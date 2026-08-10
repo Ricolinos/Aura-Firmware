@@ -94,11 +94,12 @@ def generate_header(tokens):
             lines.append(f"#define {define} LCD_RGBPACK({r}, {g}, {b})")
         lines.append("")
 
-    lines.append("typedef enum {")
-    lines.append("    AURA_THEME_LIGHT = 0,")
-    lines.append("    AURA_THEME_DARK,")
-    lines.append("    AURA_THEME_COUNT,")
-    lines.append("} aura_theme_t;")
+    lines.append("/* Tamanos de icono (px). Los bitmaps viven en ICON_DIR \"/aura/<tema>/\". */")
+    for size_name, size_px in tokens["icon"]["sizes"].items():
+        lines.append(f"#define AURA_ICON_SIZE_{size_name.upper()} {size_px}")
+    lines.append("")
+    lines.append("/* El enum de temas vive en aura_settings.h (es logica de app, no un")
+    lines.append(" * token de diseno); este header solo expone los colores de cada uno. */")
     lines.append("")
     lines.append("#endif /* AURA_TOKENS_H */")
     lines.append("")
@@ -139,16 +140,41 @@ def check_tool(name):
 def generate_icons(tokens):
     print("==> Generando iconos (out/icons/<tema>/*.bmp)")
     check_tool("rsvg-convert")
-    check_tool("sips")
+    try:
+        from PIL import Image
+    except ImportError:
+        die(
+            "falta el modulo Pillow -- crea el venv del design system:\n"
+            "  python3 -m venv design-system/.venv && "
+            "design-system/.venv/bin/pip install pillow\n"
+            "y ejecuta este script con design-system/.venv/bin/python3"
+        )
 
     icon_cfg = tokens["icon"]
     svg_dir = VENDOR / "lucide-svg"
+
+    # Magenta = TRANSPARENT_COLOR de Rockbox (firmware/export/lcd.h). Los
+    # iconos se componen sobre este color marcador y se dibujan con
+    # lcd_bitmap_transparent(), asi funcionan igual sobre fondo normal o
+    # sobre la barra de seleccion con color de acento.
+    #
+    # rsvg-convert antialiasea los bordes del trazo: si se compone
+    # directamente sobre el marcador magenta, esos pixeles de borde
+    # quedan en un magenta "casi puro" pero no exacto, y
+    # lcd_bitmap_transparent() (que compara color exacto) no los trata
+    # como transparentes -- se ve un halo magenta alrededor de cada
+    # icono. Por eso se renderiza con canal alfa real (fondo
+    # transparente) y se umbraliza con Pillow: alfa >= 128 -> color de
+    # trazo solido, si no -> magenta puro. Sin colores intermedios, sin
+    # halo, independiente del algoritmo de antialiasing de rsvg-convert.
+    ALPHA_THRESHOLD = 128
+    TRANSPARENT_RGB = (255, 0, 255)
 
     for theme_name, colors in tokens["color"].items():
         theme_out = OUT / "icons" / theme_name
         theme_out.mkdir(parents=True, exist_ok=True)
         fg = colors["text_primary"]
-        bg = colors["background"]
+        fg_rgb = hex_to_rgb(fg)
 
         for icon_name in icon_cfg["names"]:
             svg_path = svg_dir / f"{icon_name}.svg"
@@ -170,18 +196,23 @@ def generate_icons(tokens):
                         "rsvg-convert",
                         "-w", str(size_px),
                         "-h", str(size_px),
-                        "-b", bg,
                         "-o", str(tmp_png),
                         str(tmp_svg),
                     ],
                     check=True,
                     capture_output=True,
                 )
-                subprocess.run(
-                    ["sips", "-s", "format", "bmp", str(tmp_png), "--out", str(out_bmp)],
-                    check=True,
-                    capture_output=True,
-                )
+
+                src = Image.open(tmp_png).convert("RGBA")
+                out_img = Image.new("RGB", src.size, TRANSPARENT_RGB)
+                pixels_in = src.load()
+                pixels_out = out_img.load()
+                for y in range(src.height):
+                    for x in range(src.width):
+                        if pixels_in[x, y][3] >= ALPHA_THRESHOLD:
+                            pixels_out[x, y] = fg_rgb
+                out_img.save(out_bmp, format="BMP")
+
                 tmp_svg.unlink()
                 tmp_png.unlink()
 

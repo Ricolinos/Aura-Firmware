@@ -938,5 +938,9 @@ struct user_settings
 extern struct user_settings global_settings;
 /* global status */
 extern struct system_status global_status;
+/* valores por defecto (cutoff/q/tipo) de cada banda del ecualizador;
+ * reutilizado por apps/aura para construir sus presets de EQ sin
+ * duplicar esta tabla (ver DECISIONS.md). */
+extern struct eq_band_setting eq_defaults[EQ_NUM_BANDS];
 
 #endif /* __SETTINGS_H__ */

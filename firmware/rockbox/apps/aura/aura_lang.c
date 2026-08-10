@@ -1,0 +1,87 @@
+#include "aura_lang.h"
+#include "aura_settings.h"
+
+static const char *const strings_es[AURA_STR_COUNT] = {
+    [AURA_STR_MUSIC]              = "Musica",
+    [AURA_STR_VIDEOS]             = "Videos",
+    [AURA_STR_PHOTOS]             = "Fotos",
+    [AURA_STR_NOWPLAYING]         = "Ahora suena",
+    [AURA_STR_SETTINGS]           = "Ajustes",
+
+    [AURA_STR_SETTINGS_THEME]       = "Tema",
+    [AURA_STR_SETTINGS_GRAPHICS]    = "Graficos",
+    [AURA_STR_SETTINGS_EQ]          = "Ecualizador",
+    [AURA_STR_SETTINGS_BRIGHTNESS]  = "Brillo",
+    [AURA_STR_SETTINGS_LANGUAGE]    = "Idioma",
+    [AURA_STR_SETTINGS_ABOUT]       = "Acerca de",
+
+    [AURA_STR_THEME_LIGHT]        = "Claro",
+    [AURA_STR_THEME_DARK]         = "Oscuro",
+
+    [AURA_STR_GFX_ULTRA]          = "Ultra minimalista",
+    [AURA_STR_GFX_MINIMAL]        = "Minimalista",
+    [AURA_STR_GFX_FULL]           = "Completo",
+
+    [AURA_STR_EQ_FLAT]            = "Plano",
+    [AURA_STR_EQ_BASS_BOOST]      = "Realce de graves",
+    [AURA_STR_EQ_VOCAL]           = "Voz",
+    [AURA_STR_EQ_TREBLE_BOOST]    = "Realce de agudos",
+
+    [AURA_STR_LANG_ES]            = "Espanol",
+    [AURA_STR_LANG_EN]            = "Ingles",
+
+    [AURA_STR_ABOUT_BUILT_ON]     = "Basado en Rockbox",
+
+    [AURA_STR_EMPTY_MUSIC]        = "Sin musica todavia",
+    [AURA_STR_EMPTY_VIDEOS]       = "Sin videos todavia",
+    [AURA_STR_EMPTY_PHOTOS]       = "Sin fotos todavia",
+    [AURA_STR_NOTHING_PLAYING]    = "Nada sonando",
+};
+
+static const char *const strings_en[AURA_STR_COUNT] = {
+    [AURA_STR_MUSIC]              = "Music",
+    [AURA_STR_VIDEOS]             = "Videos",
+    [AURA_STR_PHOTOS]             = "Photos",
+    [AURA_STR_NOWPLAYING]         = "Now Playing",
+    [AURA_STR_SETTINGS]           = "Settings",
+
+    [AURA_STR_SETTINGS_THEME]       = "Theme",
+    [AURA_STR_SETTINGS_GRAPHICS]    = "Graphics",
+    [AURA_STR_SETTINGS_EQ]          = "Equalizer",
+    [AURA_STR_SETTINGS_BRIGHTNESS]  = "Brightness",
+    [AURA_STR_SETTINGS_LANGUAGE]    = "Language",
+    [AURA_STR_SETTINGS_ABOUT]       = "About",
+
+    [AURA_STR_THEME_LIGHT]        = "Light",
+    [AURA_STR_THEME_DARK]         = "Dark",
+
+    [AURA_STR_GFX_ULTRA]          = "Ultra minimal",
+    [AURA_STR_GFX_MINIMAL]        = "Minimal",
+    [AURA_STR_GFX_FULL]           = "Full",
+
+    [AURA_STR_EQ_FLAT]            = "Flat",
+    [AURA_STR_EQ_BASS_BOOST]      = "Bass boost",
+    [AURA_STR_EQ_VOCAL]           = "Vocal",
+    [AURA_STR_EQ_TREBLE_BOOST]    = "Treble boost",
+
+    [AURA_STR_LANG_ES]            = "Spanish",
+    [AURA_STR_LANG_EN]            = "English",
+
+    [AURA_STR_ABOUT_BUILT_ON]     = "Built on Rockbox",
+
+    [AURA_STR_EMPTY_MUSIC]        = "No music yet",
+    [AURA_STR_EMPTY_VIDEOS]       = "No videos yet",
+    [AURA_STR_EMPTY_PHOTOS]       = "No photos yet",
+    [AURA_STR_NOTHING_PLAYING]    = "Nothing playing",
+};
+
+const char *aura_str(aura_str_id_t id)
+{
+    if (id < 0 || id >= AURA_STR_COUNT)
+        return "";
+
+    const char *s = (aura_settings.language == AURA_LANG_EN)
+                        ? strings_en[id]
+                        : strings_es[id];
+    return s ? s : "";
+}

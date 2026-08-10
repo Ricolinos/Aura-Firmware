@@ -34,15 +34,67 @@
 #include <windows.h>
 #endif
 
-/* Aura: automatizacion de screendump para evidencia headless (sin permisos
- * de captura de pantalla de macOS). Activado por variables de entorno:
- *   AURA_SIM_AUTODUMP_TICKS=<n>  -> toma un screendump n ticks tras el boot
+/* Aura: automatizacion de entrada + screendump para evidencia headless
+ * (sin permisos de Grabacion de Pantalla ni de Accesibilidad de macOS).
+ * Activado por variables de entorno:
+ *   AURA_SIM_AUTODUMP_TICKS=<n>  -> ticks a esperar antes de volcar
+ *                                   la pantalla (desde el boot, o desde
+ *                                   que termina de inyectar botones si
+ *                                   AURA_SIM_BUTTONS esta presente)
  *   AURA_SIM_AUTODUMP_QUIT=1     -> sale del proceso tras el dump
+ *   AURA_SIM_BUTTONS=SELECT,MENU,SCROLL_FWD,... -> inyecta esta secuencia
+ *                                   de botones (uno de: SELECT, MENU,
+ *                                   SCROLL_FWD, SCROLL_BACK, PLAY, LEFT,
+ *                                   RIGHT) directamente en la cola de
+ *                                   botones antes de tomar el dump
  * Ver firmware/tools/sim_screenshot.sh */
 #include <stdlib.h>
+#include <string.h>
+#include "string-extra.h"
+#include "button.h"
+
 static bool autodump_pending = false;
 static bool autodump_quit = false;
 static long autodump_tick = 0;
+static long autodump_settle_ticks = 0;
+
+#define AURA_MAX_INJECT_BUTTONS 32
+#define AURA_INJECT_RELEASE_GAP (HZ / 20)
+#define AURA_INJECT_PRESS_GAP   (HZ / 4)
+
+static long inject_codes[AURA_MAX_INJECT_BUTTONS];
+static int inject_count = 0;
+static int inject_pos = 0;
+static bool inject_release_pending = false;
+static long inject_next_tick = 0;
+
+static long aura_button_name_to_code(const char *name)
+{
+    if (!strcmp(name, "SELECT"))      return BUTTON_SELECT;
+    if (!strcmp(name, "MENU"))        return BUTTON_MENU;
+    if (!strcmp(name, "SCROLL_FWD"))  return BUTTON_SCROLL_FWD;
+    if (!strcmp(name, "SCROLL_BACK")) return BUTTON_SCROLL_BACK;
+    if (!strcmp(name, "PLAY"))        return BUTTON_PLAY;
+    if (!strcmp(name, "LEFT"))        return BUTTON_LEFT;
+    if (!strcmp(name, "RIGHT"))       return BUTTON_RIGHT;
+    return BUTTON_NONE;
+}
+
+static void aura_parse_inject_buttons(const char *spec)
+{
+    char buf[256];
+    char *tok, *saveptr;
+
+    strlcpy(buf, spec, sizeof(buf));
+    tok = strtok_r(buf, ",", &saveptr);
+    while (tok && inject_count < AURA_MAX_INJECT_BUTTONS)
+    {
+        long code = aura_button_name_to_code(tok);
+        if (code != BUTTON_NONE)
+            inject_codes[inject_count++] = code;
+        tok = strtok_r(NULL, ",", &saveptr);
+    }
+}
 
 static void sim_thread(void);
 static long sim_thread_stack[DEFAULT_STACK_SIZE/sizeof(long)];
@@ -73,7 +125,31 @@ void sim_thread(void)
 
     while (1)
     {
-        queue_wait_w_tmo(&sim_queue, &ev, autodump_pending ? HZ/10 : 5*HZ);
+        bool fine_poll = autodump_pending || (inject_pos < inject_count);
+        queue_wait_w_tmo(&sim_queue, &ev, fine_poll ? HZ/10 : 5*HZ);
+
+        if (inject_pos < inject_count && TIME_AFTER(current_tick, inject_next_tick))
+        {
+            if (!inject_release_pending)
+            {
+                button_queue_post(inject_codes[inject_pos], 0);
+                inject_release_pending = true;
+                inject_next_tick = current_tick + AURA_INJECT_RELEASE_GAP;
+            }
+            else
+            {
+                button_queue_post(inject_codes[inject_pos] | BUTTON_REL, 0);
+                inject_release_pending = false;
+                inject_pos++;
+                inject_next_tick = current_tick + AURA_INJECT_PRESS_GAP;
+
+                if (inject_pos == inject_count && autodump_settle_ticks >= 0)
+                {
+                    autodump_pending = true;
+                    autodump_tick = current_tick + autodump_settle_ticks;
+                }
+            }
+        }
 
         if (autodump_pending && TIME_AFTER(current_tick, autodump_tick))
         {
@@ -153,14 +229,29 @@ void sim_thread(void)
 void sim_tasks_init(void)
 {
     const char *ticks_env = getenv("AURA_SIM_AUTODUMP_TICKS");
+    const char *buttons_env = getenv("AURA_SIM_BUTTONS");
 
     queue_init(&sim_queue, false);
 
-    if (ticks_env)
+    if (buttons_env)
+        aura_parse_inject_buttons(buttons_env);
+
+    if (ticks_env || buttons_env)
+    {
+        autodump_settle_ticks = ticks_env ? atoi(ticks_env) : HZ / 2;
+        autodump_quit = getenv("AURA_SIM_AUTODUMP_QUIT") != NULL;
+    }
+
+    if (inject_count > 0)
+    {
+        /* El primer boton se dispara enseguida; el dump se programa
+         * cuando termine de inyectar todos (ver sim_thread()). */
+        inject_next_tick = current_tick + AURA_INJECT_PRESS_GAP;
+    }
+    else if (ticks_env)
     {
         autodump_pending = true;
-        autodump_tick = current_tick + atoi(ticks_env);
-        autodump_quit = getenv("AURA_SIM_AUTODUMP_QUIT") != NULL;
+        autodump_tick = current_tick + autodump_settle_ticks;
     }
 
     create_thread(sim_thread, sim_thread_stack, sizeof(sim_thread_stack), 0,

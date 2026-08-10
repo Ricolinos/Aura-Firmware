@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Compila el simulador SDL de Aura (target ipod6g) en macOS.
 #
-# Requisitos (Homebrew): sdl2, un gcc real (no solo el clang de Xcode) —
-# `brew install sdl2 gcc`. tools/configure detecta automaticamente el gcc
+# Requisitos (Homebrew): sdl2, un gcc real (no solo el clang de Xcode),
+# freetype, librsvg — `brew install sdl2 gcc freetype librsvg`. Ademas un
+# venv en design-system/.venv con Pillow (design-system/scripts/fetch_assets.sh
+# no lo crea; `python3 -m venv design-system/.venv && design-system/.venv/bin/pip
+# install pillow` una vez). tools/configure detecta automaticamente el gcc
 # de Homebrew mas nuevo disponible (16, 15, 14 o 13); ver D-007 en
 # DECISIONS.md sobre por que clang no sirve aqui.
 #
@@ -23,7 +26,14 @@ if [[ "${1:-}" == "--reconfigure" ]]; then
 fi
 
 echo "==> Regenerando el design system (design-system/generate.py)"
-python3 "$ROOT_DIR/design-system/generate.py"
+GENERATE_PY="$ROOT_DIR/design-system/.venv/bin/python3"
+if [[ ! -x "$GENERATE_PY" ]]; then
+  GENERATE_PY="python3"
+fi
+"$GENERATE_PY" "$ROOT_DIR/design-system/generate.py"
+
+echo "==> Instalando aura_tokens.h en apps/aura/"
+cp "$ROOT_DIR/design-system/out/aura_tokens.h" "$SRC_DIR/apps/aura/aura_tokens.h"
 
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
@@ -38,6 +48,14 @@ make -j"$(sysctl -n hw.ncpu)"
 
 echo "==> Instalando assets de Rockbox en el disco simulado"
 make install
+
+echo "==> Instalando fuentes e iconos de Aura en el disco simulado"
+mkdir -p simdisk/.rockbox/fonts
+cp "$ROOT_DIR"/design-system/out/fonts/*.fnt simdisk/.rockbox/fonts/
+for theme in light dark; do
+  mkdir -p "simdisk/.rockbox/icons/aura/$theme"
+  cp "$ROOT_DIR"/design-system/out/icons/$theme/*.bmp "simdisk/.rockbox/icons/aura/$theme/"
+done
 
 echo "==> Listo: $BUILD_DIR/rockboxui"
 

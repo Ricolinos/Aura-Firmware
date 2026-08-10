@@ -36,6 +36,7 @@
 #include "filetypes.h"
 #include "panic.h"
 #include "menu.h"
+#include "aura/aura_main.h"
 #include "usb.h"
 #include "wifi.h"
 #include "powermgmt.h"
@@ -243,8 +244,11 @@ int main(void)
     validate_start_directory_init();
     /* no calls INIT_ATTR functions after this point anymore!
      * see definition of INIT_ATTR in config.h */
-    CHART(">root_menu");
-    root_menu();
+    /* Aura reemplaza por completo la UI de Rockbox (arbol de archivos,
+     * menu raiz, WPS): aura_main() es el unico punto de entrada a la
+     * interfaz que ve el usuario final. Ver DECISIONS.md D-001/D-014. */
+    CHART(">aura_main");
+    aura_main();
 }
 
 /* The disk isn't ready at boot, rblogo is stored in bin and erased after boot */
