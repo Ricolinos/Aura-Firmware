@@ -20,7 +20,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
 
     [AURA_STR_GFX_ULTRA]          = "Ultra minimalista",
     [AURA_STR_GFX_MINIMAL]        = "Minimalista",
-    [AURA_STR_GFX_FULL]           = "Completo",
+    [AURA_STR_GFX_FULL]           = "Pro",
 
     [AURA_STR_EQ_FLAT]            = "Plano",
     [AURA_STR_EQ_BASS_BOOST]      = "Realce de graves",
@@ -66,7 +66,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
 
     [AURA_STR_GFX_ULTRA]          = "Ultra minimal",
     [AURA_STR_GFX_MINIMAL]        = "Minimal",
-    [AURA_STR_GFX_FULL]           = "Full",
+    [AURA_STR_GFX_FULL]           = "Pro",
 
     [AURA_STR_EQ_FLAT]            = "Flat",
     [AURA_STR_EQ_BASS_BOOST]      = "Bass boost",

@@ -3,6 +3,7 @@
 #include "audio.h"
 #include "tick.h"
 #include "misc.h"
+#include "usb.h"
 
 #include "aura_main.h"
 #include "aura_nav.h"
@@ -38,6 +39,20 @@ void aura_main(void)
     aura_settings_load();
     aura_theme_init();
     aura_nav_init(&nav, AURA_SCREEN_ROOT);
+
+#ifdef USB_ENABLE_HID
+    /* Fase 12 (PLAN-UX.md) / D-051: global_settings.usb_hid=false (en
+     * apps/main.c) solo apaga la UI del selector HID -- el driver real
+     * lee su propia variable estatica en firmware/usb.c, que solo
+     * cambia usb_set_hid() (el callback que dispara el menu de Ajustes
+     * de Rockbox, que Aura no usa). Sin esta llamada el iPod segue
+     * enumerandose como teclado/raton HID ante el host aunque la
+     * pantalla ya no lo muestre. Se llama aca (no en apps/main.c) para
+     * garantizar que el hilo usb ya termino usb_core_init() y su tabla
+     * de drivers ya existe -- aura_main() arranca varios pasos de init()
+     * despues de usb_init(). */
+    usb_set_hid(false);
+#endif
 
     while (1)
     {

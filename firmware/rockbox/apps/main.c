@@ -255,27 +255,17 @@ int main(void)
 int show_logo_boot( void ) INIT_ATTR;
 int show_logo_boot( void )
 {
-    unsigned char version[32];
-    int font_h, ver_w;
-    snprintf(version, sizeof(version), "Ver. %s", rbversion);
-    ver_w = font_getstringsize(version, NULL, &font_h, FONT_SYSFIXED);
+    /* Fase 12 (PLAN-UX.md) / D-051: sin texto de version -- el bitmap
+     * ya es el logotipo propio de Aura (design-system/scripts/gen_boot_logo.py),
+     * no el logo amarillo "ROCKbox" original, y un iPod real nunca
+     * muestra un numero de build en su arranque. */
     lcd_clear_display();
-    lcd_setfont(FONT_SYSFIXED);
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPV2) || defined(SANSA_CLIPPLUS)
     /* display the logo in the blue area of the screen (bottom 48 pixels) */
-    if (ver_w > LCD_WIDTH)
-        lcd_putsxy(0, 0, rbversion);
-    else
-        lcd_putsxy((LCD_WIDTH/2) - (ver_w/2), 0, version);
     lcd_bmp(&bm_rockboxlogo, (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2, 16);
 #else
     lcd_bmp(&bm_rockboxlogo, (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2, 10);
-    if (ver_w > LCD_WIDTH)
-        lcd_putsxy(0, LCD_HEIGHT-font_h, rbversion);
-    else
-        lcd_putsxy((LCD_WIDTH/2) - (ver_w/2), LCD_HEIGHT-font_h, version);
 #endif
-    lcd_setfont(FONT_UI);
     lcd_update();
 #ifdef HAVE_REMOTE_LCD
     lcd_remote_clear_display();
@@ -468,8 +458,29 @@ static void init(void)
      * Bug real encontrado en hardware: un iPod con una instalacion
      * previa de Rockbox que tenia HID activado en su config.cfg se
      * quedaba mostrando el selector de modo HID (mouse/browser/etc.)
-     * en vez de montarse como disco al conectar el cable. */
+     * en vez de montarse como disco al conectar el cable. Guardado con
+     * USB_ENABLE_HID (bug de compilacion preexistente arreglado en la
+     * Fase 12, D-051: sin esta guarda, el simulador -- que no define
+     * USB_ENABLE_HID -- no compila porque el campo usb_hid ni siquiera
+     * existe en struct user_settings ahi, ver settings.h). */
+#ifdef USB_ENABLE_HID
     global_settings.usb_hid = false;
+#endif
+    /* Fase 12 (PLAN-UX.md): higiene de ajustes heredados de Rockbox.
+     * Ninguno de estos aparece en los Ajustes simplificados de Aura, asi
+     * que sus valores de fabrica de Rockbox (pensados para su propia UI,
+     * no para un appliance cerrado) no son los que Aura quiere. Ver
+     * D-051 en DECISIONS.md. */
+    global_settings.statusbar = STATUSBAR_OFF;       /* sin barra clasica de Rockbox */
+    global_settings.backdrop_file[0] = '-';          /* sin wallpaper Cabbie v2 */
+    global_settings.backdrop_file[1] = '\0';
+    global_settings.show_shutdown_message = false;   /* sin "Shutting down..." de Rockbox */
+    global_settings.talk_menu = false;               /* Aura no tiene voces .talk propias */
+    global_settings.clear_settings_on_hold = false;   /* un flip de Hold no debe borrar ajustes */
+    global_settings.volume_limit = -6;               /* limite de volumen razonable (antes: sin limite) */
+    global_settings.poweroff = 30;                   /* apagado por inactividad, en minutos */
+    global_settings.backlight_timeout = 10;          /* segundos, desenchufado */
+    global_settings.backlight_timeout_plugged = 30;  /* segundos, enchufado */
     settings_apply(true);
     init_battery_tables();
 #ifdef HAVE_DIRCACHE
@@ -744,8 +755,26 @@ static void init(void)
 #endif
     /* Ver el comentario equivalente en la otra variante de init()
      * (PLATFORM_HOSTED) mas arriba: Aura siempre usa modo de
-     * almacenamiento masivo al conectar USB, nunca HID. */
+     * almacenamiento masivo al conectar USB, nunca HID. Guardado con
+     * USB_ENABLE_HID -- ver el comentario equivalente en la otra
+     * variante de init() mas arriba. */
+#ifdef USB_ENABLE_HID
     global_settings.usb_hid = false;
+#endif
+    /* Fase 12 (PLAN-UX.md): higiene de ajustes heredados de Rockbox. Ver
+     * el comentario equivalente y D-051 en la otra variante de init()
+     * mas arriba -- debe ir antes del chequeo de Hold de abajo, que lee
+     * clear_settings_on_hold. */
+    global_settings.statusbar = STATUSBAR_OFF;
+    global_settings.backdrop_file[0] = '-';
+    global_settings.backdrop_file[1] = '\0';
+    global_settings.show_shutdown_message = false;
+    global_settings.talk_menu = false;
+    global_settings.clear_settings_on_hold = false;
+    global_settings.volume_limit = -6;
+    global_settings.poweroff = 30;
+    global_settings.backlight_timeout = 10;
+    global_settings.backlight_timeout_plugged = 30;
 
 #if defined(BUTTON_REC) || \
     (CONFIG_KEYPAD == GIGABEAT_PAD) || \
