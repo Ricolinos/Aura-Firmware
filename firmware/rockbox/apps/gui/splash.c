@@ -34,6 +34,7 @@
 #include "font.h"
 #ifndef BOOTLOADER
 #include "misc.h" /* get_current_activity */
+#include "aura/aura_splash_lang.h" /* Fase 14, PLAN-UX.md / D-055 */
 #endif
 
 static long progress_next_tick, talked_tick;
@@ -134,6 +135,16 @@ static bool splash_internal(struct screen * screen, const char *fmt, va_list ap,
 
     int res = vsnprintf(splash_buf, sizeof(splash_buf), fmt, ap);
     va_end(ap);
+
+#ifndef BOOTLOADER
+    /* Fase 14 (PLAN-UX.md) / D-055: reescribe el mensaje ya resuelto
+     * (fmt puede venir de un LANG_* de Rockbox con sus argumentos ya
+     * sustituidos por vsnprintf arriba) al wording de Aura si es uno
+     * de los conocidos. Corre antes del word-wrap de mas abajo, que no
+     * se toca. */
+    if (res > 0)
+        aura_splash_translate(splash_buf, sizeof(splash_buf));
+#endif
 
     if (res <= 0 || width < space_w || height < chr_h)
     {

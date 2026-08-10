@@ -37,6 +37,8 @@
 #include "panic.h"
 #include "menu.h"
 #include "aura/aura_main.h"
+#include "aura/aura_tokens.h"
+#include "string-extra.h"
 #include "usb.h"
 #include "wifi.h"
 #include "powermgmt.h"
@@ -481,6 +483,19 @@ static void init(void)
     global_settings.poweroff = 30;                   /* apagado por inactividad, en minutos */
     global_settings.backlight_timeout = 10;          /* segundos, desenchufado */
     global_settings.backlight_timeout_plugged = 30;  /* segundos, enchufado */
+    /* Fase 14 (PLAN-UX.md) / D-055: re-skin de apps/gui/splash.c (y de
+     * cualquier otra pantalla que use el tema "core" de Rockbox, como
+     * los menus del plugin mpegplayer) a la paleta y tipografia de
+     * Aura, sin tocar la logica de esos archivos. */
+#ifdef HAVE_LCD_COLOR
+    global_settings.fg_color = LCD_RGBPACK(0xff, 0xff, 0xff);
+    global_settings.bg_color = LCD_RGBPACK(0, 0, 0);
+    global_settings.lss_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
+    global_settings.lse_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
+    global_settings.lst_color = LCD_RGBPACK(0, 0, 0);
+#endif
+    strlcpy((char *)global_settings.font_file, AURA_FONT_BASENAME_BODY,
+            sizeof(global_settings.font_file));
     settings_apply(true);
     init_battery_tables();
 #ifdef HAVE_DIRCACHE
@@ -775,6 +790,17 @@ static void init(void)
     global_settings.poweroff = 30;
     global_settings.backlight_timeout = 10;
     global_settings.backlight_timeout_plugged = 30;
+    /* Fase 14 (PLAN-UX.md) / D-055: ver el comentario equivalente en la
+     * otra variante de init() mas arriba. */
+#ifdef HAVE_LCD_COLOR
+    global_settings.fg_color = LCD_RGBPACK(0xff, 0xff, 0xff);
+    global_settings.bg_color = LCD_RGBPACK(0, 0, 0);
+    global_settings.lss_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
+    global_settings.lse_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
+    global_settings.lst_color = LCD_RGBPACK(0, 0, 0);
+#endif
+    strlcpy((char *)global_settings.font_file, AURA_FONT_BASENAME_BODY,
+            sizeof(global_settings.font_file));
 
 #if defined(BUTTON_REC) || \
     (CONFIG_KEYPAD == GIGABEAT_PAD) || \

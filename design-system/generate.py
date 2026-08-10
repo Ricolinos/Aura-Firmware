@@ -91,6 +91,14 @@ def generate_header(tokens):
         lines.append(f'#define AURA_FONT_{style_name.upper()} "{fname}"')
     lines.append("")
 
+    lines.append("/* Mismo nombre sin extension: lo que espera global_settings.font_file")
+    lines.append(" * (Fase 14, PLAN-UX.md) -- settings.c le agrega \".fnt\" el solo. */")
+    for style_name, weight in tokens["font"]["styles_by_size"].items():
+        size = tokens["type_scale"][style_name]
+        base = f"aura-{style_name}-{size}"
+        lines.append(f'#define AURA_FONT_BASENAME_{style_name.upper()} "{base}"')
+    lines.append("")
+
     lines.append("/* Colores por tema, empaquetados con LCD_RGBPACK al formato nativo del LCD */")
     for theme_name, colors in tokens["color"].items():
         lines.append(f"/* Tema {theme_name} */")
