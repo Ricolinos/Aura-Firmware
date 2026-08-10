@@ -15,6 +15,9 @@
 #include "aura_tokens.h"
 #include "aura_music.h"
 #include "aura_nowplaying.h"
+#include "aura_transitions.h"
+#include "aura_coverflow.h"
+#include "aura_home.h"
 
 #define MAX_MENU_ENTRIES 8
 
@@ -315,6 +318,26 @@ static int is_music_browse_screen(aura_screen_id_t screen)
     }
 }
 
+/* En modo grafico Completo, Albumes se navega con Coverflow en vez de
+ * la lista plana (D-025); en Ultra/Minimalista sigue siendo una lista
+ * como cualquier otra pantalla de is_music_browse_screen(). */
+/* En modo grafico Completo, la raiz se dibuja como pantalla dividida
+ * con caratulas si hay al menos un album con arte disponible (D-025);
+ * si no hay ninguna caratula, la pantalla dividida no aportaria nada
+ * y se usa la lista simple de siempre. */
+static int is_split_home_screen(aura_screen_id_t screen)
+{
+    return screen == AURA_SCREEN_ROOT
+        && aura_settings.graphics_mode == AURA_GFX_FULL
+        && aura_home_has_content();
+}
+
+static int is_coverflow_screen(aura_screen_id_t screen)
+{
+    return aura_settings.graphics_mode == AURA_GFX_FULL
+        && (screen == AURA_SCREEN_MUSIC_ALBUMS || screen == AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST);
+}
+
 static aura_screen_id_t s_music_cache_screen = AURA_SCREEN_COUNT;
 static int s_music_cache_generation = -1;
 static aura_music_item_t s_music_cache[AURA_MUSIC_MAX_ITEMS];
@@ -402,7 +425,9 @@ void aura_screens_draw(aura_nav_t *nav)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
 
-    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
+    if (is_split_home_screen(screen))
+        aura_home_draw(nav);
+    else if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -410,6 +435,8 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_brightness();
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
         draw_about();
+    else if (is_coverflow_screen(screen))
+        aura_coverflow_draw(nav, screen);
     else if (is_music_browse_screen(screen))
         draw_music_browse(nav, screen);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
@@ -594,13 +621,18 @@ static void handle_playlists(aura_nav_t *nav, long button)
 void aura_screens_handle_button(aura_nav_t *nav, long button)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
+    int depth_before = aura_nav_depth(nav);
 
-    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
+    if (is_split_home_screen(screen))
+        aura_home_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
     else if (screen == AURA_SCREEN_SETTINGS_BRIGHTNESS)
         handle_brightness(nav, button);
+    else if (is_coverflow_screen(screen))
+        aura_coverflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))
         handle_music_browse(nav, screen, button);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
@@ -609,4 +641,12 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_nowplaying_handle_button(nav, button);
     else
         handle_dismiss_only(nav, button);
+
+    /* Centralizado aca (no en cada handler) para no repetir la logica
+     * en cada punto de push/pop: la profundidad de la pila es la unica
+     * senal que hace falta para saber si hubo navegacion y en que
+     * sentido. Ver D-024. */
+    int depth_after = aura_nav_depth(nav);
+    if (depth_after != depth_before)
+        aura_transition_slide(nav, depth_after > depth_before ? 1 : -1);
 }

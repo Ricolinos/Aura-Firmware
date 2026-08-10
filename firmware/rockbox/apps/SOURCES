@@ -309,6 +309,9 @@ keymaps/keymap-hibyr3proii.c
 /* Aura UI: reemplaza la interfaz de Rockbox (ver apps/main.c y
  * DECISIONS.md D-001/D-014). root_menu.c se mantiene compilado porque
  * otros settings aun lo referencian, pero nunca se invoca. */
+aura/aura_albumart.c
+aura/aura_coverflow.c
+aura/aura_home.c
 aura/aura_lang.c
 aura/aura_lrc.c
 aura/aura_music.c
@@ -317,5 +320,6 @@ aura/aura_nowplaying.c
 aura/aura_screens.c
 aura/aura_settings.c
 aura/aura_theme.c
+aura/aura_transitions.c
 aura/aura_widgets.c
 aura/aura_main.c

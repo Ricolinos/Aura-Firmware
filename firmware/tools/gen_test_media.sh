@@ -47,4 +47,7 @@ cat > "$OUT_DIR/aura-test.lrc" <<'EOF'
 [00:02.00]Segundo dos
 EOF
 
+echo "==> Generando $OUT_DIR/cover.jpg"
+ffmpeg -y -loglevel error -f lavfi -i "color=c=0x3366CC:s=200x200" -frames:v 1 "$OUT_DIR/cover.jpg"
+
 echo "==> Listo: $OUT_DIR"
