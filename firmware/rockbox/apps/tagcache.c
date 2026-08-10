@@ -3464,6 +3464,19 @@ static bool commit(void)
     }
 #endif /*defined(PLUGIN)*/
 
+#if !defined(PLUGIN)
+    /* Aura: si ni dircache (indisponible en SIMULATOR, ver
+     * HAVE_DIRCACHE en firmware/export/config.h) ni ramcache (no
+     * puede robar de una base que todavia no existe -- ver
+     * allocate_tagcache(), necesita un master file previo) aportaron
+     * un buffer, se pide uno general directamente. Sin esto, el
+     * primer commit de siempre en el simulador queda pospuesto "hasta
+     * el proximo arranque" para siempre, ya que ningun arranque
+     * futuro cambia esta situacion (D-021). */
+    if (tempbuf_size == 0)
+        allocate_tempbuf();
+#endif
+
     /* And finally fail if there are no buffers available. */
     if (tempbuf_size == 0)
     {

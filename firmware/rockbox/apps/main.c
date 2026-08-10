@@ -451,6 +451,16 @@ static void init(void)
     dsp_init();
     settings_reset();
     settings_load();
+#ifdef HAVE_TAGCACHE
+    /* Aura fuerza el cache de tags en RAM (D-021): sin HAVE_DIRCACHE
+     * (no disponible en SIMULATOR) ni tagcache_ram activo, el primer
+     * commit del tagcache nunca encuentra un buffer temporal que
+     * robar y queda pospuesto para "el proximo arranque" para
+     * siempre. Ademas, cachear en RAM evita giros de disco repetidos
+     * al navegar la biblioteca -- alineado con el objetivo de
+     * bateria del proyecto. */
+    global_settings.tagcache_ram = 1;
+#endif
     settings_apply(true);
     init_battery_tables();
 #ifdef HAVE_DIRCACHE
@@ -715,6 +725,14 @@ static void init(void)
     CHART(">settings_load");
     settings_load();
     CHART("<settings_load");
+
+#ifdef HAVE_TAGCACHE
+    /* Aura fuerza el cache de tags en RAM (D-021): evita giros de
+     * disco repetidos al navegar la biblioteca, alineado con el
+     * objetivo de bateria del proyecto. Ver el comentario equivalente
+     * en la otra variante de init() (PLATFORM_HOSTED) mas arriba. */
+    global_settings.tagcache_ram = 1;
+#endif
 
 #if defined(BUTTON_REC) || \
     (CONFIG_KEYPAD == GIGABEAT_PAD) || \

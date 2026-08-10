@@ -36,6 +36,14 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_EMPTY_VIDEOS]       = "Sin videos todavia",
     [AURA_STR_EMPTY_PHOTOS]       = "Sin fotos todavia",
     [AURA_STR_NOTHING_PLAYING]    = "Nada sonando",
+
+    [AURA_STR_MUSIC_ARTISTS]      = "Artistas",
+    [AURA_STR_MUSIC_ALBUMS]       = "Albumes",
+    [AURA_STR_MUSIC_SONGS]        = "Canciones",
+    [AURA_STR_MUSIC_PLAYLISTS]    = "Playlists",
+    [AURA_STR_MUSIC_GENRES]       = "Generos",
+    [AURA_STR_DB_NOT_READY]       = "Preparando la biblioteca...",
+    [AURA_STR_EMPTY_LIST]         = "Sin resultados",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -73,6 +81,14 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_EMPTY_VIDEOS]       = "No videos yet",
     [AURA_STR_EMPTY_PHOTOS]       = "No photos yet",
     [AURA_STR_NOTHING_PLAYING]    = "Nothing playing",
+
+    [AURA_STR_MUSIC_ARTISTS]      = "Artists",
+    [AURA_STR_MUSIC_ALBUMS]       = "Albums",
+    [AURA_STR_MUSIC_SONGS]        = "Songs",
+    [AURA_STR_MUSIC_PLAYLISTS]    = "Playlists",
+    [AURA_STR_MUSIC_GENRES]       = "Genres",
+    [AURA_STR_DB_NOT_READY]       = "Preparing your library...",
+    [AURA_STR_EMPTY_LIST]         = "No results",
 };
 
 const char *aura_str(aura_str_id_t id)

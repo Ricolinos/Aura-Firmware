@@ -1,0 +1,60 @@
+/* Navegacion de la biblioteca musical (base de datos indexada de
+ * Rockbox, no navegacion de carpetas) y arranque de reproduccion.
+ *
+ * Envuelve tagcache (apps/tagcache.h) y playlist (apps/playlist.h) del
+ * fork; Aura solo decide que consultar y cuando. Ver DECISIONS.md D-021.
+ */
+#ifndef AURA_MUSIC_H
+#define AURA_MUSIC_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "aura_nav.h"
+
+#define AURA_MUSIC_MAX_ITEMS 300
+#define AURA_MUSIC_ITEM_LEN  64
+
+typedef struct {
+    char label[AURA_MUSIC_ITEM_LEN];
+    int32_t seek; /* tagcache: result_seek (agrupadores) o idx_id (titulo) */
+} aura_music_item_t;
+
+/* True si la base de datos de Rockbox esta lista para consultarse. */
+bool aura_music_db_ready(void);
+
+/* Llena `out` (hasta `max_items`) con los resultados de navegar
+ * `screen`, aplicando el contexto de filtro activo (ver
+ * aura_music_select_*). Devuelve la cantidad de items. */
+int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_items);
+
+/* Fija el contexto de filtro antes de empujar la pantalla hija
+ * correspondiente (p.ej. tras elegir un artista, antes de mostrar sus
+ * albumes). `seek` es el aura_music_item_t.seek del item elegido. */
+void aura_music_select_artist(int32_t seek);
+void aura_music_select_album(int32_t seek);
+void aura_music_select_genre(int32_t seek);
+
+/* Limpia todo el contexto de filtro; llamar al entrar a cualquier modo
+ * de navegacion desde cero (Artistas/Albumes/Canciones/Generos) para
+ * no arrastrar filtros de una sesion de navegacion anterior. */
+void aura_music_reset_filters(void);
+
+/* Se incrementa en cada llamada a aura_music_select_xxx o a
+ * aura_music_reset_filters. aura_screens.c lo usa como parte de la
+ * clave de su cache de listas:
+ * el id de pantalla solo no alcanza para saber si hay que volver a
+ * consultar tagcache (p.ej. re-entrar a "Albumes por artista" con un
+ * artista distinto reutiliza el mismo id de pantalla). */
+int aura_music_filter_generation(void);
+
+/* Reconstruye la playlist dinamica con todas las canciones que
+ * `screen` está mostrando actualmente (mismo filtro que aura_music_browse)
+ * y arranca la reproduccion en start_index. */
+bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index);
+
+/* Catalogo de playlists guardadas (archivos .m3u/.m3u8). */
+int aura_music_list_playlists(char labels[][AURA_MUSIC_ITEM_LEN], int max_items);
+bool aura_music_play_playlist(int index);
+
+#endif /* AURA_MUSIC_H */

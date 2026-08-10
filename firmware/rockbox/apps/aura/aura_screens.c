@@ -13,6 +13,8 @@
 #include "aura_settings.h"
 #include "aura_lang.h"
 #include "aura_tokens.h"
+#include "aura_music.h"
+#include "aura_nowplaying.h"
 
 #define MAX_MENU_ENTRIES 8
 
@@ -28,6 +30,14 @@ static const nav_entry_t root_entries[] = {
     { AURA_STR_PHOTOS,     "image",    AURA_SCREEN_PHOTOS },
     { AURA_STR_NOWPLAYING, "play",     AURA_SCREEN_NOWPLAYING },
     { AURA_STR_SETTINGS,   "settings", AURA_SCREEN_SETTINGS },
+};
+
+static const nav_entry_t music_entries[] = {
+    { AURA_STR_MUSIC_ARTISTS,   NULL, AURA_SCREEN_MUSIC_ARTISTS },
+    { AURA_STR_MUSIC_ALBUMS,    NULL, AURA_SCREEN_MUSIC_ALBUMS },
+    { AURA_STR_MUSIC_SONGS,     NULL, AURA_SCREEN_MUSIC_SONGS },
+    { AURA_STR_MUSIC_PLAYLISTS, NULL, AURA_SCREEN_MUSIC_PLAYLISTS },
+    { AURA_STR_MUSIC_GENRES,    NULL, AURA_SCREEN_MUSIC_GENRES },
 };
 
 static const nav_entry_t settings_entries[] = {
@@ -46,6 +56,9 @@ static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
     case AURA_SCREEN_ROOT:
         *out = root_entries;
         return sizeof(root_entries) / sizeof(root_entries[0]);
+    case AURA_SCREEN_MUSIC:
+        *out = music_entries;
+        return sizeof(music_entries) / sizeof(music_entries[0]);
     case AURA_SCREEN_SETTINGS:
         *out = settings_entries;
         return sizeof(settings_entries) / sizeof(settings_entries[0]);
@@ -60,6 +73,14 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     switch (screen)
     {
     case AURA_SCREEN_MUSIC:               return AURA_STR_MUSIC;
+    case AURA_SCREEN_MUSIC_ARTISTS:       return AURA_STR_MUSIC_ARTISTS;
+    case AURA_SCREEN_MUSIC_ALBUMS:
+    case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST: return AURA_STR_MUSIC_ALBUMS;
+    case AURA_SCREEN_MUSIC_SONGS:
+    case AURA_SCREEN_MUSIC_SONGS_BY_ALBUM:
+    case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:   return AURA_STR_MUSIC_SONGS;
+    case AURA_SCREEN_MUSIC_GENRES:        return AURA_STR_MUSIC_GENRES;
+    case AURA_SCREEN_MUSIC_PLAYLISTS:     return AURA_STR_MUSIC_PLAYLISTS;
     case AURA_SCREEN_VIDEOS:              return AURA_STR_VIDEOS;
     case AURA_SCREEN_PHOTOS:              return AURA_STR_PHOTOS;
     case AURA_SCREEN_NOWPLAYING:          return AURA_STR_NOWPLAYING;
@@ -247,18 +268,9 @@ static void draw_about(void)
                (const unsigned char *)rbversion);
 }
 
-static void draw_empty_state(aura_screen_id_t screen)
+static void draw_message_centered(aura_str_id_t msg_id)
 {
-    aura_str_id_t msg_id;
     int w, h;
-
-    switch (screen)
-    {
-    case AURA_SCREEN_MUSIC:  msg_id = AURA_STR_EMPTY_MUSIC; break;
-    case AURA_SCREEN_VIDEOS: msg_id = AURA_STR_EMPTY_VIDEOS; break;
-    case AURA_SCREEN_PHOTOS: msg_id = AURA_STR_EMPTY_PHOTOS; break;
-    default:                 msg_id = AURA_STR_NOTHING_PLAYING; break;
-    }
 
     aura_theme_clear_screen();
 
@@ -269,11 +281,128 @@ static void draw_empty_state(aura_screen_id_t screen)
                (const unsigned char *)aura_str(msg_id));
 }
 
+static void draw_empty_state(aura_screen_id_t screen)
+{
+    aura_str_id_t msg_id;
+
+    switch (screen)
+    {
+    case AURA_SCREEN_MUSIC:  msg_id = AURA_STR_EMPTY_MUSIC; break;
+    case AURA_SCREEN_VIDEOS: msg_id = AURA_STR_EMPTY_VIDEOS; break;
+    case AURA_SCREEN_PHOTOS: msg_id = AURA_STR_EMPTY_PHOTOS; break;
+    default:                 msg_id = AURA_STR_NOTHING_PLAYING; break;
+    }
+
+    draw_message_centered(msg_id);
+}
+
+/* -- Musica: navegacion por base de datos (tagcache) --------------------- */
+
+static int is_music_browse_screen(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_MUSIC_ARTISTS:
+    case AURA_SCREEN_MUSIC_ALBUMS:
+    case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST:
+    case AURA_SCREEN_MUSIC_SONGS:
+    case AURA_SCREEN_MUSIC_SONGS_BY_ALBUM:
+    case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:
+    case AURA_SCREEN_MUSIC_GENRES:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static aura_screen_id_t s_music_cache_screen = AURA_SCREEN_COUNT;
+static int s_music_cache_generation = -1;
+static aura_music_item_t s_music_cache[AURA_MUSIC_MAX_ITEMS];
+static int s_music_cache_count = 0;
+static aura_list_item_t s_music_items_buf[AURA_MUSIC_MAX_ITEMS];
+
+static void ensure_music_cache(aura_screen_id_t screen)
+{
+    int gen = aura_music_filter_generation();
+
+    if (s_music_cache_screen == screen && s_music_cache_generation == gen)
+        return;
+
+    s_music_cache_screen = screen;
+    s_music_cache_generation = gen;
+    s_music_cache_count = aura_music_browse(screen, s_music_cache, AURA_MUSIC_MAX_ITEMS);
+}
+
+static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
+{
+    int i;
+
+    if (!aura_music_db_ready())
+    {
+        draw_message_centered(AURA_STR_DB_NOT_READY);
+        return;
+    }
+
+    ensure_music_cache(screen);
+
+    if (s_music_cache_count == 0)
+    {
+        draw_message_centered(AURA_STR_EMPTY_LIST);
+        return;
+    }
+
+    for (i = 0; i < s_music_cache_count; i++)
+    {
+        s_music_items_buf[i].label = s_music_cache[i].label;
+        s_music_items_buf[i].icon_name = NULL;
+        s_music_items_buf[i].checked = 0;
+    }
+
+    aura_widgets_draw_list(aura_str(screen_title_id(screen)), s_music_items_buf,
+                            s_music_cache_count, aura_nav_get_selection(nav));
+}
+
+static aura_screen_id_t s_playlist_cache_screen = AURA_SCREEN_COUNT;
+static char s_playlist_cache[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+static int s_playlist_cache_count = 0;
+
+static void ensure_playlist_cache(aura_screen_id_t screen)
+{
+    if (s_playlist_cache_screen == screen)
+        return;
+
+    s_playlist_cache_screen = screen;
+    s_playlist_cache_count = aura_music_list_playlists(s_playlist_cache, AURA_MUSIC_MAX_ITEMS);
+}
+
+static void draw_playlists(aura_nav_t *nav)
+{
+    int i;
+
+    ensure_playlist_cache(AURA_SCREEN_MUSIC_PLAYLISTS);
+
+    if (s_playlist_cache_count == 0)
+    {
+        draw_message_centered(AURA_STR_EMPTY_LIST);
+        return;
+    }
+
+    for (i = 0; i < s_playlist_cache_count; i++)
+    {
+        s_music_items_buf[i].label = s_playlist_cache[i];
+        s_music_items_buf[i].icon_name = NULL;
+        s_music_items_buf[i].checked = 0;
+    }
+
+    aura_widgets_draw_list(aura_str(AURA_STR_MUSIC_PLAYLISTS), s_music_items_buf,
+                            s_playlist_cache_count, aura_nav_get_selection(nav));
+}
+
 void aura_screens_draw(aura_nav_t *nav)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
 
-    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS)
+    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -281,6 +410,12 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_brightness();
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
         draw_about();
+    else if (is_music_browse_screen(screen))
+        draw_music_browse(nav, screen);
+    else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
+        draw_playlists(nav);
+    else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
+        aura_nowplaying_draw();
     else
         draw_empty_state(screen);
 }
@@ -304,6 +439,8 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
             aura_nav_set_selection(nav, sel - 1);
         break;
     case BUTTON_SELECT:
+        if (screen == AURA_SCREEN_MUSIC)
+            aura_music_reset_filters();
         aura_nav_push(nav, entries[sel].target);
         break;
     case BUTTON_MENU:
@@ -377,16 +514,99 @@ static void handle_dismiss_only(aura_nav_t *nav, long button)
         aura_nav_pop(nav);
 }
 
+static void handle_music_browse(aura_nav_t *nav, aura_screen_id_t screen, long button)
+{
+    int count = s_music_cache_count;
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (sel < count - 1)
+            aura_nav_set_selection(nav, sel + 1);
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (sel > 0)
+            aura_nav_set_selection(nav, sel - 1);
+        break;
+    case BUTTON_SELECT:
+        if (count == 0)
+            break;
+        switch (screen)
+        {
+        case AURA_SCREEN_MUSIC_ARTISTS:
+            aura_music_select_artist(s_music_cache[sel].seek);
+            aura_nav_push(nav, AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST);
+            break;
+        case AURA_SCREEN_MUSIC_ALBUMS:
+        case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST:
+            aura_music_select_album(s_music_cache[sel].seek);
+            aura_nav_push(nav, AURA_SCREEN_MUSIC_SONGS_BY_ALBUM);
+            break;
+        case AURA_SCREEN_MUSIC_GENRES:
+            aura_music_select_genre(s_music_cache[sel].seek);
+            aura_nav_push(nav, AURA_SCREEN_MUSIC_SONGS_BY_GENRE);
+            break;
+        case AURA_SCREEN_MUSIC_SONGS:
+        case AURA_SCREEN_MUSIC_SONGS_BY_ALBUM:
+        case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:
+            if (aura_music_play_songs(screen, sel))
+                aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+            break;
+        default:
+            break;
+        }
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+static void handle_playlists(aura_nav_t *nav, long button)
+{
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (sel < s_playlist_cache_count - 1)
+            aura_nav_set_selection(nav, sel + 1);
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (sel > 0)
+            aura_nav_set_selection(nav, sel - 1);
+        break;
+    case BUTTON_SELECT:
+        if (s_playlist_cache_count > 0 && aura_music_play_playlist(sel))
+            aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
 void aura_screens_handle_button(aura_nav_t *nav, long button)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
 
-    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS)
+    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
     else if (screen == AURA_SCREEN_SETTINGS_BRIGHTNESS)
         handle_brightness(nav, button);
+    else if (is_music_browse_screen(screen))
+        handle_music_browse(nav, screen, button);
+    else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
+        handle_playlists(nav, button);
+    else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
+        aura_nowplaying_handle_button(nav, button);
     else
         handle_dismiss_only(nav, button);
 }
