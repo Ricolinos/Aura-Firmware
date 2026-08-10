@@ -13,11 +13,33 @@ typedef struct {
 } aura_list_item_t;
 
 /* Dibuja una pantalla de lista completa: limpia con el color de fondo
- * del tema, barra de titulo, y las filas visibles alrededor de
- * `selected` (con scroll si no caben todas). No llama a lcd_update():
- * el llamador decide cuando presentar el frame. */
+ * del tema, barra de estado/titulo, y las filas visibles alrededor de
+ * `selected` (con scroll si no caben todas). En cualquier modo grafico
+ * salvo Ultra la lista ocupa solo el panel izquierdo y el panel
+ * derecho muestra el icono del item seleccionado, con un retardo de
+ * ~1s (L2/L3, PLAN-UX.md, Fase 15) -- en Ultra ocupa toda la pantalla,
+ * sin panel derecho. No llama a lcd_update(): el llamador decide
+ * cuando presentar el frame. */
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected);
+
+/* True si el modo grafico activo usa pantalla dividida (todos menos
+ * Ultra). Lo consultan las pantallas con dibujo propio (Coverflow,
+ * Now Playing) para decidir su propio layout. */
+int aura_widgets_split_active(void);
+
+/* True mientras el panel derecho tiene un icono nuevo pendiente de
+ * mostrar (retardo de 1s, L3) -- aura_main.c lo usa para decidir si
+ * redibujar con un timeout corto en vez de bloquear indefinidamente
+ * esperando el proximo boton. */
+int aura_widgets_panel_pending(void);
+
+/* Dibuja el panel derecho de la pantalla dividida: linea divisoria +
+ * icono grande centrado (NULL = panel vacio). Sin retardo propio --
+ * aura_widgets_draw_list() ya se encarga del debounce de 1s antes de
+ * llamar esto; una pantalla con dibujo propio que quiera el mismo
+ * panel sin contenido animado puede llamarlo directo. */
+void aura_widgets_draw_right_panel_icon(const char *icon_name);
 
 /* Numero de filas de lista que caben en pantalla con el layout actual;
  * usado por aura_screens.c para el scroll. */

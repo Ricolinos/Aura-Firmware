@@ -6,6 +6,7 @@
 #include "file.h"
 #include "rbpaths.h"
 #include "recorder/bmp.h"
+#include "tick.h"
 
 #include "aura_widgets.h"
 #include "aura_theme.h"
@@ -15,11 +16,19 @@
 #include "aura_lang.h"
 
 /* Layout: barra de estado arriba (Fase 13, PLAN-UX.md), filas de lista
- * debajo. */
+ * debajo. Pantalla dividida izquierda/derecha (Fase 15, L2): en
+ * cualquier modo grafico salvo Ultra, la lista ocupa solo el panel
+ * izquierdo (168px) y el panel derecho muestra un preview contextual
+ * del item seleccionado, con un retardo de ~1s (L3) antes de
+ * actualizarse. En Ultra, sigue siendo la lista de ancho completo de
+ * siempre -- "sin panel derecho", L4. */
 #define LIST_TOP      (AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_SM)
 #define ROW_HEIGHT    (AURA_TYPE_BODY + 2 * AURA_SPACING_SM)
 #define ROW_PAD_X     AURA_SPACING_LG
 #define ICON_TEXT_GAP AURA_SPACING_MD
+#define PANEL_RIGHT_X (AURA_LAYOUT_PANEL_LEFT_WIDTH + 1)
+#define PANEL_RIGHT_W (AURA_SCREEN_WIDTH - PANEL_RIGHT_X)
+#define PANEL_RETARDO_TICKS HZ
 
 static const char *theme_dir_name(void)
 {
@@ -28,7 +37,11 @@ static const char *theme_dir_name(void)
 
 int aura_widgets_draw_icon(const char *name, int size, int x, int y)
 {
-    static unsigned char icon_buf[AURA_ICON_SIZE_MENU * AURA_ICON_SIZE_MENU
+    /* Dimensionado para el icono mas grande que se pide hoy
+     * (AURA_ICON_SIZE_PREVIEW, panel derecho de la pantalla dividida,
+     * Fase 15) -- un buffer de sobra tambien sirve para los tamanos
+     * mas chicos que se usan en listas/barra de estado. */
+    static unsigned char icon_buf[AURA_ICON_SIZE_PREVIEW * AURA_ICON_SIZE_PREVIEW
                                    * 4 + 64];
     char path[MAX_PATH];
     struct bitmap bm;
@@ -52,15 +65,66 @@ int aura_widgets_draw_icon(const char *name, int size, int x, int y)
     return bm.width;
 }
 
+int aura_widgets_split_active(void)
+{
+    return aura_settings.graphics_mode != AURA_GFX_ULTRA;
+}
+
+static int list_width(void)
+{
+    return aura_widgets_split_active() ? AURA_LAYOUT_PANEL_LEFT_WIDTH : AURA_SCREEN_WIDTH;
+}
+
 int aura_widgets_visible_rows(void)
 {
     int rows = (AURA_SCREEN_HEIGHT - LIST_TOP) / ROW_HEIGHT;
     return rows > 0 ? rows : 1;
 }
 
+/* Retardo de ~1s antes de que el panel derecho refleje una nueva
+ * seleccion (L3, PLAN-UX.md): mientras el usuario sigue moviendose por
+ * la lista, el panel sigue mostrando el icono anterior. */
+static const char *s_panel_pending_icon;
+static const char *s_panel_shown_icon;
+static long s_panel_pending_since = 0;
+
+static void draw_right_panel_debounced(const char *icon_name)
+{
+    if (icon_name != s_panel_pending_icon)
+    {
+        s_panel_pending_icon = icon_name;
+        s_panel_pending_since = current_tick;
+    }
+
+    if (TIME_AFTER(current_tick, s_panel_pending_since + PANEL_RETARDO_TICKS))
+        s_panel_shown_icon = s_panel_pending_icon;
+
+    aura_widgets_draw_right_panel_icon(s_panel_shown_icon);
+}
+
+int aura_widgets_panel_pending(void)
+{
+    return s_panel_shown_icon != s_panel_pending_icon;
+}
+
+void aura_widgets_draw_right_panel_icon(const char *icon_name)
+{
+    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
+    lcd_vline(AURA_LAYOUT_PANEL_LEFT_WIDTH, 0, AURA_SCREEN_HEIGHT - 1);
+
+    if (!icon_name)
+        return;
+
+    aura_widgets_draw_icon(icon_name, AURA_ICON_SIZE_PREVIEW,
+        PANEL_RIGHT_X + (PANEL_RIGHT_W - AURA_ICON_SIZE_PREVIEW) / 2,
+        (AURA_SCREEN_HEIGHT - AURA_ICON_SIZE_PREVIEW) / 2);
+}
+
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected)
 {
+    int split = aura_widgets_split_active();
+    int width = list_width();
     int visible = aura_widgets_visible_rows();
     int first = 0;
     int i;
@@ -75,7 +139,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     }
 
     aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+    aura_statusbar_draw(0, width, title, 0);
 
     lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
 
@@ -88,7 +152,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         if (is_selected)
         {
             lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
-            lcd_fillrect(0, row_y, AURA_SCREEN_WIDTH, ROW_HEIGHT);
+            lcd_fillrect(0, row_y, width, ROW_HEIGHT);
         }
 
         if (items[i].icon_name)
@@ -107,10 +171,13 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         if (items[i].checked)
         {
             aura_widgets_draw_icon("check", AURA_ICON_SIZE_MENU,
-                      AURA_SCREEN_WIDTH - ROW_PAD_X - AURA_ICON_SIZE_MENU,
+                      width - ROW_PAD_X - AURA_ICON_SIZE_MENU,
                       row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2);
         }
     }
+
+    if (split)
+        draw_right_panel_debounced(count > 0 ? items[selected].icon_name : NULL);
 }
 
 /* -- Fila booleana (L11) --------------------------------------------- */

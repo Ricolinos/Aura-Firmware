@@ -12,7 +12,7 @@
 #include "aura_screens.h"
 #include "aura_nowplaying.h"
 #include "aura_music.h"
-#include "aura_home.h"
+#include "aura_widgets.h"
 
 /* Boton crudo normalizado: se ignoran eventos de soltar (BUTTON_REL) y
  * se trata un repeat igual que una pulsacion nueva (mismo idioma que
@@ -79,11 +79,12 @@ void aura_main(void)
         if (!aura_music_db_ready() && timeout_ticks < 0)
             timeout_ticks = HZ / 2;
 
-        /* Rotacion/crossfade de la pantalla de inicio dividida (modo
-         * grafico Completo, D-025): necesita un tick mas fino que las
-         * demas para que el crossfade (~1s) se vea con varios pasos
-         * visibles en vez de un salto brusco. */
-        if (aura_nav_current(&nav) == AURA_SCREEN_ROOT && aura_home_needs_tick())
+        /* Retardo de 1s del panel derecho en pantallas divididas (L3,
+         * Fase 15): mientras el icono nuevo todavia no se mostro, hay
+         * que seguir redibujando aunque el usuario no toque nada, si
+         * no el cambio pendiente nunca llega a la pantalla hasta el
+         * proximo boton. */
+        if (aura_widgets_panel_pending() && timeout_ticks < 0)
             timeout_ticks = HZ / 4;
 
         button = next_button(timeout_ticks);

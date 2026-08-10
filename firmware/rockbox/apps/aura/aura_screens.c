@@ -18,7 +18,6 @@
 #include "aura_nowplaying.h"
 #include "aura_transitions.h"
 #include "aura_coverflow.h"
-#include "aura_home.h"
 #include "aura_photos.h"
 #include "aura_video.h"
 
@@ -300,20 +299,13 @@ static int is_music_browse_screen(aura_screen_id_t screen)
     }
 }
 
-/* En modo grafico Completo, Albumes se navega con Coverflow en vez de
- * la lista plana (D-025); en Ultra/Minimalista sigue siendo una lista
- * como cualquier otra pantalla de is_music_browse_screen(). */
-/* En modo grafico Completo, la raiz se dibuja como pantalla dividida
- * con caratulas si hay al menos un album con arte disponible (D-025);
- * si no hay ninguna caratula, la pantalla dividida no aportaria nada
- * y se usa la lista simple de siempre. */
-static int is_split_home_screen(aura_screen_id_t screen)
-{
-    return screen == AURA_SCREEN_ROOT
-        && aura_settings.graphics_mode == AURA_GFX_FULL
-        && aura_home_has_content();
-}
-
+/* En modo grafico Pro, Albumes se navega con Coverflow en vez de la
+ * lista plana (D-025); en Ultra/Minimalista sigue siendo una lista
+ * como cualquier otra pantalla de is_music_browse_screen(). La raiz ya
+ * no tiene una pantalla especial propia (D-025 la retiro en la Fase
+ * 15): aura_widgets_draw_list() dibuja la pantalla dividida
+ * izquierda/derecha para *cualquier* lista en modo no-Ultra, root
+ * incluida -- ver D-057 en DECISIONS.md. */
 static int is_coverflow_screen(aura_screen_id_t screen)
 {
     return aura_settings.graphics_mode == AURA_GFX_FULL
@@ -407,9 +399,7 @@ void aura_screens_draw(aura_nav_t *nav)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
 
-    if (is_split_home_screen(screen))
-        aura_home_draw(nav);
-    else if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
+    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -611,9 +601,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     aura_screen_id_t screen = aura_nav_current(nav);
     int depth_before = aura_nav_depth(nav);
 
-    if (is_split_home_screen(screen))
-        aura_home_handle_button(nav, button);
-    else if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
+    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
