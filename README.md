@@ -21,7 +21,7 @@ Ecosistema para revivir el iPod Classic 6G (2008) con un firmware moderno, minim
 
 ## Estado del proyecto
 
-Las 12 fases del plan están completas (código, tests y evidencia visual committeados). Lo que **no** se pudo verificar en esta sesión de desarrollo, por no contar con un iPod físico ni un Mac con Xcode completamente configurado, es: el arranque/flasheo en hardware real, y `xcodebuild` de `AuraStudio.xcodeproj` (verificado en cambio con `swift build`/`swift test` sobre el mismo código fuente — ver D-034 en DECISIONS.md). El detalle completo, fase por fase, está en el resumen de cierre del historial de esta sesión y en las guías de arriba.
+Las 12 fases del plan están completas (código, tests y evidencia visual committeados). `AuraStudio.xcodeproj` compila y pasa sus 30 tests con `xcodebuild` real (no solo con el camino alternativo de `swift build`/`swift test` — ver D-034/D-041 en DECISIONS.md), generando `AuraStudio.app` con los artefactos de `firmware/dist/` embebidos y verificados. Lo único que **no** se pudo verificar en esta sesión de desarrollo, por no contar con un iPod físico conectado, es el arranque/flasheo en hardware real. El detalle completo, fase por fase, está en el resumen de cierre del historial de esta sesión y en las guías de arriba.
 
 ## Licencias
 
