@@ -2,6 +2,7 @@
 #include "lcd.h"
 #include "audio.h"
 #include "tick.h"
+#include "misc.h"
 
 #include "aura_main.h"
 #include "aura_nav.h"
@@ -71,6 +72,19 @@ void aura_main(void)
             timeout_ticks = HZ / 4;
 
         button = next_button(timeout_ticks);
+
+        /* SYS_USB_CONNECTED/SYS_POWEROFF/SYS_REBOOT son eventos de
+         * sistema, no botones -- aura_screens_handle_button() no los
+         * reconoce y los ignora en silencio (bug real encontrado en
+         * hardware: el iPod nunca entraba en modo de almacenamiento
+         * USB al conectar el cable estando ya arrancado en Aura,
+         * porque este evento nunca se manejaba). default_event_handler()
+         * es la misma funcion que usa el resto de Rockbox (menu.c,
+         * tree.c, etc.): monta el disco/apaga limpio y devuelve el
+         * propio evento si lo manejo, o 0 para un boton normal. */
+        if (default_event_handler(button) != 0)
+            continue;
+
         aura_screens_handle_button(&nav, button);
     }
 }

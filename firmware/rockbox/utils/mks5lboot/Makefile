@@ -30,6 +30,16 @@ endif
 else
 ifeq ($(findstring APPLE,$(CPPDEFINES)),APPLE)
 LDOPTS += -L/usr/local/lib -framework IOKit -framework CoreFoundation
+# backend libusb opcional ademas de IOKit (no lo reemplaza): el
+# backend IOKit clasico (IOUSBDeviceInterface) puede sufrir timeouts
+# de transaccion bajo el stack USB moderno de macOS con dispositivos
+# en modo DFU/WTF; libusb usa una ruta distinta que a veces evita ese
+# problema. api_list[] prueba ambos backends en orden, asi que agregar
+# este no rompe nada si IOKit ya funciona.
+ifeq ($(USE_LIBUSBAPI),1)
+CFLAGS += -DUSE_LIBUSBAPI -I$(shell brew --prefix libusb 2>/dev/null || echo /opt/homebrew)/include
+LDOPTS += -L$(shell brew --prefix libusb 2>/dev/null || echo /opt/homebrew)/lib -lusb-1.0
+endif
 else # Linux
 CFLAGS += -DUSE_LIBUSBAPI
 LDOPTS += -lusb-1.0

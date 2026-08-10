@@ -461,6 +461,15 @@ static void init(void)
      * bateria del proyecto. */
     global_settings.tagcache_ram = 1;
 #endif
+    /* Aura siempre usa modo de almacenamiento masivo al conectar USB,
+     * nunca HID (mouse/browser/presentacion/multimedia) -- Aura no
+     * expone esa opcion en sus Ajustes (los simplifica a proposito) y
+     * el unico uso real de USB en Aura es sincronizar con Aura Studio.
+     * Bug real encontrado en hardware: un iPod con una instalacion
+     * previa de Rockbox que tenia HID activado en su config.cfg se
+     * quedaba mostrando el selector de modo HID (mouse/browser/etc.)
+     * en vez de montarse como disco al conectar el cable. */
+    global_settings.usb_hid = false;
     settings_apply(true);
     init_battery_tables();
 #ifdef HAVE_DIRCACHE
@@ -733,6 +742,10 @@ static void init(void)
      * en la otra variante de init() (PLATFORM_HOSTED) mas arriba. */
     global_settings.tagcache_ram = 1;
 #endif
+    /* Ver el comentario equivalente en la otra variante de init()
+     * (PLATFORM_HOSTED) mas arriba: Aura siempre usa modo de
+     * almacenamiento masivo al conectar USB, nunca HID. */
+    global_settings.usb_hid = false;
 
 #if defined(BUTTON_REC) || \
     (CONFIG_KEYPAD == GIGABEAT_PAD) || \
