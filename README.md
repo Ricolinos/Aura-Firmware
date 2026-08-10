@@ -14,7 +14,14 @@ Ecosistema para revivir el iPod Classic 6G (2008) con un firmware moderno, minim
 ## Documentos clave
 
 - [PLAN.md](PLAN.md) — plan maestro con fases, riesgos y criterios de aceptación.
-- [DECISIONS.md](DECISIONS.md) — registro de decisiones técnicas.
+- [DECISIONS.md](DECISIONS.md) — registro de decisiones técnicas (más de 40 entradas, cada una con el problema real encontrado y la alternativa implementada).
+- [docs/guia-instalacion.md](docs/guia-instalacion.md) — guía para el usuario final: instalar Aura y sincronizar tu biblioteca.
+- [docs/guia-flasheo-restauracion.md](docs/guia-flasheo-restauracion.md) — detalle técnico del flasheo, dual-boot y restauración.
+- [docs/guia-desarrollo.md](docs/guia-desarrollo.md) — cómo compilar cada parte del proyecto.
+
+## Estado del proyecto
+
+Las 12 fases del plan están completas (código, tests y evidencia visual committeados). Lo que **no** se pudo verificar en esta sesión de desarrollo, por no contar con un iPod físico ni un Mac con Xcode completamente configurado, es: el arranque/flasheo en hardware real, y `xcodebuild` de `AuraStudio.xcodeproj` (verificado en cambio con `swift build`/`swift test` sobre el mismo código fuente — ver D-034 en DECISIONS.md). El detalle completo, fase por fase, está en el resumen de cierre del historial de esta sesión y en las guías de arriba.
 
 ## Licencias
 
