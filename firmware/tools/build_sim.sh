@@ -22,6 +22,9 @@ if [[ "${1:-}" == "--reconfigure" ]]; then
   shift
 fi
 
+echo "==> Regenerando el design system (design-system/generate.py)"
+python3 "$ROOT_DIR/design-system/generate.py"
+
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
