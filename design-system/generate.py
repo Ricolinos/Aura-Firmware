@@ -68,6 +68,12 @@ def generate_header(tokens):
     lines.append(f"#define AURA_SCREEN_HEIGHT {screen['height']}")
     lines.append("")
 
+    layout = tokens["layout"]
+    lines.append("/* Retroalimentacion de layout global (px) */")
+    for name, value in layout.items():
+        lines.append(f"#define AURA_LAYOUT_{name.upper()} {value}")
+    lines.append("")
+
     lines.append("/* Espaciados (px) */")
     for name, value in tokens["spacing"].items():
         lines.append(f"#define AURA_SPACING_{name.upper()} {value}")

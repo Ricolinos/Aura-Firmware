@@ -13,6 +13,7 @@
 #include "aura_settings.h"
 #include "aura_lang.h"
 #include "aura_tokens.h"
+#include "aura_statusbar.h"
 
 /* Coverflow simplificado (D-025): en vez de perspectiva 3D real por
  * cuadro (demasiado costosa para un ARM926EJ-S a ~216MHz), todas las
@@ -146,6 +147,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     (void)nav;
 
     aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_ALBUMS), 0);
 
     if (!aura_music_db_ready())
     {

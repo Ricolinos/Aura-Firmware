@@ -320,6 +320,7 @@ aura/aura_nowplaying.c
 aura/aura_photos.c
 aura/aura_screens.c
 aura/aura_settings.c
+aura/aura_statusbar.c
 aura/aura_theme.c
 aura/aura_transitions.c
 aura/aura_video.c

@@ -11,11 +11,12 @@
 #include "aura_theme.h"
 #include "aura_settings.h"
 #include "aura_tokens.h"
+#include "aura_statusbar.h"
+#include "aura_lang.h"
 
-/* Layout: barra de titulo arriba, filas de lista debajo. */
-#define TITLE_TOP     AURA_SPACING_LG
-#define TITLE_HEIGHT  (AURA_TYPE_TITLE + AURA_SPACING_MD)
-#define LIST_TOP      (TITLE_TOP + TITLE_HEIGHT + AURA_SPACING_SM)
+/* Layout: barra de estado arriba (Fase 13, PLAN-UX.md), filas de lista
+ * debajo. */
+#define LIST_TOP      (AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_SM)
 #define ROW_HEIGHT    (AURA_TYPE_BODY + 2 * AURA_SPACING_SM)
 #define ROW_PAD_X     AURA_SPACING_LG
 #define ICON_TEXT_GAP AURA_SPACING_MD
@@ -25,7 +26,7 @@ static const char *theme_dir_name(void)
     return (aura_settings.theme == AURA_THEME_DARK) ? "dark" : "light";
 }
 
-static int draw_icon(const char *name, int size, int x, int y)
+int aura_widgets_draw_icon(const char *name, int size, int x, int y)
 {
     static unsigned char icon_buf[AURA_ICON_SIZE_MENU * AURA_ICON_SIZE_MENU
                                    * 4 + 64];
@@ -74,10 +75,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     }
 
     aura_theme_clear_screen();
-
-    lcd_setfont(aura_font(AURA_FONT_STYLE_TITLE));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
-    lcd_putsxy(ROW_PAD_X, TITLE_TOP, (const unsigned char *)title);
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
 
     lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
 
@@ -95,7 +93,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 
         if (items[i].icon_name)
         {
-            int w = draw_icon(items[i].icon_name, AURA_ICON_SIZE_MENU,
+            int w = aura_widgets_draw_icon(items[i].icon_name, AURA_ICON_SIZE_MENU,
                                text_x, row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2);
             if (w > 0)
                 text_x += w + ICON_TEXT_GAP;
@@ -108,9 +106,131 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 
         if (items[i].checked)
         {
-            draw_icon("check", AURA_ICON_SIZE_MENU,
+            aura_widgets_draw_icon("check", AURA_ICON_SIZE_MENU,
                       AURA_SCREEN_WIDTH - ROW_PAD_X - AURA_ICON_SIZE_MENU,
                       row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2);
         }
     }
+}
+
+/* -- Fila booleana (L11) --------------------------------------------- */
+
+void aura_widgets_draw_bool_row(const char *title, const char *label,
+                                 int value)
+{
+    const char *value_text = aura_str(value ? AURA_STR_YES : AURA_STR_NO);
+    int w, h;
+
+    aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+
+    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
+    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
+    lcd_putsxy(ROW_PAD_X, LIST_TOP + AURA_SPACING_SM,
+               (const unsigned char *)label);
+
+    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
+    lcd_getstringsize((const unsigned char *)value_text, &w, &h);
+    lcd_putsxy(AURA_SCREEN_WIDTH - ROW_PAD_X - w, LIST_TOP + AURA_SPACING_SM,
+               (const unsigned char *)value_text);
+}
+
+/* -- Slider horizontal (migra el de Brillo, D-014) -------------------- */
+
+void aura_widgets_draw_slider(const char *title, int fraction,
+                               const char *value_text)
+{
+    int bar_x = AURA_SPACING_XXL;
+    int bar_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
+    int bar_y = AURA_SCREEN_HEIGHT / 2;
+    int fill_w;
+
+    aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+
+    if (fraction < 0)   fraction = 0;
+    if (fraction > 256) fraction = 256;
+
+    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
+    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_XL);
+
+    fill_w = (bar_w * fraction) / 256;
+    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
+    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_XL);
+
+    if (value_text)
+    {
+        lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
+        lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+        lcd_putsxy(bar_x, bar_y + AURA_SPACING_XL + AURA_SPACING_SM,
+                   (const unsigned char *)value_text);
+    }
+}
+
+/* -- Selector de digitos (L10, pantallas de fecha/hora/codigo) -------- */
+
+#define DIGIT_BOX_W  24
+#define DIGIT_BOX_H  32
+#define DIGIT_GAP    AURA_SPACING_SM
+
+void aura_widgets_draw_digits(const char *title, const int *digits,
+                               int count, int focus)
+{
+    int total_w = count * DIGIT_BOX_W + (count - 1) * DIGIT_GAP;
+    int start_x = (AURA_SCREEN_WIDTH - total_w) / 2;
+    int box_y = AURA_SCREEN_HEIGHT / 2 - DIGIT_BOX_H / 2;
+    int i;
+
+    aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+
+    lcd_setfont(aura_font(AURA_FONT_STYLE_TITLE));
+
+    for (i = 0; i < count; i++)
+    {
+        int box_x = start_x + i * (DIGIT_BOX_W + DIGIT_GAP);
+        char digit_str[2] = { (char)('0' + digits[i]), '\0' };
+        int w, h;
+        int is_focus = (i == focus);
+
+        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_ACCENT)
+                                     : aura_color(AURA_TOK_SURFACE));
+        lcd_fillrect(box_x, box_y, DIGIT_BOX_W, DIGIT_BOX_H);
+
+        lcd_getstringsize((const unsigned char *)digit_str, &w, &h);
+        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_ACCENT_ON)
+                                     : aura_color(AURA_TOK_TEXT_PRIMARY));
+        lcd_putsxy(box_x + (DIGIT_BOX_W - w) / 2, box_y + (DIGIT_BOX_H - h) / 2,
+                   (const unsigned char *)digit_str);
+    }
+}
+
+/* -- Progreso ----------------------------------------------------------- */
+
+void aura_widgets_draw_progress(const char *text, int fraction)
+{
+    int bar_x = AURA_SPACING_XXL;
+    int bar_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
+    int bar_y = AURA_SCREEN_HEIGHT / 2;
+    int fill_w;
+
+    if (fraction < 0)   fraction = 0;
+    if (fraction > 256) fraction = 256;
+
+    if (text)
+    {
+        int w, h;
+        lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
+        lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+        lcd_getstringsize((const unsigned char *)text, &w, &h);
+        lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, bar_y - AURA_SPACING_XL - h,
+                   (const unsigned char *)text);
+    }
+
+    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
+    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_SM);
+
+    fill_w = (bar_w * fraction) / 256;
+    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
+    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_SM);
 }

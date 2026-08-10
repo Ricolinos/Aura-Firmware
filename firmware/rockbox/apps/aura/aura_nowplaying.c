@@ -11,7 +11,6 @@
 #include "audio.h"
 #include "file.h"
 #include "string-extra.h"
-#include "powermgmt.h"
 #include "recorder/albumart.h"
 #include "recorder/bmp.h"
 #include "recorder/jpeg_load.h"
@@ -22,10 +21,11 @@
 #include "aura_lang.h"
 #include "aura_lrc.h"
 #include "aura_tokens.h"
+#include "aura_statusbar.h"
 
 #define ART_SIZE   100
 #define ART_X      ((AURA_SCREEN_WIDTH - ART_SIZE) / 2)
-#define ART_Y      AURA_SPACING_LG
+#define ART_Y      (AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_SM)
 
 #define LRC_FILE_BUF_SIZE 8192
 
@@ -122,23 +122,6 @@ static void format_time(unsigned long ms, char *buf, size_t bufsz)
     snprintf(buf, bufsz, "%lu:%02lu", total_s / 60, total_s % 60);
 }
 
-static void draw_battery(void)
-{
-    char buf[16];
-    int level = battery_level();
-    int w, h;
-
-    if (level < 0)
-        return;
-
-    lcd_setfont(aura_font(AURA_FONT_STYLE_MICRO));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
-    snprintf(buf, sizeof(buf), "%d%%", level);
-    lcd_getstringsize((const unsigned char *)buf, &w, &h);
-    lcd_putsxy(AURA_SCREEN_WIDTH - AURA_SPACING_LG - w, AURA_SPACING_SM,
-               (const unsigned char *)buf);
-}
-
 static void draw_lyrics(const struct mp3entry *id3)
 {
     int active = aura_lrc_find_active_line(&s_lrc, (long)id3->elapsed);
@@ -217,13 +200,8 @@ static void draw_player(const struct mp3entry *id3)
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     lcd_putsxy(bar_x + bar_w - w, bar_y + AURA_SPACING_SM + AURA_SPACING_XS,
                (const unsigned char *)line);
-
-    if (audio_status() & AUDIO_STATUS_PAUSE)
-    {
-        lcd_setfont(aura_font(AURA_FONT_STYLE_CAPTION));
-        lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
-        lcd_putsxy(bar_x, bar_y + AURA_SPACING_XL, (const unsigned char *)"II");
-    }
+    /* El estado de pausa ya lo indica el icono de la barra de estado
+     * (Fase 13, PLAN-UX.md, L5) -- sin duplicarlo aca dentro. */
 }
 
 void aura_nowplaying_draw(void)
@@ -231,12 +209,12 @@ void aura_nowplaying_draw(void)
     struct mp3entry *id3 = audio_current_track();
 
     aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING), 1);
 
     if (!id3)
         return;
 
     reload_for_track(id3);
-    draw_battery();
 
     if (s_show_lyrics && s_lrc_valid)
         draw_lyrics(id3);

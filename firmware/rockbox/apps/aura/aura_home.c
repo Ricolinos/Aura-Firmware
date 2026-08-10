@@ -13,11 +13,17 @@
 #include "aura_settings.h"
 #include "aura_lang.h"
 #include "aura_tokens.h"
+#include "aura_statusbar.h"
 
-#define HOME_ART_SIZE     96
-#define HOME_ART_Y        6
-#define HOME_DIVIDER_Y    112
-#define HOME_LIST_TOP     118
+/* Geometria comprimida para dejarle sitio a la barra de estado (Fase
+ * 13, PLAN-UX.md) arriba de todo -- esta pantalla dividida arriba/abajo
+ * es transitoria: la Fase 15 la reemplaza por el split izquierda/derecha
+ * del firmware original (L2), asi que no vale la pena invertir mas en
+ * su geometria actual que lo minimo para que quepa sin recortarse. */
+#define HOME_ART_SIZE     72
+#define HOME_ART_Y        (AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_SM)
+#define HOME_DIVIDER_Y    (HOME_ART_Y + HOME_ART_SIZE + AURA_SPACING_MD)
+#define HOME_LIST_TOP     (HOME_DIVIDER_Y + AURA_SPACING_SM)
 #define HOME_ROW_HEIGHT   24
 #define HOME_ROTATE_TICKS (HZ * 4)
 #define HOME_FADE_TICKS   HZ
@@ -177,6 +183,7 @@ void aura_home_draw(aura_nav_t *nav)
 
     ensure_init();
     aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, "Aura", 0);
     advance_rotation();
 
     lcd_set_foreground(aura_color(AURA_TOK_BORDER));

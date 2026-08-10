@@ -9,6 +9,7 @@
 
 #include "aura_screens.h"
 #include "aura_widgets.h"
+#include "aura_statusbar.h"
 #include "aura_theme.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
@@ -225,64 +226,43 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
 static void draw_brightness(void)
 {
     char buf[16];
-    int bar_x = AURA_SPACING_XXL;
-    int bar_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
-    int bar_y = AURA_SCREEN_HEIGHT / 2;
-    int fill_w;
     int range = MAX_BRIGHTNESS_SETTING - MIN_BRIGHTNESS_SETTING;
+    int fraction = range > 0
+        ? (256 * (global_settings.brightness - MIN_BRIGHTNESS_SETTING)) / range
+        : 0;
 
-    aura_theme_clear_screen();
-
-    lcd_setfont(aura_font(AURA_FONT_STYLE_TITLE));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
-    lcd_putsxy(AURA_SPACING_LG, AURA_SPACING_LG,
-               (const unsigned char *)aura_str(AURA_STR_SETTINGS_BRIGHTNESS));
-
-    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
-    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_XL);
-
-    if (range > 0)
-        fill_w = (bar_w * (global_settings.brightness - MIN_BRIGHTNESS_SETTING)) / range;
-    else
-        fill_w = 0;
-    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_XL);
-
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
     snprintf(buf, sizeof(buf), "%d / %d", global_settings.brightness,
              MAX_BRIGHTNESS_SETTING);
-    lcd_putsxy(bar_x, bar_y + AURA_SPACING_XL + AURA_SPACING_SM,
-               (const unsigned char *)buf);
+    aura_widgets_draw_slider(aura_str(AURA_STR_SETTINGS_BRIGHTNESS), fraction, buf);
 }
 
 static void draw_about(void)
 {
     aura_theme_clear_screen();
-
-    lcd_setfont(aura_font(AURA_FONT_STYLE_TITLE));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
-    lcd_putsxy(AURA_SPACING_LG, AURA_SPACING_LG, (const unsigned char *)"Aura");
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT), 0);
 
     lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
     lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
-    lcd_putsxy(AURA_SPACING_LG, AURA_SPACING_LG + AURA_TYPE_TITLE + AURA_SPACING_MD,
+    lcd_putsxy(AURA_SPACING_LG, AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_LG,
                (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
     lcd_putsxy(AURA_SPACING_LG,
-               AURA_SPACING_LG + AURA_TYPE_TITLE + AURA_SPACING_MD + AURA_TYPE_BODY + AURA_SPACING_SM,
+               AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_LG + AURA_TYPE_BODY + AURA_SPACING_SM,
                (const unsigned char *)rbversion);
 }
 
 static void draw_message_centered(aura_str_id_t msg_id)
 {
     int w, h;
+    int content_top = AURA_LAYOUT_STATUSBAR_HEIGHT;
+    int content_h = AURA_SCREEN_HEIGHT - content_top;
 
     aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, NULL, 0);
 
     lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
     lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
     lcd_getstringsize((const unsigned char *)aura_str(msg_id), &w, &h);
-    lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, (AURA_SCREEN_HEIGHT - h) / 2,
+    lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, content_top + (content_h - h) / 2,
                (const unsigned char *)aura_str(msg_id));
 }
 
