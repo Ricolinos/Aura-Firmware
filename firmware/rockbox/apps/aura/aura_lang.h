@@ -51,6 +51,7 @@ typedef enum {
     AURA_STR_MUSIC_GENRES,
     AURA_STR_DB_NOT_READY,
     AURA_STR_EMPTY_LIST,
+    AURA_STR_UNSUPPORTED_FORMAT,
 
     AURA_STR_COUNT,
 } aura_str_id_t;

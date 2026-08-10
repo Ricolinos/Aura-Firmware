@@ -18,6 +18,8 @@
 #include "aura_transitions.h"
 #include "aura_coverflow.h"
 #include "aura_home.h"
+#include "aura_photos.h"
+#include "aura_video.h"
 
 #define MAX_MENU_ENTRIES 8
 
@@ -441,6 +443,12 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_music_browse(nav, screen);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
         draw_playlists(nav);
+    else if (screen == AURA_SCREEN_PHOTOS)
+        aura_photos_draw(nav);
+    else if (screen == AURA_SCREEN_PHOTO_VIEWER)
+        aura_photo_viewer_draw(nav);
+    else if (screen == AURA_SCREEN_VIDEOS)
+        aura_video_draw(nav);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_draw();
     else
@@ -637,6 +645,12 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_music_browse(nav, screen, button);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
         handle_playlists(nav, button);
+    else if (screen == AURA_SCREEN_PHOTOS)
+        aura_photos_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_PHOTO_VIEWER)
+        aura_photo_viewer_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_VIDEOS)
+        aura_video_handle_button(nav, button);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_handle_button(nav, button);
     else

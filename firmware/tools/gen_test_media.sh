@@ -48,6 +48,41 @@ cat > "$OUT_DIR/aura-test.lrc" <<'EOF'
 EOF
 
 echo "==> Generando $OUT_DIR/cover.jpg"
-ffmpeg -y -loglevel error -f lavfi -i "color=c=0x3366CC:s=200x200" -frames:v 1 "$OUT_DIR/cover.jpg"
+# -pix_fmt yuvj420p fuerza submuestreo de croma 4:2:0 estandar con tablas
+# de cuantizacion separadas por componente. Sin este flag, el encoder
+# mjpeg de ffmpeg a veces emite un muestreo no estandar (mismo factor de
+# muestreo en los 3 componentes + una sola tabla de cuantizacion
+# compartida) que el decoder JPEG de Rockbox no interpreta bien: decodifica
+# "con exito" (ret>0, dimensiones correctas) pero el resultado sale
+# corrupto/desordenado. Ver D-030 en DECISIONS.md.
+ffmpeg -y -loglevel error -f lavfi -i "color=c=0x3366CC:s=200x200" \
+  -pix_fmt yuvj420p -frames:v 1 "$OUT_DIR/cover.jpg"
+
+echo "==> Generando fixtures de Fotos (test-media/Photos)"
+mkdir -p "$OUT_DIR/Photos"
+ffmpeg -y -loglevel error -f lavfi -i "testsrc=size=320x240:rate=1" \
+  -pix_fmt yuvj420p -frames:v 1 "$OUT_DIR/Photos/photo1.jpg"
+ffmpeg -y -loglevel error -f lavfi -i "color=c=0x2244AA:s=320x240" \
+  -pix_fmt yuvj420p -frames:v 1 "$OUT_DIR/Photos/photo2.jpg"
+ffmpeg -y -loglevel error -f lavfi -i "smptebars=size=160x120:rate=1" \
+  -frames:v 1 "$OUT_DIR/Photos/photo3.bmp"
+ffmpeg -y -loglevel error -f lavfi -i "color=c=0xAA6622:s=100x100" \
+  -frames:v 1 "$OUT_DIR/Photos/photo4_unsupported.png"
+
+echo "==> Generando fixture de Video (test-media/Videos)"
+mkdir -p "$OUT_DIR/Videos"
+ffmpeg -y -loglevel error -f lavfi -i "testsrc=size=320x240:rate=15:duration=2" \
+  -f lavfi -i "sine=frequency=440:duration=2" \
+  -c:v mpeg2video -q:v 5 -c:a mp2 "$OUT_DIR/Videos/test.mpg"
+
+SIMDISK="$ROOT_DIR/firmware/build-sim/simdisk"
+if [[ -d "$SIMDISK" ]]; then
+  echo "==> Instalando fixtures en $SIMDISK"
+  mkdir -p "$SIMDISK/Music" "$SIMDISK/Photos" "$SIMDISK/Videos"
+  cp "$OUT_DIR"/aura-test.* "$SIMDISK/Music/"
+  cp "$OUT_DIR"/cover.jpg "$SIMDISK/Music/"
+  cp "$OUT_DIR"/Photos/* "$SIMDISK/Photos/"
+  cp "$OUT_DIR"/Videos/*.mpg "$SIMDISK/Videos/"
+fi
 
 echo "==> Listo: $OUT_DIR"

@@ -44,6 +44,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_MUSIC_GENRES]       = "Generos",
     [AURA_STR_DB_NOT_READY]       = "Preparando la biblioteca...",
     [AURA_STR_EMPTY_LIST]         = "Sin resultados",
+    [AURA_STR_UNSUPPORTED_FORMAT] = "Formato no soportado",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -89,6 +90,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_MUSIC_GENRES]       = "Genres",
     [AURA_STR_DB_NOT_READY]       = "Preparing your library...",
     [AURA_STR_EMPTY_LIST]         = "No results",
+    [AURA_STR_UNSUPPORTED_FORMAT] = "Unsupported format",
 };
 
 const char *aura_str(aura_str_id_t id)

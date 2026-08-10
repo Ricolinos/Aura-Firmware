@@ -317,9 +317,11 @@ aura/aura_lrc.c
 aura/aura_music.c
 aura/aura_nav.c
 aura/aura_nowplaying.c
+aura/aura_photos.c
 aura/aura_screens.c
 aura/aura_settings.c
 aura/aura_theme.c
 aura/aura_transitions.c
+aura/aura_video.c
 aura/aura_widgets.c
 aura/aura_main.c

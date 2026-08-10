@@ -1,0 +1,128 @@
+#include <string.h>
+#include <stdio.h>
+
+#include "lcd.h"
+#include "font.h"
+#include "button.h"
+#include "file.h"
+#include "dir.h"
+#include "string-extra.h"
+#include "rbpaths.h"
+#include "plugin.h"
+
+#include "aura_video.h"
+#include "aura_widgets.h"
+#include "aura_theme.h"
+#include "aura_settings.h"
+#include "aura_lang.h"
+#include "aura_tokens.h"
+
+/* Aura solo reproduce su formato interno (MPEG-1/2 320x240, generado
+ * por Aura Studio al sincronizar) delegando en el plugin mpegplayer
+ * del propio fork -- portar un decoder de video propio queda fuera de
+ * alcance de esta fase (D-029). plugin_load() hace toda la limpieza
+ * de pantalla/viewport/fuente antes y despues por su cuenta; Aura solo
+ * necesita llamarlo y redibujar su pantalla normal al volver. */
+
+#define VIDEOS_DIR     "/Videos"
+#define MAX_VIDEOS     100
+#define VIDEO_NAME_LEN 64
+
+static char s_videos[MAX_VIDEOS][VIDEO_NAME_LEN];
+static int s_video_count = -1;
+
+static bool has_ext(const char *name, const char *ext)
+{
+    size_t nlen = strlen(name), elen = strlen(ext);
+    return nlen > elen && !strcasecmp(name + nlen - elen, ext);
+}
+
+static bool is_video_file(const char *name)
+{
+    return has_ext(name, ".mpg") || has_ext(name, ".mpeg");
+}
+
+static void ensure_video_list(void)
+{
+    DIR *d;
+    struct DIRENT *entry;
+
+    if (s_video_count >= 0)
+        return;
+
+    s_video_count = 0;
+    d = opendir(VIDEOS_DIR);
+    if (!d)
+        return;
+
+    while (s_video_count < MAX_VIDEOS && (entry = readdir(d)) != NULL)
+    {
+        if (!is_video_file(entry->d_name))
+            continue;
+        strlcpy(s_videos[s_video_count], entry->d_name, VIDEO_NAME_LEN);
+        s_video_count++;
+    }
+    closedir(d);
+}
+
+void aura_video_draw(aura_nav_t *nav)
+{
+    int i;
+    static aura_list_item_t items[MAX_VIDEOS];
+
+    ensure_video_list();
+    aura_theme_clear_screen();
+
+    if (s_video_count == 0)
+    {
+        int w, h;
+        lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
+        lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+        lcd_getstringsize((const unsigned char *)aura_str(AURA_STR_EMPTY_VIDEOS), &w, &h);
+        lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, (AURA_SCREEN_HEIGHT - h) / 2,
+                   (const unsigned char *)aura_str(AURA_STR_EMPTY_VIDEOS));
+        return;
+    }
+
+    for (i = 0; i < s_video_count; i++)
+    {
+        items[i].label = s_videos[i];
+        items[i].icon_name = "video";
+        items[i].checked = 0;
+    }
+    aura_widgets_draw_list(aura_str(AURA_STR_VIDEOS), items, s_video_count,
+                            aura_nav_get_selection(nav));
+}
+
+void aura_video_handle_button(aura_nav_t *nav, long button)
+{
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (sel < s_video_count - 1)
+            aura_nav_set_selection(nav, sel + 1);
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (sel > 0)
+            aura_nav_set_selection(nav, sel - 1);
+        break;
+    case BUTTON_SELECT:
+        if (s_video_count > 0)
+        {
+            char path[MAX_PATH];
+            snprintf(path, sizeof(path), "%s/%s", VIDEOS_DIR, s_videos[sel]);
+            plugin_load(VIEWERS_DIR "/mpegplayer.rock", path);
+            /* plugin_load() ya restauro pantalla/viewport/fuente; el
+             * proximo ciclo de aura_main() redibuja esta pantalla
+             * normalmente, sin pasos extra aca. */
+        }
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
