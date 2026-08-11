@@ -53,6 +53,11 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_LANG_EN]            = "Ingles",
 
     [AURA_STR_ABOUT_BUILT_ON]     = "Basado en Rockbox",
+    [AURA_STR_ABOUT_MUSIC]        = "Musica",
+    [AURA_STR_ABOUT_VIDEOS]       = "Video",
+    [AURA_STR_ABOUT_PHOTOS]       = "Fotos",
+    [AURA_STR_ABOUT_PLAYLISTS]    = "Playlists",
+    [AURA_STR_ABOUT_NO_SYNC]      = "Todavia no sincronizaste con Aura Studio.",
 
     [AURA_STR_EMPTY_MUSIC]        = "Sin musica todavia",
     [AURA_STR_EMPTY_VIDEOS]       = "Sin videos todavia",
@@ -124,6 +129,11 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_LANG_EN]            = "English",
 
     [AURA_STR_ABOUT_BUILT_ON]     = "Built on Rockbox",
+    [AURA_STR_ABOUT_MUSIC]        = "Music",
+    [AURA_STR_ABOUT_VIDEOS]       = "Video",
+    [AURA_STR_ABOUT_PHOTOS]       = "Photos",
+    [AURA_STR_ABOUT_PLAYLISTS]    = "Playlists",
+    [AURA_STR_ABOUT_NO_SYNC]      = "You haven't synced with Aura Studio yet.",
 
     [AURA_STR_EMPTY_MUSIC]        = "No music yet",
     [AURA_STR_EMPTY_VIDEOS]       = "No videos yet",

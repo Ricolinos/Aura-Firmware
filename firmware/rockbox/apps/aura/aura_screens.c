@@ -9,6 +9,7 @@
 #include "sound.h"
 #include "powermgmt.h"
 #include "string-extra.h"
+#include "misc.h"
 
 #include "aura_screens.h"
 #include "aura_widgets.h"
@@ -23,6 +24,7 @@
 #include "aura_coverflow.h"
 #include "aura_photos.h"
 #include "aura_video.h"
+#include "aura_manifest.h"
 
 #define MAX_MENU_ENTRIES 16
 
@@ -326,18 +328,58 @@ static void draw_brightness(void)
     aura_widgets_draw_slider(aura_str(AURA_STR_SETTINGS_BRIGHTNESS), fraction, buf);
 }
 
+/* Fase 24: contadores/bytes reales que dejo Aura Studio en el ultimo
+ * sync (aura_manifest_load()), no solo la version del firmware -- si
+ * el dispositivo nunca se sincronizo desde Studio (aura_manifest_load
+ * devuelve false, p. ej. instalacion recien flasheada) se muestra un
+ * aviso en vez de contadores en cero que podrian confundirse con "la
+ * biblioteca esta vacia". */
 static void draw_about(void)
 {
+    const int line_h = AURA_TYPE_BODY + AURA_SPACING_SM;
+    int y = AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_LG;
+    aura_manifest_t manifest;
+    char size_buf[16];
+    char line_buf[48];
+
     aura_theme_clear_screen();
     aura_statusbar_draw(0, AURA_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT), 0);
 
     lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
     lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
-    lcd_putsxy(AURA_SPACING_LG, AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_LG,
-               (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
-    lcd_putsxy(AURA_SPACING_LG,
-               AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_LG + AURA_TYPE_BODY + AURA_SPACING_SM,
-               (const unsigned char *)rbversion);
+
+    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
+    y += line_h;
+    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)rbversion);
+    y += line_h + AURA_SPACING_LG;
+
+    if (!aura_manifest_load(&manifest))
+    {
+        lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_NO_SYNC));
+        return;
+    }
+
+    output_dyn_value(size_buf, sizeof(size_buf), manifest.music_bytes, byte_units, 4, true);
+    snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
+             aura_str(AURA_STR_ABOUT_MUSIC), manifest.music_count, size_buf);
+    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
+    y += line_h;
+
+    output_dyn_value(size_buf, sizeof(size_buf), manifest.video_bytes, byte_units, 4, true);
+    snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
+             aura_str(AURA_STR_ABOUT_VIDEOS), manifest.video_count, size_buf);
+    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
+    y += line_h;
+
+    output_dyn_value(size_buf, sizeof(size_buf), manifest.photo_bytes, byte_units, 4, true);
+    snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
+             aura_str(AURA_STR_ABOUT_PHOTOS), manifest.photo_count, size_buf);
+    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
+    y += line_h;
+
+    snprintf(line_buf, sizeof(line_buf), "%s: %d",
+             aura_str(AURA_STR_ABOUT_PLAYLISTS), manifest.playlist_count);
+    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
 }
 
 /* -- Temporiz. luz / Temporiz. reposo: listas de opciones numericas,

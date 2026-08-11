@@ -1,0 +1,64 @@
+#include <string.h>
+
+#include "file.h"
+#include "misc.h"
+#include "rbpaths.h"
+#include "settings.h"
+
+#include "aura_manifest.h"
+
+#define AURA_DIR       ROCKBOX_DIR "/aura"
+#define MANIFEST_PATH  AURA_DIR "/sync_summary.cfg"
+
+/* No se usa atoll/strtoll (no disponibles en todos los targets de este
+ * arbol) -- los valores siempre son enteros decimales no negativos
+ * escritos por CatalogSummaryWriter (Aura Studio), asi que un parser
+ * propio de unas pocas lineas alcanza sin depender de libc extendida. */
+static long long parse_i64(const char *s)
+{
+    long long value = 0;
+
+    while (*s >= '0' && *s <= '9')
+    {
+        value = value * 10 + (*s - '0');
+        s++;
+    }
+    return value;
+}
+
+bool aura_manifest_load(aura_manifest_t *out)
+{
+    int fd;
+    char line[64];
+
+    memset(out, 0, sizeof(*out));
+
+    fd = open(MANIFEST_PATH, O_RDONLY);
+    if (fd < 0)
+        return false;
+
+    while (read_line(fd, line, sizeof(line)) > 0)
+    {
+        char *name, *value;
+        if (!settings_parseline(line, &name, &value))
+            continue;
+
+        if (!strcmp(name, "music_count"))
+            out->music_count = (int)parse_i64(value);
+        else if (!strcmp(name, "music_bytes"))
+            out->music_bytes = parse_i64(value);
+        else if (!strcmp(name, "video_count"))
+            out->video_count = (int)parse_i64(value);
+        else if (!strcmp(name, "video_bytes"))
+            out->video_bytes = parse_i64(value);
+        else if (!strcmp(name, "photo_count"))
+            out->photo_count = (int)parse_i64(value);
+        else if (!strcmp(name, "photo_bytes"))
+            out->photo_bytes = parse_i64(value);
+        else if (!strcmp(name, "playlist_count"))
+            out->playlist_count = (int)parse_i64(value);
+    }
+    close(fd);
+
+    return true;
+}
