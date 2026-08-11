@@ -749,4 +749,24 @@ Auditoría explícita de pantallas existentes contra el inventario §4 del doc d
 
 ---
 
+## D-082 — AUDITORIA-01, Lote 1-2 (bloqueantes): iconos con rampa real + ortografía ES corregida
+
+Primeros dos lotes de la Fase B de `docs/design/AUDITORIA-01.md` (auditoría de solo-lectura ejecutada de forma autónoma, mismo permiso explícito que las entradas anteriores de esta sesión, reiterado sin ambigüedad: "vayas de corrido con todas las fases que quedan", "no acepto un 'Es que no pude'").
+
+**Lote 1 (A-01, bloqueante)**: el supersampleo de D-075 (8×, LANCZOS, umbral de alfa a 128) seguía produciendo bitmaps binarios -- confirmado por conteo real, no a ojo: los 468 iconos del sistema (234 por tema) tenían exactamente 1 tono de tinta cada uno. Corrección: `design-system/generate.py` renderiza a 16×, reduce con filtro de caja y compone la tinta de cada variante contra el fondo real de esa variante/tema (`SHELL_BG` para la normal, `SELECTION_FILL` para `-on`) usando el canal de cobertura como máscara de mezcla -- la clave magenta de transparencia (D-010) queda solo para cobertura exactamente cero. El pipeline ahora verifica esto mecánicamente (cuenta tonos por bmp, falla si alguno queda con menos de 4) en vez de confiar en inspección visual. Resultado: promedio 78.1 tonos de tinta por archivo. Documento fuente actualizado (§4) para reflejar el mecanismo real, ya no el umbral binario de D-075.
+
+**Lote 2 (A-02, bloqueante)**: 17 cadenas de `aura_lang.c`/`aura_splash_lang.c` sin tildes/eñes pese a que las fuentes `.fnt` cubren el rango completo (verificado con inspección de cabecera `RB12`: U+0020-U+FFFD) -- vacío real, no limitación técnica. Corregidas todas. De paso, `AURA_STR_ABOUT_NO_SYNC` tenía una construcción rioplatense ("Todavia no sincronizaste") que no es español mexicano/neutro -- corregida a antepresente ("Aún no te has sincronizado con Aura Studio"), y el propio reporte de auditoría tenía dos formas de voseo coladas en su prosa ("querés", "Tu llamada") que también se corrigieron, tras una segunda corrección explícita del usuario sobre este mismo punto en la sesión.
+
+**Decisiones de ambigüedad resueltas en el documento fuente (sin tocar código, porque el código ya las cumplía)**:
+- **Selección en acento (A-0-bis del reporte)**: el usuario decidió explícitamente que la fila seleccionada usa `ACCENT` en texto e ícono, no `TEXT_PRIMARY` -- el código (`aura_widgets.c`) ya lo hacía así desde D-075; lo que faltaba era que el documento (Principio 2, §5.1) dejara de contradecirlo con la lectura literal "la selección es una pastilla gris". Corregido en ambos lugares.
+- **Márgenes de la pastilla (A-g)**: redacción ambigua de "8px respecto al inset de 16px" -- se fija como "8px desde el borde de la columna de lista", la única lectura compatible con "nunca toca el borde". Solo redacción, el código ya lo hacía así.
+- **Paso de escrub (A-h)**: el valor de 3 segundos por click existía en código (`aura_nowplaying.c`) sin estar en `Reproductor - Ahora suena.md` §5. Documentado.
+- **Empaquetado de iconos (A-i)**: se confirma que el layout de archivos sueltos por ícono/tamaño/variante sigue siendo la fuente de verdad; la composición por cobertura del Lote 1 se aplica sobre ESE layout. El empaquetado en dos tiras únicas sigue diferido, sin fecha, como ya decía el documento -- no era parte de lo pedido, solo una posible lectura ambigua de "las dos tiras" que se aclara explícitamente.
+
+**Ambigüedades restantes (A-a, A-b, A-c, A-d, A-e, A-f) quedan para los lotes que tocan su código correspondiente** (Altas/Medias), documentadas junto con el fix real en vez de adelantar una regla que el código todavía no cumple.
+
+**Aceptación**: sim reconstruido y compila limpio; 566/566 tests host-side sin cambios (ninguno de los dos lotes toca módulos puros). Verificado en el simulador: iconos con borde antialiaseado real en Ajustes/Ahora suena (`docs/screenshots/auditoria01/lote1-*.png`); acentos renderizando correctamente en Música/Gráficos/Límite volumen/Acerca de sin sincronizar (`docs/screenshots/auditoria01/lote2-*.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -46,7 +46,7 @@ Extiende la regla ya existente "SELECT en Reproduciendo cicla los modos de la ru
 | # | Ícono (SF Symbol) | Modo | Qué hace la rueda | Feedback visual |
 |---|---|---|---|---|
 | 5.1 | `speaker.wave.2` | Volumen | Sube/baja el volumen | Pastilla de volumen temporal sobre la barra de progreso (mismo tratamiento que §5.2 del doc base, cápsula `SHELL_BG`/`SHELL_RAIL`) |
-| 5.2 | `arrow.left.and.right` | Avance/retroceso | Escrubea la barra de progreso | El relleno de la pastilla de progreso seguidor en vivo; tiempos a los lados se actualizan sin parpadeo |
+| 5.2 | `arrow.left.and.right` | Avance/retroceso | Escrubea la barra de progreso, 3 segundos por paso de rueda | El relleno de la pastilla de progreso seguidor en vivo; tiempos a los lados se actualizan sin parpadeo |
 | 5.3 | `list.bullet` | Añadir a lista | Recorre las listas de reproducción existentes | Panel flotante corto con el nombre de la lista resaltada (pastilla `SELECTION_FILL`, igual que una fila de lista); Select confirma añadir |
 | 5.4 | `text.bubble` | Letra | Select abre la vista de letra a pantalla completa (§6) | El ícono no reacciona a la rueda directamente, solo a Select |
 | 5.5 | `star` / `star.fill` | Estrellas | Sube/baja el rating 0–5 | Estrellas del bloque de texto (§4) se llenan una a una con el mismo resorte corto; al soltar, la canción se añade a la lista automática "N estrellas" correspondiente |
