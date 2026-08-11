@@ -1313,9 +1313,14 @@ static void osd_init(void)
     osd.print_delay = 75*HZ/100;
     osd.resume_delay = HZ/2;
 #ifdef HAVE_LCD_COLOR
-    osd.bgcolor = LCD_RGBPACK(0x73, 0x75, 0xbd);
+    /* Fase 20 (PLAN-UX.md) / D-06x: paleta de Aura (tema Oscuro de
+     * design-system/tokens.json) en vez del azul-lavanda generico de
+     * Rockbox -- los plugins no pueden incluir aura_tokens.h (build y
+     * link separados, via la tabla rb->), asi que los valores van
+     * literales, igual que ya hacia este archivo. */
+    osd.bgcolor = LCD_RGBPACK(0x1c, 0x1c, 0x1e);   /* AURA_TOK_SURFACE, oscuro */
     osd.fgcolor = LCD_WHITE;
-    osd.prog_fillcolor = LCD_BLACK;
+    osd.prog_fillcolor = LCD_RGBPACK(0xff, 0x45, 0x3a); /* AURA_TOK_ACCENT, oscuro */
 #else
     osd.bgcolor = GREY_LIGHTGRAY;
     osd.fgcolor = GREY_BLACK;

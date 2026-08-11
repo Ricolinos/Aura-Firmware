@@ -415,6 +415,18 @@ Al implementar el gate de primer-arranque salió un segundo problema, encadenado
 
 **Aceptación**: sim y build ARM real compilan limpio (`rockbox.ipod` actualizado, incluye el motor de fade recién habilitado); 95/95 tests host-side sin cambios. Sin captura del logo USB nuevo ni del fade (no hay forma segura de disparar `SYS_USB_CONNECTED` ni de observar timing de PMU en el simulador headless de esta sesión) — verificado por lectura de código y compilación limpia en ambos targets, siguiendo el mismo criterio de honestidad que D-056.
 
+## D-062 — Fase 20 (PLAN-UX.md): mpegplayer sin menú de inicio + OSD de Aura; Fotos diferida
+
+**Video**: `mpeg_start_menu()` (`apps/plugins/mpegplayer/mpeg_settings.c`) ya no llama `show_start_menu()` — retorna `MPEG_START_SEEK` directo, ignorando a propósito `settings.resume_options` (en vez de solo cambiar su valor por default) para que el comportamiento sea correcto incluso si el dispositivo tiene un `mpegplayer.cfg` heredado de una instalación previa de Rockbox con `MPEG_RESUME_MENU_ALWAYS` guardado. Con `resume_time` en 0 (video nunca visto) esto reproduce igual desde el principio, así que cubre ambos casos con una sola rama. Verificado en el simulador: el video de prueba entra directo a reproducirse, sin el menú "MPEG Player: Play from beginning / Resume Playback / ...".
+
+Esto dejó **8 funciones sin llamador** (`show_start_menu`, y en cascada `get_start_time`, `get_start_time_lcd_enable_hook`, `show_loading`, `draw_slider`, `display_thumb_image`, `increment_time` — toda la UI del selector de tiempo de inicio, ~340 líneas) — se removieron en vez de dejarlas como advertencias de compilación silenciadas, siguiendo el mismo criterio que la Fase 15 con `aura_home.c`: código muerto no se deja "por si acaso", el historial de git alcanza como referencia si hiciera falta.
+
+**OSD**: `osd_init()` (`mpegplayer.c`) usaba colores hardcodeados de Rockbox (azul-lavanda `#7375bd` de fondo, negro de relleno de progreso) — ahora usa la paleta de Aura (tema Oscuro: superficie `#1c1c1e` de fondo, acento `#ff453a` de relleno), literal porque los plugins no pueden incluir `aura_tokens.h` (build/link separado vía la tabla `rb->`). El keymap **ya estaba alineado** sin cambios: `apps/plugins/mpegplayer/mpegplayer.c` ya mapea `BUTTON_SCROLL_FWD/BACK` a volumen y `BUTTON_MENU` a salir para el target ipod6g — coincide exactamente con la convención del resto de Aura.
+
+**Diferido — Fotos (fit/fill + paneo, álbumes por subcarpeta, slideshow completo)**: es una función nueva real (modos de render, temporizador de auto-avance, ajustes de tiempo/aleatorio/transición), no un ajuste sobre algo existente — merece su propia pasada. **Diferido — poster de video**: depende de que Aura Studio extraiga un frame con ffmpeg (Fase 24, todavía no existe).
+
+**Aceptación**: sim y build ARM real compilan limpio, **sin ningún warning nuevo** (se verificó explícitamente que la remoción en cascada de las 7 funciones muertas no dejó ninguna advertencia de `-Wunused-function` pendiente); `rockbox.ipod` actualizado. 95/95 tests host-side sin cambios. Verificado en el simulador con el fixture de video de prueba: reproduce directo, sin menú, sin regresión.
+
 ---
 
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
