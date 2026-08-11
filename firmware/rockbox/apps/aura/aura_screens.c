@@ -709,6 +709,19 @@ static void draw_message_centered(aura_str_id_t msg_id)
                (const unsigned char *)aura_str(msg_id));
 }
 
+/* Pantalla en espera de un recurso que todavia esta cargando en segundo
+ * plano (hoy: la base de datos musical durante el escaneo inicial) --
+ * a diferencia de draw_message_centered(), NO es un estado terminal:
+ * usa la capsula flotante (SS5.2, Principio 3), no un texto centrado en
+ * pagina completa (ese patron queda solo para los estados propios del
+ * aparato, no para esperas). */
+static void draw_waiting_state(aura_str_id_t msg_id)
+{
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, NULL, 0);
+    aura_widgets_draw_wait_capsule(aura_str(msg_id));
+}
+
 static void draw_empty_state(aura_screen_id_t screen)
 {
     aura_str_id_t msg_id;
@@ -780,7 +793,7 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
 
     if (!aura_music_db_ready())
     {
-        draw_message_centered(AURA_STR_DB_NOT_READY);
+        draw_waiting_state(AURA_STR_DB_NOT_READY);
         return;
     }
 

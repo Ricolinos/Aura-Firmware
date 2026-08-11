@@ -132,3 +132,51 @@ void a26_shell_stamp_corners(void)
     stamp_corner(0,     h - 1, 1, -1,  radius, bg); /* inferior izquierda */
     stamp_corner(w - 1, h - 1,-1, -1,  radius, bg); /* inferior derecha   */
 }
+
+void a26_shell_fill_rounded_rect(int x, int y, int w, int h, int radius,
+                                  unsigned fill, unsigned bg)
+{
+    if (radius > w / 2)
+        radius = w / 2;
+    if (radius > h / 2)
+        radius = h / 2;
+
+    lcd_set_drawmode(DRMODE_SOLID);
+    lcd_set_foreground(fill);
+    lcd_fillrect(x, y, w, h);
+    lcd_set_drawmode(DRMODE_FG);
+
+    if (radius <= 0)
+        return;
+
+    stamp_corner(x,         y,          1,  1, radius, bg); /* superior izquierda */
+    stamp_corner(x + w - 1, y,         -1,  1, radius, bg); /* superior derecha   */
+    stamp_corner(x,         y + h - 1,  1, -1, radius, bg); /* inferior izquierda */
+    stamp_corner(x + w - 1, y + h - 1, -1, -1, radius, bg); /* inferior derecha   */
+}
+
+void a26_shell_outline_rounded_rect(int x, int y, int w, int h, int radius,
+                                     unsigned fill, unsigned border, unsigned bg)
+{
+    int inner_radius = (radius > 0) ? radius - 1 : 0;
+
+    a26_shell_fill_rounded_rect(x, y, w, h, radius, border, bg);
+    a26_shell_fill_rounded_rect(x + 1, y + 1, w - 2, h - 2, inner_radius,
+                                 fill, border);
+}
+
+unsigned a26_shell_blend(unsigned from, unsigned to, int alpha_256)
+{
+    int r, g, b;
+
+    if (alpha_256 <= 0)
+        return from;
+    if (alpha_256 >= 256)
+        return to;
+
+    r = RGB_UNPACK_RED(from)   + ((RGB_UNPACK_RED(to)   - RGB_UNPACK_RED(from))   * alpha_256 / 256);
+    g = RGB_UNPACK_GREEN(from) + ((RGB_UNPACK_GREEN(to) - RGB_UNPACK_GREEN(from)) * alpha_256 / 256);
+    b = RGB_UNPACK_BLUE(from)  + ((RGB_UNPACK_BLUE(to)  - RGB_UNPACK_BLUE(from))  * alpha_256 / 256);
+
+    return LCD_RGBPACK(r, g, b);
+}

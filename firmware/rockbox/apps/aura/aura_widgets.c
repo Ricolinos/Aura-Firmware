@@ -24,11 +24,19 @@
  * siempre -- "sin panel derecho", L4. */
 #define LIST_TOP      (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_SM)
 #define ROW_HEIGHT    (A26_TYPE_BODY + 2 * A26_SPACING_SM)
-#define ROW_PAD_X     A26_SPACING_LG
+#define ROW_PAD_X     A26_LAYOUT_LIST_INSET
 #define ICON_TEXT_GAP A26_SPACING_MD
 #define PANEL_RIGHT_X (A26_LAYOUT_PANEL_LEFT_WIDTH + 1)
 #define PANEL_RIGHT_W (A26_SCREEN_WIDTH - PANEL_RIGHT_X)
 #define PANEL_RETARDO_TICKS HZ
+
+/* Pastilla de seleccion de lista (doc SS5.1): rectangulo que no toca los
+ * bordes -- margen 8px desde el borde de la columna (mas angosto que el
+ * inset de 16px del texto, asi la pastilla queda mas ancha que el
+ * contenido pero sin llegar al borde) y 2px arriba/abajo. */
+#define PILL_MARGIN_X A26_SPACING_MD
+#define PILL_MARGIN_Y 2
+#define PILL_RADIUS   A26_LAYOUT_CORNER_RADIUS_PILL
 
 static const char *theme_dir_name(void)
 {
@@ -164,6 +172,92 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name)
         (A26_SCREEN_HEIGHT - A26_ICON_SIZE_PREVIEW) / 2);
 }
 
+/* Barra de deslizamiento (doc SS5.3): aparece/persiste/desvanece segun
+ * actividad de scroll, nunca fija en pantalla. Sin compositor alfa en
+ * este LCD, el fundido se simula interpolando el color del trazo entre
+ * el fondo y SHELL_RAIL con a26_shell_blend() -- visualmente equivalente
+ * a variar la opacidad, calculado una vez por cuadro. Estado global
+ * (una sola lista visible a la vez, mismo patron que el debounce del
+ * panel derecho de arriba); se reinicia si cambia la lista mostrada. */
+#define SCROLLBAR_W          3
+#define SCROLLBAR_INSET      2
+#define SCROLLBAR_MIN_H      24
+#define SCROLLBAR_RADIUS     1
+#define SCROLLBAR_FADE_IN_TICKS  (HZ * 150 / 1000)
+#define SCROLLBAR_HOLD_TICKS     (HZ * 800 / 1000)
+#define SCROLLBAR_FADE_OUT_TICKS (HZ * 330 / 1000)
+
+static const aura_list_item_t *s_scrollbar_items;
+static int s_scrollbar_selected = -1;
+static long s_scrollbar_activity_since;
+
+static int scrollbar_alpha_256(void)
+{
+    long elapsed = current_tick - s_scrollbar_activity_since;
+
+    if (elapsed < 0)
+        elapsed = 0;
+
+    if (elapsed < SCROLLBAR_FADE_IN_TICKS)
+        return (int)(elapsed * 256 / SCROLLBAR_FADE_IN_TICKS);
+
+    if (elapsed < SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS)
+        return 256;
+
+    elapsed -= SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS;
+    if (elapsed < SCROLLBAR_FADE_OUT_TICKS)
+        return 256 - (int)(elapsed * 256 / SCROLLBAR_FADE_OUT_TICKS);
+
+    return 0;
+}
+
+int aura_widgets_scrollbar_pending(void)
+{
+    /* No alcanza con "alpha > 0": justo al reiniciar la actividad
+     * (elapsed=0) el fundido de entrada arranca en alpha=0 -- si
+     * pending() mirara solo el alpha actual, el bucle principal nunca
+     * pediria un timeout corto para el SIGUIENTE cuadro y la barra se
+     * quedaria congelada invisible hasta el proximo boton real. Lo que
+     * importa es si releva seguir animando: toda la ventana
+     * entrada+persistencia+salida, no el valor de un instante. */
+    long elapsed = current_tick - s_scrollbar_activity_since;
+    if (elapsed < 0)
+        elapsed = 0;
+    return elapsed < SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS + SCROLLBAR_FADE_OUT_TICKS;
+}
+
+static void draw_scrollbar(int width, int visible, int count, int first)
+{
+    int alpha;
+    int track_top = LIST_TOP;
+    int track_h = A26_SCREEN_HEIGHT - LIST_TOP;
+    int thumb_h, thumb_y, x;
+    unsigned color;
+
+    if (count <= visible)
+        return;
+
+    alpha = scrollbar_alpha_256();
+    if (alpha <= 0)
+        return;
+
+    thumb_h = track_h * visible / count;
+    if (thumb_h < SCROLLBAR_MIN_H)
+        thumb_h = SCROLLBAR_MIN_H;
+    if (thumb_h > track_h)
+        thumb_h = track_h;
+
+    thumb_y = (count > visible)
+        ? track_top + (track_h - thumb_h) * first / (count - visible)
+        : track_top;
+
+    x = width - SCROLLBAR_INSET - SCROLLBAR_W;
+    color = a26_shell_blend(a26_color(A26_SHELL_BG), a26_color(A26_SHELL_RAIL), alpha);
+
+    a26_shell_fill_rounded_rect(x, thumb_y, SCROLLBAR_W, thumb_h,
+                                 SCROLLBAR_RADIUS, color, a26_color(A26_SHELL_BG));
+}
+
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected)
 {
@@ -182,6 +276,13 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
             first = count - visible;
     }
 
+    if (items != s_scrollbar_items || selected != s_scrollbar_selected)
+    {
+        s_scrollbar_items = items;
+        s_scrollbar_selected = selected;
+        s_scrollbar_activity_since = current_tick;
+    }
+
     a26_shell_clear_screen();
     aura_statusbar_draw(0, width, title, 0);
 
@@ -193,12 +294,17 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         int is_selected = (i == selected);
         int text_x = ROW_PAD_X;
 
-        /* Fila activa: barra gris neutra con el contenido (icono, texto,
+        /* Fila activa: pastilla redondeada (doc SS5.1, no la barra de
+         * ancho completo de 2007) con el contenido (icono, texto,
          * checkmark) en el color de contraste de la marca. */
         if (is_selected)
         {
-            lcd_set_foreground(a26_color(A26_SELECTION_FILL));
-            lcd_fillrect(0, row_y, width, ROW_HEIGHT);
+            a26_shell_fill_rounded_rect(PILL_MARGIN_X, row_y + PILL_MARGIN_Y,
+                                         width - 2 * PILL_MARGIN_X,
+                                         ROW_HEIGHT - 2 * PILL_MARGIN_Y,
+                                         PILL_RADIUS,
+                                         a26_color(A26_SELECTION_FILL),
+                                         a26_color(A26_SHELL_BG));
         }
 
         if (items[i].icon_name)
@@ -231,6 +337,8 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 
     if (split)
         draw_right_panel_debounced(count > 0 ? items[selected].icon_name : NULL);
+
+    draw_scrollbar(width, visible, count, first);
 }
 
 /* -- Fila booleana (L11) --------------------------------------------- */
@@ -425,10 +533,16 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
     no_x = box_x;
     yes_x = box_x + box_w - btn_w;
 
-    lcd_set_foreground(a26_color(!yes_selected ? A26_SELECTION_FILL : A26_SHELL_RAIL));
-    lcd_fillrect(no_x, btn_y, btn_w, 32);
-    lcd_set_foreground(a26_color(yes_selected ? A26_SELECTION_FILL : A26_SHELL_RAIL));
-    lcd_fillrect(yes_x, btn_y, btn_w, 32);
+    /* Chips redondeados, mismo radio de pastilla que la lista (SS5.4:
+     * nunca un radio suelto por componente) -- antes eran rectangulos a
+     * bordes vivos, el unico control del sistema que no seguia la
+     * jerarquia concentrica de radios. */
+    a26_shell_fill_rounded_rect(no_x, btn_y, btn_w, 32, PILL_RADIUS,
+                                 a26_color(!yes_selected ? A26_SELECTION_FILL : A26_SHELL_RAIL),
+                                 a26_color(A26_SHELL_BG));
+    a26_shell_fill_rounded_rect(yes_x, btn_y, btn_w, 32, PILL_RADIUS,
+                                 a26_color(yes_selected ? A26_SELECTION_FILL : A26_SHELL_RAIL),
+                                 a26_color(A26_SHELL_BG));
 
     {
         int w, h;
@@ -442,12 +556,23 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
     }
 }
 
+/* Pastilla de progreso canonica (doc SS5.2): 4px de alto, extremos
+ * redondeados, carril PROGRESS_TRACK + relleno PROGRESS_FILL -- NUNCA
+ * SHELL_RAIL/ACCENT (esos son para separadores y estado activo, no
+ * progreso; el doc reserva un par de tokens dedicado). El redondeo de
+ * los extremos usa la misma primitiva de corte por distancia que la
+ * pastilla de seleccion en vez de la tabla de retranqueos manual del
+ * documento -- mismo resultado visual (un radio real, no aproximado a
+ * mano), una sola implementacion de "rectangulo con puntas redondas" en
+ * todo el sistema. */
 void aura_widgets_draw_progress(const char *text, int fraction)
 {
     int bar_x = A26_SPACING_XXL;
     int bar_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
     int bar_y = A26_SCREEN_HEIGHT / 2;
+    int bar_h = A26_SPACING_SM;
     int fill_w;
+    unsigned bg = a26_color(A26_SHELL_BG);
 
     if (fraction < 0)   fraction = 0;
     if (fraction > 256) fraction = 256;
@@ -462,10 +587,44 @@ void aura_widgets_draw_progress(const char *text, int fraction)
                    (const unsigned char *)text);
     }
 
-    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
-    lcd_drawrect(bar_x, bar_y, bar_w, A26_SPACING_SM);
+    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, bar_h, bar_h / 2,
+                                 a26_color(A26_PROGRESS_TRACK), bg);
 
     fill_w = (bar_w * fraction) / 256;
-    lcd_set_foreground(a26_color(A26_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_SM);
+    if (fill_w > 0)
+        a26_shell_fill_rounded_rect(bar_x, bar_y, fill_w, bar_h, bar_h / 2,
+                                     a26_color(A26_PROGRESS_FILL), bg);
+}
+
+/* Capsula flotante de espera (doc SS5.2, Principio 3: "la carga
+ * convive, no interrumpe"): NO limpia pantalla ni ocupa una pagina
+ * completa -- se dibuja encima de lo que ya esta a la vista, como
+ * ultimo paso del dibujo de la pantalla que la necesita. Geometria fija
+ * del documento: x=40, ancho pantalla-80, y=alto-14, capsula de 12px con
+ * radio 6 (A26_LAYOUT_CORNER_RADIUS_CAPSULE), fondo SHELL_BG y borde
+ * SHELL_RAIL de 1px -- unica superficie de esperas del sistema; unica
+ * pagina completa que le queda al aparato es para sus propios estados
+ * (apagado, USB, base de datos vacia), no para un progreso. */
+void aura_widgets_draw_wait_capsule(const char *text)
+{
+    int cap_h = 12;
+    int cap_y = A26_SCREEN_HEIGHT - 14;
+    int cap_x = 40;
+    int cap_w = A26_SCREEN_WIDTH - 80;
+    int w, h;
+
+    a26_shell_outline_rounded_rect(cap_x, cap_y, cap_w, cap_h,
+                                    A26_LAYOUT_CORNER_RADIUS_CAPSULE,
+                                    a26_color(A26_SHELL_BG),
+                                    a26_color(A26_SHELL_RAIL),
+                                    a26_color(A26_SHELL_BG));
+
+    if (!text)
+        return;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    lcd_getstringsize((const unsigned char *)text, &w, &h);
+    lcd_putsxy(cap_x + (cap_w - w) / 2, cap_y + (cap_h - h) / 2,
+               (const unsigned char *)text);
 }

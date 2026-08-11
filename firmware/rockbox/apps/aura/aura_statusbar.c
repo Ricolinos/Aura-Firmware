@@ -64,6 +64,7 @@ void aura_statusbar_draw(int x, int width, const char *title, int centered)
     int is_playing = (status & (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)) != 0;
     int is_paused = (status & AUDIO_STATUS_PAUSE) != 0;
     int is_hold = button_hold();
+    int is_full = (width == A26_SCREEN_WIDTH);
     int title_right_edge = x; /* borde derecho ocupado por el titulo, si hay */
 
     /* Sin relleno propio: la barra es parte del mismo fondo que el
@@ -79,8 +80,16 @@ void aura_statusbar_draw(int x, int width, const char *title, int centered)
 
     /* Candado de Hold y play/pausa: el candado ocupa el lugar del
      * play/pausa si no suena nada; si suena, se coloca a la izquierda
-     * del icono de reproduccion (L5). */
-    if (is_playing)
+     * del icono de reproduccion (L5). El indicador de reproduccion solo
+     * vive en la barra COMPLETA (doc SS5): en la barra dividida de 160px
+     * el hueco entre reloj y bateria son los 15px del candado, no
+     * alcanza para los dos. La reposicion documentada -- la tarjeta de
+     * reproduccion del panel derecho, centrado sobre la barra de
+     * progreso -- todavia no existe (queda para Fase 30, junto con el
+     * resto de "Ahora suena"); mientras tanto la barra dividida omite el
+     * indicador en vez de mostrarlo donde el documento dice que no
+     * corresponde. */
+    if (is_full && is_playing)
     {
         right -= A26_SPACING_XS + A26_ICON_SIZE_STATUS;
         aura_widgets_draw_icon(is_paused ? "pause" : "play",

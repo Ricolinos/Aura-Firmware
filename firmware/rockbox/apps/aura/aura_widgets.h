@@ -65,6 +65,12 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name);
  * usado por aura_screens.c para el scroll. */
 int aura_widgets_visible_rows(void);
 
+/* True mientras la barra de deslizamiento (doc SS5.3) todavia esta
+ * apareciendo o desvaneciendose -- aura_main.c la consulta igual que
+ * aura_widgets_panel_pending() para pedir un timeout corto y seguir
+ * animando el fundido sin bloquear esperando el proximo boton. */
+int aura_widgets_scrollbar_pending(void);
+
 /* Dibuja el icono <name>-<size>.bmp del tema activo en (x, y) via
  * lcd_bitmap_transparent(). Devuelve su ancho (0 si no se encontro el
  * archivo). Compartido por aura_widgets_draw_list() y aura_statusbar.c
@@ -95,6 +101,13 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
 
 /* Barra de progreso simple con texto arriba. `fraction` en [0, 256]. */
 void aura_widgets_draw_progress(const char *text, int fraction);
+
+/* Capsula flotante de espera (SS5.2): NO limpia pantalla, se dibuja
+ * encima de lo que el llamador ya pinto en este cuadro. `text` opcional
+ * (NULL = solo la capsula vacia). El patron de espera del sistema --
+ * ninguna otra pantalla debe tapar su contenido con un mensaje centrado
+ * mientras algo carga (Principio 3). */
+void aura_widgets_draw_wait_capsule(const char *text);
 
 /* Aviso bloqueante con 2 opciones (Si/No), estilo el "aviso" de
  * PLAN-UX.md S3.8 -- SELECT confirma la opcion resaltada. El llamador
