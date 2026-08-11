@@ -26,6 +26,21 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 /* True si el modo grafico activo usa pantalla dividida (todos menos
  * Ultra). Lo consultan las pantallas con dibujo propio (Coverflow,
  * Now Playing) para decidir su propio layout. */
+/* Layout de la pantalla actual. No todas las pantallas del firmware
+ * original son divididas ni todas son de ancho completo: la tabla que
+ * decide cual es cual vive en aura_screens.c (screen_uses_split_layout)
+ * y se comunica aca antes de dibujar, para que exista una sola fuente
+ * de verdad en vez de que cada funcion de dibujo elija por su cuenta. */
+typedef enum {
+    AURA_LIST_SPLIT = 0, /* lista a la izquierda + panel de preview */
+    AURA_LIST_FULL,      /* lista a ancho completo, sin panel */
+} aura_list_layout_t;
+
+void aura_widgets_set_list_layout(aura_list_layout_t layout);
+
+/* True si la pantalla que se esta por dibujar termina realmente
+ * dividida: hace falta que su layout declarado sea SPLIT *y* que el
+ * ajuste de Graficos no este en Ninguno. */
 int aura_widgets_split_active(void);
 
 /* True mientras el panel derecho tiene un icono nuevo pendiente de
@@ -33,6 +48,11 @@ int aura_widgets_split_active(void);
  * redibujar con un timeout corto en vez de bloquear indefinidamente
  * esperando el proximo boton. */
 int aura_widgets_panel_pending(void);
+
+/* El proximo draw_list adopta el icono pendiente del panel derecho de
+ * inmediato, sin el retardo de ~1s -- para navegacion hacia atras,
+ * donde el preview del padre se restaura al instante (D-068). */
+void aura_widgets_panel_force_next(void);
 
 /* Dibuja el panel derecho de la pantalla dividida: linea divisoria +
  * icono grande centrado (NULL = panel vacio). Sin retardo propio --
@@ -50,6 +70,10 @@ int aura_widgets_visible_rows(void);
  * archivo). Compartido por aura_widgets_draw_list() y aura_statusbar.c
  * -- un unico punto que resuelve ICON_DIR/aura/<tema>/. */
 int aura_widgets_draw_icon(const char *name, int size, int x, int y);
+
+/* Misma firma, pero con la variante de color de contraste del icono --
+ * para el contenido que va sobre la barra de seleccion. */
+int aura_widgets_draw_icon_selected(const char *name, int size, int x, int y);
 
 /* Fila booleana: label a la izquierda, "Si"/"No" (localizado) a la
  * derecha. SELECT la alterna in situ (L11, PLAN-UX.md) -- el llamador

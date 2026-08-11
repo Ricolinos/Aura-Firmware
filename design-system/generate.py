@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """Pipeline determinista del sistema de diseno Aura.
 
-Lee tokens.json (unica fuente de verdad) y produce, a partir de los
-assets de origen en vendor/ (Inter TTF, iconos Lucide SVG):
+Lee tokens.json (unica fuente de verdad) y produce:
 
   - out/aura_tokens.h   Header C con colores, espaciados y tipografia,
                          para incluir desde firmware/rockbox/apps/aura/.
-  - out/fonts/*.fnt      Fuentes bitmap Inter en el formato nativo de
+  - out/fonts/*.fnt      Fuentes bitmap SF Pro en el formato nativo de
                          Rockbox, rasterizadas a los tamanos exactos de
                          type_scale, via la herramienta convttf del fork.
-  - out/icons/<theme>/*.bmp  Iconos Lucide rasterizados a los tamanos
-                         exactos de uso, uno por tema (color de trazo
-                         resuelto en tiempo de generacion, no en runtime;
-                         ver DECISIONS.md).
+  - out/icons/<theme>/*.bmp  SF Symbols rasterizados a los tamanos exactos
+                         de uso, por tema y por variante (color resuelto en
+                         tiempo de generacion, no en runtime; ver D-010).
 
-No descarga nada de la red: eso es responsabilidad de scripts/fetch_assets.sh.
+Origen de los assets de Apple (SF Pro y SF Symbols): NO se versionan en
+este repo. La fuente se lee de la instalacion local del sistema y los
+simbolos se renderizan pidiendoselos a macOS via AppKit
+(scripts/render_sf_symbols.swift). Es decir: este pipeline solo corre en
+un Mac con SF Pro instalada -- una restriccion aceptable porque Aura
+Studio (el otro entregable del proyecto) ya es una app de macOS.
+
 Es seguro volver a ejecutar este script cuantas veces haga falta; out/ se
 regenera por completo cada vez.
 """
@@ -122,8 +126,82 @@ def generate_header(tokens):
     (OUT / "aura_tokens.h").write_text("\n".join(lines))
 
 
+STUDIO_GENERATED = (
+    ROOT.parent / "studio" / "AuraStudio" / "Sources" / "AuraStudio" / "Generated"
+)
+
+
+def generate_swift_palette(tokens):
+    """Emite la misma paleta para Aura Studio.
+
+    El firmware y la app de escritorio comparten identidad visual, asi que
+    tienen que compartir tambien la fuente de los colores: el header C y
+    este archivo Swift salen del mismo tokens.json. Se escribe directo en
+    el arbol de fuentes de Studio (no en out/) porque Studio se compila
+    con SwiftPM/Xcode, que no tienen un paso de instalacion de assets
+    como build_sim.sh.
+    """
+    print("==> Generando la paleta de Aura Studio (Generated/AuraPalette.swift)")
+    lines = [
+        "// Generado por design-system/generate.py a partir de tokens.json.",
+        "// NO editar a mano: los cambios se perderian al regenerar.",
+        "",
+        "import SwiftUI",
+        "",
+        "/// Paleta compartida con el firmware -- misma fuente de verdad",
+        "/// (design-system/tokens.json) que aura_tokens.h.",
+        "struct AuraColors {",
+    ]
+
+    token_names = list(next(iter(tokens["color"].values())).keys())
+    for name in token_names:
+        lines.append(f"    let {to_camel(name)}: Color")
+    lines.append("}")
+    lines.append("")
+    lines.append("extension AuraColors {")
+    for theme_name, colors in tokens["color"].items():
+        lines.append(f"    static let {theme_name} = AuraColors(")
+        parts = []
+        for name in token_names:
+            r, g, b = hex_to_rgb(colors[name])
+            parts.append(
+                f"        {to_camel(name)}: Color(red: {r / 255:.4f}, "
+                f"green: {g / 255:.4f}, blue: {b / 255:.4f})"
+            )
+        lines.append(",\n".join(parts))
+        lines.append("    )")
+    lines.append("}")
+    lines.append("")
+
+    STUDIO_GENERATED.mkdir(parents=True, exist_ok=True)
+    (STUDIO_GENERATED / "AuraPalette.swift").write_text("\n".join(lines))
+
+
+def to_camel(snake):
+    head, *rest = snake.split("_")
+    return head + "".join(part.capitalize() for part in rest)
+
+
 def font_filename(style_name, size_px):
     return f"aura-{style_name}-{size_px}.fnt"
+
+
+def resolve_font_file(tokens, filename):
+    """Busca una cara de SF Pro en la instalacion local del sistema.
+
+    No se versiona en el repo (licencia de Apple), asi que la ausencia se
+    reporta con la instruccion exacta para resolverla en vez de un
+    'archivo no encontrado' pelado.
+    """
+    for base in tokens["font"]["search_paths"]:
+        candidate = Path(base).expanduser() / filename
+        if candidate.exists():
+            return candidate
+    die(
+        f"no se encontro {filename} en {tokens['font']['search_paths']}.\n"
+        "SF Pro no se versiona en este repo (licencia de Apple): descargala de\n"
+        "https://developer.apple.com/fonts/ e instalala (doble clic en los .otf)."
+    )
 
 
 def generate_fonts(tokens):
@@ -132,28 +210,52 @@ def generate_fonts(tokens):
     fonts_out = OUT / "fonts"
     fonts_out.mkdir(parents=True, exist_ok=True)
 
-    weights = tokens["font"]["weights"]
-    for style_name, weight in tokens["font"]["styles_by_size"].items():
+    faces = tokens["font"]["faces"]
+    for style_name, face in tokens["font"]["styles_by_size"].items():
         size = tokens["type_scale"][style_name]
-        ttf_path = VENDOR / "inter-ttf" / weights[weight]
-        if not ttf_path.exists():
-            die(f"falta {ttf_path} -- ejecuta design-system/scripts/fetch_assets.sh")
+        ttf_path = resolve_font_file(tokens, faces[face])
         out_fnt = fonts_out / font_filename(style_name, size)
         cmd = [str(CONVTTF), "-p", str(size), "-o", str(out_fnt), str(ttf_path)]
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0 or not out_fnt.exists():
             die(f"convttf fallo para {style_name}@{size}px:\n{result.stdout}\n{result.stderr}")
-        print(f"   {style_name} ({weight} @ {size}px) -> {out_fnt.name}")
+        print(f"   {style_name} ({face} @ {size}px) -> {out_fnt.name}")
 
 
-def check_tool(name):
-    if shutil.which(name) is None:
-        die(f"falta la herramienta '{name}' en PATH (brew install librsvg)")
+def render_symbol_shapes(tokens, shapes_dir):
+    """Renderiza cada (simbolo, tamano) una sola vez, negro sobre alfa 0.
+
+    La forma no depende del tema ni de la variante -- solo el color, que
+    se aplica despues con Pillow. Un unico proceso de Swift para todo el
+    lote: `swift archivo.swift` recompila el script en cada invocacion
+    (~2s), asi que 57 invocaciones costarian minutos.
+    """
+    icon_cfg = tokens["icon"]
+    shapes_dir.mkdir(parents=True, exist_ok=True)
+
+    jobs = []
+    for icon_key, symbol_name in icon_cfg["names"].items():
+        for size_name, size_px in icon_cfg["sizes"].items():
+            jobs.append({
+                "symbol": symbol_name,
+                "px": size_px,
+                "weight": icon_cfg["weight_by_size"][size_name],
+                "out": str(shapes_dir / f"{icon_key}-{size_px}.png"),
+            })
+
+    result = subprocess.run(
+        ["swift", str(ROOT / "scripts" / "render_sf_symbols.swift")],
+        input=json.dumps(jobs),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        die(f"el renderizador de SF Symbols fallo:\n{result.stdout}\n{result.stderr}")
+    return len(jobs)
 
 
 def generate_icons(tokens):
     print("==> Generando iconos (out/icons/<tema>/*.bmp)")
-    check_tool("rsvg-convert")
     try:
         from PIL import Image
     except ImportError:
@@ -165,72 +267,47 @@ def generate_icons(tokens):
         )
 
     icon_cfg = tokens["icon"]
-    svg_dir = VENDOR / "lucide-svg"
+    shapes_dir = OUT / "_shapes"
+    n_shapes = render_symbol_shapes(tokens, shapes_dir)
+    print(f"   {n_shapes} formas renderizadas desde SF Symbols")
 
     # Magenta = TRANSPARENT_COLOR de Rockbox (firmware/export/lcd.h). Los
     # iconos se componen sobre este color marcador y se dibujan con
-    # lcd_bitmap_transparent(), asi funcionan igual sobre fondo normal o
-    # sobre la barra de seleccion con color de acento.
+    # lcd_bitmap_transparent(), asi funcionan igual sobre el fondo normal
+    # o sobre la barra de seleccion.
     #
-    # rsvg-convert antialiasea los bordes del trazo: si se compone
-    # directamente sobre el marcador magenta, esos pixeles de borde
-    # quedan en un magenta "casi puro" pero no exacto, y
-    # lcd_bitmap_transparent() (que compara color exacto) no los trata
-    # como transparentes -- se ve un halo magenta alrededor de cada
-    # icono. Por eso se renderiza con canal alfa real (fondo
-    # transparente) y se umbraliza con Pillow: alfa >= 128 -> color de
-    # trazo solido, si no -> magenta puro. Sin colores intermedios, sin
-    # halo, independiente del algoritmo de antialiasing de rsvg-convert.
+    # AppKit antialiasea los bordes: si se compusiera directamente sobre
+    # el marcador magenta, esos pixeles quedarian en un magenta "casi
+    # puro" pero no exacto, y lcd_bitmap_transparent() (que compara color
+    # exacto) no los trataria como transparentes -- halo magenta
+    # alrededor de cada icono. Por eso se renderiza con alfa real y se
+    # umbraliza: alfa >= 128 -> color solido, si no -> magenta puro. Sin
+    # colores intermedios, sin halo.
     ALPHA_THRESHOLD = 128
     TRANSPARENT_RGB = (255, 0, 255)
 
     for theme_name, colors in tokens["color"].items():
         theme_out = OUT / "icons" / theme_name
         theme_out.mkdir(parents=True, exist_ok=True)
-        fg = colors["text_primary"]
-        fg_rgb = hex_to_rgb(fg)
 
-        for icon_name in icon_cfg["names"]:
-            svg_path = svg_dir / f"{icon_name}.svg"
-            if not svg_path.exists():
-                die(f"falta {svg_path} -- ejecuta design-system/scripts/fetch_assets.sh")
+        for suffix, color_token in icon_cfg["variants"].items():
+            fg_rgb = hex_to_rgb(colors[color_token])
+            for icon_key in icon_cfg["names"]:
+                for size_px in icon_cfg["sizes"].values():
+                    src = Image.open(shapes_dir / f"{icon_key}-{size_px}.png").convert("RGBA")
+                    mask = src.getchannel("A").point(
+                        lambda a: 255 if a >= ALPHA_THRESHOLD else 0, mode="1"
+                    )
+                    out_img = Image.new("RGB", src.size, TRANSPARENT_RGB)
+                    out_img.paste(Image.new("RGB", src.size, fg_rgb), (0, 0), mask)
+                    out_img.save(theme_out / f"{icon_key}-{size_px}{suffix}.bmp", format="BMP")
 
-            svg_colored = svg_path.read_text().replace(
-                "<svg\n", f'<svg\n  color="{fg}"\n', 1
-            )
+        total = len(icon_cfg["names"]) * len(icon_cfg["sizes"]) * len(icon_cfg["variants"])
+        print(f"   tema {theme_name}: {total} bmp "
+              f"({len(icon_cfg['names'])} iconos x {len(icon_cfg['sizes'])} tamanos "
+              f"x {len(icon_cfg['variants'])} variantes)")
 
-            for size_name, size_px in icon_cfg["sizes"].items():
-                tmp_svg = theme_out / f"_{icon_name}-{size_px}.tmp.svg"
-                tmp_png = theme_out / f"_{icon_name}-{size_px}.tmp.png"
-                out_bmp = theme_out / f"{icon_name}-{size_px}.bmp"
-
-                tmp_svg.write_text(svg_colored)
-                subprocess.run(
-                    [
-                        "rsvg-convert",
-                        "-w", str(size_px),
-                        "-h", str(size_px),
-                        "-o", str(tmp_png),
-                        str(tmp_svg),
-                    ],
-                    check=True,
-                    capture_output=True,
-                )
-
-                src = Image.open(tmp_png).convert("RGBA")
-                out_img = Image.new("RGB", src.size, TRANSPARENT_RGB)
-                pixels_in = src.load()
-                pixels_out = out_img.load()
-                for y in range(src.height):
-                    for x in range(src.width):
-                        if pixels_in[x, y][3] >= ALPHA_THRESHOLD:
-                            pixels_out[x, y] = fg_rgb
-                out_img.save(out_bmp, format="BMP")
-
-                tmp_svg.unlink()
-                tmp_png.unlink()
-
-        print(f"   tema {theme_name}: {len(icon_cfg['names'])} iconos x {len(icon_cfg['sizes'])} tamanos")
+    shutil.rmtree(shapes_dir)
 
 
 def main():
@@ -241,6 +318,7 @@ def main():
     OUT.mkdir(parents=True)
 
     generate_header(tokens)
+    generate_swift_palette(tokens)
     generate_fonts(tokens)
     generate_icons(tokens)
 

@@ -74,6 +74,7 @@ static const nav_entry_t music_entries[] = {
 
 static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_THEME,      NULL, AURA_SCREEN_SETTINGS_THEME },
+    { AURA_STR_SETTINGS_ANIMATIONS, NULL, AURA_SCREEN_SETTINGS_ANIMATIONS },
     { AURA_STR_SETTINGS_GRAPHICS,   NULL, AURA_SCREEN_SETTINGS_GRAPHICS },
     { AURA_STR_SETTINGS_EQ,         NULL, AURA_SCREEN_SETTINGS_EQ },
     { AURA_STR_SETTINGS_BRIGHTNESS, NULL, AURA_SCREEN_SETTINGS_BRIGHTNESS },
@@ -127,6 +128,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_NOWPLAYING:          return AURA_STR_NOWPLAYING;
     case AURA_SCREEN_SETTINGS:            return AURA_STR_SETTINGS;
     case AURA_SCREEN_SETTINGS_THEME:      return AURA_STR_SETTINGS_THEME;
+    case AURA_SCREEN_SETTINGS_ANIMATIONS: return AURA_STR_SETTINGS_ANIMATIONS;
     case AURA_SCREEN_SETTINGS_GRAPHICS:   return AURA_STR_SETTINGS_GRAPHICS;
     case AURA_SCREEN_SETTINGS_EQ:         return AURA_STR_SETTINGS_EQ;
     case AURA_SCREEN_SETTINGS_BRIGHTNESS: return AURA_STR_SETTINGS_BRIGHTNESS;
@@ -149,8 +151,11 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
 static const aura_str_id_t theme_choice_labels[] = {
     AURA_STR_THEME_LIGHT, AURA_STR_THEME_DARK,
 };
+static const aura_str_id_t animation_choice_labels[] = {
+    AURA_STR_ANIM_NONE, AURA_STR_ANIM_MINIMAL, AURA_STR_ANIM_ALL,
+};
 static const aura_str_id_t graphics_choice_labels[] = {
-    AURA_STR_GFX_ULTRA, AURA_STR_GFX_MINIMAL, AURA_STR_GFX_FULL,
+    AURA_STR_GFX_NONE, AURA_STR_GFX_MINIMAL, AURA_STR_GFX_ALL,
 };
 static const aura_str_id_t eq_choice_labels[] = {
     AURA_STR_EQ_FLAT, AURA_STR_EQ_BASS_BOOST, AURA_STR_EQ_VOCAL, AURA_STR_EQ_TREBLE_BOOST,
@@ -170,6 +175,7 @@ static const aura_str_id_t repeat_choice_labels[] = {
 static int is_choice_screen(aura_screen_id_t screen)
 {
     return screen == AURA_SCREEN_SETTINGS_THEME
+        || screen == AURA_SCREEN_SETTINGS_ANIMATIONS
         || screen == AURA_SCREEN_SETTINGS_GRAPHICS
         || screen == AURA_SCREEN_SETTINGS_EQ
         || screen == AURA_SCREEN_SETTINGS_LANGUAGE
@@ -183,6 +189,9 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
     case AURA_SCREEN_SETTINGS_THEME:
         *out = theme_choice_labels;
         return sizeof(theme_choice_labels) / sizeof(theme_choice_labels[0]);
+    case AURA_SCREEN_SETTINGS_ANIMATIONS:
+        *out = animation_choice_labels;
+        return sizeof(animation_choice_labels) / sizeof(animation_choice_labels[0]);
     case AURA_SCREEN_SETTINGS_GRAPHICS:
         *out = graphics_choice_labels;
         return sizeof(graphics_choice_labels) / sizeof(graphics_choice_labels[0]);
@@ -205,8 +214,9 @@ static int get_choice_current(aura_screen_id_t screen)
 {
     switch (screen)
     {
-    case AURA_SCREEN_SETTINGS_THEME:    return (int)aura_settings.theme;
-    case AURA_SCREEN_SETTINGS_GRAPHICS: return (int)aura_settings.graphics_mode;
+    case AURA_SCREEN_SETTINGS_THEME:      return (int)aura_settings.theme;
+    case AURA_SCREEN_SETTINGS_ANIMATIONS: return (int)aura_settings.animation_mode;
+    case AURA_SCREEN_SETTINGS_GRAPHICS:   return (int)aura_settings.graphics_mode;
     case AURA_SCREEN_SETTINGS_EQ:       return (int)aura_settings.eq_preset;
     case AURA_SCREEN_SETTINGS_LANGUAGE: return (int)aura_settings.language;
     case AURA_SCREEN_SETTINGS_REPEAT:   return global_settings.repeat_mode;
@@ -231,6 +241,9 @@ static void apply_choice(aura_screen_id_t screen, int index)
     {
     case AURA_SCREEN_SETTINGS_THEME:
         aura_settings.theme = (aura_theme_id_t)index;
+        break;
+    case AURA_SCREEN_SETTINGS_ANIMATIONS:
+        aura_settings.animation_mode = (aura_anim_mode_t)index;
         break;
     case AURA_SCREEN_SETTINGS_GRAPHICS:
         aura_settings.graphics_mode = (aura_gfx_mode_t)index;
@@ -739,7 +752,7 @@ static int is_music_browse_screen(aura_screen_id_t screen)
  * incluida -- ver D-057 en DECISIONS.md. */
 static int is_coverflow_screen(aura_screen_id_t screen)
 {
-    return aura_settings.graphics_mode == AURA_GFX_FULL
+    return aura_settings.graphics_mode == AURA_GFX_ALL
         && (screen == AURA_SCREEN_MUSIC_ALBUMS || screen == AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST);
 }
 
@@ -826,9 +839,39 @@ static void draw_playlists(aura_nav_t *nav)
                             s_playlist_cache_count, aura_nav_get_selection(nav));
 }
 
+/* Tabla de layout: UNICA fuente de verdad de que pantalla se dibuja
+ * dividida (lista izquierda + panel de preview) y cual a ancho completo.
+ * El firmware original tiene de las dos, asi que Aura tampoco puede
+ * asumir una sola: los menus de navegacion y las listas de contenido son
+ * divididos; las pantallas con maquetacion propia (sliders de Brillo y
+ * Limite de volumen, filas booleanas, Acerca de, aviso de reset,
+ * Coverflow, visor de fotos, Ahora suena) son de ancho completo y ni
+ * siquiera pasan por aura_widgets_draw_list().
+ *
+ * La consumen dos lugares: aura_screens_draw() (para el dibujo) y
+ * aura_screens_handle_button() (para decidir si el empuje de la
+ * transicion abarca solo el panel izquierdo o toda la pantalla). */
+static int screen_uses_split_layout(aura_screen_id_t screen)
+{
+    return screen == AURA_SCREEN_ROOT
+        || screen == AURA_SCREEN_SETTINGS
+        || screen == AURA_SCREEN_MUSIC
+        || is_choice_screen(screen)
+        || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
+        || screen == AURA_SCREEN_SETTINGS_SLEEPTIMER
+        || screen == AURA_SCREEN_SETTINGS_MAINMENU
+        || is_music_browse_screen(screen)
+        || screen == AURA_SCREEN_MUSIC_PLAYLISTS
+        || screen == AURA_SCREEN_VIDEOS
+        || screen == AURA_SCREEN_PHOTOS;
+}
+
 void aura_screens_draw(aura_nav_t *nav)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
+
+    aura_widgets_set_list_layout(screen_uses_split_layout(screen)
+                                  ? AURA_LIST_SPLIT : AURA_LIST_FULL);
 
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         draw_nav_list(nav, screen);
@@ -1092,9 +1135,39 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     int depth_after = aura_nav_depth(nav);
     if (depth_after != depth_before)
     {
-        if (depth_after > depth_before && is_coverflow_screen(aura_nav_current(nav)))
+        aura_screen_id_t to = aura_nav_current(nav);
+
+        if (depth_after > depth_before && is_coverflow_screen(to))
             aura_transition_reveal(nav);
         else
-            aura_transition_slide(nav, depth_after > depth_before ? 1 : -1);
+        {
+            /* T1 vs T3 segun los DOS extremos de la navegacion (L4):
+             * si origen y destino son menus divididos, el empuje solo
+             * se ve en el panel izquierdo -- el panel derecho es una
+             * capa que no se mueve (L1) y se actualiza despues con su
+             * debounce de ~1s (L3). Si cualquiera de los dos es de
+             * pantalla completa, es un T3: push de ancho completo.
+             * `screen` conserva la pantalla activa al entrar a esta
+             * funcion (el origen); `to` es a donde se navego. */
+            /* Se consulta la tabla directamente y no
+             * aura_widgets_split_active(), que refleja el layout de la
+             * ultima pantalla dibujada -- aca hacen falta los dos
+             * extremos de la navegacion, no el estado del renderer. */
+            int width = (aura_settings.graphics_mode != AURA_GFX_NONE
+                         && screen_uses_split_layout(screen)
+                         && screen_uses_split_layout(to))
+                        ? AURA_LAYOUT_PANEL_LEFT_WIDTH
+                        : AURA_SCREEN_WIDTH;
+
+            /* Al volver, el preview del padre se restaura al instante
+             * (sin el retardo de ~1s de seleccion nueva) -- observado
+             * cuadro a cuadro en el original, D-068. Antes de la
+             * transicion, para que el render offscreen ya lo incluya. */
+            if (depth_after < depth_before)
+                aura_widgets_panel_force_next();
+
+            aura_transition_slide(nav, depth_after > depth_before ? 1 : -1,
+                                  width);
+        }
     }
 }

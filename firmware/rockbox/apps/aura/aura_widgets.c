@@ -35,7 +35,13 @@ static const char *theme_dir_name(void)
     return (aura_settings.theme == AURA_THEME_DARK) ? "dark" : "light";
 }
 
-int aura_widgets_draw_icon(const char *name, int size, int x, int y)
+/* `suffix` elige la variante de color del bitmap: "" es el color de
+ * texto normal y "-on" el color de contraste, para el contenido que va
+ * sobre la barra de seleccion. Las dos variantes las genera
+ * design-system/generate.py; el color viene horneado en el bitmap
+ * porque lcd_bitmap_transparent() no sabe recolorear (D-010). */
+static int draw_icon_variant(const char *name, int size, int x, int y,
+                              const char *suffix)
 {
     /* Dimensionado para el icono mas grande que se pide hoy
      * (AURA_ICON_SIZE_PREVIEW, panel derecho de la pantalla dividida,
@@ -50,8 +56,8 @@ int aura_widgets_draw_icon(const char *name, int size, int x, int y)
     if (!name)
         return 0;
 
-    snprintf(path, sizeof(path), "%s/aura/%s/%s-%d.bmp",
-              ICON_DIR, theme_dir_name(), name, size);
+    snprintf(path, sizeof(path), "%s/aura/%s/%s-%d%s.bmp",
+              ICON_DIR, theme_dir_name(), name, size, suffix);
 
     bm.data = (char *)icon_buf;
     ret = read_bmp_file(path, &bm, sizeof(icon_buf), FORMAT_NATIVE, NULL);
@@ -60,14 +66,35 @@ int aura_widgets_draw_icon(const char *name, int size, int x, int y)
 
     /* Los bitmaps se generan sobre TRANSPARENT_COLOR (D-010 en
      * DECISIONS.md), asi que se dibujan igual sobre fondo normal o
-     * sobre la barra de seleccion resaltada. */
+     * sobre la barra de seleccion. */
     lcd_bitmap_transparent((const fb_data *)bm.data, x, y, bm.width, bm.height);
     return bm.width;
 }
 
+int aura_widgets_draw_icon(const char *name, int size, int x, int y)
+{
+    return draw_icon_variant(name, size, x, y, "");
+}
+
+int aura_widgets_draw_icon_selected(const char *name, int size, int x, int y)
+{
+    return draw_icon_variant(name, size, x, y, "-on");
+}
+
+/* Layout declarado por la pantalla actual (lo fija aura_screens_draw
+ * desde su tabla). Por defecto SPLIT: es el layout de la mayoria de los
+ * menus del firmware original. */
+static aura_list_layout_t s_list_layout = AURA_LIST_SPLIT;
+
+void aura_widgets_set_list_layout(aura_list_layout_t layout)
+{
+    s_list_layout = layout;
+}
+
 int aura_widgets_split_active(void)
 {
-    return aura_settings.graphics_mode != AURA_GFX_ULTRA;
+    return s_list_layout == AURA_LIST_SPLIT
+        && aura_settings.graphics_mode != AURA_GFX_NONE;
 }
 
 static int list_width(void)
@@ -87,6 +114,12 @@ int aura_widgets_visible_rows(void)
 static const char *s_panel_pending_icon;
 static const char *s_panel_shown_icon;
 static long s_panel_pending_since = 0;
+static int s_panel_force_next = 0;
+
+void aura_widgets_panel_force_next(void)
+{
+    s_panel_force_next = 1;
+}
 
 static void draw_right_panel_debounced(const char *icon_name)
 {
@@ -94,6 +127,17 @@ static void draw_right_panel_debounced(const char *icon_name)
     {
         s_panel_pending_icon = icon_name;
         s_panel_pending_since = current_tick;
+    }
+
+    /* Al volver atras el preview del menu padre se restaura al
+     * instante, sin esperar el retardo -- es contenido que el usuario
+     * ya habia visto, no una seleccion nueva (observado cuadro a cuadro
+     * en el firmware original, D-068). El retardo de ~1s aplica solo a
+     * selecciones nuevas mientras se navega. */
+    if (s_panel_force_next)
+    {
+        s_panel_force_next = 0;
+        s_panel_shown_icon = s_panel_pending_icon;
     }
 
     if (TIME_AFTER(current_tick, s_panel_pending_since + PANEL_RETARDO_TICKS))
@@ -149,30 +193,39 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         int is_selected = (i == selected);
         int text_x = ROW_PAD_X;
 
+        /* Fila activa: barra gris neutra con el contenido (icono, texto,
+         * checkmark) en el color de contraste de la marca. */
         if (is_selected)
         {
-            lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
+            lcd_set_foreground(aura_color(AURA_TOK_SELECTION));
             lcd_fillrect(0, row_y, width, ROW_HEIGHT);
         }
 
         if (items[i].icon_name)
         {
-            int w = aura_widgets_draw_icon(items[i].icon_name, AURA_ICON_SIZE_MENU,
-                               text_x, row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2);
+            int icon_y = row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2;
+            int w = is_selected
+                ? aura_widgets_draw_icon_selected(items[i].icon_name,
+                                                   AURA_ICON_SIZE_MENU, text_x, icon_y)
+                : aura_widgets_draw_icon(items[i].icon_name,
+                                          AURA_ICON_SIZE_MENU, text_x, icon_y);
             if (w > 0)
                 text_x += w + ICON_TEXT_GAP;
         }
 
-        lcd_set_foreground(is_selected ? aura_color(AURA_TOK_ACCENT_ON)
+        lcd_set_foreground(is_selected ? aura_color(AURA_TOK_ON_SELECTION)
                                         : aura_color(AURA_TOK_TEXT_PRIMARY));
         lcd_putsxy(text_x, row_y + AURA_SPACING_SM,
                    (const unsigned char *)items[i].label);
 
         if (items[i].checked)
         {
-            aura_widgets_draw_icon("check", AURA_ICON_SIZE_MENU,
-                      width - ROW_PAD_X - AURA_ICON_SIZE_MENU,
-                      row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2);
+            int check_x = width - ROW_PAD_X - AURA_ICON_SIZE_MENU;
+            int check_y = row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2;
+            if (is_selected)
+                aura_widgets_draw_icon_selected("check", AURA_ICON_SIZE_MENU, check_x, check_y);
+            else
+                aura_widgets_draw_icon("check", AURA_ICON_SIZE_MENU, check_x, check_y);
         }
     }
 
@@ -260,12 +313,12 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
         int w, h;
         int is_focus = (i == focus);
 
-        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_ACCENT)
+        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_SELECTION)
                                      : aura_color(AURA_TOK_SURFACE));
         lcd_fillrect(box_x, box_y, DIGIT_BOX_W, DIGIT_BOX_H);
 
         lcd_getstringsize((const unsigned char *)digit_str, &w, &h);
-        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_ACCENT_ON)
+        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_ON_SELECTION)
                                      : aura_color(AURA_TOK_TEXT_PRIMARY));
         lcd_putsxy(box_x + (DIGIT_BOX_W - w) / 2, box_y + (DIGIT_BOX_H - h) / 2,
                    (const unsigned char *)digit_str);
@@ -372,18 +425,18 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
     no_x = box_x;
     yes_x = box_x + box_w - btn_w;
 
-    lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_ACCENT : AURA_TOK_SURFACE));
+    lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_SELECTION : AURA_TOK_SURFACE));
     lcd_fillrect(no_x, btn_y, btn_w, 32);
-    lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_ACCENT : AURA_TOK_SURFACE));
+    lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_SELECTION : AURA_TOK_SURFACE));
     lcd_fillrect(yes_x, btn_y, btn_w, 32);
 
     {
         int w, h;
-        lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_ACCENT_ON : AURA_TOK_TEXT_PRIMARY));
+        lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_ON_SELECTION : AURA_TOK_TEXT_PRIMARY));
         lcd_getstringsize((const unsigned char *)no_label, &w, &h);
         lcd_putsxy(no_x + (btn_w - w) / 2, btn_y + (32 - h) / 2, (const unsigned char *)no_label);
 
-        lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_ACCENT_ON : AURA_TOK_TEXT_PRIMARY));
+        lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_ON_SELECTION : AURA_TOK_TEXT_PRIMARY));
         lcd_getstringsize((const unsigned char *)yes_label, &w, &h);
         lcd_putsxy(yes_x + (btn_w - w) / 2, btn_y + (32 - h) / 2, (const unsigned char *)yes_label);
     }

@@ -10,8 +10,15 @@ typedef enum {
     AURA_TOK_TEXT_PRIMARY,
     AURA_TOK_TEXT_SECONDARY,
     AURA_TOK_BORDER,
+    /* Color de contraste de la marca: texto/icono del elemento activo,
+     * rellenos de progreso, sliders. NO es el fondo de la seleccion. */
     AURA_TOK_ACCENT,
-    AURA_TOK_ACCENT_ON,
+    /* Fondo de la barra de seleccion (gris neutro), y color del
+     * contenido que va encima de ella. Separados de ACCENT desde el
+     * ajuste de identidad visual: la fila activa es una barra gris con
+     * el contenido en color de contraste, no una barra de color. */
+    AURA_TOK_SELECTION,
+    AURA_TOK_ON_SELECTION,
 } aura_color_token_t;
 
 typedef enum {

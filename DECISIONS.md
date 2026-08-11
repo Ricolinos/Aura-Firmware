@@ -499,4 +499,52 @@ El cambio de ruta para archivos **ya sincronizados antes de esta fase** (instala
 
 ---
 
+## D-068 — Transiciones: push real con framebuffer offscreen, reemplazando el wipe de revelado
+
+El análisis cuadro a cuadro del video del firmware original (aportado por el usuario) mostró que un T1/T3 real mueve las DOS pantallas en bloque —la vieja sale por un borde mientras la nueva entra por el opuesto—, con aceleración de salida (el primer paso cubre ~la mitad del recorrido) y el título de la barra de estado cambia al instante, sin deslizar. El wipe de revelado de D-030/D-058 no movía la pantalla vieja; además `aura_theme_clear_screen()` usaba `lcd_clear_display()`, que ignora el viewport activo y borra el framebuffer entero en cada cuadro —la pantalla nueva deslizaba sobre fondo vacío.
+
+**Corrección de raíz**: `aura_theme_clear_screen()` pasa a `lcd_clear_viewport()` (respeta el recorte activo). El push real renderiza la pantalla nueva una sola vez a un framebuffer offscreen propio (`viewport_set_buffer`, API estándar de Rockbox) y cada cuadro desplaza el remanente de la vieja con `memmove` por fila más un `lcd_bitmap_part` de la franja entrante —nunca se instala un viewport fuera de `[0, AURA_SCREEN_WIDTH]` (restricción real de D-030 intacta). Ease-out cuadrático precalculado, sin física de resorte con estado.
+
+**Alcance del push**: se decide por los DOS extremos de la navegación, no por la pantalla de origen sola —si ambos extremos son pantallas de lista dividida, el push queda confinado al panel izquierdo (el derecho es una capa que no se mueve, con su propio debounce de ~1s); si cualquiera es de pantalla completa, es un T3 de ancho completo. Al volver atrás, el preview del panel derecho del padre se restaura al instante (`aura_widgets_panel_force_next`), sin esperar el retardo de selección nueva —así se ve en el original.
+
+**Aceptación**: sim y ARM real compilan limpio; verificado visualmente por el usuario en el simulador.
+
+## D-069 — Identidad visual F21B33 + separación Animaciones/Gráficos (superada por Apple2026, documentada como estado real que existió)
+
+El usuario pidió una identidad visual concreta: acento `#F21B33`, fondo blanco en claro, selector gris `#EFEFEF`, tipografía SF Pro y iconografía SF Symbols real. Se migró `design-system/tokens.json` a esos valores, con la fila activa separada en dos tokens (`SELECTION` para el fondo gris, `ON_SELECTION` para el contenido en acento) en vez del acento como fondo de fila. SF Symbols no tiene distribución como archivos sueltos —se renderizan pidiéndoselos al sistema vía AppKit (`design-system/scripts/render_sf_symbols.swift`, un solo proceso Swift por lote batch en vez de uno por símbolo, evitando pagar ~2s de recompilación 57 veces).
+
+**Bug encontrado por captura de pantalla, no por compilación**: la primera versión de `draw_about()` usaba `kibyte_units` (arranca en KiB) pasando bytes crudos sin dividir —489 MB se mostraban como "466 GiB". Corregido usando `byte_units` (arranca en Byte).
+
+**Separación Animaciones/Gráficos**: el ajuste único "Gráficos" (Ultra/Minimalista/Pro) controlaba a la vez el movimiento (transiciones) y el contenido dibujado de más (panel de preview, Coverflow). El usuario pidió partirlo en dos ajustes independientes de verdad: `aura_settings.animation_mode` (Ninguna/Mínimas/Todas, gobierna `aura_transitions.c`) y `aura_settings.graphics_mode` (Ninguno/Mínimos/Todos, gobierna `aura_widgets_split_active()`/Coverflow). Migración silenciosa: un `aura.cfg` viejo sin `animation_mode` adopta el valor que tenía `graphics_mode`, porque los tres valores coinciden 1:1 en orden. Se extrajo además una tabla única de layout (`screen_uses_split_layout()` en `aura_screens.c`) que declara pantalla por pantalla si es dividida o de ancho completo, consumida tanto por el dibujo como por el ancho del push —antes esa decisión estaba implícita y dispersa.
+
+**Nota de continuidad**: esta identidad visual y esta separación de ajustes quedan reemplazadas por el sistema de diseño Apple2026 (`docs/design/`, ver PLAN-APPLE2026.md) a partir de la Fase 26 —color, tipografía e iconografía cambian de nuevo. Se documenta aquí porque fue trabajo real, verificado y aceptado por el usuario en su momento, no un experimento descartado sin más.
+
+**Aceptación**: sim y ARM real compilan limpio; verificado visualmente en ambos temas.
+
+## D-070 — Aura Studio: barra lateral tipo Finder, detección automática de dispositivo Aura, y Ajustes de la aplicación
+
+El usuario pidió que Aura Studio detectara automáticamente el iPod con firmware Aura instalado y organizara la biblioteca en secciones al estilo Finder (General/Música/Video/Fotos/Extras). Se implementó `AuraDeviceProbe`, que distingue cuatro estados reales mirando archivos en el volumen montado —el firmware no se está ejecutando en modo almacenamiento, así que la única señal disponible es el disco—: firmware original de Apple, Rockbox sin Aura, Aura instalada sin arrancar aún, y Aura en uso (se sabe por la existencia de `.rockbox/aura/aura.cfg`, que el firmware solo escribe en su primer arranque). `ContentView` pasa de pestañas a `NavigationSplitView` con esa estructura; los contadores de "En el iPod" salen del mismo `sync_summary.cfg` que ya lee la pantalla "Acerca de" del firmware (D-066), no de recorrer el disco.
+
+**Ajustes de la aplicación** (nuevos, distintos de los ajustes del firmware que viven en el iPod): selector de idioma ES/EN con cobertura parcial y honesta —aplica hoy solo a Ajustes y la barra lateral, el resto de la app sigue en español, y la propia pantalla lo dice en vez de simular una traducción completa—; política de carátulas "una por álbum" vs "una por canción", que sí cambia qué archivos terminan en el iPod (`LibrarySync.writeAlbumCovers` escribe un único `cover.jpg` por carpeta de álbum en el destino, no en el staging plano compartido por todos los álbumes); interruptores de enriquecimiento en línea y letras sincronizadas.
+
+**Investigación de fuentes de datos** (agosto 2026, verificada contra documentación oficial y endpoints en vivo, no memoria): MusicBrainz + Cover Art Archive + LRCLIB cubren metadata, carátulas (múltiples variantes por edición) y letras sincronizadas sin ninguna API key. Se encontró que el campo de API key de Genius en la UI no tenía ningún uso real —la API oficial de Genius no expone letras, ni sincronizadas ni planas—; se eliminaron esa pantalla y `APIKeyStore`, que quedó sin un solo consumidor. Se agregó `MusicBrainzRateLimiter` (actor, 1 req/s compartido entre todos los pedidos, reintento con espera creciente ante 503/429) porque el cliente ya enviaba el `User-Agent` correcto pero no respetaba el límite documentado y estricto de MusicBrainz —sin esto, una biblioteca grande pierde metadata en silencio (`enrich()` traga el error con `try?`).
+
+**Bug de concurrencia real encontrado por `xcodebuild`, no por `swift build`** (mismo patrón que D-034/D-065): el colector de archivos soltados en `MediaSectionView` acumulaba en un `var urls` capturado por callbacks concurrentes de cada `NSItemProvider` —carrera de datos real. Corregido con `DropCollector`, una clase con lock que además preserva el orden de los archivos soltados.
+
+**Aceptación**: `swift test` y `xcodebuild build`/`test` en verde; verificado visualmente por el usuario en la app.
+
+## D-071 — Bug crítico: Aura Studio detectaba el disco de arranque del Mac como si fuera el iPod
+
+El usuario reportó que, con el iPod conectado, la sección General mostraba un volumen de 2 TB en vez de los 128 GB reales, con un error de "read only" al intentar sincronizar. Investigación con DiskArbitration en vivo confirmó la causa exacta: **la app apuntaba al SSD interno del Mac**, no a un volumen ajeno cualquiera.
+
+Dos bugs combinados. **(1)** DiskArbitration notifica un evento por cada disco y cada partición —para un iPod llegan tres: el disco entero, la partición de firmware y el volumen de datos montado—; `DiskArbitrationMonitor` se quedaba con el primero que llegara, que es el disco entero, sin punto de montaje. **(2)** `mountPath` quedaba vacío, y `URL(fileURLWithPath: "")` no falla: se resuelve contra el directorio de trabajo del proceso, es decir `/`. Todo lo que dependía de esa URL (capacidad, lectura del resumen, y de haber sido escribible, el propio sync) terminaba operando sobre el disco de arranque del Mac. Se sumó que `DiskArbitrationMonitor` tenía su propia lógica de identificación —un simple OR entre marca y modelo, sin exigir removible ni externo— duplicando mal una decisión de seguridad que `IPodDiskIdentifier` (D-046/D-047) ya tenía resuelta y con 10 tests, en otro archivo que nunca se consultaba desde el monitor de disco.
+
+**Corrección**: el monitor ahora exige punto de montaje real y reutiliza los mismos criterios estrictos de `IPodDiskIdentifier.matchesIPodCriteria`. `AuraDeviceProbe.probe` pasa a devolver opcional y rechaza rutas vacías, relativas o inexistentes como defensa en profundidad. De paso se corrigió el criterio de tamaño, que exigía 120 GB ±5 GB —el iPod real de la sesión (124.9 GB, un 6G con el disco cambiado por flash) pasaba por apenas 130 MB de margen, y un mod de flash más grande (256 GB–1 TB, lo común hoy para mantener vivo un Classic) habría sido rechazado—: ahora el modelo "iPod" sirve de señal principal y el tamaño es respaldo solo para el caso del disco de fábrica sin ese string (D-046).
+
+**Verificación contra hardware real**: se midieron con DiskArbitration todos los discos conectados en la sesión del usuario (SSD interno del Mac, dos SSD externos de terceros de 2 TB, el iPod real de 124.9 GB) y se replicó la lógica nueva en un script standalone contra ese hardware —acepta exactamente un disco, el volumen correcto del iPod. 10 tests de regresión nuevos fijan cada caso con los datos reales medidos, no sintéticos inventados.
+
+**Aceptación**: 96 tests en verde; verificado contra hardware real conectado, no solo en el simulador de datos.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

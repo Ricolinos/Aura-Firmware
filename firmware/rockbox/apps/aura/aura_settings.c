@@ -18,6 +18,7 @@ aura_settings_t aura_settings;
 
 static const aura_settings_t aura_settings_defaults = {
     .theme = AURA_THEME_DARK,
+    .animation_mode = AURA_ANIM_MINIMAL,
     .graphics_mode = AURA_GFX_MINIMAL,
     .eq_preset = AURA_EQ_FLAT,
     .language = AURA_LANG_ES,
@@ -87,6 +88,7 @@ void aura_settings_load(void)
 {
     int fd;
     char line[64];
+    bool has_animation_mode = false;
 
     aura_settings = aura_settings_defaults;
 
@@ -102,6 +104,11 @@ void aura_settings_load(void)
             int v = atoi(value);
             if (!strcmp(name, "theme"))
                 aura_settings.theme = clamp_enum(v, AURA_THEME_COUNT);
+            else if (!strcmp(name, "animation_mode"))
+            {
+                aura_settings.animation_mode = clamp_enum(v, AURA_ANIM_COUNT);
+                has_animation_mode = true;
+            }
             else if (!strcmp(name, "graphics_mode"))
                 aura_settings.graphics_mode = clamp_enum(v, AURA_GFX_COUNT);
             else if (!strcmp(name, "eq_preset"))
@@ -116,6 +123,15 @@ void aura_settings_load(void)
                 aura_settings.show_nowplaying = (v != 0);
         }
         close(fd);
+
+        /* Migracion silenciosa de los aura.cfg escritos antes de que
+         * "Graficos" se partiera en Animaciones + Graficos: el ajuste
+         * viejo controlaba las dos cosas a la vez y sus tres valores
+         * coinciden 1:1 en orden con los nuevos, asi que se adopta como
+         * valor inicial de Animaciones. Sin esto, un usuario que tenia
+         * todo desactivado veria las animaciones reaparecer solas. */
+        if (!has_animation_mode)
+            aura_settings.animation_mode = (aura_anim_mode_t)aura_settings.graphics_mode;
     }
 
     aura_settings_apply_eq();
@@ -133,6 +149,7 @@ void aura_settings_save(void)
         return;
 
     fdprintf(fd, "theme: %d\n", (int)aura_settings.theme);
+    fdprintf(fd, "animation_mode: %d\n", (int)aura_settings.animation_mode);
     fdprintf(fd, "graphics_mode: %d\n", (int)aura_settings.graphics_mode);
     fdprintf(fd, "eq_preset: %d\n", (int)aura_settings.eq_preset);
     fdprintf(fd, "language: %d\n", (int)aura_settings.language);

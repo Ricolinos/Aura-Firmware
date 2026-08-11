@@ -1,7 +1,7 @@
 /* Coverflow: version simplificada para el modo grafico Completo.
  * Reemplaza a la lista plana de Albumes (AURA_SCREEN_MUSIC_ALBUMS /
  * AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST) solo cuando
- * aura_settings.graphics_mode == AURA_GFX_FULL -- en Ultra/Minimalista
+ * aura_settings.graphics_mode == AURA_GFX_ALL -- con Graficos en Ninguno/Minimos
  * esas pantallas siguen siendo la lista de aura_screens.c. Ver D-025.
  */
 #ifndef AURA_COVERFLOW_H

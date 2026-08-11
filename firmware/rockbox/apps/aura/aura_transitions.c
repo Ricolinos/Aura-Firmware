@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "lcd.h"
 #include "kernel.h"
 #include "tick.h"
@@ -20,80 +22,146 @@
         (void)(start_tick); /* evita -Wunused-variable en builds sin DEBUG */ \
     } while (0)
 
-/* NOTA (reemplaza el enfoque anterior de viewport desplazado -- ver
- * DECISIONS.md): un viewport con x fuera de [0, AURA_SCREEN_WIDTH] o con
- * x+width > AURA_SCREEN_WIDTH es invalido. set_viewport_ex() en
- * SIMULATOR solo lo *reporta* por DEBUGF, pero lo instala igual como
- * viewport activo -- un blit grande (p.ej. una foto a pantalla
- * completa) dentro de ese viewport invalido corrompe memoria (bus
- * error). No hay forma segura de "desplazar" un viewport de
- * AURA_SCREEN_WIDTH completo sin salirse de esos limites, porque en
- * Rockbox vp.x cumple doble función (origen de traduccion de
- * coordenadas Y limite de recorte): no se puede recortar el ancho
- * visible sin romper la traduccion del contenido dibujado dentro.
+/* -- Push real (Fase 26 / D-068) ---------------------------------------
  *
- * En su lugar, se usa un "wipe" de revelado: se dibuja la pantalla
- * nueva completa (coordenadas normales, sin desplazar) pero acotada a
- * una franja que crece cada cuadro, siempre dentro de
- * [0, AURA_SCREEN_WIDTH]. El framebuffer conserva la pantalla anterior
- * en la parte aun no cubierta, dando el mismo efecto visual de
- * "entra deslizando" sin nunca construir un viewport invalido. */
-void aura_transition_slide(aura_nav_t *nav, int direction)
+ * Analisis cuadro a cuadro del firmware original (video del usuario,
+ * D-068): en un T1/T3 las DOS pantallas se mueven en bloque -- la vieja
+ * sale por un borde mientras la nueva entra por el opuesto -- con
+ * ease-out (el primer paso cubre ~la mitad del recorrido) y el titulo
+ * de la barra de estado cambia AL INSTANTE, sin deslizar. El enfoque
+ * anterior ("wipe" de revelado) no movia la pantalla vieja, y ademas
+ * aura_theme_clear_screen() borraba el framebuffer entero en cada
+ * cuadro (lcd_clear_display ignora el viewport activo), asi que en la
+ * practica la nueva pantalla deslizaba sobre fondo vacio.
+ *
+ * Mecanica: la pantalla nueva se renderiza UNA vez a un framebuffer
+ * offscreen propio (viewport_set_buffer, API estandar de Rockbox);
+ * despues cada cuadro es solo (a) desplazar el remanente de la pantalla
+ * vieja en el framebuffer real con memmove por fila (stride horizontal,
+ * filas contiguas -- garantizado para este target, config.h:818) y (b)
+ * blitear la franja entrante de la nueva con lcd_bitmap_part. Ningun
+ * viewport sale jamas de [0, AURA_SCREEN_WIDTH] (la restriccion real de
+ * D-030 se mantiene). La banda de la barra de estado (y < statusbar_h)
+ * queda fuera del deslizamiento: se blitea completa antes del primer
+ * cuadro (titulo instantaneo, como el original). */
+
+static fb_data s_push_fb[AURA_SCREEN_WIDTH * AURA_SCREEN_HEIGHT];
+
+static void *push_fb_address(int x, int y)
 {
-    int frames, frame_delay, i;
+    return &s_push_fb[y * AURA_SCREEN_WIDTH + x];
+}
+
+static struct frame_buffer_t s_push_buffer = {
+    { .fb_ptr = s_push_fb },
+    .get_address_fn = &push_fb_address,
+    .stride = STRIDE_MAIN(AURA_SCREEN_WIDTH, AURA_SCREEN_HEIGHT),
+    .elems = AURA_SCREEN_WIDTH * AURA_SCREEN_HEIGHT,
+};
+
+/* Desplazamiento con ease-out cuadratico: d(t) = W * (1 - (1-t)^2).
+ * Coincide con lo observado en el original: arranque rapido,
+ * desaceleracion al asentarse. */
+static int eased_offset(int width, int i, int frames)
+{
+    int remain = frames - i;
+    return width - (width * remain * remain) / (frames * frames);
+}
+
+void aura_transition_slide(aura_nav_t *nav, int direction, int width)
+{
+    int frames, frame_delay, i, y;
+    int d_prev = 0;
+    const int bar_h = AURA_LAYOUT_STATUSBAR_HEIGHT;
     struct viewport vp;
     struct viewport *saved;
     long start_tick = current_tick;
 
-    if (aura_settings.graphics_mode == AURA_GFX_ULTRA || direction == 0)
+    if (aura_settings.animation_mode == AURA_ANIM_NONE || direction == 0)
         return;
 
-    if (aura_settings.graphics_mode == AURA_GFX_FULL)
+    /* Fuera de rango -> ancho completo. */
+    if (width <= 0 || width > AURA_SCREEN_WIDTH)
+        width = AURA_SCREEN_WIDTH;
+
+    if (aura_settings.animation_mode == AURA_ANIM_ALL)
     {
         frames = 8;
         frame_delay = HZ / 60;
     }
-    else /* AURA_GFX_MINIMAL */
+    else /* AURA_ANIM_MINIMAL */
     {
         frames = 4;
         frame_delay = HZ / 45;
     }
 
+    /* 1. Renderizar la pantalla nueva completa, una sola vez, al
+     * framebuffer offscreen. aura_theme_clear_screen() limpia solo el
+     * viewport activo (ver aura_theme.c), asi que el framebuffer real
+     * -- con la pantalla vieja -- queda intacto. */
+    viewport_set_defaults(&vp, SCREEN_MAIN);
+    vp.x = 0;
+    vp.y = 0;
+    vp.width = AURA_SCREEN_WIDTH;
+    vp.height = AURA_SCREEN_HEIGHT;
+    viewport_set_buffer(&vp, &s_push_buffer, SCREEN_MAIN);
+
+    saved = lcd_set_viewport(&vp);
+    aura_screens_draw(nav);
+    lcd_set_viewport(saved);
+
+    /* 2. Titulo instantaneo: la banda de la barra de estado no
+     * desliza -- se blitea entera antes del primer cuadro. */
+    lcd_bitmap_part(s_push_fb, 0, 0, AURA_SCREEN_WIDTH, 0, 0, width, bar_h);
+
+    /* 3. Push por cuadros sobre la banda del cuerpo (y >= bar_h). */
     for (i = 1; i <= frames; i++)
     {
-        int revealed = (AURA_SCREEN_WIDTH * i) / frames;
+        int d = eased_offset(width, i, frames);
+        int delta = d - d_prev;
 
-        viewport_set_defaults(&vp, SCREEN_MAIN);
-        vp.y = 0;
-        vp.height = AURA_SCREEN_HEIGHT;
-
-        if (direction > 0)
+        if (delta > 0)
         {
-            /* Adelante: revela desde el borde derecho hacia la
-             * izquierda (x+width se mantiene siempre en
-             * AURA_SCREEN_WIDTH, nunca lo excede). */
-            vp.x = AURA_SCREEN_WIDTH - revealed;
-            vp.width = revealed;
-        }
-        else
-        {
-            /* Atras: revela desde el borde izquierdo hacia la
-             * derecha (x fijo en 0, width nunca excede
-             * AURA_SCREEN_WIDTH). */
-            vp.x = 0;
-            vp.width = revealed;
+            for (y = bar_h; y < AURA_SCREEN_HEIGHT; y++)
+            {
+                fb_data *row = FBADDR(0, y);
+
+                if (direction > 0)
+                    /* La vieja sale por la izquierda: el remanente
+                     * [0, width-d) viene de lo que estaba `delta`
+                     * pixeles a la derecha. */
+                    memmove(row, row + delta,
+                            (width - d) * sizeof(fb_data));
+                else
+                    /* La vieja sale por la derecha: el remanente
+                     * [d, width) viene de lo que estaba `delta`
+                     * pixeles a la izquierda. */
+                    memmove(row + d, row + d_prev,
+                            (width - d) * sizeof(fb_data));
+            }
+
+            if (direction > 0)
+                /* La nueva entra desde el borde derecho: sus columnas
+                 * [0, d) aparecen en x = [width-d, width). */
+                lcd_bitmap_part(s_push_fb, 0, bar_h, AURA_SCREEN_WIDTH,
+                                width - d, bar_h, d,
+                                AURA_SCREEN_HEIGHT - bar_h);
+            else
+                /* La nueva entra desde el borde izquierdo: sus columnas
+                 * [width-d, width) aparecen en x = [0, d). */
+                lcd_bitmap_part(s_push_fb, width - d, bar_h,
+                                AURA_SCREEN_WIDTH, 0, bar_h, d,
+                                AURA_SCREEN_HEIGHT - bar_h);
         }
 
-        saved = lcd_set_viewport(&vp);
-        aura_screens_draw(nav);
-        lcd_set_viewport(saved);
-        lcd_update();
+        lcd_update_rect(0, 0, width, AURA_SCREEN_HEIGHT);
 
+        d_prev = d;
         if (i < frames)
             sleep(frame_delay);
     }
 
-    TRANSITION_LOG("slide", frames, start_tick);
+    TRANSITION_LOG("push", frames, start_tick);
 }
 
 /* T4 (Coverflow, L4): mismo truco seguro de "wipe" que aura_transition_slide
@@ -108,15 +176,15 @@ void aura_transition_reveal(aura_nav_t *nav)
     struct viewport *saved;
     long start_tick = current_tick;
 
-    if (aura_settings.graphics_mode == AURA_GFX_ULTRA)
+    if (aura_settings.animation_mode == AURA_ANIM_NONE)
         return;
 
-    if (aura_settings.graphics_mode == AURA_GFX_FULL)
+    if (aura_settings.animation_mode == AURA_ANIM_ALL)
     {
         frames = 10;
         frame_delay = HZ / 60;
     }
-    else /* AURA_GFX_MINIMAL */
+    else /* AURA_ANIM_MINIMAL */
     {
         frames = 4;
         frame_delay = HZ / 45;

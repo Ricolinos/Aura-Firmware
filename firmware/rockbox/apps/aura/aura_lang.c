@@ -9,6 +9,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS]           = "Ajustes",
 
     [AURA_STR_SETTINGS_THEME]       = "Tema",
+    [AURA_STR_SETTINGS_ANIMATIONS]  = "Animaciones",
     [AURA_STR_SETTINGS_GRAPHICS]    = "Graficos",
     [AURA_STR_SETTINGS_EQ]          = "Ecualizador",
     [AURA_STR_SETTINGS_BRIGHTNESS]  = "Brillo",
@@ -40,9 +41,13 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_THEME_LIGHT]        = "Claro",
     [AURA_STR_THEME_DARK]         = "Oscuro",
 
-    [AURA_STR_GFX_ULTRA]          = "Ultra minimalista",
-    [AURA_STR_GFX_MINIMAL]        = "Minimalista",
-    [AURA_STR_GFX_FULL]           = "Pro",
+    [AURA_STR_ANIM_NONE]          = "Ninguna",
+    [AURA_STR_ANIM_MINIMAL]       = "Minimas",
+    [AURA_STR_ANIM_ALL]           = "Todas",
+
+    [AURA_STR_GFX_NONE]           = "Ninguno",
+    [AURA_STR_GFX_MINIMAL]        = "Minimos",
+    [AURA_STR_GFX_ALL]            = "Todos",
 
     [AURA_STR_EQ_FLAT]            = "Plano",
     [AURA_STR_EQ_BASS_BOOST]      = "Realce de graves",
@@ -85,6 +90,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS]           = "Settings",
 
     [AURA_STR_SETTINGS_THEME]       = "Theme",
+    [AURA_STR_SETTINGS_ANIMATIONS]  = "Animations",
     [AURA_STR_SETTINGS_GRAPHICS]    = "Graphics",
     [AURA_STR_SETTINGS_EQ]          = "Equalizer",
     [AURA_STR_SETTINGS_BRIGHTNESS]  = "Brightness",
@@ -116,9 +122,13 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_THEME_LIGHT]        = "Light",
     [AURA_STR_THEME_DARK]         = "Dark",
 
-    [AURA_STR_GFX_ULTRA]          = "Ultra minimal",
+    [AURA_STR_ANIM_NONE]          = "None",
+    [AURA_STR_ANIM_MINIMAL]       = "Minimal",
+    [AURA_STR_ANIM_ALL]           = "All",
+
+    [AURA_STR_GFX_NONE]           = "None",
     [AURA_STR_GFX_MINIMAL]        = "Minimal",
-    [AURA_STR_GFX_FULL]           = "Pro",
+    [AURA_STR_GFX_ALL]            = "All",
 
     [AURA_STR_EQ_FLAT]            = "Flat",
     [AURA_STR_EQ_BASS_BOOST]      = "Bass boost",

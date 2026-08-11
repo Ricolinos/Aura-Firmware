@@ -16,10 +16,23 @@ typedef enum {
     AURA_THEME_COUNT,
 } aura_theme_id_t;
 
+/* Animaciones: todo lo que se MUEVE (transiciones entre pantallas y su
+ * cantidad de cuadros). Ajuste propio, separado de los graficos: un
+ * usuario puede querer la interfaz completa pero sin movimiento, o al
+ * reves. */
 typedef enum {
-    AURA_GFX_ULTRA = 0,   /* cero animaciones, refrescos minimos */
-    AURA_GFX_MINIMAL,     /* solo transicion direccional breve */
-    AURA_GFX_FULL,        /* coverflow, crossfade, transiciones completas */
+    AURA_ANIM_NONE = 0,   /* Ninguna */
+    AURA_ANIM_MINIMAL,    /* Minimas */
+    AURA_ANIM_ALL,        /* Todas */
+    AURA_ANIM_COUNT,
+} aura_anim_mode_t;
+
+/* Graficos: todo lo que se DIBUJA de mas (panel derecho de preview,
+ * coverflow, caratulas). Nada que ver con el movimiento. */
+typedef enum {
+    AURA_GFX_NONE = 0,    /* Ninguno */
+    AURA_GFX_MINIMAL,     /* Minimos */
+    AURA_GFX_ALL,         /* Todos */
     AURA_GFX_COUNT,
 } aura_gfx_mode_t;
 
@@ -39,6 +52,7 @@ typedef enum {
 
 typedef struct {
     aura_theme_id_t theme;
+    aura_anim_mode_t animation_mode;
     aura_gfx_mode_t graphics_mode;
     aura_eq_preset_t eq_preset;
     aura_lang_t language;

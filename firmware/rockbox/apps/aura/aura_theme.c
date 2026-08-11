@@ -57,8 +57,10 @@ unsigned aura_color(aura_color_token_t token)
         return dark ? AURA_COLOR_DARK_BORDER : AURA_COLOR_LIGHT_BORDER;
     case AURA_TOK_ACCENT:
         return dark ? AURA_COLOR_DARK_ACCENT : AURA_COLOR_LIGHT_ACCENT;
-    case AURA_TOK_ACCENT_ON:
-        return dark ? AURA_COLOR_DARK_ACCENT_ON : AURA_COLOR_LIGHT_ACCENT_ON;
+    case AURA_TOK_SELECTION:
+        return dark ? AURA_COLOR_DARK_SELECTION : AURA_COLOR_LIGHT_SELECTION;
+    case AURA_TOK_ON_SELECTION:
+        return dark ? AURA_COLOR_DARK_ON_SELECTION : AURA_COLOR_LIGHT_ON_SELECTION;
     }
     return dark ? AURA_COLOR_DARK_TEXT_PRIMARY : AURA_COLOR_LIGHT_TEXT_PRIMARY;
 }
@@ -67,7 +69,17 @@ void aura_theme_clear_screen(void)
 {
     lcd_set_background(aura_color(AURA_TOK_BACKGROUND));
     lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
-    lcd_clear_display();
+    /* lcd_clear_viewport, NO lcd_clear_display: clear_display ignora el
+     * viewport activo (cambia a default_vp y borra la pantalla ENTERA,
+     * firmware/drivers/lcd-color-common.c:100) -- durante una
+     * transicion (aura_transitions.c dibuja dentro de un viewport
+     * recortado/desplazado, o hacia un framebuffer offscreen) eso
+     * destruia la pantalla anterior en cada cuadro, y el "push" se veia
+     * como un deslizamiento sobre fondo vacio en vez de sobre la
+     * pantalla que se va (D-068). Fuera de una transicion el viewport
+     * activo ES default_vp (nadie mas instala viewports en Aura), asi
+     * que el comportamiento es identico al de antes. */
+    lcd_clear_viewport();
 
     /* DRMODE_FG (en vez del DRMODE_SOLID por defecto): el texto y los
      * bitmaps solo pintan sus pixeles de trazo y dejan el resto de la
