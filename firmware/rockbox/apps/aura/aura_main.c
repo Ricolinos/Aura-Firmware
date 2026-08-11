@@ -163,6 +163,11 @@ void aura_main(void)
              * -- 20fps durante los ~380ms completos. */
             if (aura_widgets_pill_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
+
+            /* Resorte del icono de modo en Ahora suena (Fase 30, mismo
+             * criterio que la pastilla de arriba). */
+            if (aura_nowplaying_wheel_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
         }
 
         button = next_button(timeout_ticks);

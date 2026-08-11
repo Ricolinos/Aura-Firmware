@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 /* tagcache.h chequea "#ifdef HAVE_TAGCACHE" antes de incluir config.h
  * el mismo (esa macro la define config.h via config/ipod6g.h); si
@@ -11,6 +12,7 @@
 #include "audio.h"
 #include "dir.h"
 #include "file.h"
+#include "filetypes.h"
 #include "string-extra.h"
 
 #include "aura_music.h"
@@ -237,4 +239,20 @@ bool aura_music_play_playlist(int index)
 
     playlist_start(0, 0, 0);
     return true;
+}
+
+bool aura_music_add_track_to_playlist(int index, const char *track_path)
+{
+    char dir[MAX_PATH];
+    char full_path[MAX_PATH + AURA_MUSIC_ITEM_LEN + 1];
+    char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+    int n;
+
+    catalog_get_directory(dir, sizeof(dir));
+    n = aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
+    if (index < 0 || index >= n)
+        return false;
+
+    snprintf(full_path, sizeof(full_path), "%s/%s", dir, labels[index]);
+    return catalog_insert_into(full_path, false, track_path, FILE_ATTR_AUDIO) == 0;
 }

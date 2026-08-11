@@ -671,4 +671,26 @@ Ejecutada de forma autónoma, mismo permiso que D-073/D-075/D-076.
 
 ---
 
+## D-078 — Fase 30 (PLAN-APPLE2026.md): reproductor "Ahora suena" completo, con simplificaciones documentadas
+
+Reescritura completa de `aura_nowplaying.c` (la versión anterior era de la era D-025, centrada y sin ninguno de los 5 modos) siguiendo `Reproductor - Ahora suena.md` -- ejecutada de forma autónoma, mismo permiso que D-073/D-075/D-076/D-077.
+
+**Layout real (doc SS2)**: carátula 84px + reflejo (`aura_art.c`, D-077) a la izquierda en y=28; bloque de texto (título Semibold/`A26_FONT_STYLE_TITLE`, artista Secondary, estrellas) a la derecha; fila de 5 modos debajo del bloque de texto, alineada a la derecha de la pantalla; pastilla de progreso canónica en y=alto−34 con tiempos a los lados; transporte (repetir/transporte/aleatorio) en y=alto−14.
+
+**Los 5 modos, con velocidad real de la Fase 29**: Volumen (existente, D-014/D-017), Avance/retroceso (`audio_ff_rewind`, vista previa desacoplada de `id3->elapsed` real hasta confirmar -- doc SS5.2, "sin parpadeo"), Añadir a lista (nueva `aura_music_add_track_to_playlist()`, usa `catalog_insert_into()` -- la misma primitiva real de Rockbox detrás del menú "Agregar a lista" de `onplay.c`, no una reinvención), Letra (fusionada con "modo activo" en vez de un toggle separado, ver simplificación abajo), Estrellas (persistencia real vía `tagcache_update_numeric(idx, tag_rating, ...)` -- **el mismo mecanismo exacto que usa `onplay.c:set_rating_inline()`**, investigado antes de escribir nada; mapeo 0-5 estrellas ↔ 0-10 rating nativo de Rockbox, par para redondeo limpio).
+
+**Dos bugs reales de interacción encontrados probando la pantalla, no en revisión de código**:
+1. La pastilla de progreso, transporte y estrellas usan iconos ya horneados en un solo color por variante (D-010: normal o acento, nada más) -- un primer intento tiñó "activo"/"inactivo" con `lcd_set_foreground()` antes de llamar a `aura_widgets_draw_icon()`, que **no tiene ningún efecto** sobre bitmaps ya coloreados. Corregido a elegir entre `aura_widgets_draw_icon()`/`_selected()` (variante acento) en vez de intentar recolorear. Sin variante `TEXT_TERTIARY` horneada, así que los iconos "inactivos" de la fila de modos y el transporte quedan en el color de texto normal, no atenuados -- simplificación real, documentada, no un descuido (una tercera variante horneada por ícono duplicaría el costo de generación de assets por una diferencia sutil).
+2. **Modo Playlist podía quedar completamente atascado**: con Select reservado en ese modo para "confirmar agregar" (doc SS5.3), sin ninguna playlist creada Select nunca volvía a ciclar -- Letra y Estrellas quedaban inalcanzables. Corregido en dos frentes: (a) Select solo confirma si `playlist_count() > 0` (si no hay nada que confirmar, cicla como cualquier otro modo); (b) MENU en modo Playlist o Letra vuelve a Volumen en vez de salir de la pantalla, como escape explícito. Encontrado tomando capturas reales del ciclo de modos, no reviendo el código -- el primer intento parecía funcionar en una prueba de 1-2 pulsaciones y se rompía recién en la tercera.
+
+**Simplificaciones deliberadas frente al doc, documentadas explícitamente**:
+- **Vista de letra**: el doc pide un panel comprimido `FULL-CARRY` (carátula mini + fila de modos en columna a la izquierda, letra a pantalla completa a la derecha). Implementado como reemplazo de pantalla completa simple (ya existía de la versión anterior) -- construir el layout comprimido + la transición `FULL-CARRY` es un tramo de trabajo real propio (mismo motivo que ya diferenció D-076 al posponer esa transición en Fase 28), no algo para resolver de paso en esta pasada.
+- **Reflejo sin cross-fade**: el doc pide que carátula y reflejo se crucen en fundido de 330ms en cada cambio de pista. Implementado el reemplazo instantáneo (ya existía); el fundido necesitaría mantener dos carátulas decodificadas a la vez (memoria) y un estado de transición dedicado -- viable pero no alcanzado esta pasada.
+- **Listas automáticas "N estrellas"**: el rating en sí persiste de verdad (tagcache), pero las 5 playlists generadas al vuelo por rating (doc SS5.5, para que aparezcan en Música → Listas repr.) no se construyeron -- requiere una consulta nueva a tagcache filtrando por `tag_rating`, alcance propio.
+- **Icono "inactivo" en `TEXT_TERTIARY`**: ver bug #1 arriba.
+
+**Aceptación**: sim compila limpio (0 warnings nuevos); 95/95 + 132 + 215 tests host-side sin cambios (Fase 30 no toca módulos puros). Verificado en el simulador con música y letra de prueba reales instaladas: layout correcto en ambos temas (`docs/screenshots/ahora-suena-*.png`), ciclo completo de los 5 modos confirmado uno por uno con capturas dedicadas, rating persistiendo en memoria con 1 y 2 clics (3 clics coincidió con el loop del track de prueba de 3 segundos sin `tagcache_idx` válido -- limitación del fixture de prueba, no de la implementación), escrubeo moviendo la posición real de reproducción, modo Playlist mostrando "Sin resultados" sin listas creadas y ya no atascándose.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

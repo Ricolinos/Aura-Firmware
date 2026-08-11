@@ -88,6 +88,8 @@ typedef enum {
     AURA_STR_YES,
     AURA_STR_NO,
 
+    AURA_STR_PLAYLIST_ADDED,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

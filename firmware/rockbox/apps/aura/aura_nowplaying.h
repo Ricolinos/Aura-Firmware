@@ -17,4 +17,10 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button);
  * el usuario no vuelva a tocar el clickwheel. */
 bool aura_nowplaying_needs_tick(void);
 
+/* True mientras el icono de modo recien activado sigue en pleno resorte
+ * (doc "Reproductor - Ahora suena.md" SS5, Fase 30) -- aura_main.c pide
+ * la cadencia fina de 20fps mientras dure, mismo patron que
+ * aura_widgets_pill_animating(). */
+int aura_nowplaying_wheel_animating(void);
+
 #endif /* AURA_NOWPLAYING_H */

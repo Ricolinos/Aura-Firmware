@@ -80,6 +80,8 @@ static const char *const strings_es[AURA_STR_COUNT] = {
 
     [AURA_STR_YES]                = "Si",
     [AURA_STR_NO]                 = "No",
+
+    [AURA_STR_PLAYLIST_ADDED]     = "Agregada a la lista",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -161,6 +163,8 @@ static const char *const strings_en[AURA_STR_COUNT] = {
 
     [AURA_STR_YES]                = "Yes",
     [AURA_STR_NO]                 = "No",
+
+    [AURA_STR_PLAYLIST_ADDED]     = "Added to playlist",
 };
 
 const char *aura_str(aura_str_id_t id)

@@ -57,4 +57,10 @@ bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index);
 int aura_music_list_playlists(char labels[][AURA_MUSIC_ITEM_LEN], int max_items);
 bool aura_music_play_playlist(int index);
 
+/* Agrega `track_path` (ruta completa) al final de la playlist guardada
+ * en la posicion `index` de aura_music_list_playlists() -- modo "Añadir
+ * a lista" de la rueda en Ahora suena (Fase 30, doc SS5.3). No cambia
+ * la reproduccion actual, solo el archivo .m3u8 en disco. */
+bool aura_music_add_track_to_playlist(int index, const char *track_path);
+
 #endif /* AURA_MUSIC_H */
