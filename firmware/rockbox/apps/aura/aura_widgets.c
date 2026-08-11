@@ -512,12 +512,23 @@ void aura_widgets_draw_slider(const char *title, int fraction,
     if (fraction < 0)   fraction = 0;
     if (fraction > 256) fraction = 256;
 
-    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
-    lcd_drawrect(bar_x, bar_y, bar_w, A26_SPACING_XL);
+    /* PROGRESS_TRACK/PROGRESS_FILL (doc SS2), no SHELL_RAIL/ACCENT --
+     * son tokens de progreso, no de separador/estado-activo (Fase 32,
+     * D-081: el mismo error de token que D-073 ya habia corregido en
+     * aura_widgets_draw_progress() se habia colado aca tambien, sin
+     * auditar -- Brillo y Limite volumen lo usan). Extremos redondeados
+     * con la misma primitiva compartida que el resto del sistema, radio
+     * "tarjeta" (8px, SS5.4) -- es una barra mas gruesa que la pastilla
+     * de progreso canonica (16px de alto vs 4px), no la misma pieza. */
+    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, A26_SPACING_XL,
+                                 A26_LAYOUT_CORNER_RADIUS_CARD,
+                                 a26_color(A26_PROGRESS_TRACK), a26_color(A26_SHELL_BG));
 
     fill_w = (bar_w * fraction) / 256;
-    lcd_set_foreground(a26_color(A26_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_XL);
+    if (fill_w > 0)
+        a26_shell_fill_rounded_rect(bar_x, bar_y, fill_w, A26_SPACING_XL,
+                                     A26_LAYOUT_CORNER_RADIUS_CARD,
+                                     a26_color(A26_PROGRESS_FILL), a26_color(A26_SHELL_BG));
 
     if (value_text)
     {

@@ -25,7 +25,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_BACKLIGHT]    = "Temporiz. luz",
     [AURA_STR_SETTINGS_SLEEPTIMER]   = "Temporiz. reposo",
     [AURA_STR_SETTINGS_VOLUME_LIMIT] = "Limite volumen",
-    [AURA_STR_SETTINGS_CLICKER]      = "Clicker",
+    [AURA_STR_SETTINGS_CLICKER]      = "Sonido de clic",
     [AURA_STR_SETTINGS_MAINMENU]     = "Menu principal",
     [AURA_STR_SETTINGS_RESET]        = "Restablecer ajustes",
 
@@ -61,7 +61,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_MUSIC]        = "Musica",
     [AURA_STR_ABOUT_VIDEOS]       = "Video",
     [AURA_STR_ABOUT_PHOTOS]       = "Fotos",
-    [AURA_STR_ABOUT_PLAYLISTS]    = "Playlists",
+    [AURA_STR_ABOUT_PLAYLISTS]    = "Listas",
     [AURA_STR_ABOUT_NO_SYNC]      = "Todavia no sincronizaste con Aura Studio.",
 
     [AURA_STR_EMPTY_MUSIC]        = "Sin musica todavia",
@@ -72,7 +72,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_MUSIC_ARTISTS]      = "Artistas",
     [AURA_STR_MUSIC_ALBUMS]       = "Albumes",
     [AURA_STR_MUSIC_SONGS]        = "Canciones",
-    [AURA_STR_MUSIC_PLAYLISTS]    = "Playlists",
+    [AURA_STR_MUSIC_PLAYLISTS]    = "Listas",
     [AURA_STR_MUSIC_GENRES]       = "Generos",
     [AURA_STR_DB_NOT_READY]       = "Preparando la biblioteca...",
     [AURA_STR_EMPTY_LIST]         = "Sin resultados",
@@ -82,6 +82,8 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_NO]                 = "No",
 
     [AURA_STR_PLAYLIST_ADDED]     = "Agregada a la lista",
+    [AURA_STR_ABOUT_STORAGE]      = "Almacenamiento",
+    [AURA_STR_PLAYLIST_PICK]      = "Gira la rueda para elegir",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -165,6 +167,8 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_NO]                 = "No",
 
     [AURA_STR_PLAYLIST_ADDED]     = "Added to playlist",
+    [AURA_STR_ABOUT_STORAGE]      = "Storage",
+    [AURA_STR_PLAYLIST_PICK]      = "Turn the wheel to choose",
 };
 
 const char *aura_str(aura_str_id_t id)

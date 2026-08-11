@@ -223,6 +223,18 @@ int aura_music_list_playlists(char labels[][AURA_MUSIC_ITEM_LEN], int max_items)
     return n;
 }
 
+void aura_music_playlist_display_name(const char *filename, char *out, size_t outsz)
+{
+    size_t len;
+
+    strlcpy(out, filename, outsz);
+    len = strlen(out);
+    if (len > 4 && !strcasecmp(out + len - 4, ".m3u"))
+        out[len - 4] = '\0';
+    else if (len > 5 && !strcasecmp(out + len - 5, ".m3u8"))
+        out[len - 5] = '\0';
+}
+
 bool aura_music_play_playlist(int index)
 {
     char dir[MAX_PATH];

@@ -361,58 +361,203 @@ static void draw_brightness(void)
     aura_widgets_draw_slider(aura_str(AURA_STR_SETTINGS_BRIGHTNESS), fraction, buf);
 }
 
-/* Fase 24: contadores/bytes reales que dejo Aura Studio en el ultimo
- * sync (aura_manifest_load()), no solo la version del firmware -- si
- * el dispositivo nunca se sincronizo desde Studio (aura_manifest_load
- * devuelve false, p. ej. instalacion recien flasheada) se muestra un
- * aviso en vez de contadores en cero que podrian confundirse con "la
- * biblioteca esta vacia". */
-static void draw_about(void)
+/* Acerca de: FULL-COLD con 3 modos navegables (doc de comportamiento
+ * SS4.6) -- el original real tiene barra de espacio por categoria,
+ * contador de archivos, e info del dispositivo como TRES pantallas
+ * separadas que se recorren con izquierda/derecha (Select = adelante),
+ * no una sola lista larga. La primera version de esta pantalla
+ * (Fase 24) las concatenaba todas en una -- vacio real contra el doc,
+ * no una decision (nadie habia auditado esta pantalla contra el
+ * inventario hasta la Fase 32). */
+typedef enum {
+    ABOUT_PAGE_STORAGE = 0,
+    ABOUT_PAGE_COUNTS,
+    ABOUT_PAGE_DEVICE,
+    ABOUT_PAGE_COUNT,
+} about_page_t;
+
+static int s_about_page = ABOUT_PAGE_STORAGE;
+static aura_screen_id_t s_about_last_screen = AURA_SCREEN_COUNT;
+
+#define ABOUT_CONTENT_Y (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL)
+
+static void draw_about_dots(void)
+{
+    /* Indicador de pagina (doc no lo especifica en detalle -- FULL-COLD
+     * generico, Fase 32): puntos simples, la pagina activa en ACCENT,
+     * el resto en SHELL_RAIL. Mismo lenguaje visual que cualquier
+     * paginador. */
+    int dot = 4, gap = A26_SPACING_MD;
+    int total_w = ABOUT_PAGE_COUNT * dot + (ABOUT_PAGE_COUNT - 1) * gap;
+    int x = (A26_SCREEN_WIDTH - total_w) / 2;
+    int y = A26_SCREEN_HEIGHT - A26_SPACING_XXL;
+    int i;
+
+    for (i = 0; i < ABOUT_PAGE_COUNT; i++)
+    {
+        lcd_set_foreground(a26_color(i == s_about_page ? A26_ACCENT : A26_SHELL_RAIL));
+        lcd_fillrect(x + i * (dot + gap), y, dot, dot);
+    }
+}
+
+/* Pagina 1: barra de espacio usado por categoria (doc: "espacio de
+ * almacenamiento usado, por categoria: Audio, Video, Fotos, Otros").
+ * Sin "Otros": necesitaria consultar el espacio real de disco (fat_size)
+ * ademas del manifiesto de Aura Studio, una API nueva sin precedente en
+ * este modulo -- se muestra la proporcion entre las tres categorias
+ * reales que Aura si conoce, simplificacion documentada (D-081). */
+static void draw_about_storage(const aura_manifest_t *m)
+{
+    int bar_x = A26_SPACING_XXL;
+    int bar_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
+    int bar_y = ABOUT_CONTENT_Y + A26_SPACING_XXL;
+    long long total = m->music_bytes + m->video_bytes + m->photo_bytes;
+    int seg_x = bar_x;
+    int i;
+    struct { long long bytes; aura_str_id_t label; } cats[3] = {
+        { m->music_bytes, AURA_STR_ABOUT_MUSIC },
+        { m->video_bytes, AURA_STR_ABOUT_VIDEOS },
+        { m->photo_bytes, AURA_STR_ABOUT_PHOTOS },
+    };
+    int label_y = bar_y + A26_SPACING_LG + A26_SPACING_SM;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    lcd_putsxy(bar_x, ABOUT_CONTENT_Y, (const unsigned char *)aura_str(AURA_STR_ABOUT_STORAGE));
+
+    /* Radio = mitad del alto (SS5.4: extremos totalmente redondeados de
+     * una barra fina, misma derivacion que el resto de las barras de
+     * progreso del sistema -- no un radio suelto). */
+    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, A26_SPACING_LG,
+                                 A26_SPACING_LG / 2, a26_color(A26_PROGRESS_TRACK),
+                                 a26_color(A26_SHELL_BG));
+
+    for (i = 0; i < 3 && total > 0; i++)
+    {
+        int seg_w = (int)(bar_w * cats[i].bytes / total);
+        if (seg_w <= 0)
+            continue;
+        /* Segmentos separados por una linea de 1px (SHELL_RAIL) en vez
+         * de color por categoria -- Aura no tiene paleta por categoria
+         * (D-075: "el acento se gana, nunca decoracion de superficie"),
+         * asi que la distincion es geometrica, no cromatica. */
+        lcd_set_foreground(a26_color(A26_PROGRESS_FILL));
+        lcd_fillrect(seg_x, bar_y, seg_w, A26_SPACING_LG);
+        if (seg_x > bar_x)
+        {
+            lcd_set_foreground(a26_color(A26_SHELL_BG));
+            lcd_vline(seg_x, bar_y, bar_y + A26_SPACING_LG - 1);
+        }
+        seg_x += seg_w;
+    }
+
+    for (i = 0; i < 3; i++)
+    {
+        char line[48], size_buf[16];
+        output_dyn_value(size_buf, sizeof(size_buf), cats[i].bytes, byte_units, 4, true);
+        snprintf(line, sizeof(line), "%s: %s", aura_str(cats[i].label), size_buf);
+        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+        lcd_putsxy(bar_x, label_y, (const unsigned char *)line);
+        label_y += A26_TYPE_BODY + A26_SPACING_SM;
+    }
+}
+
+/* Pagina 2: contador de archivos (doc: "Canciones, Videos, Podcast,
+ * Fotos, Juegos, Contactos" -- Aura solo tiene Musica/Video/Fotos/
+ * Listas reales, se muestran esas). */
+static void draw_about_counts(const aura_manifest_t *m)
 {
     const int line_h = A26_TYPE_BODY + A26_SPACING_SM;
-    int y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_LG;
+    int y = ABOUT_CONTENT_Y;
+    char line[48];
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+
+    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_MUSIC), m->music_count);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
+    y += line_h;
+
+    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_VIDEOS), m->video_count);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
+    y += line_h;
+
+    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_PHOTOS), m->photo_count);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
+    y += line_h;
+
+    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_PLAYLISTS), m->playlist_count);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
+}
+
+/* Pagina 3: info del dispositivo (doc: numero de serie/modelo/version --
+ * Aura no tiene un numero de serie que mostrar con sentido, asi que
+ * queda solo la version real del firmware, que ya se mostraba en la
+ * version de una sola pagina). */
+static void draw_about_device(void)
+{
+    const int line_h = A26_TYPE_BODY + A26_SPACING_SM;
+    int y = ABOUT_CONTENT_Y;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
+    y += line_h;
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)rbversion);
+}
+
+static void draw_about(void)
+{
     aura_manifest_t manifest;
-    char size_buf[16];
-    char line_buf[48];
+    bool has_manifest;
+
+    if (s_about_last_screen != AURA_SCREEN_SETTINGS_ABOUT)
+        s_about_page = ABOUT_PAGE_STORAGE; /* reinicia solo al ENTRAR de nuevo */
+    s_about_last_screen = AURA_SCREEN_SETTINGS_ABOUT;
 
     a26_shell_clear_screen();
     aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT), 0);
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
-    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    has_manifest = aura_manifest_load(&manifest);
 
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
-    y += line_h;
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)rbversion);
-    y += line_h + A26_SPACING_LG;
-
-    if (!aura_manifest_load(&manifest))
+    if (!has_manifest && s_about_page != ABOUT_PAGE_DEVICE)
     {
-        lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_NO_SYNC));
-        return;
+        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_putsxy(A26_SPACING_LG, ABOUT_CONTENT_Y,
+                   (const unsigned char *)aura_str(AURA_STR_ABOUT_NO_SYNC));
+    }
+    else switch (s_about_page)
+    {
+    case ABOUT_PAGE_STORAGE: draw_about_storage(&manifest); break;
+    case ABOUT_PAGE_COUNTS:  draw_about_counts(&manifest); break;
+    case ABOUT_PAGE_DEVICE:  draw_about_device(); break;
+    default: break;
     }
 
-    output_dyn_value(size_buf, sizeof(size_buf), manifest.music_bytes, byte_units, 4, true);
-    snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
-             aura_str(AURA_STR_ABOUT_MUSIC), manifest.music_count, size_buf);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
-    y += line_h;
+    draw_about_dots();
+}
 
-    output_dyn_value(size_buf, sizeof(size_buf), manifest.video_bytes, byte_units, 4, true);
-    snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
-             aura_str(AURA_STR_ABOUT_VIDEOS), manifest.video_count, size_buf);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
-    y += line_h;
-
-    output_dyn_value(size_buf, sizeof(size_buf), manifest.photo_bytes, byte_units, 4, true);
-    snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
-             aura_str(AURA_STR_ABOUT_PHOTOS), manifest.photo_count, size_buf);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
-    y += line_h;
-
-    snprintf(line_buf, sizeof(line_buf), "%s: %d",
-             aura_str(AURA_STR_ABOUT_PLAYLISTS), manifest.playlist_count);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
+static void handle_about(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_SELECT:
+    case BUTTON_RIGHT:
+        if (s_about_page < ABOUT_PAGE_COUNT - 1)
+            s_about_page++;
+        break;
+    case BUTTON_LEFT:
+        if (s_about_page > 0)
+            s_about_page--;
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
 }
 
 /* -- Temporiz. luz / Temporiz. reposo: listas de opciones numericas,
@@ -822,11 +967,21 @@ static int s_playlist_cache_count = 0;
 
 static void ensure_playlist_cache(aura_screen_id_t screen)
 {
+    int i;
+
     if (s_playlist_cache_screen == screen)
         return;
 
     s_playlist_cache_screen = screen;
     s_playlist_cache_count = aura_music_list_playlists(s_playlist_cache, AURA_MUSIC_MAX_ITEMS);
+
+    /* Este cache es solo para mostrar (aura_music_play_playlist() vuelve
+     * a resolver el archivo real por su cuenta) -- se puede pelar la
+     * extension in situ sin romper nada mas (Fase 32, D-081: ".m3u8" a
+     * la vista del usuario es jerga tecnica de archivo, doc Principio 7). */
+    for (i = 0; i < s_playlist_cache_count; i++)
+        aura_music_playlist_display_name(s_playlist_cache[i], s_playlist_cache[i],
+                                          AURA_MUSIC_ITEM_LEN);
 }
 
 static void draw_playlists(aura_nav_t *nav)
@@ -1159,6 +1314,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_mainmenu(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_RESET)
         handle_reset_confirm(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
+        handle_about(nav, button);
     else if (is_coverflow_screen(screen))
         aura_coverflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))

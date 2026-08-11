@@ -729,4 +729,24 @@ El usuario confirmó seguir después de D-079 ("sí, continua") -- este ítem co
 
 ---
 
+## D-081 — Fase 32 (PLAN-APPLE2026.md): barrido total -- taxonomía + anti-patrones, con hallazgos reales
+
+Auditoría explícita de pantallas existentes contra el inventario §4 del doc de comportamiento y el catálogo de anti-patrones §8 del doc de diseño -- ejecutada de forma autónoma, mismo permiso que las entradas anteriores de esta sesión.
+
+**Acerca de, reescrita como FULL-COLD de 3 páginas reales**: la versión existente (Fase 24) concatenaba versión + almacenamiento + contadores en una sola lista larga -- el doc de comportamiento (§4.6) describe 3 páginas separadas navegables con izquierda/derecha, nunca auditadas contra el inventario hasta ahora. Reescrita: página 1 (barra de almacenamiento por categoría, sin "Otros" -- necesitaría una API de espacio de disco real, `fat_size()`, sin precedente en este módulo; simplificación documentada), página 2 (contadores, ya existía como parte de la lista única), página 3 (versión de Rockbox). Indicador de página con puntos (ACCENT = activa). Cada página respeta el estado "sin sincronizar" salvo la de versión, que no depende del manifiesto.
+
+**Bug de token real, replicado sin que D-073 lo hubiera atrapado**: `aura_widgets_draw_slider()` (Brillo, Límite volumen) usaba `SHELL_RAIL`/`ACCENT` para la barra en vez de `PROGRESS_TRACK`/`PROGRESS_FILL` -- el mismo error de token que D-073 ya había corregido en `aura_widgets_draw_progress()`, pero en una función *distinta* que nadie había auditado. Corregido con la misma primitiva de rectángulo redondeado que el resto del sistema (radio = mitad del alto, derivación consistente para una barra fina, no un radio suelto).
+
+**Jerga técnica real encontrada, no solo teorizada**: la tabla de español tenía "Playlists" sin traducir (dos entradas: `AURA_STR_ABOUT_PLAYLISTS`, `AURA_STR_MUSIC_PLAYLISTS`) y "Clicker" sin traducir -- vacíos reales contra el Principio 7 ("nunca jerga"), encontrados recién al ver el título de la pantalla de Listas en el simulador y notar que decía "Playlists" en español. Corregidos a "Listas" y "Sonido de clic". Los nombres de playlist mostrados al usuario (`aura_music_list_playlists()`) también traían la extensión de archivo (`.m3u`/`.m3u8`) sin pelar -- jerga de archivo, no de menú, mismo principio. Nueva `aura_music_playlist_display_name()` para separar "nombre para archivo" (con extensión, lo sigue necesitando `catalog_insert_into()`) de "nombre para mostrar" (sin extensión) sin romper ninguna de las dos.
+
+**Selección inicial activa en lista consecuente, anti-patrón §8 encontrado en el propio trabajo de esta sesión**: el modo Playlist de Ahora suena (D-078, Fase 30) dejaba la primera playlist real pre-resaltada al entrar -- un Select reflejo (el mismo gesto que cicla modos en cualquier otro contexto) podía agregar la canción a una lista sin que el usuario hubiera elegido nada a propósito. El doc lo nombra explícito ("añadir a playlist debe entrar sin selección"). Corregido: `s_playlist_sel` arranca en -1 (sin selección) cada vez que se entra al modo, el panel muestra una pista neutra ("Gira la rueda para elegir") en vez de un nombre, y Select no confirma nada hasta que la rueda haya elegido algo real.
+
+**Revisado y NO tocado, con razón**: `aura_widgets_draw_confirm()`/`DRMODE_SOLID` -- los únicos usos reales están dentro de `a26_shell_fill_rounded_rect()`, acotados y restaurados a `DRMODE_FG` de inmediato (uso técnico correcto, no el anti-patrón que el doc describe). Límite volumen sin la "flecha gráfica" literal del original: la barra rellena ya comunica la misma información (dónde está el tope) con un lenguaje visual coherente con el resto del sistema; se interpreta como equivalente funcional, no como vacío.
+
+**Deferido con razón, no en silencio**: EQ con ícono de curva por preset (doc: "cada opción muestra un ícono con una gráfica distinta representando la curva") -- los 4 presets de Aura (`aura_eq_gain_db`) sí tienen datos reales de ganancia por banda para dibujar una curva de verdad, pero `aura_widgets_draw_list()` no tiene forma de inyectar un dibujo custom por fila (solo bitmaps con nombre) -- exigiría extender el widget con un callback de dibujo, cambio de arquitectura real que no se improvisa al final de una auditoría. Documentado como pendiente, no descartado.
+
+**Aceptación**: sim compila limpio (0 warnings nuevos); 95/95 + 132 + 215 + 174 tests host-side sin cambios (Fase 32 no toca módulos puros). Verificado en el simulador: Acerca de navegando sus 3 páginas con datos reales y sin sincronizar; Listas mostrando "Favoritas" sin extensión y con título en español; modo Playlist de Ahora suena mostrando la pista neutra al entrar y confirmando recién después de girar la rueda.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

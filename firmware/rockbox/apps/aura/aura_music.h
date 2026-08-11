@@ -9,6 +9,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #include "aura_nav.h"
 
@@ -53,9 +54,21 @@ int aura_music_filter_generation(void);
  * y arranca la reproduccion en start_index. */
 bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index);
 
-/* Catalogo de playlists guardadas (archivos .m3u/.m3u8). */
+/* Catalogo de playlists guardadas (archivos .m3u/.m3u8). `labels` trae
+ * el nombre de archivo completo, CON extension -- hace falta tal cual
+ * para aura_music_play_playlist()/aura_music_add_track_to_playlist(),
+ * que vuelven a resolver la ruta real a partir de el. Para mostrarle el
+ * nombre al usuario, usar aura_music_playlist_display_name() (Fase 32,
+ * D-081: mostrar ".m3u8" en pantalla es jerga tecnica de archivo, doc
+ * Principio 7 -- vacio real encontrado en el barrido final, no en el
+ * armado original). */
 int aura_music_list_playlists(char labels[][AURA_MUSIC_ITEM_LEN], int max_items);
 bool aura_music_play_playlist(int index);
+
+/* Nombre de playlist para MOSTRAR (sin extension .m3u/.m3u8) -- separado
+ * de aura_music_list_playlists() porque ese nombre con extension sigue
+ * haciendo falta para las operaciones de archivo reales. */
+void aura_music_playlist_display_name(const char *filename, char *out, size_t outsz);
 
 /* Agrega `track_path` (ruta completa) al final de la playlist guardada
  * en la posicion `index` de aura_music_list_playlists() -- modo "Añadir

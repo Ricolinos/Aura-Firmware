@@ -104,7 +104,7 @@ static np_mode_t s_mode = NP_MODE_VOLUME;
 static long s_mode_pop_since = -1000000;
 
 /* Panel de anadir a lista (modo 5.3). */
-static int s_playlist_sel = 0;
+static int s_playlist_sel = -1; /* -1 = sin seleccion todavia, ver cycle_mode() */
 
 /* Vista previa en vivo de la posicion mientras se escrubea (modo 5.2) --
  * separada de id3->elapsed real hasta soltar, para que el numero y el
@@ -420,13 +420,20 @@ static void draw_transport(void)
 static void draw_playlist_panel(void)
 {
     char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
-    int n = aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
+    int n, i;
     int box_h = 28;
     int box_w = 220;
     int box_x = (A26_SCREEN_WIDTH - box_w) / 2;
     int box_y = TRANSPORT_Y - box_h - A26_SPACING_LG - 20;
     int w, h;
     const char *label;
+
+    n = aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
+    /* Solo para mostrar -- aura_music_add_track_to_playlist() vuelve a
+     * resolver el archivo real por indice, no usa estas cadenas (Fase
+     * 32, D-081: ".m3u8" a la vista es jerga tecnica de archivo). */
+    for (i = 0; i < n; i++)
+        aura_music_playlist_display_name(labels[i], labels[i], AURA_MUSIC_ITEM_LEN);
 
     /* Panel flotante, NUNCA pantalla completa (Principio 3, doc SS5,
      * nota de implementacion 5.3) -- pastilla SELECTION_FILL igual que
@@ -447,12 +454,17 @@ static void draw_playlist_panel(void)
         label = aura_str(AURA_STR_EMPTY_LIST);
         lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     }
+    else if (s_playlist_sel < 0)
+    {
+        /* Sin seleccion todavia (doc SS8): pista neutra, no una lista ya
+         * resaltada -- Select en este estado no confirma nada. */
+        label = aura_str(AURA_STR_PLAYLIST_PICK);
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    }
     else
     {
         if (s_playlist_sel >= n)
             s_playlist_sel = n - 1;
-        if (s_playlist_sel < 0)
-            s_playlist_sel = 0;
         label = labels[s_playlist_sel];
         lcd_set_foreground(a26_color(A26_ACCENT));
     }
@@ -583,6 +595,14 @@ static void cycle_mode(int direction)
     s_mode = (np_mode_t)next;
     s_mode_pop_since = current_tick;
     s_scrub_preview_ms = -1;
+    /* Doc SS8 (anti-patron): "Seleccion inicial activa en listas
+     * destructivas -- anadir a playlist debe entrar sin seleccion".
+     * Sin este reset, entrar al modo Playlist ya dejaba la primera lista
+     * pre-resaltada -- un SELECT reflejo (el mismo gesto que cicla en
+     * cualquier otro modo) agregaba la cancion sin que el usuario
+     * hubiera elegido nada a proposito (Fase 32, D-081). */
+    if (s_mode == NP_MODE_PLAYLIST)
+        s_playlist_sel = -1;
 }
 
 static int playlist_count(void)
@@ -613,12 +633,12 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
          * una excepcion propia: ya es simplemente que el modo activo sea
          * o no NP_MODE_LYRICS (simplificacion respecto al panel
          * comprimido del doc, ver D-078). */
-        if (s_mode == NP_MODE_PLAYLIST && id3 && playlist_count() > 0)
+        if (s_mode == NP_MODE_PLAYLIST && id3 && s_playlist_sel >= 0 && playlist_count() > 0)
         {
             if (aura_music_add_track_to_playlist(s_playlist_sel, id3->path))
                 s_playlist_confirm_until = current_tick + PLAYLIST_CONFIRM_TICKS;
         }
-        else
+        else if (s_mode != NP_MODE_PLAYLIST || s_playlist_sel < 0)
         {
             cycle_mode(1);
         }
@@ -661,7 +681,13 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
             char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
             int n = aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
             if (n > 0)
-                s_playlist_sel = (s_playlist_sel + dir + n) % n;
+            {
+                /* Primer giro sin seleccion previa: entra a la lista en
+                 * vez de calcular un salto relativo a -1 (doc SS8). */
+                s_playlist_sel = (s_playlist_sel < 0)
+                    ? (dir > 0 ? 0 : n - 1)
+                    : (s_playlist_sel + dir + n) % n;
+            }
             break;
         }
 
