@@ -8,6 +8,7 @@
 #include "recorder/albumart.h"
 #include "recorder/bmp.h"
 #include "recorder/jpeg_load.h"
+#include "string-extra.h"
 
 #include "aura_albumart.h"
 #include "apple2026_shell.h"

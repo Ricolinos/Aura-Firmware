@@ -1,0 +1,171 @@
+#include "aura_flow.h"
+
+int aura_flow_fmul(int a, int b)
+{
+    return (int)(((long long)a * (long long)b) >> AURA_FLOW_SHIFT);
+}
+
+/* Division en punto fijo por desplazamiento adaptativo (pictureflow.c
+ * fdiv()/allowed_shift()/clz()): preserva la mayor precision posible sin
+ * desbordar un entero de 32 bits. La version original usa un conteo de
+ * ceros a la izquierda por CPU (clz) para elegir el corrimiento maximo
+ * seguro; aca se usa un bucle simple -- este modulo no corre en tiempo
+ * real todavia (SS31.1: nucleo matematico puro, sin conectar a pantalla,
+ * D-079), asi que la version portable importa mas que la mas rapida. */
+static int allowed_shift(int val)
+{
+    unsigned uval = (unsigned)(val ^ (val >> 31));
+    int shift = 0;
+
+    if (uval == 0)
+        return 30;
+
+    while (!(uval & 0x40000000u) && shift < 30)
+    {
+        uval <<= 1;
+        shift++;
+    }
+    return shift - 1;
+}
+
+int aura_flow_fdiv(int num, int den)
+{
+    int shift = allowed_shift(num);
+    if (shift > AURA_FLOW_SHIFT)
+        shift = AURA_FLOW_SHIFT;
+    if (shift < 0)
+        shift = 0;
+
+    num <<= shift;
+    den >>= (AURA_FLOW_SHIFT - shift);
+    if (den == 0)
+        return 0; /* fuera de rango del original tambien -- evita division por cero */
+    return num / den;
+}
+
+/* Tabla de seno de pictureflow.c (33 muestras, un cuarto de vuelta cada
+ * 8 entradas -- IANGLE_MAX=1024 por vuelta completa). Portada tal cual,
+ * NO regenerada: son las mismas constantes que ya probo el firmware
+ * original en este hardware. */
+static const short sin_tab[] = {
+        0,   100,   200,   297,   392,   483,   569,   650,
+      724,   792,   851,   903,   946,   980,  1004,  1019,
+     1024,  1019,  1004,   980,   946,   903,   851,   792,
+      724,   650,   569,   483,   392,   297,   200,   100,
+        0,  -100,  -200,  -297,  -392,  -483,  -569,  -650,
+     -724,  -792,  -851,  -903,  -946,  -980, -1004, -1019,
+    -1024, -1019, -1004,  -980,  -946,  -903,  -851,  -792,
+     -724,  -650,  -569,  -483,  -392,  -297,  -200,  -100,
+        0
+};
+
+int aura_flow_fsin(int iangle)
+{
+    int i, p, q, g;
+
+    iangle &= AURA_FLOW_IANGLE_MASK;
+    i = iangle >> 4;
+    p = sin_tab[i];
+    q = sin_tab[i + 1];
+    g = q - p;
+    return p + g * (iangle - i * 16) / 16;
+}
+
+int aura_flow_fcos(int iangle)
+{
+    return aura_flow_fsin(iangle + (AURA_FLOW_IANGLE_MAX >> 2));
+}
+
+void aura_flow_begin_projection(aura_flow_projection_t *proj,
+                                 const aura_flow_slide_t *slide,
+                                 int slide_width_px)
+{
+    int cosr = aura_flow_fcos(slide->angle);
+    int sinr = aura_flow_fsin(slide->angle);
+    int zo = slide->distance;
+    int slide_left = -slide_width_px * AURA_FLOW_HALF + AURA_FLOW_HALF;
+    int xs = slide_left;
+    int xp, xi;
+
+    proj->slide_width_px = slide_width_px;
+    proj->slide_left = slide_left;
+    proj->cosr = cosr;
+    proj->sinr = sinr;
+    proj->zo = zo;
+    proj->has_rotation = (slide->angle != 0) || (zo != 0);
+
+    /* Columna de pantalla proyectada del borde izquierdo de la fuente
+     * (formula de camara de pictureflow.c, portada tal cual). */
+    xp = aura_flow_fdiv(AURA_FLOW_CAM_DIST * (slide->cx + aura_flow_fmul(xs, cosr)),
+                         (AURA_FLOW_CAM_DIST_R + zo + aura_flow_fmul(xs, sinr)));
+
+    if (xp < AURA_FLOW_DISPLAY_LEFT_R)
+        xp = AURA_FLOW_DISPLAY_LEFT_R;
+
+    /* Redondea hacia arriba a la primera columna entera de pantalla,
+     * igual que el original ("Since we're finding the screen position
+     * of the left edge of the slide, we round up"). */
+    xi = (xp - AURA_FLOW_DISPLAY_LEFT_R + AURA_FLOW_ONE - 1) >> AURA_FLOW_SHIFT;
+    xp = AURA_FLOW_DISPLAY_LEFT_R + xi * AURA_FLOW_ONE;
+
+    if (xi >= AURA_FLOW_SCREEN_W)
+    {
+        proj->screen_x = AURA_FLOW_SCREEN_W; /* nada visible */
+        return;
+    }
+
+    /* xs real en esa primera columna, mas los incrementos constantes de
+     * la recurrencia de Mobius que aura_flow_advance_column() reusa
+     * columna a columna sin volver a resolver la formula completa. */
+    proj->xsnum = AURA_FLOW_CAM_DIST * (slide->cx - xp)
+                - aura_flow_fmul(xp, zo);
+    proj->xsden = aura_flow_fmul(xp, sinr) - AURA_FLOW_CAM_DIST * cosr;
+    proj->xs = aura_flow_fdiv(proj->xsnum, proj->xsden);
+
+    proj->xsnumi = -AURA_FLOW_CAM_DIST_R - zo;
+    proj->xsdeni = sinr;
+    proj->screen_x = xi;
+}
+
+int aura_flow_advance_column(aura_flow_projection_t *proj)
+{
+    int column;
+
+    if (proj->screen_x >= AURA_FLOW_SCREEN_W)
+        return 0;
+
+    if (proj->has_rotation)
+    {
+        proj->xsnum += proj->xsnumi;
+        proj->xsden += proj->xsdeni;
+        proj->xs = aura_flow_fdiv(proj->xsnum, proj->xsden);
+    }
+    else
+    {
+        proj->xs += AURA_FLOW_ONE;
+    }
+    proj->screen_x++;
+
+    if (proj->screen_x >= AURA_FLOW_SCREEN_W)
+        return 0;
+
+    column = (proj->xs - proj->slide_left) / AURA_FLOW_ONE;
+    return column >= 0 && column < proj->slide_width_px;
+}
+
+int aura_flow_source_column(const aura_flow_projection_t *proj)
+{
+    int column = (proj->xs - proj->slide_left) / AURA_FLOW_ONE;
+    if (column < 0)
+        column = 0;
+    if (column >= proj->slide_width_px)
+        column = proj->slide_width_px - 1;
+    return column;
+}
+
+int aura_flow_vertical_scale(const aura_flow_projection_t *proj)
+{
+    int dy = (AURA_FLOW_CAM_DIST_R + proj->zo + aura_flow_fmul(proj->xs, proj->sinr))
+           / AURA_FLOW_CAM_DIST;
+    return dy > 0 ? dy : 1;
+}

@@ -693,4 +693,22 @@ Reescritura completa de `aura_nowplaying.c` (la versión anterior era de la era 
 
 ---
 
+## D-079 — Fase 31.1 (PLAN-APPLE2026.md): núcleo matemático de Cover Flow real, sin tocar hardware ni conectar a pantalla
+
+El usuario pidió explícitamente empezar el módulo de renderizado de Cover Flow "sin tocar hardware" -- Fase 31 completa depende de medición real en el dispositivo (§31.4 del plan, sesión guiada), pero §0 del plan ya identificó que el núcleo matemático de `pictureflow.c` es portable y evaluable sin eso. Este ítem cubre exactamente esa porción: la aritmética y la fórmula de proyección, no el dibujo de píxeles.
+
+**Qué se cosechó, literal**: `aura_flow.c`/`.h` (nuevo, C99 puro sin dependencias de Rockbox -- mismo criterio que `aura_nav.c`/`aura_motion.c`/`aura_wheel.c`). De `apps/plugins/pictureflow/pictureflow.c`: la tabla `sin_tab` (33 muestras, portada byte a byte, no regenerada -- son las constantes que ya probó el firmware original en este hardware), `fmul`/`fdiv`/`fsin`/`fcos`, y la fórmula de proyección por columnas de `render_slide()` (la recurrencia de Möbius que evita recalcular la perspectiva completa por cada columna de pantalla) -- extraída del bucle que blitea píxeles, que sí depende del framebuffer/formato de LCD real y queda fuera de este módulo a propósito.
+
+**Qué NO se re-cosechó, y por qué**: la técnica de reflejo por tabla (`reflect_table` de pictureflow.c) que §0 también menciona. Aura ya la tiene -- `aura_art.c` (Fase 29, D-077) implementa exactamente esa técnica (atenuación precalculada por fila) con la convención propia del sistema de diseño (35% de alto, doc SS5.4), distinta de la de pictureflow (80 filas fijas, fórmula propia). Portar una segunda versión hubiera sido duplicar lo que ya existe y probablemente entrar en conflicto de convenciones.
+
+**Geometría fija, no generalizada**: pictureflow.c generaliza sus constantes de cámara (`CAM_DIST`, `DISPLAY_WIDTH`, etc.) vía macros porque el plugin corre en decenas de targets de Rockbox con LCD distinto. Aura tiene un solo target (320×240, aspecto 1:1) -- las mismas fórmulas, resueltas una vez a números concretos en `aura_flow.h`, sin la capa de generalización que no hace falta.
+
+**Bug real de punto fijo encontrado por los tests, no en revisión**: el primer test de "slide fuera de pantalla" usaba `cx = ONE * 100000` para simular una posición lejana -- desbordaba `int32` en `CAM_DIST * cx` (240 × 102.4M ≈ 24.500 millones, fuera de rango) y el resultado truncado por el overflow *parecía* seguir siendo visible. No es un bug de la fórmula portada: valores de `cx` así de extremos no ocurren en un flujo real (nunca más allá de unos pocos miles de unidades de pantalla). Corregido el test para usar un valor "lejos" pero realista; documentado el límite en el propio test para que quien conecte esto a la UI real no vuelva a pasar un `cx` fuera de rango sin darse cuenta.
+
+**Sin conectar a nada todavía, a propósito**: el módulo no dibuja un solo píxel ni lo llama nadie desde `aura_coverflow.c` -- es intencional, el usuario pidió específicamente no tocar la pantalla real todavía. El coverflow plano actual (D-025) sigue siendo lo que se ve en el dispositivo; conectar este núcleo al dibujo real, con caché de superficies preescaladas y el presupuesto de memoria recalculado con el tamaño de slide definitivo, es el resto de la Fase 31.1/31.2 -- trabajo futuro, no alcanzado ni prometido esta pasada.
+
+**Aceptación**: sim y ARM real compilan limpio -- de paso, un `-Wimplicit-function-declaration` real (no de esta fase) encontrado en `aura_albumart.c` al compilar para ARM (`strlcpy` sin su header, `string-extra.h`, nunca incluido; el build de sim lo resolvía por una ruta transitiva distinta y nunca lo mostró) corregido y documentado aquí. `rockbox.ipod`/checksums actualizados. 175 tests host-side nuevos (`test_flow.c`) verifican identidades de la aritmética de punto fijo, valores trigonométricos conocidos contra la identidad pitagórica, y que la proyección por columnas termina (no se cuelga) tanto para un slide de frente como para uno rotado, además del caso "fuera de pantalla". 95/95 + 132 + 215 tests preexistentes sin cambios.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
