@@ -126,7 +126,11 @@ void aura_statusbar_draw(int x, int width, const char *title, int centered)
          * barra alineado) sin numeros magicos que no calzan con
          * A26_TYPE_CAPTION. */
         text_y = (A26_LAYOUT_STATUSBAR_HEIGHT - h) / 2;
-        text_x = centered ? x + (width - w) / 2 : x + A26_SPACING_LG;
+        /* A26_LAYOUT_LIST_INSET (16px), no A26_SPACING_LG (12px) --
+         * AUDITORIA-01 A-21: el titulo debe alinearse verticalmente con
+         * el inset real de las filas de lista (doc SS5), no un
+         * espaciado suelto que por coincidencia quedaba cerca. */
+        text_x = centered ? x + (width - w) / 2 : x + A26_LAYOUT_LIST_INSET;
         lcd_putsxy(text_x, text_y, (const unsigned char *)title);
         if (!centered)
             title_right_edge = text_x + w;

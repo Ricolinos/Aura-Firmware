@@ -394,8 +394,12 @@ static void draw_about_dots(void)
 
     for (i = 0; i < ABOUT_PAGE_COUNT; i++)
     {
-        lcd_set_foreground(a26_color(i == s_about_page ? A26_ACCENT : A26_SHELL_RAIL));
-        lcd_fillrect(x + i * (dot + gap), y, dot, dot);
+        /* Circulo, no cuadrado (AUDITORIA-01 A-22): radio = mitad del
+         * lado, misma primitiva de corte por distancia que el resto del
+         * sistema -- nada de cajas vivas (doc SS5.4/anti-patron SS8). */
+        unsigned color = a26_color(i == s_about_page ? A26_ACCENT : A26_SHELL_RAIL);
+        a26_shell_fill_rounded_rect(x + i * (dot + gap), y, dot, dot,
+                                     dot / 2, color, a26_color(A26_SHELL_BG));
     }
 }
 

@@ -419,9 +419,15 @@ static void draw_transport(void)
         aura_widgets_draw_icon("shuffle", A26_ICON_SIZE_STATUS,
                                 A26_SCREEN_WIDTH - A26_SPACING_XXL - A26_ICON_SIZE_STATUS, y);
 
+    /* play-fill/pause-fill, no las lineales (AUDITORIA-01 A-b, ambiguedad
+     * resuelta): backward.fill/forward.fill ya eran rellenos: dejar el
+     * boton central lineal en medio de dos rellenos se veia mixto sin
+     * razon. Unifica la fila entera de transporte a rellenos -- excepcion
+     * de la variante lineal documentada en tokens.json, no aplica a la
+     * tira de iconos de menu (SS4). */
     aura_widgets_draw_icon("backward", A26_ICON_SIZE_STATUS,
                             cx - A26_ICON_SIZE_STATUS - A26_SPACING_LG - A26_ICON_SIZE_STATUS / 2, y);
-    aura_widgets_draw_icon(paused ? "play" : "pause", A26_ICON_SIZE_STATUS,
+    aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_STATUS,
                             cx - A26_ICON_SIZE_STATUS / 2, y);
     aura_widgets_draw_icon("forward", A26_ICON_SIZE_STATUS,
                             cx + A26_SPACING_LG + A26_ICON_SIZE_STATUS / 2, y);

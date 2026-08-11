@@ -136,9 +136,6 @@ void aura_widgets_draw_slider(const char *title, int fraction,
 void aura_widgets_draw_digits(const char *title, const int *digits,
                                int count, int focus);
 
-/* Barra de progreso simple con texto arriba. `fraction` en [0, 256]. */
-void aura_widgets_draw_progress(const char *text, int fraction);
-
 /* Capsula flotante de espera (SS5.2): NO limpia pantalla, se dibuja
  * encima de lo que el llamador ya pinto en este cuadro. `text` opcional
  * (NULL = solo la capsula vacia). El patron de espera del sistema --

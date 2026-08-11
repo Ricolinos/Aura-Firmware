@@ -36,13 +36,13 @@ static void test_exact_match_es(void)
     aura_settings.language = AURA_LANG_ES;
 
     translate("Loading...", buf, sizeof(buf));
-    CHECK(strcmp(buf, "Cargando...") == 0);
+    CHECK(strcmp(buf, "Cargando…") == 0);
 
     translate("Scanning disk...", buf, sizeof(buf));
-    CHECK(strcmp(buf, "Preparando el disco...") == 0);
+    CHECK(strcmp(buf, "Preparando el disco…") == 0);
 
     translate("Database is not ready", buf, sizeof(buf));
-    CHECK(strcmp(buf, "Terminando de preparar la biblioteca...") == 0);
+    CHECK(strcmp(buf, "Terminando de preparar la biblioteca…") == 0);
 }
 
 static void test_exact_match_en(void)
@@ -66,7 +66,7 @@ static void test_prefix_preserves_dynamic_suffix(void)
     CHECK(strcmp(buf, "Preparando la biblioteca [3/9]") == 0);
 
     translate("Loading... (PLAY/PAUSE to abort)", buf, sizeof(buf));
-    CHECK(strcmp(buf, "Cargando... (PLAY/PAUSE to abort)") == 0);
+    CHECK(strcmp(buf, "Cargando… (PLAY/PAUSE to abort)") == 0);
 }
 
 static void test_unmapped_text_passes_through(void)
@@ -89,7 +89,7 @@ static void test_longer_prefix_checked_before_shorter(void)
     /* "Loading..." (exacto) no debe "ganarle" por error a
      * "Loading... (" (prefijo) cuando el texto trae el parentesis. */
     translate("Loading... (STOP to abort)", buf, sizeof(buf));
-    CHECK(strcmp(buf, "Cargando... (STOP to abort)") == 0);
+    CHECK(strcmp(buf, "Cargando… (STOP to abort)") == 0);
 }
 
 int main(void)

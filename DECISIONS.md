@@ -819,4 +819,30 @@ Cuarto lote de la Fase B, ejecutado de forma autónoma. Once de los trece hallaz
 
 ---
 
+## D-085 — AUDITORIA-01, Lote 6 (cosméticas A-21 a A-26 + ambigüedades A-b/A-e): cierre de la Fase B
+
+Último lote de la Fase B. Seis hallazgos "Cosmética" del reporte más la resolución de la ambigüedad A-b (código) y la constatación honesta de que A-e no se puede resolver sin una decisión de producto nueva.
+
+**A-21 — inset del título de la barra**: usaba `A26_SPACING_LG` (12px) en vez de `A26_LAYOUT_LIST_INSET` (16px) -- quedaba 4px fuera de la vertical del contenido de las filas. Corregido.
+
+**A-22 — puntos de página de Acerca de**: `lcd_fillrect` (cuadrados) reemplazado por `a26_shell_fill_rounded_rect()` con radio = mitad del lado (círculo real) -- anti-patrón §8, "radios de esquina inconsistentes"/"cajas vivas". El selector de dígitos (segunda mitad del hallazgo original) sigue sin tocar: cero consumidores hoy, ligado a Fecha y hora (D-060), no se construye geometría para un componente sin pantalla que lo use.
+
+**A-23 — código muerto**: `aura_widgets_draw_progress()` tenía cero llamadores por segunda vez (ya lo había notado D-073 y quedó "para Fase 30", que pasó sin conectarla). Retirada por completo (declaración + definición) en vez de dejarla como código muerto a la espera de un consumidor hipotético -- si hace falta una pastilla de progreso genérica en el futuro, se reconstruye contra su caso de uso real, mismo criterio que ya aplicó D-073 al contenedor modal.
+
+**A-24 — elipsis ASCII vs tipográfica**: 7 cadenas ES de `aura_splash_lang.c` (más la ya corregida en el Lote 2) usaban `"..."` en vez de `"…"` -- el propio Principio 7 del documento usa "…" en sus ejemplos. Corregidas todas las cadenas ES (no las claves de coincidencia contra el texto real de Rockbox, que deben seguir siendo `"..."` literal para que `strncmp`/`strcmp` sigan encontrando el texto; tampoco la columna EN, fuera del alcance de Principio 7). `test_splash_lang.c` actualizado para los nuevos valores esperados -- eran aserciones reales sobre el string exacto, no solo cobertura de líneas.
+
+**A-b — íconos de transporte unificados a rellenos**: `backward.fill`/`forward.fill` ya eran rellenos; el botón central (play/pause) quedaba lineal en medio de los dos, mixto sin razón. Nuevos `play-fill`/`pause-fill` (SF Symbols verificados con sonda de AppKit antes de usarlos, mismo método de siempre) conectados en `draw_transport()`. Doc actualizado (§4): la excepción a "nunca .fill" ahora cubre dos casos, ninguno en la tira de íconos de menú -- el ícono de menú "Ahora suena" y el indicador de la barra de estado siguen usando `play`/`pause` lineales a propósito, no son controles de transporte.
+
+**A-25 — reevaluado, no era un hallazgo real**: el reporte original marcó "tiempos a los lados" (doc-R §2) como incumplido porque el código los pone en la línea de arriba, no verticalmente centrados junto a la barra. Revisado de nuevo: la barra tiene 4px de alto, insuficiente para alojar dígitos de 13px a su lado sin recortarlos -- los tiempos ya están en los extremos horizontales (izquierda/derecha), que es la lectura razonable de "a los lados"; solo difieren en la coordenada vertical, una necesidad física del tamaño de fuente. Se retracta como hallazgo real; no se toca el código.
+
+**A-26 — aceptado como está**: `caption` y `body` generan `.fnt` idénticos (mismo tamaño, misma cara) -- duplicación real de bytes en disco, pero deduplicar en el pipeline (detectar pares idénticos, compartir un solo archivo/id de fuente) es trabajo de infraestructura real por unos KB de ahorro en un dispositivo con 64MB de RAM. Los dos estilos siguen siendo semánticamente distintos en el código (`BODY` = filas de lista, `CAPTION` = texto secundario) aunque hoy coincidan en métrica -- se documenta el trade-off, no se fuerza una refactorización de bajo valor.
+
+**A-e — no resuelta, requiere una decisión de producto real**: el reporte proponía fondo negro real para el visor de fotos (doc-C §3.4). Al intentar implementarlo se choca con una regla explícita del propio sistema (§2: "prohibido hardcodear RGB en C") -- ningún token existente es negro puro (los temas evitan negro puro a propósito, "para que esquinas y sombras sigan leyéndose"), así que esto exige introducir un token nuevo (p. ej. un fondo "inmersivo" fuera de la paleta de shell) o decidir mantener `SHELL_BG` del tema. Es exactamente el tipo de valor que AUDITORIA-01 se comprometió a no inventar por su cuenta (sección de conducta del reporte) -- queda como ambigüedad abierta, sin tocar código.
+
+**Aceptación**: sim reconstruido, compila limpio (0 warnings nuevos); 566/566 tests host-side (incluye 3 aserciones de `test_splash_lang.c` actualizadas a los nuevos valores, no solo sin cambios). Verificado en el simulador: título alineado con el inset de lista, puntos de Acerca de circulares, botón central de transporte relleno (`docs/screenshots/auditoria01/lote6-*.png`).
+
+**Cierre de la Fase B**: de los 26 hallazgos del reporte, 24 quedan resueltos (2 bloqueantes, 5 altos, 11 medios, 6 cosméticos -- uno de los cosméticos, A-25, se retracta por no ser un hallazgo real tras revisión). Quedan explícitamente diferidos con razón: A-17 (animación de switch, necesita estado por-fila), A-19 (tarjeta de reproducción del panel derecho, componente nuevo). Queda abierta: A-e (fondo del visor de fotos, decisión de token nueva). De las 9 ambigüedades originales, 8 quedaron resueltas en los Lotes 3-6 (A-0-bis, A-g, A-h, A-i en el Lote 3; A-a en el Lote 4; A-d, A-f en el Lote 5; A-b en este lote); A-c se resolvió de forma parcial (se conserva la atribución, se retira el hash -- Lote 5).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -587,8 +587,6 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
     }
 }
 
-/* -- Progreso ----------------------------------------------------------- */
-
 /* -- Aviso bloqueante con 2 opciones (S3.8) ---------------------------- */
 
 #define CONFIRM_MAX_LINES 4
@@ -708,46 +706,6 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
         lcd_getstringsize((const unsigned char *)yes_label, &w, &h);
         lcd_putsxy(yes_x + (btn_w - w) / 2, btn_y + (32 - h) / 2, (const unsigned char *)yes_label);
     }
-}
-
-/* Pastilla de progreso canonica (doc SS5.2): 4px de alto, extremos
- * redondeados, carril PROGRESS_TRACK + relleno PROGRESS_FILL -- NUNCA
- * SHELL_RAIL/ACCENT (esos son para separadores y estado activo, no
- * progreso; el doc reserva un par de tokens dedicado). El redondeo de
- * los extremos usa la misma primitiva de corte por distancia que la
- * pastilla de seleccion en vez de la tabla de retranqueos manual del
- * documento -- mismo resultado visual (un radio real, no aproximado a
- * mano), una sola implementacion de "rectangulo con puntas redondas" en
- * todo el sistema. */
-void aura_widgets_draw_progress(const char *text, int fraction)
-{
-    int bar_x = A26_SPACING_XXL;
-    int bar_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
-    int bar_y = A26_SCREEN_HEIGHT / 2;
-    int bar_h = A26_SPACING_SM;
-    int fill_w;
-    unsigned bg = a26_color(A26_SHELL_BG);
-
-    if (fraction < 0)   fraction = 0;
-    if (fraction > 256) fraction = 256;
-
-    if (text)
-    {
-        int w, h;
-        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
-        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-        lcd_getstringsize((const unsigned char *)text, &w, &h);
-        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, bar_y - A26_SPACING_XL - h,
-                   (const unsigned char *)text);
-    }
-
-    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, bar_h, bar_h / 2,
-                                 a26_color(A26_PROGRESS_TRACK), bg);
-
-    fill_w = (bar_w * fraction) / 256;
-    if (fill_w > 0)
-        a26_shell_fill_rounded_rect(bar_x, bar_y, fill_w, bar_h, bar_h / 2,
-                                     a26_color(A26_PROGRESS_FILL), bg);
 }
 
 /* Capsula flotante de espera (doc SS5.2, Principio 3: "la carga
