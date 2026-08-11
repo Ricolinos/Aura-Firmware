@@ -16,6 +16,7 @@
 #include "aura_settings.h"
 #include "aura_lang.h"
 #include "apple2026_tokens.h"
+#include "aura_statusbar.h"
 
 /* Aura solo reproduce su formato interno (MPEG-1/2 320x240, generado
  * por Aura Studio al sincronizar) delegando en el plugin mpegplayer
@@ -91,6 +92,9 @@ void aura_video_draw(aura_nav_t *nav)
     if (s_video_count == 0)
     {
         int w, h;
+        /* AUDITORIA-01 A-15: mismo vacio que Fotos -- la barra nunca
+         * cambia de forma entre pantallas (doc SS5). */
+        aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_VIDEOS), 0);
         lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
         lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
         lcd_getstringsize((const unsigned char *)aura_str(AURA_STR_EMPTY_VIDEOS), &w, &h);

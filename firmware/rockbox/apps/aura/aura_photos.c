@@ -16,6 +16,7 @@
 #include "aura_settings.h"
 #include "aura_lang.h"
 #include "apple2026_tokens.h"
+#include "aura_statusbar.h"
 
 #define PHOTOS_DIR      "/Photos"
 #define MAX_PHOTOS      200
@@ -116,7 +117,11 @@ void aura_photos_draw(aura_nav_t *nav)
 
     if (s_photo_count == 0)
     {
+        /* AUDITORIA-01 A-15: "la barra nunca cambia de forma entre
+         * pantallas" (doc SS5) -- este vacio era la unica pantalla del
+         * sistema sin ella. */
         a26_shell_clear_screen();
+        aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_PHOTOS), 0);
         draw_message(AURA_STR_EMPTY_PHOTOS);
         return;
     }

@@ -377,7 +377,6 @@ typedef enum {
 } about_page_t;
 
 static int s_about_page = ABOUT_PAGE_STORAGE;
-static aura_screen_id_t s_about_last_screen = AURA_SCREEN_COUNT;
 
 #define ABOUT_CONTENT_Y (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL)
 
@@ -492,29 +491,29 @@ static void draw_about_counts(const aura_manifest_t *m)
 
 /* Pagina 3: info del dispositivo (doc: numero de serie/modelo/version --
  * Aura no tiene un numero de serie que mostrar con sentido, asi que
- * queda solo la version real del firmware, que ya se mostraba en la
- * version de una sola pagina). */
+ * queda solo la atribucion a Rockbox). AUDITORIA-01 A-10/A-c: antes
+ * tambien mostraba `rbversion` crudo (hash de git + fecha de build,
+ * p. ej. "28a30450a8M-260811") -- es informacion de debug de build, no
+ * un numero de version real de Aura, y exponerla es jerga tecnica cruda
+ * (Principio 7). Se retira en vez de inventar un esquema de version
+ * semantica para Aura que no existe en ningun otro lugar del proyecto
+ * -- introducir uno es una decision de producto real, no algo para
+ * resolver de paso en una auditoria (misma razon por la que
+ * AUDITORIA-01 no "resuelve en silencio" sus ambiguedades). La
+ * atribucion textual a Rockbox se conserva: es informacion real y
+ * apropiada para una app derivada de un proyecto GPL, no cromo. */
 static void draw_about_device(void)
 {
-    const int line_h = A26_TYPE_BODY + A26_SPACING_SM;
-    int y = ABOUT_CONTENT_Y;
-
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
-    y += line_h;
-    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)rbversion);
+    lcd_putsxy(A26_SPACING_LG, ABOUT_CONTENT_Y,
+               (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
 }
 
 static void draw_about(void)
 {
     aura_manifest_t manifest;
     bool has_manifest;
-
-    if (s_about_last_screen != AURA_SCREEN_SETTINGS_ABOUT)
-        s_about_page = ABOUT_PAGE_STORAGE; /* reinicia solo al ENTRAR de nuevo */
-    s_about_last_screen = AURA_SCREEN_SETTINGS_ABOUT;
 
     a26_shell_clear_screen();
     aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT), 0);
@@ -553,6 +552,12 @@ static void handle_about(aura_nav_t *nav, long button)
             s_about_page--;
         break;
     case BUTTON_MENU:
+        /* AUDITORIA-01 A-09: FULL-COLD "sin memoria" (doc de
+         * comportamiento SS1) -- reiniciar al SALIR, no intentar
+         * detectar "se volvio a entrar" con una variable centinela que
+         * nunca cambiaba de valor una vez puesta (bug real: solo
+         * funcionaba la primera vez que se dibujaba en todo el proceso). */
+        s_about_page = ABOUT_PAGE_STORAGE;
         aura_nav_pop(nav);
         break;
     default:
@@ -1287,12 +1292,13 @@ static void handle_playlists(aura_nav_t *nav, long button)
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < s_playlist_cache_count - 1)
-            aura_nav_set_selection(nav, sel + 1);
+        /* wheel_advance(), no +-1 fijo (AUDITORIA-01 A-18): unico
+         * manejador de lista que se habia quedado afuera de la
+         * aceleracion real de rueda de Fase 29 (D-077). */
+        aura_nav_set_selection(nav, wheel_advance(sel, s_playlist_cache_count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        if (sel > 0)
-            aura_nav_set_selection(nav, sel - 1);
+        aura_nav_set_selection(nav, wheel_advance(sel, s_playlist_cache_count, -1));
         break;
     case BUTTON_SELECT:
         if (s_playlist_cache_count > 0 && aura_music_play_playlist(sel))

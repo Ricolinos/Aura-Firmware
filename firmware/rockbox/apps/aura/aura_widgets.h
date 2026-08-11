@@ -101,6 +101,15 @@ int aura_widgets_draw_icon(const char *name, int size, int x, int y);
  * para el contenido que va sobre la barra de seleccion. */
 int aura_widgets_draw_icon_selected(const char *name, int size, int x, int y);
 
+/* Misma firma, variante TEXT_TERTIARY -- iconos en reposo/inactivos
+ * fuera de una lista (p. ej. los 4 modos no activos de Ahora suena,
+ * AUDITORIA-01 A-16). */
+int aura_widgets_draw_icon_tertiary(const char *name, int size, int x, int y);
+
+/* Misma firma, variante SHELL_RAIL -- controles de cantidad vacios
+ * (p. ej. estrellas sin llenar de Ahora suena, AUDITORIA-01 A-16). */
+int aura_widgets_draw_icon_rail(const char *name, int size, int x, int y);
+
 /* Fila booleana: label a la izquierda, "Si"/"No" (localizado) a la
  * derecha. SELECT la alterna in situ (L11, PLAN-UX.md) -- el llamador
  * decide que hacer con el nuevo valor, este widget solo dibuja. */

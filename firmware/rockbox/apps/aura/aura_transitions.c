@@ -94,7 +94,13 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
     struct viewport *saved;
     long start_tick = current_tick;
 
-    if (aura_settings.animation_mode == AURA_ANIM_NONE || direction == 0)
+    /* AUDITORIA-01 A-08: "toda animacion se detiene con la pantalla
+     * dormida" (doc SS6/CLAUDE.md) -- la puerta central de aura_main.c
+     * gatea CUANDO se pide un redibujo por timeout, pero estas funciones
+     * corren dentro del manejo directo de boton, fuera de ese camino;
+     * sin este chequeo, una transicion podia arrancar y sostener varios
+     * frames con la pantalla ya apagada. */
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE || direction == 0)
         return;
 
     /* Fuera de rango -> ancho completo. */
@@ -194,7 +200,8 @@ void aura_transition_reveal(aura_nav_t *nav)
     struct viewport *saved;
     long start_tick = current_tick;
 
-    if (aura_settings.animation_mode == AURA_ANIM_NONE)
+    /* AUDITORIA-01 A-08, mismo criterio que aura_transition_slide(). */
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE)
         return;
 
     if (aura_settings.animation_mode == AURA_ANIM_ALL)

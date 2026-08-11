@@ -331,7 +331,16 @@ def generate_icons(tokens):
     # equivocado; la rampa sigue siendo muchisimo mas fiel que la
     # escalera binaria de antes, y el caso primario -- la fila
     # resaltada -- queda exacto).
-    VARIANT_BG_TOKEN = {"": "shell_bg", "-on": "selection_fill"}
+    # "-tertiary"/"-rail" (AUDITORIA-01 A-16): mismo criterio que la
+    # variante normal -- se usan sobre contenido en reposo (icono de
+    # modo inactivo, estrella vacia), nunca sobre la pastilla de
+    # seleccion, asi que su fondo de composicion tambien es SHELL_BG.
+    VARIANT_BG_TOKEN = {
+        "": "shell_bg",
+        "-on": "selection_fill",
+        "-tertiary": "shell_bg",
+        "-rail": "shell_bg",
+    }
 
     tone_report = []  # (path, n_tonos) de cada bmp generado
     fail_files = []

@@ -101,6 +101,16 @@ int aura_widgets_draw_icon_selected(const char *name, int size, int x, int y)
     return draw_icon_variant(name, size, x, y, "-on");
 }
 
+int aura_widgets_draw_icon_tertiary(const char *name, int size, int x, int y)
+{
+    return draw_icon_variant(name, size, x, y, "-tertiary");
+}
+
+int aura_widgets_draw_icon_rail(const char *name, int size, int x, int y)
+{
+    return draw_icon_variant(name, size, x, y, "-rail");
+}
+
 /* Layout declarado por la pantalla actual (lo fija aura_screens_draw
  * desde su tabla). Por defecto SPLIT: es el layout de la mayoria de los
  * menus del firmware original. */
@@ -766,7 +776,13 @@ void aura_widgets_draw_wait_capsule(const char *text)
     if (!text)
         return;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    /* MICRO (7px), no CAPTION (13px) -- AUDITORIA-01 A-20/A-d: el cuerpo
+     * de 13px no entra en los 12px de alto de la capsula (doc SS5.2) sin
+     * pisar el borde superior/inferior. La geometria de la capsula es
+     * deliberadamente la misma que la capsula flotante de progreso (SS5.2)
+     * -- crecerla rompe esa consistencia entre las dos unicas superficies
+     * flotantes del sistema; achicar el texto no. */
+    lcd_setfont(a26_font(A26_FONT_STYLE_MICRO));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     lcd_getstringsize((const unsigned char *)text, &w, &h);
     lcd_putsxy(cap_x + (cap_w - w) / 2, cap_y + (cap_h - h) / 2,

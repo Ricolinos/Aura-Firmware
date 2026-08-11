@@ -785,4 +785,38 @@ Tercer lote de la Fase B. Cinco hallazgos "Alta" del reporte, ejecutados de form
 
 ---
 
+## D-084 — AUDITORIA-01, Lote 5 (medias A-08 a A-20): energía, purga de decoración, dinámica real, íconos -tertiary/-rail, geometría de progreso
+
+Cuarto lote de la Fase B, ejecutado de forma autónoma. Once de los trece hallazgos "Media" del reporte; los dos restantes (A-17, A-19) quedan diferidos con razón, no en silencio (ver abajo).
+
+**A-08 — puerta de energía en transiciones**: `aura_transition_slide()`/`aura_transition_reveal()` corren dentro del manejo directo de botón, fuera del camino que gatea la puerta central de `aura_main.c` (Fase 28, D-076) — con la pantalla dormida podían arrancar y sostener varios cuadros igual. Ambas ahora chequean `lcd_active()` primero, mismo criterio que ya usaba `AURA_ANIM_NONE`; el siguiente ciclo del bucle principal sigue dibujando la pantalla ya cambiada de todas formas (sin animación), no hay pantalla en blanco.
+
+**A-09 — bug real: reset de página de Acerca de**: `s_about_last_screen` se ponía en `AURA_SCREEN_SETTINGS_ABOUT` en el primer dibujo y nunca volvía a otro valor -- el "reinicia solo al ENTRAR de nuevo" solo funcionaba la primera vez que se dibujaba en toda la vida del proceso. Retirada la variable centinela; ahora `handle_about()` resetea `s_about_page` al SALIR (`BUTTON_MENU`), coherente con FULL-COLD "sin memoria" (doc de comportamiento §1).
+
+**A-10/A-c — hash crudo en Acerca de**: página 3 mostraba `rbversion` (hash de git + fecha de build, p. ej. `28a30450a8M-260811`) -- jerga de debug, no un número de versión de Aura. Retirado; no se inventa un esquema de versión semántica que no existe en ningún otro lugar del proyecto (decisión de producto real, fuera de alcance de un fix de auditoría). La atribución "Basado en Rockbox" se conserva -- resuelve también la ambigüedad A-c: es información real y apropiada, no cromo.
+
+**A-11 — marco de acento en Cover Flow**: retirado el `lcd_drawrect()` en `ACCENT` alrededor de la tapa central -- decoración de superficie (Principio 1/2), la central ya se distingue por brillo/tamaño/perspectiva.
+
+**A-12 — espera de biblioteca en Cover Flow**: `draw_message(DB_NOT_READY)` (página completa) reemplazado por `aura_widgets_draw_wait_capsule()` -- mismo anti-patrón que D-073 ya había corregido en `draw_music_browse()`, no replicado aquí hasta ahora.
+
+**A-13 — aceleración real en Cover Flow**: `scroll_step()` usaba la heurística vieja de "dos eventos en menos de HZ/6 = paso 2" en vez de `aura_wheel_step(aura_main_wheel_velocity())`, pese a que Fase 29 (D-077) declaró este módulo "consumido por listas, coverflow y scrub" -- coverflow había quedado afuera, vacío real no anotado en su momento.
+
+**A-14/A-f — overlay de volumen con la pieza correcta**: usaba `lcd_drawrect()`/`lcd_fillrect()` (bordes vivos) en `PROGRESS_TRACK`/`ACCENT` en vez de la primitiva redondeada compartida en `PROGRESS_TRACK`/`PROGRESS_FILL`. Resuelve también la ambigüedad A-f: `PROGRESS_FILL` es siempre el relleno de progreso/nivel, `ACCENT` se reserva para íconos y estado activo -- sin excepción por "estar bajo edición" (mismo criterio que D-081 ya aplicó a Brillo/Límite volumen). Comentario de `apple2026_shell.h` actualizado para no seguir prometiendo la excepción vieja.
+
+**A-15 — barra de estado ausente en vacíos de Fotos/Videos**: única pareja de pantallas del sistema sin ella (doc §5: "la barra nunca cambia de forma entre pantallas"). Corregido en ambas.
+
+**A-16 — variantes `-tertiary`/`-rail` de íconos**: la composición por cobertura del Lote 1 permite variantes nuevas a costo casi nulo -- `tokens.json` agrega `-tertiary` (`text_tertiary`) y `-rail` (`shell_rail`), ambas compuestas contra `SHELL_BG` (se usan sobre contenido en reposo, nunca sobre la pastilla de selección). Nuevas `aura_widgets_draw_icon_tertiary()`/`_rail()`. Destraba dos límites que D-078 había documentado como "no hay una tercera variante horneada": los 4 íconos de modo inactivos de Ahora suena ahora van en `TEXT_TERTIARY` real (antes aproximados con `TEXT_PRIMARY`), y las estrellas vacías van en `SHELL_RAIL` real (antes también `TEXT_PRIMARY`), en reposo y editando por igual.
+
+**A-18 — aceleración real en la lista de playlists de Ahora suena**: `handle_playlists()` era el único manejador de lista que avanzaba ±1 fijo en vez de `wheel_advance()`. Corregido.
+
+**A-20/A-d — geometría de la cápsula de espera**: el cuerpo de 13px no entraba en los 12px de alto de la cápsula (doc §5.2) sin pisar el borde. Resuelto cambiando el texto a `A26_FONT_STYLE_MICRO` (7px) en vez de crecer la cápsula -- crecerla habría roto la consistencia deliberada con la otra única superficie flotante del sistema (la cápsula de progreso, misma geometría por diseño).
+
+**Diferidos con razón, no en silencio**:
+- **A-17 (animación de deslizamiento del switch)**: el propio doc (§5.1-bis) ya lo marcaba "sin animación propia todavía (Fase 28... la añade)" -- Fase 28 (D-076) pasó sin construirla y sin re-anotar el vacío. Implementarla bien requiere animar por-fila (dos switches reales, Aleatorio y Clicker, pueden estar visibles a la vez en Ajustes) -- el mismo patrón de estado-por-identidad que ya usa la pastilla de selección (`s_pill_items`), pero aplicado a un componente distinto; construirlo apurado dentro de este lote arriesgaba un glitch real si dos switches cambian en la misma pantalla. Queda como trabajo real propio, no un agregado de cierre de lote.
+- **A-19 (tarjeta de reproducción del panel derecho)**: D-073 ya la había mandado a "Fase 30 cuando exista el resto de la infraestructura visual de reproducción" -- Fase 30 (D-078) pasó sin construirla y sin re-anotar el vacío tampoco. Es un componente nuevo real (mini-progreso + ▶/⏸ en el panel derecho mientras suena música), con decisiones de layout propias que no están en el documento -- mismo criterio que ya evitó sobre-diseñar el contenedor modal en D-073: no se improvisa su forma sin un pase dedicado.
+
+**Aceptación**: sim reconstruido, compila limpio (0 warnings nuevos); 566/566 tests host-side sin cambios. Verificado en el simulador, ambos temas: Cover Flow sin marco de acento (`docs/screenshots/auditoria01/lote5-music_albums-light.png`), Acerca de sin hash crudo (`lote5-about-p3-light.png`), íconos de modo en `TEXT_TERTIARY` real (`lote5-nowplaying-modes-{light,dark}.png`), overlay de volumen con la barra redondeada correcta (`lote5-nowplaying-volumeoverlay-dark.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

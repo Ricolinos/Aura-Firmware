@@ -277,21 +277,21 @@ static void draw_stars(int x, int y, int stars, bool editing)
      * las llenas (doc SS4, unica excepcion documentada a "nunca .fill").
      * Editando (modo Estrellas activo): llenas en ACCENT -- el acento se
      * gana porque se esta editando con la rueda en ese momento
-     * (Principio 2); vacias y el reposo general quedan en TEXT_PRIMARY.
-     * El doc pide vacias en SHELL_RAIL en reposo, pero los iconos son
-     * bitmaps ya horneados en un solo color por variante (D-010: normal
-     * o acento, nada mas) -- no hay una tercera variante SHELL_RAIL, asi
-     * que esa distincion queda solo en la FORMA (contorno vs relleno),
-     * no en el color (misma limitacion que el resto de esta pantalla,
-     * ver D-078). */
+     * (Principio 2); llenas en reposo van en TEXT_PRIMARY; vacias van en
+     * SHELL_RAIL siempre, editando o no (AUDITORIA-01 A-16: la variante
+     * "-rail" del icono ya existe desde el Lote 5, destrabando el limite
+     * de D-010/D-078 que antes solo generaba normal+acento). */
     int i;
     int step = A26_ICON_SIZE_STATUS + A26_SPACING_XS;
 
     for (i = 0; i < STAR_COUNT; i++)
     {
-        const char *name = (i < stars) ? "star-fill" : "star";
+        bool filled = (i < stars);
+        const char *name = filled ? "star-fill" : "star";
 
-        if (editing && i < stars)
+        if (!filled)
+            aura_widgets_draw_icon_rail(name, A26_ICON_SIZE_STATUS, x + i * step, y);
+        else if (editing)
             aura_widgets_draw_icon_selected(name, A26_ICON_SIZE_STATUS, x + i * step, y);
         else
             aura_widgets_draw_icon(name, A26_ICON_SIZE_STATUS, x + i * step, y);
@@ -331,10 +331,9 @@ static void draw_text_and_modes(const struct mp3entry *id3)
     /* Fila de modos: debajo del bloque de texto, alineada a la derecha
      * de la pantalla (doc SS2). El icono activo va en ACCENT con un
      * pequeno salto de resorte al activarse (SS5); los otros 4 en
-     * TEXT_TERTIARY -- no hay variante bitmap "tertiary" horneada
-     * (D-010 solo genera texto normal + acento), asi que el estado
-     * inactivo se aproxima con la variante normal (TEXT_PRIMARY):
-     * simplificacion documentada, ver D-078. */
+     * TEXT_TERTIARY -- variante real desde el Lote 5 de AUDITORIA-01
+     * (A-16), ya no la aproximacion con TEXT_PRIMARY que D-078 dejo
+     * documentada como limite de D-010. */
     mode_y = y;
     if (mode_y + A26_ICON_SIZE_MENU > ART_Y + ART_SIZE + REFL_GAP)
         mode_y = ART_Y + ART_SIZE + REFL_GAP - A26_ICON_SIZE_MENU; /* no invade el reflejo */
@@ -357,7 +356,7 @@ static void draw_text_and_modes(const struct mp3entry *id3)
         if (active)
             aura_widgets_draw_icon_selected(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y);
         else
-            aura_widgets_draw_icon(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y);
+            aura_widgets_draw_icon_tertiary(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y);
     }
 }
 
@@ -554,15 +553,22 @@ static void draw_volume_overlay(void)
                                     a26_color(A26_SHELL_BG), a26_color(A26_SHELL_RAIL),
                                     a26_color(A26_SHELL_BG));
 
-    lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
-    lcd_drawrect(bar_x, bar_y, bar_w, A26_SPACING_SM);
+    /* Misma pieza que el resto del sistema (AUDITORIA-01 A-14/A-f):
+     * carril PROGRESS_TRACK relleno + PROGRESS_FILL, extremos
+     * redondeados -- no un rectangulo delineado con relleno en ACCENT.
+     * Ambiguedad A-f resuelta: PROGRESS_FILL es siempre el relleno de
+     * progreso/nivel, ACCENT se reserva para iconos y estado (mismo
+     * criterio que D-081 ya aplico a Brillo/Limite volumen). */
+    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, A26_SPACING_SM, A26_SPACING_SM / 2,
+                                 a26_color(A26_PROGRESS_TRACK), a26_color(A26_SHELL_BG));
     fill_w = (vol_max > vol_min)
         ? (bar_w * (global_status.volume - vol_min)) / (vol_max - vol_min)
         : 0;
     if (fill_w < 0)      fill_w = 0;
     if (fill_w > bar_w)  fill_w = bar_w;
-    lcd_set_foreground(a26_color(A26_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_SM);
+    if (fill_w > 0)
+        a26_shell_fill_rounded_rect(bar_x, bar_y, fill_w, A26_SPACING_SM, A26_SPACING_SM / 2,
+                                     a26_color(A26_PROGRESS_FILL), a26_color(A26_SHELL_BG));
 
     lcd_setfont(a26_font(A26_FONT_STYLE_MICRO));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));

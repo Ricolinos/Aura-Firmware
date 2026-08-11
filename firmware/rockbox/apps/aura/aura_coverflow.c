@@ -10,6 +10,9 @@
 #include "aura_music.h"
 #include "aura_albumart.h"
 #include "aura_art.h"
+#include "aura_widgets.h"
+#include "aura_wheel.h"
+#include "aura_main.h"
 #include "aura_flow.h"
 #include "apple2026_shell.h"
 #include "aura_settings.h"
@@ -20,13 +23,12 @@
 /* Coverflow simplificado (D-025): en vez de perspectiva 3D real por
  * cuadro (demasiado costosa para un ARM926EJ-S a ~216MHz), todas las
  * caratulas visibles se decodifican una sola vez al mismo tamano fijo
- * y se cachean; la caratula central se dibuja a brillo completo con
- * un marco de acento, las laterales atenuadas hacia el color de fondo
- * (mismo blend que usa el reflejo, D-024/D-025). El "flujo" avanza de
- * a un album por vez, pero dos eventos de scroll seguidos en menos de
- * HZ/6 ticks avanzan de a dos -- aproximacion barata de "respuesta
- * proporcional a la velocidad del clickwheel" sin necesitar la senal
- * cruda de repeticion de boton (aura_main.c la descarta, ver D-022).
+ * y se cachean; la caratula central se dibuja a brillo completo, las
+ * laterales atenuadas hacia el color de fondo (mismo blend que usa el
+ * reflejo, D-024/D-025; sin marco de acento -- AUDITORIA-01 A-11). El
+ * "flujo" avanza segun la velocidad real del clickwheel
+ * (aura_wheel_step(), AUDITORIA-01 A-13) -- ya no la heuristica vieja
+ * de "dos eventos en menos de HZ/6 = paso 2".
  */
 
 #define CF_COVER_SIZE     56
@@ -50,7 +52,6 @@ typedef struct {
 
 static cf_slot_t s_slots[CF_CACHE_SLOTS];
 static int s_current_index = 0;
-static long s_last_scroll_tick = 0;
 
 static aura_screen_id_t s_cache_screen = AURA_SCREEN_COUNT;
 static int s_cache_generation = -1;
@@ -238,7 +239,12 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 
     if (!aura_music_db_ready())
     {
-        draw_message(AURA_STR_DB_NOT_READY);
+        /* Capsula flotante, no pagina completa (AUDITORIA-01 A-12,
+         * Principio 3: "la carga convive, no interrumpe") -- mismo
+         * anti-patron que D-073 ya habia corregido en
+         * draw_music_browse(), sin replicar aca todavia. La barra de
+         * estado ya se dibujo arriba; la capsula va encima. */
+        aura_widgets_draw_wait_capsule(aura_str(AURA_STR_DB_NOT_READY));
         return;
     }
 
@@ -288,14 +294,17 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 
         if (offset == 0)
         {
+            /* Sin marco de acento (AUDITORIA-01 A-11, Principio 1 "nada
+             * de marcos/biseles" + Principio 2 "el acento nunca es
+             * decoracion de superficie") -- la central ya se distingue
+             * por brillo (255 vs CF_SIDE_FADE), tamano y perspectiva,
+             * igual que en cualquier coverflow real; el marco era
+             * decoracion, no significado. */
             x = A26_SCREEN_WIDTH / 2 - CF_COVER_SIZE / 2;
             blit_dimmed((const fb_data *)slot->art.cover_data,
                         CF_COVER_SIZE, CF_COVER_SIZE, x, y, fade);
             blit_dimmed((const fb_data *)slot->art.reflection_data,
                         CF_COVER_SIZE, CF_REFLECTION_H, x, y + CF_COVER_SIZE, fade);
-
-            lcd_set_foreground(a26_color(A26_ACCENT));
-            lcd_drawrect(x - 2, y - 2, CF_COVER_SIZE + 4, CF_COVER_SIZE + 4);
         }
         else
         {
@@ -316,14 +325,16 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     }
 }
 
+/* Velocidad real del clickwheel (AUDITORIA-01 A-13, doc de diseno SS7 +
+ * Fase 29 del plan: "modulo unico consumido por listas, coverflow y
+ * scrub") -- reemplaza la heuristica vieja de "dos eventos en menos de
+ * HZ/6 = paso 2", una aproximacion barata de antes de que existiera
+ * aura_wheel_step() con la velocidad angular real del driver. Las
+ * listas ya migraron en D-077/Fase 29; coverflow habia quedado afuera,
+ * vacio real no anotado en su momento. */
 static void scroll_step(int dir)
 {
-    long now = current_tick;
-    int step = 1;
-
-    if (s_last_scroll_tick != 0 && (now - s_last_scroll_tick) < (HZ / 6))
-        step = 2;
-    s_last_scroll_tick = now;
+    int step = aura_wheel_step((int)aura_main_wheel_velocity());
 
     s_current_index += dir * step;
     if (s_current_index < 0)

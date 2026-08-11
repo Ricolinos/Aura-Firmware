@@ -13,8 +13,12 @@ typedef enum {
     A26_TEXT_SECONDARY,
     A26_TEXT_TERTIARY,
     /* Color de contraste de la marca: iconos de menu, estado activo,
-     * relleno de progreso/sliders bajo edicion. NO es el fondo de la
-     * seleccion (Principio 2: "el acento se gana"). */
+     * contenido (texto/icono) de la fila seleccionada. NO es el fondo
+     * de la seleccion, y NO es el relleno de barras de progreso/nivel
+     * -- eso es siempre A26_PROGRESS_FILL, incluso mientras se edita
+     * con la rueda (AUDITORIA-01 ambiguedad A-f, resuelta: un solo
+     * criterio para toda barra de progreso/nivel del sistema, sin
+     * excepcion por estado de edicion). Ver Principio 2. */
     A26_ACCENT,
     /* Separadores, bordes finos -- tambien el token que reemplaza tanto
      * al viejo "surface" (relleno neutro de controles no activos) como
