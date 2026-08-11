@@ -7,7 +7,7 @@
 #ifndef AURA_STATUSBAR_H
 #define AURA_STATUSBAR_H
 
-/* Dibuja la franja [x, x+width) x [0, AURA_LAYOUT_STATUSBAR_HEIGHT).
+/* Dibuja la franja [x, x+width) x [0, A26_LAYOUT_STATUSBAR_HEIGHT).
  * `title` puede ser NULL (sin texto, solo bateria/reproduccion/hold).
  * `centered` = 0 alinea a la izquierda (menus), 1 centra (pantallas
  * con interfaz propia: Ahora suena, reloj, etc.). No llama a

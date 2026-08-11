@@ -9,9 +9,9 @@
 #include "tick.h"
 
 #include "aura_widgets.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 #include "aura_settings.h"
-#include "aura_tokens.h"
+#include "apple2026_tokens.h"
 #include "aura_statusbar.h"
 #include "aura_lang.h"
 
@@ -22,12 +22,12 @@
  * del item seleccionado, con un retardo de ~1s (L3) antes de
  * actualizarse. En Ultra, sigue siendo la lista de ancho completo de
  * siempre -- "sin panel derecho", L4. */
-#define LIST_TOP      (AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_SM)
-#define ROW_HEIGHT    (AURA_TYPE_BODY + 2 * AURA_SPACING_SM)
-#define ROW_PAD_X     AURA_SPACING_LG
-#define ICON_TEXT_GAP AURA_SPACING_MD
-#define PANEL_RIGHT_X (AURA_LAYOUT_PANEL_LEFT_WIDTH + 1)
-#define PANEL_RIGHT_W (AURA_SCREEN_WIDTH - PANEL_RIGHT_X)
+#define LIST_TOP      (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_SM)
+#define ROW_HEIGHT    (A26_TYPE_BODY + 2 * A26_SPACING_SM)
+#define ROW_PAD_X     A26_SPACING_LG
+#define ICON_TEXT_GAP A26_SPACING_MD
+#define PANEL_RIGHT_X (A26_LAYOUT_PANEL_LEFT_WIDTH + 1)
+#define PANEL_RIGHT_W (A26_SCREEN_WIDTH - PANEL_RIGHT_X)
 #define PANEL_RETARDO_TICKS HZ
 
 static const char *theme_dir_name(void)
@@ -44,10 +44,10 @@ static int draw_icon_variant(const char *name, int size, int x, int y,
                               const char *suffix)
 {
     /* Dimensionado para el icono mas grande que se pide hoy
-     * (AURA_ICON_SIZE_PREVIEW, panel derecho de la pantalla dividida,
+     * (A26_ICON_SIZE_PREVIEW, panel derecho de la pantalla dividida,
      * Fase 15) -- un buffer de sobra tambien sirve para los tamanos
      * mas chicos que se usan en listas/barra de estado. */
-    static unsigned char icon_buf[AURA_ICON_SIZE_PREVIEW * AURA_ICON_SIZE_PREVIEW
+    static unsigned char icon_buf[A26_ICON_SIZE_PREVIEW * A26_ICON_SIZE_PREVIEW
                                    * 4 + 64];
     char path[MAX_PATH];
     struct bitmap bm;
@@ -99,12 +99,12 @@ int aura_widgets_split_active(void)
 
 static int list_width(void)
 {
-    return aura_widgets_split_active() ? AURA_LAYOUT_PANEL_LEFT_WIDTH : AURA_SCREEN_WIDTH;
+    return aura_widgets_split_active() ? A26_LAYOUT_PANEL_LEFT_WIDTH : A26_SCREEN_WIDTH;
 }
 
 int aura_widgets_visible_rows(void)
 {
-    int rows = (AURA_SCREEN_HEIGHT - LIST_TOP) / ROW_HEIGHT;
+    int rows = (A26_SCREEN_HEIGHT - LIST_TOP) / ROW_HEIGHT;
     return rows > 0 ? rows : 1;
 }
 
@@ -153,15 +153,15 @@ int aura_widgets_panel_pending(void)
 
 void aura_widgets_draw_right_panel_icon(const char *icon_name)
 {
-    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
-    lcd_vline(AURA_LAYOUT_PANEL_LEFT_WIDTH, 0, AURA_SCREEN_HEIGHT - 1);
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
+    lcd_vline(A26_LAYOUT_PANEL_LEFT_WIDTH, 0, A26_SCREEN_HEIGHT - 1);
 
     if (!icon_name)
         return;
 
-    aura_widgets_draw_icon(icon_name, AURA_ICON_SIZE_PREVIEW,
-        PANEL_RIGHT_X + (PANEL_RIGHT_W - AURA_ICON_SIZE_PREVIEW) / 2,
-        (AURA_SCREEN_HEIGHT - AURA_ICON_SIZE_PREVIEW) / 2);
+    aura_widgets_draw_icon(icon_name, A26_ICON_SIZE_PREVIEW,
+        PANEL_RIGHT_X + (PANEL_RIGHT_W - A26_ICON_SIZE_PREVIEW) / 2,
+        (A26_SCREEN_HEIGHT - A26_ICON_SIZE_PREVIEW) / 2);
 }
 
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
@@ -182,10 +182,10 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
             first = count - visible;
     }
 
-    aura_theme_clear_screen();
+    a26_shell_clear_screen();
     aura_statusbar_draw(0, width, title, 0);
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
 
     for (i = first; i < count && i < first + visible; i++)
     {
@@ -197,35 +197,35 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
          * checkmark) en el color de contraste de la marca. */
         if (is_selected)
         {
-            lcd_set_foreground(aura_color(AURA_TOK_SELECTION));
+            lcd_set_foreground(a26_color(A26_SELECTION_FILL));
             lcd_fillrect(0, row_y, width, ROW_HEIGHT);
         }
 
         if (items[i].icon_name)
         {
-            int icon_y = row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2;
+            int icon_y = row_y + (ROW_HEIGHT - A26_ICON_SIZE_MENU) / 2;
             int w = is_selected
                 ? aura_widgets_draw_icon_selected(items[i].icon_name,
-                                                   AURA_ICON_SIZE_MENU, text_x, icon_y)
+                                                   A26_ICON_SIZE_MENU, text_x, icon_y)
                 : aura_widgets_draw_icon(items[i].icon_name,
-                                          AURA_ICON_SIZE_MENU, text_x, icon_y);
+                                          A26_ICON_SIZE_MENU, text_x, icon_y);
             if (w > 0)
                 text_x += w + ICON_TEXT_GAP;
         }
 
-        lcd_set_foreground(is_selected ? aura_color(AURA_TOK_ON_SELECTION)
-                                        : aura_color(AURA_TOK_TEXT_PRIMARY));
-        lcd_putsxy(text_x, row_y + AURA_SPACING_SM,
+        lcd_set_foreground(is_selected ? a26_color(A26_ACCENT)
+                                        : a26_color(A26_TEXT_PRIMARY));
+        lcd_putsxy(text_x, row_y + A26_SPACING_SM,
                    (const unsigned char *)items[i].label);
 
         if (items[i].checked)
         {
-            int check_x = width - ROW_PAD_X - AURA_ICON_SIZE_MENU;
-            int check_y = row_y + (ROW_HEIGHT - AURA_ICON_SIZE_MENU) / 2;
+            int check_x = width - ROW_PAD_X - A26_ICON_SIZE_MENU;
+            int check_y = row_y + (ROW_HEIGHT - A26_ICON_SIZE_MENU) / 2;
             if (is_selected)
-                aura_widgets_draw_icon_selected("check", AURA_ICON_SIZE_MENU, check_x, check_y);
+                aura_widgets_draw_icon_selected("check", A26_ICON_SIZE_MENU, check_x, check_y);
             else
-                aura_widgets_draw_icon("check", AURA_ICON_SIZE_MENU, check_x, check_y);
+                aura_widgets_draw_icon("check", A26_ICON_SIZE_MENU, check_x, check_y);
         }
     }
 
@@ -241,17 +241,17 @@ void aura_widgets_draw_bool_row(const char *title, const char *label,
     const char *value_text = aura_str(value ? AURA_STR_YES : AURA_STR_NO);
     int w, h;
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
-    lcd_putsxy(ROW_PAD_X, LIST_TOP + AURA_SPACING_SM,
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_putsxy(ROW_PAD_X, LIST_TOP + A26_SPACING_SM,
                (const unsigned char *)label);
 
-    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
+    lcd_set_foreground(a26_color(A26_ACCENT));
     lcd_getstringsize((const unsigned char *)value_text, &w, &h);
-    lcd_putsxy(AURA_SCREEN_WIDTH - ROW_PAD_X - w, LIST_TOP + AURA_SPACING_SM,
+    lcd_putsxy(A26_SCREEN_WIDTH - ROW_PAD_X - w, LIST_TOP + A26_SPACING_SM,
                (const unsigned char *)value_text);
 }
 
@@ -260,29 +260,29 @@ void aura_widgets_draw_bool_row(const char *title, const char *label,
 void aura_widgets_draw_slider(const char *title, int fraction,
                                const char *value_text)
 {
-    int bar_x = AURA_SPACING_XXL;
-    int bar_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
-    int bar_y = AURA_SCREEN_HEIGHT / 2;
+    int bar_x = A26_SPACING_XXL;
+    int bar_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
+    int bar_y = A26_SCREEN_HEIGHT / 2;
     int fill_w;
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
 
     if (fraction < 0)   fraction = 0;
     if (fraction > 256) fraction = 256;
 
-    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
-    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_XL);
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
+    lcd_drawrect(bar_x, bar_y, bar_w, A26_SPACING_XL);
 
     fill_w = (bar_w * fraction) / 256;
-    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_XL);
+    lcd_set_foreground(a26_color(A26_ACCENT));
+    lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_XL);
 
     if (value_text)
     {
-        lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-        lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
-        lcd_putsxy(bar_x, bar_y + AURA_SPACING_XL + AURA_SPACING_SM,
+        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_putsxy(bar_x, bar_y + A26_SPACING_XL + A26_SPACING_SM,
                    (const unsigned char *)value_text);
     }
 }
@@ -291,20 +291,20 @@ void aura_widgets_draw_slider(const char *title, int fraction,
 
 #define DIGIT_BOX_W  24
 #define DIGIT_BOX_H  32
-#define DIGIT_GAP    AURA_SPACING_SM
+#define DIGIT_GAP    A26_SPACING_SM
 
 void aura_widgets_draw_digits(const char *title, const int *digits,
                                int count, int focus)
 {
     int total_w = count * DIGIT_BOX_W + (count - 1) * DIGIT_GAP;
-    int start_x = (AURA_SCREEN_WIDTH - total_w) / 2;
-    int box_y = AURA_SCREEN_HEIGHT / 2 - DIGIT_BOX_H / 2;
+    int start_x = (A26_SCREEN_WIDTH - total_w) / 2;
+    int box_y = A26_SCREEN_HEIGHT / 2 - DIGIT_BOX_H / 2;
     int i;
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_TITLE));
+    lcd_setfont(a26_font(A26_FONT_STYLE_TITLE));
 
     for (i = 0; i < count; i++)
     {
@@ -313,13 +313,13 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
         int w, h;
         int is_focus = (i == focus);
 
-        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_SELECTION)
-                                     : aura_color(AURA_TOK_SURFACE));
+        lcd_set_foreground(is_focus ? a26_color(A26_SELECTION_FILL)
+                                     : a26_color(A26_SHELL_RAIL));
         lcd_fillrect(box_x, box_y, DIGIT_BOX_W, DIGIT_BOX_H);
 
         lcd_getstringsize((const unsigned char *)digit_str, &w, &h);
-        lcd_set_foreground(is_focus ? aura_color(AURA_TOK_ON_SELECTION)
-                                     : aura_color(AURA_TOK_TEXT_PRIMARY));
+        lcd_set_foreground(is_focus ? a26_color(A26_ACCENT)
+                                     : a26_color(A26_TEXT_PRIMARY));
         lcd_putsxy(box_x + (DIGIT_BOX_W - w) / 2, box_y + (DIGIT_BOX_H - h) / 2,
                    (const unsigned char *)digit_str);
     }
@@ -391,21 +391,21 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
 {
     const char *lines[CONFIRM_MAX_LINES];
     int lens[CONFIRM_MAX_LINES];
-    int box_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
-    int box_x = AURA_SPACING_XXL;
+    int box_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
+    int box_x = A26_SPACING_XXL;
     int text_y, i, n;
     int btn_y, btn_w, yes_x, no_x;
     const char *yes_label = aura_str(AURA_STR_YES);
     const char *no_label = aura_str(AURA_STR_NO);
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
 
     n = wrap_text(body, box_w, lines, lens, CONFIRM_MAX_LINES);
-    text_y = AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_XXL;
+    text_y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL;
     for (i = 0; i < n; i++)
     {
         /* lcd_putsxy no acepta longitud: se corta a un buffer chico con
@@ -417,26 +417,26 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
         memcpy(buf, lines[i], len);
         buf[len] = '\0';
         lcd_putsxy(box_x, text_y, (const unsigned char *)buf);
-        text_y += AURA_TYPE_BODY + AURA_SPACING_SM;
+        text_y += A26_TYPE_BODY + A26_SPACING_SM;
     }
 
     btn_w = 100;
-    btn_y = AURA_SCREEN_HEIGHT - AURA_SPACING_XXL - 32;
+    btn_y = A26_SCREEN_HEIGHT - A26_SPACING_XXL - 32;
     no_x = box_x;
     yes_x = box_x + box_w - btn_w;
 
-    lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_SELECTION : AURA_TOK_SURFACE));
+    lcd_set_foreground(a26_color(!yes_selected ? A26_SELECTION_FILL : A26_SHELL_RAIL));
     lcd_fillrect(no_x, btn_y, btn_w, 32);
-    lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_SELECTION : AURA_TOK_SURFACE));
+    lcd_set_foreground(a26_color(yes_selected ? A26_SELECTION_FILL : A26_SHELL_RAIL));
     lcd_fillrect(yes_x, btn_y, btn_w, 32);
 
     {
         int w, h;
-        lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_ON_SELECTION : AURA_TOK_TEXT_PRIMARY));
+        lcd_set_foreground(a26_color(!yes_selected ? A26_ACCENT : A26_TEXT_PRIMARY));
         lcd_getstringsize((const unsigned char *)no_label, &w, &h);
         lcd_putsxy(no_x + (btn_w - w) / 2, btn_y + (32 - h) / 2, (const unsigned char *)no_label);
 
-        lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_ON_SELECTION : AURA_TOK_TEXT_PRIMARY));
+        lcd_set_foreground(a26_color(yes_selected ? A26_ACCENT : A26_TEXT_PRIMARY));
         lcd_getstringsize((const unsigned char *)yes_label, &w, &h);
         lcd_putsxy(yes_x + (btn_w - w) / 2, btn_y + (32 - h) / 2, (const unsigned char *)yes_label);
     }
@@ -444,9 +444,9 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
 
 void aura_widgets_draw_progress(const char *text, int fraction)
 {
-    int bar_x = AURA_SPACING_XXL;
-    int bar_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
-    int bar_y = AURA_SCREEN_HEIGHT / 2;
+    int bar_x = A26_SPACING_XXL;
+    int bar_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
+    int bar_y = A26_SCREEN_HEIGHT / 2;
     int fill_w;
 
     if (fraction < 0)   fraction = 0;
@@ -455,17 +455,17 @@ void aura_widgets_draw_progress(const char *text, int fraction)
     if (text)
     {
         int w, h;
-        lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-        lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
         lcd_getstringsize((const unsigned char *)text, &w, &h);
-        lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, bar_y - AURA_SPACING_XL - h,
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, bar_y - A26_SPACING_XL - h,
                    (const unsigned char *)text);
     }
 
-    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
-    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_SM);
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
+    lcd_drawrect(bar_x, bar_y, bar_w, A26_SPACING_SM);
 
     fill_w = (bar_w * fraction) / 256;
-    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_SM);
+    lcd_set_foreground(a26_color(A26_ACCENT));
+    lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_SM);
 }

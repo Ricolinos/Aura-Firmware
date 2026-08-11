@@ -32,8 +32,8 @@ if [[ ! -x "$GENERATE_PY" ]]; then
 fi
 "$GENERATE_PY" "$ROOT_DIR/design-system/generate.py"
 
-echo "==> Instalando aura_tokens.h en apps/aura/"
-cp "$ROOT_DIR/design-system/out/aura_tokens.h" "$SRC_DIR/apps/aura/aura_tokens.h"
+echo "==> Instalando apple2026_tokens.h en apps/aura/"
+cp "$ROOT_DIR/design-system/out/apple2026_tokens.h" "$SRC_DIR/apps/aura/apple2026_tokens.h"
 
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"

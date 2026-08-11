@@ -37,7 +37,7 @@
 #include "panic.h"
 #include "menu.h"
 #include "aura/aura_main.h"
-#include "aura/aura_tokens.h"
+#include "aura/apple2026_tokens.h"
 #include "string-extra.h"
 #include "usb.h"
 #include "wifi.h"
@@ -492,13 +492,19 @@ static void init(void)
      * los menus del plugin mpegplayer) a la paleta y tipografia de
      * Aura, sin tocar la logica de esos archivos. */
 #ifdef HAVE_LCD_COLOR
-    global_settings.fg_color = LCD_RGBPACK(0xff, 0xff, 0xff);
-    global_settings.bg_color = LCD_RGBPACK(0, 0, 0);
-    global_settings.lss_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
-    global_settings.lse_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
-    global_settings.lst_color = LCD_RGBPACK(0, 0, 0);
+    /* A26_COLOR_DARK_* (apple2026_tokens.h), no RGB suelto -- SS2 del
+     * doc de diseno prohibe hardcodear color en C. Tratamiento oscuro
+     * fijo (no depende de aura_settings.theme): splash.c no tiene forma
+     * de saber que tema eligio el usuario antes de que Aura arranque
+     * (D-055), asi que se usa la paleta oscura completa -- incluido el
+     * gris muy oscuro en vez de negro puro (Principio de diseno SS2). */
+    global_settings.fg_color = A26_COLOR_DARK_TEXT_PRIMARY;
+    global_settings.bg_color = A26_COLOR_DARK_SHELL_BG;
+    global_settings.lss_color = A26_COLOR_DARK_ACCENT;
+    global_settings.lse_color = A26_COLOR_DARK_ACCENT;
+    global_settings.lst_color = A26_COLOR_DARK_SHELL_BG;
 #endif
-    strlcpy((char *)global_settings.font_file, AURA_FONT_BASENAME_BODY,
+    strlcpy((char *)global_settings.font_file, A26_FONT_BASENAME_BODY,
             sizeof(global_settings.font_file));
     settings_apply(true);
     init_battery_tables();
@@ -796,13 +802,19 @@ static void init(void)
     /* Fase 14 (PLAN-UX.md) / D-055: ver el comentario equivalente en la
      * otra variante de init() mas arriba. */
 #ifdef HAVE_LCD_COLOR
-    global_settings.fg_color = LCD_RGBPACK(0xff, 0xff, 0xff);
-    global_settings.bg_color = LCD_RGBPACK(0, 0, 0);
-    global_settings.lss_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
-    global_settings.lse_color = LCD_RGBPACK(0xff, 0x45, 0x3a);
-    global_settings.lst_color = LCD_RGBPACK(0, 0, 0);
+    /* A26_COLOR_DARK_* (apple2026_tokens.h), no RGB suelto -- SS2 del
+     * doc de diseno prohibe hardcodear color en C. Tratamiento oscuro
+     * fijo (no depende de aura_settings.theme): splash.c no tiene forma
+     * de saber que tema eligio el usuario antes de que Aura arranque
+     * (D-055), asi que se usa la paleta oscura completa -- incluido el
+     * gris muy oscuro en vez de negro puro (Principio de diseno SS2). */
+    global_settings.fg_color = A26_COLOR_DARK_TEXT_PRIMARY;
+    global_settings.bg_color = A26_COLOR_DARK_SHELL_BG;
+    global_settings.lss_color = A26_COLOR_DARK_ACCENT;
+    global_settings.lse_color = A26_COLOR_DARK_ACCENT;
+    global_settings.lst_color = A26_COLOR_DARK_SHELL_BG;
 #endif
-    strlcpy((char *)global_settings.font_file, AURA_FONT_BASENAME_BODY,
+    strlcpy((char *)global_settings.font_file, A26_FONT_BASENAME_BODY,
             sizeof(global_settings.font_file));
 
 #if defined(BUTTON_REC) || \

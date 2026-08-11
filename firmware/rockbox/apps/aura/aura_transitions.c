@@ -9,7 +9,7 @@
 #include "aura_transitions.h"
 #include "aura_screens.h"
 #include "aura_settings.h"
-#include "aura_tokens.h"
+#include "apple2026_tokens.h"
 
 /* Instrumentacion de frames (Fase 16, PLAN-UX.md): DEBUGF es un no-op
  * fuera de builds DEBUG, asi que queda siempre presente en el codigo
@@ -30,7 +30,7 @@
  * ease-out (el primer paso cubre ~la mitad del recorrido) y el titulo
  * de la barra de estado cambia AL INSTANTE, sin deslizar. El enfoque
  * anterior ("wipe" de revelado) no movia la pantalla vieja, y ademas
- * aura_theme_clear_screen() borraba el framebuffer entero en cada
+ * a26_shell_clear_screen() borraba el framebuffer entero en cada
  * cuadro (lcd_clear_display ignora el viewport activo), asi que en la
  * practica la nueva pantalla deslizaba sobre fondo vacio.
  *
@@ -40,23 +40,23 @@
  * vieja en el framebuffer real con memmove por fila (stride horizontal,
  * filas contiguas -- garantizado para este target, config.h:818) y (b)
  * blitear la franja entrante de la nueva con lcd_bitmap_part. Ningun
- * viewport sale jamas de [0, AURA_SCREEN_WIDTH] (la restriccion real de
+ * viewport sale jamas de [0, A26_SCREEN_WIDTH] (la restriccion real de
  * D-030 se mantiene). La banda de la barra de estado (y < statusbar_h)
  * queda fuera del deslizamiento: se blitea completa antes del primer
  * cuadro (titulo instantaneo, como el original). */
 
-static fb_data s_push_fb[AURA_SCREEN_WIDTH * AURA_SCREEN_HEIGHT];
+static fb_data s_push_fb[A26_SCREEN_WIDTH * A26_SCREEN_HEIGHT];
 
 static void *push_fb_address(int x, int y)
 {
-    return &s_push_fb[y * AURA_SCREEN_WIDTH + x];
+    return &s_push_fb[y * A26_SCREEN_WIDTH + x];
 }
 
 static struct frame_buffer_t s_push_buffer = {
     { .fb_ptr = s_push_fb },
     .get_address_fn = &push_fb_address,
-    .stride = STRIDE_MAIN(AURA_SCREEN_WIDTH, AURA_SCREEN_HEIGHT),
-    .elems = AURA_SCREEN_WIDTH * AURA_SCREEN_HEIGHT,
+    .stride = STRIDE_MAIN(A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT),
+    .elems = A26_SCREEN_WIDTH * A26_SCREEN_HEIGHT,
 };
 
 /* Desplazamiento con ease-out cuadratico: d(t) = W * (1 - (1-t)^2).
@@ -72,7 +72,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
 {
     int frames, frame_delay, i, y;
     int d_prev = 0;
-    const int bar_h = AURA_LAYOUT_STATUSBAR_HEIGHT;
+    const int bar_h = A26_LAYOUT_STATUSBAR_HEIGHT;
     struct viewport vp;
     struct viewport *saved;
     long start_tick = current_tick;
@@ -81,8 +81,8 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
         return;
 
     /* Fuera de rango -> ancho completo. */
-    if (width <= 0 || width > AURA_SCREEN_WIDTH)
-        width = AURA_SCREEN_WIDTH;
+    if (width <= 0 || width > A26_SCREEN_WIDTH)
+        width = A26_SCREEN_WIDTH;
 
     if (aura_settings.animation_mode == AURA_ANIM_ALL)
     {
@@ -96,14 +96,14 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
     }
 
     /* 1. Renderizar la pantalla nueva completa, una sola vez, al
-     * framebuffer offscreen. aura_theme_clear_screen() limpia solo el
+     * framebuffer offscreen. a26_shell_clear_screen() limpia solo el
      * viewport activo (ver aura_theme.c), asi que el framebuffer real
      * -- con la pantalla vieja -- queda intacto. */
     viewport_set_defaults(&vp, SCREEN_MAIN);
     vp.x = 0;
     vp.y = 0;
-    vp.width = AURA_SCREEN_WIDTH;
-    vp.height = AURA_SCREEN_HEIGHT;
+    vp.width = A26_SCREEN_WIDTH;
+    vp.height = A26_SCREEN_HEIGHT;
     viewport_set_buffer(&vp, &s_push_buffer, SCREEN_MAIN);
 
     saved = lcd_set_viewport(&vp);
@@ -112,7 +112,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
 
     /* 2. Titulo instantaneo: la banda de la barra de estado no
      * desliza -- se blitea entera antes del primer cuadro. */
-    lcd_bitmap_part(s_push_fb, 0, 0, AURA_SCREEN_WIDTH, 0, 0, width, bar_h);
+    lcd_bitmap_part(s_push_fb, 0, 0, A26_SCREEN_WIDTH, 0, 0, width, bar_h);
 
     /* 3. Push por cuadros sobre la banda del cuerpo (y >= bar_h). */
     for (i = 1; i <= frames; i++)
@@ -122,7 +122,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
 
         if (delta > 0)
         {
-            for (y = bar_h; y < AURA_SCREEN_HEIGHT; y++)
+            for (y = bar_h; y < A26_SCREEN_HEIGHT; y++)
             {
                 fb_data *row = FBADDR(0, y);
 
@@ -143,18 +143,18 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
             if (direction > 0)
                 /* La nueva entra desde el borde derecho: sus columnas
                  * [0, d) aparecen en x = [width-d, width). */
-                lcd_bitmap_part(s_push_fb, 0, bar_h, AURA_SCREEN_WIDTH,
+                lcd_bitmap_part(s_push_fb, 0, bar_h, A26_SCREEN_WIDTH,
                                 width - d, bar_h, d,
-                                AURA_SCREEN_HEIGHT - bar_h);
+                                A26_SCREEN_HEIGHT - bar_h);
             else
                 /* La nueva entra desde el borde izquierdo: sus columnas
                  * [width-d, width) aparecen en x = [0, d). */
                 lcd_bitmap_part(s_push_fb, width - d, bar_h,
-                                AURA_SCREEN_WIDTH, 0, bar_h, d,
-                                AURA_SCREEN_HEIGHT - bar_h);
+                                A26_SCREEN_WIDTH, 0, bar_h, d,
+                                A26_SCREEN_HEIGHT - bar_h);
         }
 
-        lcd_update_rect(0, 0, width, AURA_SCREEN_HEIGHT);
+        lcd_update_rect(0, 0, width, A26_SCREEN_HEIGHT);
 
         d_prev = d;
         if (i < frames)
@@ -165,7 +165,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
 }
 
 /* T4 (Coverflow, L4): mismo truco seguro de "wipe" que aura_transition_slide
- * (D-030) -- nunca se instala un viewport fuera de [0, AURA_SCREEN_WIDTH] --
+ * (D-030) -- nunca se instala un viewport fuera de [0, A26_SCREEN_WIDTH] --
  * pero revelando desde AMBOS bordes hacia el centro en vez de desde uno
  * solo, para que la entrada a Coverflow se sienta distinta de una
  * navegacion de lista comun ("el contenido emerge de detras", L4). */
@@ -192,11 +192,11 @@ void aura_transition_reveal(aura_nav_t *nav)
 
     for (i = 1; i <= frames; i++)
     {
-        int half = (AURA_SCREEN_WIDTH / 2 * i) / frames;
+        int half = (A26_SCREEN_WIDTH / 2 * i) / frames;
 
         viewport_set_defaults(&vp, SCREEN_MAIN);
         vp.y = 0;
-        vp.height = AURA_SCREEN_HEIGHT;
+        vp.height = A26_SCREEN_HEIGHT;
 
         /* Mitad izquierda: revela desde x=0 hacia el centro. */
         vp.x = 0;
@@ -206,8 +206,8 @@ void aura_transition_reveal(aura_nav_t *nav)
         lcd_set_viewport(saved);
 
         /* Mitad derecha: revela desde el borde derecho hacia el
-         * centro. x+width se mantiene siempre en AURA_SCREEN_WIDTH. */
-        vp.x = AURA_SCREEN_WIDTH - half;
+         * centro. x+width se mantiene siempre en A26_SCREEN_WIDTH. */
+        vp.x = A26_SCREEN_WIDTH - half;
         vp.width = half;
         saved = lcd_set_viewport(&vp);
         aura_screens_draw(nav);

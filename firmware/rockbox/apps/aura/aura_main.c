@@ -8,7 +8,7 @@
 #include "aura_main.h"
 #include "aura_nav.h"
 #include "aura_settings.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 #include "aura_screens.h"
 #include "aura_nowplaying.h"
 #include "aura_music.h"
@@ -58,7 +58,7 @@ void aura_main(void)
          * "primer arranque ya hecho" no dependa de que pantallas
          * visito el usuario. */
         aura_settings_save();
-    aura_theme_init();
+    a26_shell_init();
     aura_nav_init(&nav, AURA_SCREEN_ROOT);
 
 #ifdef USB_ENABLE_HID
@@ -81,6 +81,7 @@ void aura_main(void)
         int timeout_ticks = -1;
 
         aura_screens_draw(&nav);
+        a26_shell_stamp_corners();
         lcd_update();
 
         if (aura_nav_current(&nav) == AURA_SCREEN_NOWPLAYING

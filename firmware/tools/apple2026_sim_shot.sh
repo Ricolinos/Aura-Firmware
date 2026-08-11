@@ -7,7 +7,7 @@
 # en DECISIONS.md).
 #
 # Uso:
-#   firmware/tools/sim_screenshot.sh <salida.png> [ticks] [botones]
+#   firmware/tools/apple2026_sim_shot.sh <salida.png> [ticks] [botones]
 #
 # `ticks`   ticks del kernel de Rockbox (HZ ticks = 1s aprox.) a esperar
 #           antes del dump -- desde el arranque si no hay `botones`, o
@@ -21,7 +21,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BUILD_DIR="$ROOT_DIR/firmware/build-sim"
-OUT_PNG="${1:?Uso: sim_screenshot.sh <salida.png> [ticks] [botones]}"
+OUT_PNG="${1:?Uso: apple2026_sim_shot.sh <salida.png> [ticks] [botones]}"
 TICKS="${2:-150}"
 BUTTONS="${3:-}"
 

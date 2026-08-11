@@ -12,10 +12,10 @@
 
 #include "aura_video.h"
 #include "aura_widgets.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
-#include "aura_tokens.h"
+#include "apple2026_tokens.h"
 
 /* Aura solo reproduce su formato interno (MPEG-1/2 320x240, generado
  * por Aura Studio al sincronizar) delegando en el plugin mpegplayer
@@ -71,15 +71,15 @@ void aura_video_draw(aura_nav_t *nav)
     static aura_list_item_t items[MAX_VIDEOS];
 
     ensure_video_list();
-    aura_theme_clear_screen();
+    a26_shell_clear_screen();
 
     if (s_video_count == 0)
     {
         int w, h;
-        lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-        lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
         lcd_getstringsize((const unsigned char *)aura_str(AURA_STR_EMPTY_VIDEOS), &w, &h);
-        lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, (AURA_SCREEN_HEIGHT - h) / 2,
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, (A26_SCREEN_HEIGHT - h) / 2,
                    (const unsigned char *)aura_str(AURA_STR_EMPTY_VIDEOS));
         return;
     }

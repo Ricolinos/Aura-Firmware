@@ -25,8 +25,8 @@ firmware/tools/gen_test_media.sh         # genera música/fotos/video de prueba 
 Capturas headless (sin permisos de Accesibilidad de macOS, ver D-008/D-017 en DECISIONS.md):
 
 ```bash
-firmware/tools/sim_screenshot.sh salida.png [ticks] ["SELECT,SCROLL_FWD,..."]
-firmware/tools/capture_matrix.sh         # matriz completa: cada pantalla x 2 temas x 3 modos
+firmware/tools/apple2026_sim_shot.sh salida.png [ticks] ["SELECT,SCROLL_FWD,..."]
+firmware/tools/apple2026_sim_matrix.sh         # matriz completa: cada pantalla x 2 temas x 3 modos
 ```
 
 Tests de la lógica pura (máquina de navegación, parser `.lrc`):

@@ -14,10 +14,10 @@
 #include "aura_screens.h"
 #include "aura_widgets.h"
 #include "aura_statusbar.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
-#include "aura_tokens.h"
+#include "apple2026_tokens.h"
 #include "aura_music.h"
 #include "aura_nowplaying.h"
 #include "aura_transitions.h"
@@ -349,50 +349,50 @@ static void draw_brightness(void)
  * biblioteca esta vacia". */
 static void draw_about(void)
 {
-    const int line_h = AURA_TYPE_BODY + AURA_SPACING_SM;
-    int y = AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_LG;
+    const int line_h = A26_TYPE_BODY + A26_SPACING_SM;
+    int y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_LG;
     aura_manifest_t manifest;
     char size_buf[16];
     char line_buf[48];
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT), 0);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT), 0);
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
 
-    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
     y += line_h;
-    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)rbversion);
-    y += line_h + AURA_SPACING_LG;
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)rbversion);
+    y += line_h + A26_SPACING_LG;
 
     if (!aura_manifest_load(&manifest))
     {
-        lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_NO_SYNC));
+        lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_NO_SYNC));
         return;
     }
 
     output_dyn_value(size_buf, sizeof(size_buf), manifest.music_bytes, byte_units, 4, true);
     snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
              aura_str(AURA_STR_ABOUT_MUSIC), manifest.music_count, size_buf);
-    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
     y += line_h;
 
     output_dyn_value(size_buf, sizeof(size_buf), manifest.video_bytes, byte_units, 4, true);
     snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
              aura_str(AURA_STR_ABOUT_VIDEOS), manifest.video_count, size_buf);
-    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
     y += line_h;
 
     output_dyn_value(size_buf, sizeof(size_buf), manifest.photo_bytes, byte_units, 4, true);
     snprintf(line_buf, sizeof(line_buf), "%s: %d (%s)",
              aura_str(AURA_STR_ABOUT_PHOTOS), manifest.photo_count, size_buf);
-    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
     y += line_h;
 
     snprintf(line_buf, sizeof(line_buf), "%s: %d",
              aura_str(AURA_STR_ABOUT_PLAYLISTS), manifest.playlist_count);
-    lcd_putsxy(AURA_SPACING_LG, y, (const unsigned char *)line_buf);
+    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line_buf);
 }
 
 /* -- Temporiz. luz / Temporiz. reposo: listas de opciones numericas,
@@ -696,16 +696,16 @@ static void handle_reset_confirm(aura_nav_t *nav, long button)
 static void draw_message_centered(aura_str_id_t msg_id)
 {
     int w, h;
-    int content_top = AURA_LAYOUT_STATUSBAR_HEIGHT;
-    int content_h = AURA_SCREEN_HEIGHT - content_top;
+    int content_top = A26_LAYOUT_STATUSBAR_HEIGHT;
+    int content_h = A26_SCREEN_HEIGHT - content_top;
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, NULL, 0);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, NULL, 0);
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     lcd_getstringsize((const unsigned char *)aura_str(msg_id), &w, &h);
-    lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, content_top + (content_h - h) / 2,
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, content_top + (content_h - h) / 2,
                (const unsigned char *)aura_str(msg_id));
 }
 
@@ -1156,8 +1156,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             int width = (aura_settings.graphics_mode != AURA_GFX_NONE
                          && screen_uses_split_layout(screen)
                          && screen_uses_split_layout(to))
-                        ? AURA_LAYOUT_PANEL_LEFT_WIDTH
-                        : AURA_SCREEN_WIDTH;
+                        ? A26_LAYOUT_PANEL_LEFT_WIDTH
+                        : A26_SCREEN_WIDTH;
 
             /* Al volver, el preview del padre se restaura al instante
              * (sin el retardo de ~1s de seleccion nueva) -- observado

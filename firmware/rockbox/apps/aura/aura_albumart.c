@@ -10,7 +10,7 @@
 #include "recorder/jpeg_load.h"
 
 #include "aura_albumart.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 
 /* Buffer de trabajo para decodificar+remuestrear (FORMAT_RESIZE
  * necesita bastante mas espacio que el bitmap final, ver
@@ -53,7 +53,7 @@ static void generate_reflection(const aura_albumart_t *art)
     fb_data *refl = (fb_data *)art->reflection_data;
     int size = art->size;
     int refl_h = size / 2;
-    unsigned bg = aura_color(AURA_TOK_BACKGROUND);
+    unsigned bg = a26_color(A26_SHELL_BG);
     int bg_r = RGB_UNPACK_RED(bg);
     int bg_g = RGB_UNPACK_GREEN(bg);
     int bg_b = RGB_UNPACK_BLUE(bg);

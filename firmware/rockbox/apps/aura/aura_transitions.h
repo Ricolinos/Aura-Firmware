@@ -17,10 +17,10 @@
  *
  * `width` acota la region del empuje al rango [0, width): en un T1
  * entre dos menus divididos (L1/L2) el empuje solo debe verse en el
- * panel izquierdo (AURA_LAYOUT_PANEL_LEFT_WIDTH) -- el panel derecho es
+ * panel izquierdo (A26_LAYOUT_PANEL_LEFT_WIDTH) -- el panel derecho es
  * una capa aparte que no se mueve y se actualiza con su propio debounce
  * (L3). Para un T3 (cualquier extremo a pantalla completa) pasar
- * AURA_SCREEN_WIDTH. Valores fuera de rango caen a ancho completo.
+ * A26_SCREEN_WIDTH. Valores fuera de rango caen a ancho completo.
  *
  * Cubre dos de los cuatro patrones de PLAN-UX.md L4: T1 (menu->menu) y
  * T3 (push de pantalla completa) -- ambos son, en la practica, "revela

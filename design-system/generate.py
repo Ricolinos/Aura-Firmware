@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Pipeline determinista del sistema de diseno Aura.
+"""Pipeline determinista del sistema de diseno Apple2026.
 
 Lee tokens.json (unica fuente de verdad) y produce:
 
-  - out/aura_tokens.h   Header C con colores, espaciados y tipografia,
-                         para incluir desde firmware/rockbox/apps/aura/.
-  - out/fonts/*.fnt      Fuentes bitmap SF Pro en el formato nativo de
-                         Rockbox, rasterizadas a los tamanos exactos de
-                         type_scale, via la herramienta convttf del fork.
-  - out/icons/<theme>/*.bmp  SF Symbols rasterizados a los tamanos exactos
-                         de uso, por tema y por variante (color resuelto en
-                         tiempo de generacion, no en runtime; ver D-010).
+  - out/apple2026_tokens.h  Header C con colores, espaciados y tipografia
+                         (macros A26_*), para incluir desde
+                         firmware/rockbox/apps/aura/apple2026_shell.h.
+  - out/fonts/*.fnt      Fuentes bitmap SF Compact/SF Pro en el formato
+                         nativo de Rockbox, rasterizadas a los tamanos
+                         exactos de type_scale, via convttf del fork.
+  - out/icons/<theme>/*.bmp  SF Symbols en variante lineal, rasterizados
+                         a los tamanos exactos de uso, por tema y por
+                         variante (color resuelto en tiempo de
+                         generacion, no en runtime; ver D-010).
 
-Origen de los assets de Apple (SF Pro y SF Symbols): NO se versionan en
-este repo. La fuente se lee de la instalacion local del sistema y los
-simbolos se renderizan pidiendoselos a macOS via AppKit
-(scripts/render_sf_symbols.swift). Es decir: este pipeline solo corre en
-un Mac con SF Pro instalada -- una restriccion aceptable porque Aura
-Studio (el otro entregable del proyecto) ya es una app de macOS.
+Origen de los assets de Apple (SF Compact/SF Pro y SF Symbols): NO se
+versionan en este repo. La fuente se lee de la instalacion local del
+sistema y los simbolos se renderizan pidiendoselos a macOS via AppKit
+(scripts/apple2026_sf_render.swift). Es decir: este pipeline solo corre
+en un Mac con esas fuentes instaladas -- una restriccion aceptable
+porque Aura Studio (el otro entregable del proyecto) ya es una app de
+macOS.
 
 Es seguro volver a ejecutar este script cuantas veces haga falta; out/ se
 regenera por completo cada vez.
@@ -57,50 +60,50 @@ def hex_to_rgb(h):
 
 
 def generate_header(tokens):
-    print("==> Generando out/aura_tokens.h")
+    print("==> Generando out/apple2026_tokens.h")
     lines = []
     lines.append("/* Generado por design-system/generate.py a partir de tokens.json. */")
     lines.append("/* NO editar a mano: los cambios se perderian al regenerar. */")
-    lines.append("#ifndef AURA_TOKENS_H")
-    lines.append("#define AURA_TOKENS_H")
+    lines.append("#ifndef APPLE2026_TOKENS_H")
+    lines.append("#define APPLE2026_TOKENS_H")
     lines.append("")
     lines.append('#include "lcd.h"')
     lines.append("")
 
     screen = tokens["screen"]
-    lines.append(f"#define AURA_SCREEN_WIDTH  {screen['width']}")
-    lines.append(f"#define AURA_SCREEN_HEIGHT {screen['height']}")
+    lines.append(f"#define A26_SCREEN_WIDTH  {screen['width']}")
+    lines.append(f"#define A26_SCREEN_HEIGHT {screen['height']}")
     lines.append("")
 
     layout = tokens["layout"]
     lines.append("/* Retroalimentacion de layout global (px) */")
     for name, value in layout.items():
-        lines.append(f"#define AURA_LAYOUT_{name.upper()} {value}")
+        lines.append(f"#define A26_LAYOUT_{name.upper()} {value}")
     lines.append("")
 
     lines.append("/* Espaciados (px) */")
     for name, value in tokens["spacing"].items():
-        lines.append(f"#define AURA_SPACING_{name.upper()} {value}")
+        lines.append(f"#define A26_SPACING_{name.upper()} {value}")
     lines.append("")
 
     lines.append("/* Escala tipografica (px) */")
     for name, value in tokens["type_scale"].items():
-        lines.append(f"#define AURA_TYPE_{name.upper()} {value}")
+        lines.append(f"#define A26_TYPE_{name.upper()} {value}")
     lines.append("")
 
     lines.append("/* Rutas de las fuentes bitmap generadas (relativas a FONT_DIR) */")
     for style_name, weight in tokens["font"]["styles_by_size"].items():
         size = tokens["type_scale"][style_name]
         fname = font_filename(style_name, size)
-        lines.append(f'#define AURA_FONT_{style_name.upper()} "{fname}"')
+        lines.append(f'#define A26_FONT_{style_name.upper()} "{fname}"')
     lines.append("")
 
     lines.append("/* Mismo nombre sin extension: lo que espera global_settings.font_file")
     lines.append(" * (Fase 14, PLAN-UX.md) -- settings.c le agrega \".fnt\" el solo. */")
     for style_name, weight in tokens["font"]["styles_by_size"].items():
         size = tokens["type_scale"][style_name]
-        base = f"aura-{style_name}-{size}"
-        lines.append(f'#define AURA_FONT_BASENAME_{style_name.upper()} "{base}"')
+        base = font_filename(style_name, size).removesuffix(".fnt")
+        lines.append(f'#define A26_FONT_BASENAME_{style_name.upper()} "{base}"')
     lines.append("")
 
     lines.append("/* Colores por tema, empaquetados con LCD_RGBPACK al formato nativo del LCD */")
@@ -108,22 +111,22 @@ def generate_header(tokens):
         lines.append(f"/* Tema {theme_name} */")
         for token_name, hexval in colors.items():
             r, g, b = hex_to_rgb(hexval)
-            define = f"AURA_COLOR_{theme_name.upper()}_{token_name.upper()}"
+            define = f"A26_COLOR_{theme_name.upper()}_{token_name.upper()}"
             lines.append(f"#define {define} LCD_RGBPACK({r}, {g}, {b})")
         lines.append("")
 
-    lines.append("/* Tamanos de icono (px). Los bitmaps viven en ICON_DIR \"/aura/<tema>/\". */")
+    lines.append("/* Tamanos de icono (px). Los bitmaps viven en ICON_DIR \"/apple2026/<tema>/\". */")
     for size_name, size_px in tokens["icon"]["sizes"].items():
-        lines.append(f"#define AURA_ICON_SIZE_{size_name.upper()} {size_px}")
+        lines.append(f"#define A26_ICON_SIZE_{size_name.upper()} {size_px}")
     lines.append("")
     lines.append("/* El enum de temas vive en aura_settings.h (es logica de app, no un")
     lines.append(" * token de diseno); este header solo expone los colores de cada uno. */")
     lines.append("")
-    lines.append("#endif /* AURA_TOKENS_H */")
+    lines.append("#endif /* APPLE2026_TOKENS_H */")
     lines.append("")
 
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "aura_tokens.h").write_text("\n".join(lines))
+    (OUT / "apple2026_tokens.h").write_text("\n".join(lines))
 
 
 STUDIO_GENERATED = (
@@ -149,7 +152,10 @@ def generate_swift_palette(tokens):
         "import SwiftUI",
         "",
         "/// Paleta compartida con el firmware -- misma fuente de verdad",
-        "/// (design-system/tokens.json) que aura_tokens.h.",
+        "/// (design-system/tokens.json) que apple2026_tokens.h. Los nombres de",
+        "/// los campos son los mismos tokens del sistema de diseno Apple2026",
+        "/// (docs/design/Reglas de diseno Apple2026 (v2).md); \"Aura\" en el",
+        "/// nombre del tipo es el producto, no el sistema de diseno.",
         "struct AuraColors {",
     ]
 
@@ -183,7 +189,7 @@ def to_camel(snake):
 
 
 def font_filename(style_name, size_px):
-    return f"aura-{style_name}-{size_px}.fnt"
+    return f"a26-{style_name}-{size_px}.fnt"
 
 
 def resolve_font_file(tokens, filename):
@@ -244,7 +250,7 @@ def render_symbol_shapes(tokens, shapes_dir):
             })
 
     result = subprocess.run(
-        ["swift", str(ROOT / "scripts" / "render_sf_symbols.swift")],
+        ["swift", str(ROOT / "scripts" / "apple2026_sf_render.swift")],
         input=json.dumps(jobs),
         capture_output=True,
         text=True,

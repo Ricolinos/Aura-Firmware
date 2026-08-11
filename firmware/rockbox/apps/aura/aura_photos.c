@@ -12,10 +12,10 @@
 
 #include "aura_photos.h"
 #include "aura_widgets.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
-#include "aura_tokens.h"
+#include "apple2026_tokens.h"
 
 #define PHOTOS_DIR      "/Photos"
 #define MAX_PHOTOS      200
@@ -82,10 +82,10 @@ static void ensure_photo_list(void)
 static void draw_message(aura_str_id_t msg_id)
 {
     int w, h;
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     lcd_getstringsize((const unsigned char *)aura_str(msg_id), &w, &h);
-    lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, (AURA_SCREEN_HEIGHT - h) / 2,
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, (A26_SCREEN_HEIGHT - h) / 2,
                (const unsigned char *)aura_str(msg_id));
 }
 
@@ -98,7 +98,7 @@ void aura_photos_draw(aura_nav_t *nav)
 
     if (s_photo_count == 0)
     {
-        aura_theme_clear_screen();
+        a26_shell_clear_screen();
         draw_message(AURA_STR_EMPTY_PHOTOS);
         return;
     }
@@ -158,8 +158,8 @@ static void load_current_photo(void)
 
     snprintf(path, sizeof(path), "%s/%s", PHOTOS_DIR, s_photos[s_current_index].filename);
 
-    s_bm.width = AURA_SCREEN_WIDTH;
-    s_bm.height = AURA_SCREEN_HEIGHT;
+    s_bm.width = A26_SCREEN_WIDTH;
+    s_bm.height = A26_SCREEN_HEIGHT;
     s_bm.data = (char *)s_view_scratch;
 #if (LCD_DEPTH > 1)
     s_bm.maskdata = NULL;
@@ -177,7 +177,7 @@ void aura_photo_viewer_draw(aura_nav_t *nav)
 {
     (void)nav;
 
-    aura_theme_clear_screen();
+    a26_shell_clear_screen();
 
     if (s_photo_count == 0)
         return;
@@ -191,8 +191,8 @@ void aura_photo_viewer_draw(aura_nav_t *nav)
     }
 
     lcd_bitmap((const fb_data *)s_view_scratch,
-               (AURA_SCREEN_WIDTH - s_bm.width) / 2,
-               (AURA_SCREEN_HEIGHT - s_bm.height) / 2,
+               (A26_SCREEN_WIDTH - s_bm.width) / 2,
+               (A26_SCREEN_HEIGHT - s_bm.height) / 2,
                s_bm.width, s_bm.height);
 }
 

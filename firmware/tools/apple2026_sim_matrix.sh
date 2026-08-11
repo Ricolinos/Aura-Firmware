@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Matriz de capturas de la Fase 7: cada pantalla de Aura x 2 temas x 3
-# modos graficos, generada automaticamente con el mismo mecanismo de
-# inyeccion de botones headless de sim_screenshot.sh (ver D-017 en
+# Matriz de capturas: cada pantalla de Aura x 2 temas x 3 modos
+# graficos, generada automaticamente con el mismo mecanismo de
+# inyeccion de botones headless de apple2026_sim_shot.sh (ver D-017 en
 # DECISIONS.md). Requiere que firmware/build-sim ya este compilado
 # (firmware/tools/build_sim.sh) y los fixtures de prueba instalados
 # (firmware/tools/gen_test_media.sh).
 #
-# Uso: firmware/tools/capture_matrix.sh
+# Uso: firmware/tools/apple2026_sim_matrix.sh
 
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BUILD_DIR="$ROOT_DIR/firmware/build-sim"
 OUT_DIR="$ROOT_DIR/docs/screenshots/matrix"
-SHOT="$ROOT_DIR/firmware/tools/sim_screenshot.sh"
+SHOT="$ROOT_DIR/firmware/tools/apple2026_sim_shot.sh"
 CFG="$BUILD_DIR/simdisk/.rockbox/aura/aura.cfg"
 
 mkdir -p "$OUT_DIR"

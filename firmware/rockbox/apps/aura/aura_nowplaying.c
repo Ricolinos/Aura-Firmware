@@ -21,17 +21,17 @@
 #include "tick.h"
 
 #include "aura_nowplaying.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
 #include "aura_lrc.h"
-#include "aura_tokens.h"
+#include "apple2026_tokens.h"
 #include "aura_statusbar.h"
 #include "aura_widgets.h"
 
 #define ART_SIZE   100
-#define ART_X      ((AURA_SCREEN_WIDTH - ART_SIZE) / 2)
-#define ART_Y      (AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_SM)
+#define ART_X      ((A26_SCREEN_WIDTH - ART_SIZE) / 2)
+#define ART_Y      (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_SM)
 
 #define LRC_FILE_BUF_SIZE 8192
 
@@ -139,25 +139,25 @@ static void aura_format_track_time(unsigned long ms, char *buf, size_t bufsz)
 static void draw_lyrics(const struct mp3entry *id3)
 {
     int active = aura_lrc_find_active_line(&s_lrc, (long)id3->elapsed);
-    int cy = AURA_SCREEN_HEIGHT / 2;
+    int cy = A26_SCREEN_HEIGHT / 2;
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
 
     if (active >= 0)
     {
         int w, h;
         const char *text = s_lrc.lines[active].text;
         lcd_getstringsize((const unsigned char *)text, &w, &h);
-        lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, cy - h, (const unsigned char *)text);
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, cy - h, (const unsigned char *)text);
 
         if (active + 1 < s_lrc.count)
         {
-            lcd_setfont(aura_font(AURA_FONT_STYLE_CAPTION));
-            lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+            lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+            lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
             text = s_lrc.lines[active + 1].text;
             lcd_getstringsize((const unsigned char *)text, &w, &h);
-            lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, cy + AURA_SPACING_MD,
+            lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, cy + A26_SPACING_MD,
                        (const unsigned char *)text);
         }
     }
@@ -176,43 +176,43 @@ static void draw_player(const struct mp3entry *id3)
     else
         lcd_drawrect(ART_X, ART_Y, ART_SIZE, ART_SIZE);
 
-    int text_y = ART_Y + ART_SIZE + AURA_SPACING_LG;
+    int text_y = ART_Y + ART_SIZE + A26_SPACING_LG;
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
     snprintf(line, sizeof(line), "%s", id3->title ? id3->title : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
-    lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, text_y, (const unsigned char *)line);
-    text_y += h + AURA_SPACING_SM;
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, text_y, (const unsigned char *)line);
+    text_y += h + A26_SPACING_SM;
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_CAPTION));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     snprintf(line, sizeof(line), "%s - %s",
              id3->artist ? id3->artist : "", id3->album ? id3->album : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
-    lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, text_y, (const unsigned char *)line);
-    text_y += h + AURA_SPACING_LG;
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, text_y, (const unsigned char *)line);
+    text_y += h + A26_SPACING_LG;
 
-    bar_x = AURA_SPACING_XXL;
-    bar_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
+    bar_x = A26_SPACING_XXL;
+    bar_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
     bar_y = text_y;
 
-    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
-    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_SM);
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
+    lcd_drawrect(bar_x, bar_y, bar_w, A26_SPACING_SM);
 
     fill_w = id3->length ? (int)((unsigned long long)bar_w * id3->elapsed / id3->length) : 0;
-    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_SM);
+    lcd_set_foreground(a26_color(A26_ACCENT));
+    lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_SM);
 
     aura_format_track_time(id3->elapsed, timebuf, sizeof(timebuf));
     aura_format_track_time(id3->length, timebuf2, sizeof(timebuf2));
-    lcd_setfont(aura_font(AURA_FONT_STYLE_MICRO));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
-    lcd_putsxy(bar_x, bar_y + AURA_SPACING_SM + AURA_SPACING_XS,
+    lcd_setfont(a26_font(A26_FONT_STYLE_MICRO));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    lcd_putsxy(bar_x, bar_y + A26_SPACING_SM + A26_SPACING_XS,
                (const unsigned char *)timebuf);
     snprintf(line, sizeof(line), "%s", timebuf2);
     lcd_getstringsize((const unsigned char *)line, &w, &h);
-    lcd_putsxy(bar_x + bar_w - w, bar_y + AURA_SPACING_SM + AURA_SPACING_XS,
+    lcd_putsxy(bar_x + bar_w - w, bar_y + A26_SPACING_SM + A26_SPACING_XS,
                (const unsigned char *)line);
     /* El estado de pausa ya lo indica el icono de la barra de estado
      * (Fase 13, PLAN-UX.md, L5) -- sin duplicarlo aca dentro. */
@@ -226,10 +226,10 @@ static void draw_player(const struct mp3entry *id3)
 static void draw_volume_overlay(void)
 {
     int box_w = 200, box_h = 40;
-    int box_x = (AURA_SCREEN_WIDTH - box_w) / 2;
-    int box_y = AURA_SCREEN_HEIGHT - box_h - AURA_SPACING_XXL;
-    int bar_x = box_x + AURA_SPACING_LG;
-    int bar_w = box_w - 2 * AURA_SPACING_LG;
+    int box_x = (A26_SCREEN_WIDTH - box_w) / 2;
+    int box_y = A26_SCREEN_HEIGHT - box_h - A26_SPACING_XXL;
+    int bar_x = box_x + A26_SPACING_LG;
+    int bar_w = box_w - 2 * A26_SPACING_LG;
     int bar_y = box_y + box_h / 2;
     int vol_min = sound_min(SOUND_VOLUME);
     int vol_max = sound_max(SOUND_VOLUME);
@@ -239,28 +239,28 @@ static void draw_volume_overlay(void)
     if (global_settings.volume_limit < vol_max)
         vol_max = global_settings.volume_limit;
 
-    lcd_set_foreground(aura_color(AURA_TOK_SURFACE));
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
     lcd_fillrect(box_x, box_y, box_w, box_h);
-    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
     lcd_drawrect(box_x, box_y, box_w, box_h);
 
-    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
-    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_SM);
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
+    lcd_drawrect(bar_x, bar_y, bar_w, A26_SPACING_SM);
     fill_w = (vol_max > vol_min)
         ? (bar_w * (global_status.volume - vol_min)) / (vol_max - vol_min)
         : 0;
     if (fill_w < 0)      fill_w = 0;
     if (fill_w > bar_w)  fill_w = bar_w;
-    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
-    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_SM);
+    lcd_set_foreground(a26_color(A26_ACCENT));
+    lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_SM);
 
-    lcd_setfont(aura_font(AURA_FONT_STYLE_MICRO));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_MICRO));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     snprintf(buf, sizeof(buf), "%d%%",
              (vol_max > vol_min)
                  ? (100 * (global_status.volume - vol_min)) / (vol_max - vol_min)
                  : 0);
-    lcd_putsxy(box_x + AURA_SPACING_LG, box_y + AURA_SPACING_XS,
+    lcd_putsxy(box_x + A26_SPACING_LG, box_y + A26_SPACING_XS,
                (const unsigned char *)buf);
 }
 
@@ -268,8 +268,8 @@ void aura_nowplaying_draw(void)
 {
     struct mp3entry *id3 = audio_current_track();
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING), 1);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING), 1);
 
     if (!id3)
         return;

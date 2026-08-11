@@ -1313,14 +1313,21 @@ static void osd_init(void)
     osd.print_delay = 75*HZ/100;
     osd.resume_delay = HZ/2;
 #ifdef HAVE_LCD_COLOR
-    /* Fase 20 (PLAN-UX.md) / D-06x: paleta de Aura (tema Oscuro de
-     * design-system/tokens.json) en vez del azul-lavanda generico de
-     * Rockbox -- los plugins no pueden incluir aura_tokens.h (build y
-     * link separados, via la tabla rb->), asi que los valores van
-     * literales, igual que ya hacia este archivo. */
-    osd.bgcolor = LCD_RGBPACK(0x1c, 0x1c, 0x1e);   /* AURA_TOK_SURFACE, oscuro */
+    /* Fase 20 (PLAN-UX.md) / D-062, valores re-sincronizados en Fase 26:
+     * paleta Apple2026 (tema Oscuro de design-system/tokens.json) en vez
+     * del azul-lavanda generico de Rockbox -- los plugins no pueden
+     * incluir apple2026_tokens.h (build y link separados, via la tabla
+     * rb->), asi que los valores van literales, igual que ya hacia este
+     * archivo. Es exactamente el tipo de literal que el sistema de
+     * diseno prohibe (SS2) pero que la frontera de plugin obliga aca --
+     * y por eso mismo se desincronizo en silencio durante la Fase 26
+     * (el acento paso de #FF453A a #FF456C y esto no se actualizo hasta
+     * ahora): sin un mecanismo que los mantenga atados, revisar este
+     * archivo cada vez que cambie tokens.json queda en manos de quien
+     * lo recuerde. */
+    osd.bgcolor = LCD_RGBPACK(0x1c, 0x1c, 0x1e);   /* A26_SHELL_BG, oscuro */
     osd.fgcolor = LCD_WHITE;
-    osd.prog_fillcolor = LCD_RGBPACK(0xff, 0x45, 0x3a); /* AURA_TOK_ACCENT, oscuro */
+    osd.prog_fillcolor = LCD_RGBPACK(0xff, 0x45, 0x6c); /* A26_ACCENT, oscuro */
 #else
     osd.bgcolor = GREY_LIGHTGRAY;
     osd.fgcolor = GREY_BLACK;

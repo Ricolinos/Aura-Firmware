@@ -33,7 +33,7 @@ Este documento parte de esos dos principios y los traduce a las limitaciones rea
 
 ## 2. Color
 
-Todos los colores del código C salen de `a26_palette` (tokens de `apps/apple2026_shell.h`). **Prohibido hardcodear RGB en C**; en los skins van en hex y el convertidor (`tools/apple2026_dark_skin.py`) traduce al oscuro.
+Todos los colores del código C salen de `a26_color()` (tokens `a26_token_t`, `firmware/rockbox/apps/aura/apple2026_shell.h` — generados desde `design-system/tokens.json` a `apple2026_tokens.h`). **Prohibido hardcodear RGB en C**; en los skins van en hex y el convertidor (`design-system/scripts/apple2026_dark_skin.py`, aún no construido — sin consumidor real hasta que existan skins declarativos) traduce al oscuro.
 
 | Token          | Claro       | Oscuro      | Uso                                        |
 | -------------- | ----------- | ----------- | ------------------------------------------ |
@@ -70,12 +70,12 @@ Todos los colores del código C salen de `a26_palette` (tokens de `apps/apple202
 
 ## 4. Iconografía
 
-- **Solo SF Symbols**, rasterizados de macOS (`tools/apple2026_sf_render.swift`). Nunca dibujar glifos a mano ni usar paquetes externos.
-- **Siempre la variante lineal, nunca `.fill`.** El juego de íconos de menú es de trazo; una variante rellena al lado del resto se lee como una mancha maciza y rompe la fila. Si un símbolo solo existe relleno, se busca otro que signifique lo mismo.
-- Íconos de menú: frame 30×30, tinta de 18 px centrada, color acento, antialias por cobertura (supermuestreo ≥4×4; un test binario deja dientes de sierra). Viven en las DOS tiras (`icons/Apple2026Icons*.bmp`) — proceso de ampliación en `CLAUDE.md`.
+- **Solo SF Symbols**, rasterizados de macOS (`design-system/scripts/apple2026_sf_render.swift`, un solo proceso Swift por lote via AppKit). Nunca dibujar glifos a mano ni usar paquetes externos.
+- **Siempre la variante lineal, nunca `.fill`.** El juego de íconos de menú es de trazo; una variante rellena al lado del resto se lee como una mancha maciza y rompe la fila. Si un símbolo solo existe relleno, se busca otro que signifique lo mismo. Única excepción documentada: `star`/`star.fill` como control de valor (rating) en Ahora suena, no un ícono de menú — ver `Reproductor - Ahora suena.md` §4.
+- Íconos de menú: hoy generados a 20 px directo (sin lienzo de 30×30 aparte) porque `ROW_HEIGHT` (13 px de cuerpo + 2×4 px de margen = 21 px) no tiene lugar para un frame de 30×30 sin agrandar cada fila de lista — cambiar eso es una decisión de geometría de lista completa (menos filas visibles por pantalla a cambio de más aire), no algo para resolver de paso en esta pasada. **Pendiente, Fase 27 (Lista v2)**: decidir entre agrandar `ROW_HEIGHT` para el frame de 30×30/tinta 18px tal como está escrito aquí, o formalizar 20 px como el tamaño real de icono de menú de Aura y actualizar este párrafo. Mientras tanto, dos variantes por ícono (color de texto normal y de acento, para la fila activa), un bmp por combinación de tema/tamaño/variante en `design-system/out/icons/<tema>/`. **Diferido, sin fecha**: empaquetar el set en dos tiras únicas (`icons/Apple2026Icons.bmp`/`...Dark.bmp`) en vez de archivos sueltos — es una optimización de empaquetado/IO, no de apariencia; se evaluará si el número de íconos crece lo suficiente para que el costo de abrir un archivo por ícono se note.
 - Símbolos que ya representan algo en iOS se respetan: `gear` = Configuración, `square.grid.2x2` = Extras, `play.rectangle` = Videos, `sun.max.circle`/`moon.circle` = temas, `cable.connector.horizontal` = USB, `magnifyingglass` = solo búsqueda.
 - **Hermanos se distinguen**: si dos entradas de un submenú comparten símbolo, se varía con una marca pequeña (guion, punto) — nunca el mismo ícono dos veces en la misma lista.
-- Páginas de estado: símbolo 96×96 en tinta terciaria (son aviso, no acción), generadas con `tools/apple2026_symbol_page.py`.
+- Páginas de estado: símbolo 96×96 en tinta terciaria (son aviso, no acción). **Diferido**: `design-system/scripts/apple2026_symbol_page.py` como herramienta dedicada — sin pantalla de estado real que lo consuma todavía (Fase 27).
 
 ---
 
@@ -177,8 +177,8 @@ Las tres decisiones abiertas de la v1 de este documento ya están resueltas — 
 3. Se ve correcta en claro **y** oscuro (capturas de ambos).
 4. Sus esperas usan la pastilla flotante; sus estados, página de símbolo.
 5. Íconos SF Symbols en ambas tiras, sin repetirse entre hermanos.
-6. Textos en español natural, añadidos al FINAL de ambos `.lang`.
+6. Textos en español mexicano/neutro natural, añadidos al FINAL de las dos tablas ES/EN de `firmware/rockbox/apps/aura/aura_lang.c` (D-013: tablas C propias, no el sistema `.lang` de Rockbox — mismo orden estable en ambas).
 7. Animaciones con puerta `lcd_active()` y cadencia de la tabla.
 8. El vidrio, si aparece, está solo en la capa de controles — nunca en contenido.
 9. Contrato del auditor actualizado si cambió geometría o assets.
-10. Verificada en el simulador con el arnés (`tools/apple2026_sim_*`).
+10. Verificada en el simulador con el arnés (`firmware/tools/apple2026_sim_shot.sh` / `apple2026_sim_matrix.sh`).

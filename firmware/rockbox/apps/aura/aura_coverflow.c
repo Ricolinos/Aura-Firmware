@@ -9,10 +9,10 @@
 #include "aura_coverflow.h"
 #include "aura_music.h"
 #include "aura_albumart.h"
-#include "aura_theme.h"
+#include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
-#include "aura_tokens.h"
+#include "apple2026_tokens.h"
 #include "aura_statusbar.h"
 
 /* Coverflow simplificado (D-025): en vez de perspectiva 3D real por
@@ -107,7 +107,7 @@ static cf_slot_t *get_slot_for(int album_index)
 static void blit_dimmed(const fb_data *src, int w, int h, int x, int y, int fade)
 {
     static fb_data scratch[CF_COVER_SIZE * CF_COVER_SIZE];
-    unsigned bg = aura_color(AURA_TOK_BACKGROUND);
+    unsigned bg = a26_color(A26_SHELL_BG);
     int bg_r = RGB_UNPACK_RED(bg);
     int bg_g = RGB_UNPACK_GREEN(bg);
     int bg_b = RGB_UNPACK_BLUE(bg);
@@ -134,10 +134,10 @@ static void blit_dimmed(const fb_data *src, int w, int h, int x, int y, int fade
 static void draw_message(aura_str_id_t msg_id)
 {
     int w, h;
-    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     lcd_getstringsize((const unsigned char *)aura_str(msg_id), &w, &h);
-    lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2, (AURA_SCREEN_HEIGHT - h) / 2,
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, (A26_SCREEN_HEIGHT - h) / 2,
                (const unsigned char *)aura_str(msg_id));
 }
 
@@ -146,8 +146,8 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     int offset;
     (void)nav;
 
-    aura_theme_clear_screen();
-    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_ALBUMS), 0);
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_ALBUMS), 0);
 
     if (!aura_music_db_ready())
     {
@@ -173,7 +173,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
             continue;
 
         slot = get_slot_for(idx);
-        x = AURA_SCREEN_WIDTH / 2 + offset * CF_SPACING - CF_COVER_SIZE / 2;
+        x = A26_SCREEN_WIDTH / 2 + offset * CF_SPACING - CF_COVER_SIZE / 2;
         y = CF_TOP_Y;
         fade = (offset == 0) ? 255 : CF_SIDE_FADE;
 
@@ -186,13 +186,13 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         }
         else
         {
-            lcd_set_foreground(aura_color(offset == 0 ? AURA_TOK_TEXT_PRIMARY : AURA_TOK_BORDER));
+            lcd_set_foreground(a26_color(offset == 0 ? A26_TEXT_PRIMARY : A26_SHELL_RAIL));
             lcd_drawrect(x, y, CF_COVER_SIZE, CF_COVER_SIZE);
         }
 
         if (offset == 0)
         {
-            lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
+            lcd_set_foreground(a26_color(A26_ACCENT));
             lcd_drawrect(x - 2, y - 2, CF_COVER_SIZE + 4, CF_COVER_SIZE + 4);
         }
     }
@@ -201,11 +201,11 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         int w, h;
         const char *label = s_albums[s_current_index].label;
 
-        lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
-        lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
+        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
         lcd_getstringsize((const unsigned char *)label, &w, &h);
-        lcd_putsxy((AURA_SCREEN_WIDTH - w) / 2,
-                   CF_TOP_Y + CF_COVER_SIZE + CF_COVER_SIZE / 2 + AURA_SPACING_LG,
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2,
+                   CF_TOP_Y + CF_COVER_SIZE + CF_COVER_SIZE / 2 + A26_SPACING_LG,
                    (const unsigned char *)label);
     }
 }
