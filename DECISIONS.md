@@ -352,6 +352,18 @@ Nueva superficie mínima: `apps/aura/aura_statusbar.c/h` dibuja la franja `[0, A
 
 **Aceptación**: sim y build ARM real compilan limpio (`rockbox.ipod` actualizado); 95/95 tests host-side sin cambios (nav/lrc/splash-lang no tocados por esta fase); capturas confirmando el split en root (con icono de Música en el panel derecho tras el retardo), en Ajustes (panel vacío, sin iconos por fila — degrada bien) y en modo Ultra (vuelve a lista de ancho completo, sin divisor, idéntico al comportamiento previo a esta fase).
 
+## D-058 — Fase 16 (PLAN-UX.md): T4 (revelado de Coverflow) + instrumentación de frames; T1/T3 ya cubiertos, T2 diferido
+
+**T1/T3 ya estaban resueltos**: `aura_transition_slide()` (D-030, Fase 5) ya implementa exactamente el patrón que el plan describe para T1 (menú→menú) y T3 (push de pantalla completa) — un wipe de revelado seguro que nunca instala un viewport fuera de `[0, AURA_SCREEN_WIDTH]`. El plan los distingue conceptualmente (T1 mueve solo el panel izquierdo, T3 empuja toda la pantalla), pero **visualmente son la misma animación** (revela desde un borde según la dirección de navegación) — no había nada nuevo que construir ahí; se documenta la lectura, no se duplica código.
+
+**T4 implementado**: `aura_transition_reveal()` (nueva), usada específicamente al entrar a Coverflow (`aura_screens_handle_button()` la dispara en vez de `aura_transition_slide()` cuando la pantalla destino es Coverflow — único cambio de despacho de esta fase). Mismo truco seguro de wipe que D-030, pero revelando **desde ambos bordes hacia el centro** en vez de desde uno solo (dos viewports por cuadro, cada uno siempre dentro de límites válidos) — visualmente distingue la entrada a Coverflow de una navegación de lista común, cumpliendo el espíritu de L4 ("el contenido emerge de detrás") sin la complejidad/riesgo de animar capas reales moviéndose (que D-030 ya identificó como la fuente del bug original).
+
+**T2 diferido deliberadamente**: el plan lo describe como "el panel derecho crece a pantalla completa, el icono persiste" — pero **hoy no existe ninguna pantalla que nazca de un icono del panel derecho** (Fecha/hora icónicas es Fase 18; hasta que ese objeto exista, T2 no tiene nada real que animar). Construirlo ahora, sin un consumidor concreto contra el cual validarlo, sería exactamente el tipo de abstracción prematura que este proyecto evita a propósito. Se implementa en la Fase 18, junto con la pantalla que lo necesita.
+
+**Instrumentación de frames**: ambas funciones miden ticks reales de reloj (`current_tick`) al inicio y loguean vía `DEBUGF` cuántos ticks tomó la animación completa — sin costo en builds de producción (`DEBUGF` es un no-op fuera de `DEBUG`, confirmado en `firmware/export/debug.h:52`). Esto es lo que el plan pedía para "decidir con datos reales" si un modo gráfico necesita degradar en hardware real, en vez de a ojo — la medición en sí queda lista; decidir con esos datos si hace falta degradar algo es trabajo de una sesión con hardware real (Fase 25).
+
+**Aceptación**: sim y build ARM real compilan limpio, sin warnings nuevos (se corrigió uno introducido por la instrumentación: `start_tick` quedaba sin usar en builds sin `DEBUG`, resuelto con un `(void)` explícito dentro de la propia macro); `rockbox.ipod` actualizado. 95/95 tests host-side sin cambios (esta fase no toca lógica testeable host-side, es geometría de viewports). Verificado en el simulador: entrada a Coverflow con T4 sin regresión visual (captura `fase16-coverflow-t4.png`), navegación normal con T1 sin cambios (`fase16-t1-still-works.png`).
+
 ---
 
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

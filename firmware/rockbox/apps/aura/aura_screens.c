@@ -627,8 +627,15 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     /* Centralizado aca (no en cada handler) para no repetir la logica
      * en cada punto de push/pop: la profundidad de la pila es la unica
      * senal que hace falta para saber si hubo navegacion y en que
-     * sentido. Ver D-024. */
+     * sentido. Ver D-024. Entrar a Coverflow usa T4 (revelado desde
+     * ambos bordes, D-058/Fase 16) en vez del wipe T1/T3 comun, para
+     * que se sienta distinto de una navegacion de lista. */
     int depth_after = aura_nav_depth(nav);
     if (depth_after != depth_before)
-        aura_transition_slide(nav, depth_after > depth_before ? 1 : -1);
+    {
+        if (depth_after > depth_before && is_coverflow_screen(aura_nav_current(nav)))
+            aura_transition_reveal(nav);
+        else
+            aura_transition_slide(nav, depth_after > depth_before ? 1 : -1);
+    }
 }

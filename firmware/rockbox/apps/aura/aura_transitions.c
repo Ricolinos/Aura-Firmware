@@ -2,11 +2,23 @@
 #include "kernel.h"
 #include "tick.h"
 #include "gui/viewport.h"
+#include "debug.h"
 
 #include "aura_transitions.h"
 #include "aura_screens.h"
 #include "aura_settings.h"
 #include "aura_tokens.h"
+
+/* Instrumentacion de frames (Fase 16, PLAN-UX.md): DEBUGF es un no-op
+ * fuera de builds DEBUG, asi que queda siempre presente en el codigo
+ * sin costo en produccion -- sirve para decidir con datos reales (no a
+ * ojo) si un modo grafico necesita degradar en hardware real. */
+#define TRANSITION_LOG(name, frames, start_tick) \
+    do { \
+        DEBUGF("aura_transitions: %s %d frames en %ld ticks\n", \
+               (name), (frames), (long)(current_tick - (start_tick))); \
+        (void)(start_tick); /* evita -Wunused-variable en builds sin DEBUG */ \
+    } while (0)
 
 /* NOTA (reemplaza el enfoque anterior de viewport desplazado -- ver
  * DECISIONS.md): un viewport con x fuera de [0, AURA_SCREEN_WIDTH] o con
@@ -31,6 +43,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction)
     int frames, frame_delay, i;
     struct viewport vp;
     struct viewport *saved;
+    long start_tick = current_tick;
 
     if (aura_settings.graphics_mode == AURA_GFX_ULTRA || direction == 0)
         return;
@@ -79,4 +92,64 @@ void aura_transition_slide(aura_nav_t *nav, int direction)
         if (i < frames)
             sleep(frame_delay);
     }
+
+    TRANSITION_LOG("slide", frames, start_tick);
+}
+
+/* T4 (Coverflow, L4): mismo truco seguro de "wipe" que aura_transition_slide
+ * (D-030) -- nunca se instala un viewport fuera de [0, AURA_SCREEN_WIDTH] --
+ * pero revelando desde AMBOS bordes hacia el centro en vez de desde uno
+ * solo, para que la entrada a Coverflow se sienta distinta de una
+ * navegacion de lista comun ("el contenido emerge de detras", L4). */
+void aura_transition_reveal(aura_nav_t *nav)
+{
+    int frames, frame_delay, i;
+    struct viewport vp;
+    struct viewport *saved;
+    long start_tick = current_tick;
+
+    if (aura_settings.graphics_mode == AURA_GFX_ULTRA)
+        return;
+
+    if (aura_settings.graphics_mode == AURA_GFX_FULL)
+    {
+        frames = 10;
+        frame_delay = HZ / 60;
+    }
+    else /* AURA_GFX_MINIMAL */
+    {
+        frames = 4;
+        frame_delay = HZ / 45;
+    }
+
+    for (i = 1; i <= frames; i++)
+    {
+        int half = (AURA_SCREEN_WIDTH / 2 * i) / frames;
+
+        viewport_set_defaults(&vp, SCREEN_MAIN);
+        vp.y = 0;
+        vp.height = AURA_SCREEN_HEIGHT;
+
+        /* Mitad izquierda: revela desde x=0 hacia el centro. */
+        vp.x = 0;
+        vp.width = half;
+        saved = lcd_set_viewport(&vp);
+        aura_screens_draw(nav);
+        lcd_set_viewport(saved);
+
+        /* Mitad derecha: revela desde el borde derecho hacia el
+         * centro. x+width se mantiene siempre en AURA_SCREEN_WIDTH. */
+        vp.x = AURA_SCREEN_WIDTH - half;
+        vp.width = half;
+        saved = lcd_set_viewport(&vp);
+        aura_screens_draw(nav);
+        lcd_set_viewport(saved);
+
+        lcd_update();
+
+        if (i < frames)
+            sleep(frame_delay);
+    }
+
+    TRANSITION_LOG("reveal", frames, start_tick);
 }
