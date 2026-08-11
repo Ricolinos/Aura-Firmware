@@ -85,6 +85,12 @@ int aura_widgets_scrollbar_pending(void);
  * visualmente, sobrecargaba el bucle principal sin necesidad). */
 int aura_widgets_scrollbar_animating(void);
 
+/* True mientras la pastilla de seleccion todavia esta en pleno resorte
+ * (SS9.2, Fase 28) -- aura_main.c pide la cadencia fina de 20fps
+ * mientras dure, a diferencia de la barra de deslizamiento, el resorte
+ * entero (no solo sus extremos) es la parte visualmente relevante. */
+int aura_widgets_pill_animating(void);
+
 /* Dibuja el icono <name>-<size>.bmp del tema activo en (x, y) via
  * lcd_bitmap_transparent(). Devuelve su ancho (0 si no se encontro el
  * archivo). Compartido por aura_widgets_draw_list() y aura_statusbar.c

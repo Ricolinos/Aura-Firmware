@@ -14,6 +14,7 @@
 #include "apple2026_tokens.h"
 #include "aura_statusbar.h"
 #include "aura_lang.h"
+#include "aura_motion.h"
 
 /* Layout: barra de estado arriba (Fase 13, PLAN-UX.md), filas de lista
  * debajo. Pantalla dividida izquierda/derecha (Fase 15, L2): en
@@ -298,6 +299,69 @@ static void draw_scrollbar(int width, int visible, int count, int first)
                                  SCROLLBAR_RADIUS, color, a26_color(A26_SHELL_BG));
 }
 
+/* Pastilla de seleccion animada (doc SS6/SS9.2, Fase 28): antes saltaba
+ * de fila en fila; ahora se desplaza con el resorte corto con sobrepaso
+ * de aura_motion.c. Estado global -- una sola lista visible a la vez,
+ * mismo patron que el resto de aura_widgets. Se reinicia sin animar
+ * (aparece ya en su lugar) al cambiar de pantalla, para no arrastrar la
+ * posicion de una lista distinta. */
+#define PILL_SPRING_TICKS (HZ * AURA_MOTION_SPRING_MS / 1000)
+
+static const aura_list_item_t *s_pill_items;
+static int s_pill_drawn_y = -1;    /* donde se dibujo el cuadro anterior */
+static int s_pill_anim_from_y;
+static int s_pill_anim_to_y;
+static long s_pill_anim_since;
+
+static int pill_animated_y(const aura_list_item_t *items, int target_y)
+{
+    long elapsed;
+    int eased;
+
+    if (items != s_pill_items)
+    {
+        s_pill_items = items;
+        s_pill_anim_from_y = target_y;
+        s_pill_anim_to_y = target_y;
+        s_pill_anim_since = current_tick - PILL_SPRING_TICKS; /* ya "asentada" */
+    }
+    else if (target_y != s_pill_anim_to_y)
+    {
+        /* Redirige desde donde la pastilla esta REALMENTE dibujada, no
+         * desde el destino anterior -- si el usuario sigue girando la
+         * rueda antes de que termine el resorte, continua desde el
+         * punto visual actual en vez de saltar. */
+        s_pill_anim_from_y = s_pill_drawn_y;
+        s_pill_anim_to_y = target_y;
+        s_pill_anim_since = current_tick;
+    }
+
+    if (s_pill_anim_from_y == s_pill_anim_to_y)
+    {
+        s_pill_drawn_y = target_y;
+        return target_y;
+    }
+
+    elapsed = current_tick - s_pill_anim_since;
+    if (elapsed >= PILL_SPRING_TICKS)
+    {
+        s_pill_drawn_y = s_pill_anim_to_y;
+        return s_pill_drawn_y;
+    }
+
+    eased = aura_motion_spring(elapsed, PILL_SPRING_TICKS);
+    s_pill_drawn_y = s_pill_anim_from_y
+        + (s_pill_anim_to_y - s_pill_anim_from_y) * eased / 256;
+    return s_pill_drawn_y;
+}
+
+int aura_widgets_pill_animating(void)
+{
+    long elapsed = current_tick - s_pill_anim_since;
+    return s_pill_anim_from_y != s_pill_anim_to_y
+        && elapsed >= 0 && elapsed < PILL_SPRING_TICKS;
+}
+
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected)
 {
@@ -328,24 +392,32 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
 
+    /* Pastilla de fila activa (doc SS5.1), dibujada ANTES que el
+     * contenido de las filas -- no dentro del loop de la fila
+     * seleccionada. El resorte (SS9.2) puede tenerla en transito sobre
+     * la posicion de OTRA fila mientras se desliza; si se dibujara
+     * dentro de esa misma iteracion tapiaria el texto ya pintado de la
+     * fila que esta cruzando (bug real, visto en pantalla, no en
+     * teoria). Dibujando la pastilla primero y el texto de todas las
+     * filas despues, ninguna fila pierde su contenido aunque la
+     * pastilla este pasando por encima. */
+    if (selected >= first && selected < first + visible)
+    {
+        int sel_row_y = LIST_TOP + (selected - first) * ROW_HEIGHT;
+        int pill_y = pill_animated_y(items, sel_row_y + PILL_MARGIN_Y);
+        a26_shell_fill_rounded_rect(PILL_MARGIN_X, pill_y,
+                                     width - 2 * PILL_MARGIN_X,
+                                     ROW_HEIGHT - 2 * PILL_MARGIN_Y,
+                                     PILL_RADIUS,
+                                     a26_color(A26_SELECTION_FILL),
+                                     a26_color(A26_SHELL_BG));
+    }
+
     for (i = first; i < count && i < first + visible; i++)
     {
         int row_y = LIST_TOP + (i - first) * ROW_HEIGHT;
         int is_selected = (i == selected);
         int text_x = ROW_PAD_X;
-
-        /* Fila activa: pastilla redondeada (doc SS5.1, no la barra de
-         * ancho completo de 2007) con el contenido (icono, texto,
-         * checkmark) en el color de contraste de la marca. */
-        if (is_selected)
-        {
-            a26_shell_fill_rounded_rect(PILL_MARGIN_X, row_y + PILL_MARGIN_Y,
-                                         width - 2 * PILL_MARGIN_X,
-                                         ROW_HEIGHT - 2 * PILL_MARGIN_Y,
-                                         PILL_RADIUS,
-                                         a26_color(A26_SELECTION_FILL),
-                                         a26_color(A26_SHELL_BG));
-        }
 
         if (items[i].icon_name)
         {

@@ -314,6 +314,7 @@ aura/aura_coverflow.c
 aura/aura_lang.c
 aura/aura_lrc.c
 aura/aura_manifest.c
+aura/aura_motion.c
 aura/aura_music.c
 aura/aura_nav.c
 aura/aura_nowplaying.c

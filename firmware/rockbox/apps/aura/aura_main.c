@@ -84,43 +84,66 @@ void aura_main(void)
         a26_shell_stamp_corners();
         lcd_update();
 
-        if (aura_nav_current(&nav) == AURA_SCREEN_NOWPLAYING
-            && aura_nowplaying_active()
-            && (!(audio_status() & AUDIO_STATUS_PAUSE) || aura_nowplaying_needs_tick()))
-        {
-            timeout_ticks = HZ / 2;
-        }
-
         /* aura_music_db_ready() dispara el escaneo inicial de la
          * biblioteca la primera vez que se llama (D-021) -- se llama
          * aca, no solo al entrar a Musica, para que empiece en cuanto
          * arranca Aura (como en un iPod real) y para que las pantallas
          * de navegacion musical se refresquen solas en cuanto termina,
          * en vez de quedar mostrando "Preparando la biblioteca..."
-         * indefinidamente hasta el proximo boton. */
+         * indefinidamente hasta el proximo boton. No es una animacion
+         * (no hay nada que ver en pantalla mientras tanto) asi que NO
+         * se gatea con lcd_active() -- el escaneo debe seguir avanzando
+         * aunque la pantalla este dormida, igual que en un dispositivo
+         * real. */
         if (!aura_music_db_ready() && timeout_ticks < 0)
             timeout_ticks = HZ / 2;
 
-        /* Retardo de 1s del panel derecho en pantallas divididas (L3,
-         * Fase 15): mientras el icono nuevo todavia no se mostro, hay
-         * que seguir redibujando aunque el usuario no toque nada, si
-         * no el cambio pendiente nunca llega a la pantalla hasta el
-         * proximo boton. */
-        if (aura_widgets_panel_pending() && timeout_ticks < 0)
-            timeout_ticks = HZ / 4;
+        /* Puerta de energia central (doc SS6/CLAUDE.md, Fase 28): toda
+         * animacion visual se detiene con la pantalla dormida -- un
+         * unico chequeo aca, no uno por cada *_pending() (evita repetir
+         * la misma condicion en cada modulo y que alguno se olvide).
+         * Redibujar a un ritmo fijo con la pantalla apagada no sirve
+         * para nada (nadie lo ve) y solo gasta batería y CPU -- el mismo
+         * problema de fondo que ya causo un desborde real de la cola de
+         * botones una vez (D-074), asi que tambien es defensivo. */
+        if (lcd_active())
+        {
+            if (aura_nav_current(&nav) == AURA_SCREEN_NOWPLAYING
+                && aura_nowplaying_active()
+                && (!(audio_status() & AUDIO_STATUS_PAUSE) || aura_nowplaying_needs_tick()))
+            {
+                timeout_ticks = HZ / 2;
+            }
 
-        /* Fundido de la barra de deslizamiento (SS5.3): la cadencia fina
-         * de 20fps (doc SS6) solo hace falta en los tramos reales de
-         * entrada/salida -- pending() a secas cubre tambien la
-         * persistencia (alpha fijo, nada que redibujar), y pedir 20fps
-         * ahi de mas fue justamente lo que sobrecargo el bucle principal
-         * y desbordo la cola de botones con el simulador interactivo
-         * (D-074). Con solo pending() (sin animating()) alcanza la misma
-         * cadencia gruesa que ya usa el debounce del panel. */
-        if (aura_widgets_scrollbar_animating() && timeout_ticks < 0)
-            timeout_ticks = HZ / 20;
-        else if (aura_widgets_scrollbar_pending() && timeout_ticks < 0)
-            timeout_ticks = HZ / 4;
+            /* Retardo de 1s del panel derecho en pantallas divididas (L3,
+             * Fase 15): mientras el icono nuevo todavia no se mostro, hay
+             * que seguir redibujando aunque el usuario no toque nada, si
+             * no el cambio pendiente nunca llega a la pantalla hasta el
+             * proximo boton. */
+            if (aura_widgets_panel_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
+
+            /* Fundido de la barra de deslizamiento (SS5.3): la cadencia
+             * fina de 20fps (doc SS6) solo hace falta en los tramos
+             * reales de entrada/salida -- pending() a secas cubre
+             * tambien la persistencia (alpha fijo, nada que redibujar),
+             * y pedir 20fps ahi de mas fue justamente lo que sobrecargo
+             * el bucle principal y desbordo la cola de botones con el
+             * simulador interactivo (D-074). Con solo pending() (sin
+             * animating()) alcanza la misma cadencia gruesa que ya usa
+             * el debounce del panel. */
+            if (aura_widgets_scrollbar_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+            else if (aura_widgets_scrollbar_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
+
+            /* Resorte de la pastilla de seleccion (SS9.2, Fase 28): a
+             * diferencia de la barra de deslizamiento, aca el tramo
+             * entero (no solo la entrada/salida) es la parte que se ve
+             * -- 20fps durante los ~380ms completos. */
+            if (aura_widgets_pill_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+        }
 
         button = next_button(timeout_ticks);
 
