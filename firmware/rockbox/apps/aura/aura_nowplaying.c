@@ -298,12 +298,9 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
         if (s_lrc_valid)
             s_show_lyrics = !s_show_lyrics;
         break;
-    case BUTTON_PLAY:
-        if (audio_status() & AUDIO_STATUS_PAUSE)
-            audio_resume();
-        else
-            audio_pause();
-        break;
+    /* BUTTON_PLAY ya NO se maneja aca -- es global desde Fase 29
+     * (aura_screens_handle_button() lo intercepta antes de despachar a
+     * cualquier pantalla, doc de comportamiento SS7). */
     case BUTTON_RIGHT:
         audio_next();
         break;

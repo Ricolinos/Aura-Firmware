@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "button.h"
+#include "audio.h"
 #include "lcd.h"
 #include "backlight.h"
 #include "settings.h"
@@ -25,6 +26,8 @@
 #include "aura_photos.h"
 #include "aura_video.h"
 #include "aura_manifest.h"
+#include "aura_main.h"
+#include "aura_wheel.h"
 
 #define MAX_MENU_ENTRIES 16
 
@@ -922,6 +925,29 @@ void aura_screens_draw(aura_nav_t *nav)
 
 /* -- Entrada --------------------------------------------------------------- */
 
+/* Dinamica de rueda (doc SS7, Fase 29): cuantos items avanza un
+ * SCROLL_FWD/BACK depende de que tan rapido se esta girando de verdad
+ * -- aura_wheel_step() traduce la velocidad angular del ultimo evento
+ * (aura_main_wheel_velocity(), leida del driver real del clickwheel) a
+ * 1-3 items. Con velocidad 0 (arnes de botones pautado, eventos
+ * sinteticos) siempre da 1 -- degrada al comportamiento de antes. */
+static int wheel_advance(int sel, int count, int direction)
+{
+    int step, next;
+
+    if (count <= 0)
+        return sel; /* lista vacia: nada que recorrer (mismo comportamiento que antes) */
+
+    step = aura_wheel_step((int)aura_main_wheel_velocity());
+    next = sel + direction * step;
+
+    if (next < 0)
+        next = 0;
+    if (next > count - 1)
+        next = count - 1;
+    return next;
+}
+
 static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long button)
 {
     const nav_entry_t *entries;
@@ -931,12 +957,10 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < count - 1)
-            aura_nav_set_selection(nav, sel + 1);
+        aura_nav_set_selection(nav, wheel_advance(sel, count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        if (sel > 0)
-            aura_nav_set_selection(nav, sel - 1);
+        aura_nav_set_selection(nav, wheel_advance(sel, count, -1));
         break;
     case BUTTON_SELECT:
         /* Filas booleanas (Aleatorio, Clicker): SELECT invierte el
@@ -970,12 +994,10 @@ static void handle_choice_list(aura_nav_t *nav, aura_screen_id_t screen, long bu
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < count - 1)
-            aura_nav_set_selection(nav, sel + 1);
+        aura_nav_set_selection(nav, wheel_advance(sel, count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        if (sel > 0)
-            aura_nav_set_selection(nav, sel - 1);
+        aura_nav_set_selection(nav, wheel_advance(sel, count, -1));
         break;
     case BUTTON_SELECT:
         apply_choice(screen, sel);
@@ -1031,12 +1053,10 @@ static void handle_music_browse(aura_nav_t *nav, aura_screen_id_t screen, long b
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < count - 1)
-            aura_nav_set_selection(nav, sel + 1);
+        aura_nav_set_selection(nav, wheel_advance(sel, count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        if (sel > 0)
-            aura_nav_set_selection(nav, sel - 1);
+        aura_nav_set_selection(nav, wheel_advance(sel, count, -1));
         break;
     case BUTTON_SELECT:
         if (count == 0)
@@ -1104,6 +1124,24 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
     int depth_before = aura_nav_depth(nav);
+
+    /* PLAY global (doc de comportamiento SS7, Fase 29): reproducir/
+     * pausar funciona desde CUALQUIER pantalla, no solo Ahora suena --
+     * en el despachador central, no repetido por pantalla. Antes SOLO
+     * funcionaba dentro de Ahora suena (aura_nowplaying_handle_button);
+     * en el resto de la app BUTTON_PLAY no hacia nada, un vacio real
+     * contra el doc, no una decision. Mismo guard que ya usaba
+     * aura_nowplaying_active(): sin nada cargado (audio_status()==0)
+     * no hace nada, no fuerza una pausa sin sentido. */
+    if (button == BUTTON_PLAY)
+    {
+        int status = audio_status();
+        if (status & AUDIO_STATUS_PAUSE)
+            audio_resume();
+        else if (status & AUDIO_STATUS_PLAY)
+            audio_pause();
+        return;
+    }
 
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
         handle_nav_list(nav, screen, button);

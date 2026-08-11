@@ -653,4 +653,22 @@ Ejecutada de forma autónoma, mismo permiso explícito del usuario que D-073/D-0
 
 ---
 
+## D-077 — Fase 29 (PLAN-APPLE2026.md): dinámica de rueda real, PLAY global, reflejo compartido; Quickscreen y sombra diferidos
+
+Ejecutada de forma autónoma, mismo permiso que D-073/D-075/D-076.
+
+**Dinámica de rueda con velocidad real, no inventada**: investigado el driver real del clickwheel (`firmware/target/arm/ipod/button-clickwheel.c`, `HAVE_SCROLLWHEEL` -- activo en ipod6g) antes de escribir una sola línea -- **ya calcula y suaviza la velocidad angular en grados/segundo** y la manda como dato adjunto de cada `BUTTON_SCROLL_FWD/BACK` (`button_get_data() & 0xFFFFFF`). No hacía falta reinventar la medición de velocidad a partir de timing entre eventos: `aura_wheel.c` (nuevo, C99 puro, sin deps de Rockbox) solo traduce esa velocidad real a decisión de navegación -- `aura_wheel_step()` (v², tope ×3, 215 tests host-side) y `aura_wheel_should_hop_letters()` (umbral 420°/s, doc SS7, sin consumidor todavía -- no hay ninguna lista indexada A-Z en Aura, mismo motivo que D-073 difirió el riel). `aura_main.c` expone la velocidad del último scroll vía `aura_main_wheel_velocity()`; `handle_nav_list`/`handle_choice_list`/`handle_music_browse` la consumen a través de un `wheel_advance()` compartido. **Los eventos sintéticos (arnés de botones pautado, `sim_tasks.c`) siempre reportan velocidad 0** -- verificado que el comportamiento con el arnés es idéntico a antes (1 item por paso); la aceleración real solo se puede ver con interacción viva (mouse wheel sobre la ventana del simulador, o hardware real), no hay forma de verificarla headless.
+
+**PLAY global**: auditoría real encontró que `BUTTON_PLAY` solo funcionaba dentro de Ahora suena (`aura_nowplaying_handle_button`) -- en cualquier otra pantalla no hacía nada, un vacío real contra el doc de comportamiento SS7 ("PLAY en cualquier lista es reproducir/pausar global"), no una decisión. Interceptado en `aura_screens_handle_button()` antes de despachar a cualquier pantalla -- un solo punto, no repetido por pantalla. El case redundante en `aura_nowplaying.c` se eliminó (no queda como código muerto). Mismo guard que ya usaba `aura_nowplaying_active()`: sin nada cargado no hace nada.
+
+**Reflejo compartido, con bug de spec real corregido de paso**: `aura_albumart.c` ya tenía una implementación de reflejo (50% de alto, D-057) pero el doc de diseño (SS5.4) pide 35% -- nadie lo había actualizado. Extraído a `aura_art.c`/`.h` (nuevo módulo, comparte el perfil de dependencias de `lcd.h` con `aura_albumart.c`, no es host-testable como nav/motion/wheel) con la fracción corregida; `aura_coverflow.c` (el único consumidor real hoy, vía `blit_dimmed`) actualizado en buffer y llamada de dibujo. Verificado con una captura real: música de prueba instalada en el disco simulado, tagcache reconstruido, Coverflow mostrando la carátula con su reflejo al 35% -- no solo "compila".
+
+**Deliberadamente diferidos, con razón, no en silencio**:
+- **Quickscreen** (rueda=volumen, MENU+PLAY=brillo, doc SS7): requiere un gesto de disparo (mantener presionado) que **no existe en el vocabulario de botones de Aura hoy** -- toda la app distingue solo pulsación/repetición, nunca "hold" como gesto propio con su propia ventana de tiempo. Construirlo exige una máquina de estados de temporización nueva en el bucle principal, no una reutilización de piezas existentes (la cápsula de volumen de Ahora suena sí existe y podría generalizarse, pero sin el disparador no tiene desde dónde invocarse). Alcance real de su propio pase, no un agregado de cierre de fase.
+- **Sombra por campo de distancia** (doc SS5.4, caída 2px): cero implementación existente en ningún archivo del árbol, y **cero consumidor real** que la necesite hoy (a diferencia del reflejo, que ya tenía a Coverflow usándolo). Construir una utilidad de sombreado sin nada real donde aplicarla ni forma de verla en pantalla sería trabajo especulativo no verificable -- mismo criterio que ya excluyó el contenedor modal genérico en D-073.
+
+**Aceptación**: sim compila limpio (0 warnings nuevos); 95/95 + 132 + 215 tests host-side. Verificado en el simulador: navegación de listas sin regresión con el arnés pautado (velocidad 0 -- 1 item por paso, idéntico a antes); reflejo de Coverflow al 35% con música de prueba real instalada y tagcache reconstruido.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

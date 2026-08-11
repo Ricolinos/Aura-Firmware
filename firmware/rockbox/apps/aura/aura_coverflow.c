@@ -9,6 +9,7 @@
 #include "aura_coverflow.h"
 #include "aura_music.h"
 #include "aura_albumart.h"
+#include "aura_art.h"
 #include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
@@ -33,12 +34,17 @@
 #define CF_VISIBLE_RADIUS 2
 #define CF_CACHE_SLOTS    8
 #define CF_SIDE_FADE      130 /* de 255 */
+/* Alto del reflejo en tiempo de compilacion (Fase 29, doc SS5.4: 35%) --
+ * mismo calculo que aura_art_reflection_height(), pero constante en
+ * tiempo de compilacion (hace falta para dimensionar el buffer estatico
+ * de cada slot). */
+#define CF_REFLECTION_H   (CF_COVER_SIZE * AURA_ART_REFLECTION_HEIGHT_PCT / 100)
 
 typedef struct {
     int album_index; /* -1 = slot libre/no cargado */
     aura_albumart_t art;
     unsigned char cover_buf[CF_COVER_SIZE * CF_COVER_SIZE * sizeof(fb_data)];
-    unsigned char reflection_buf[CF_COVER_SIZE * (CF_COVER_SIZE / 2) * sizeof(fb_data)];
+    unsigned char reflection_buf[CF_COVER_SIZE * CF_REFLECTION_H * sizeof(fb_data)];
 } cf_slot_t;
 
 static cf_slot_t s_slots[CF_CACHE_SLOTS];
@@ -182,7 +188,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
             blit_dimmed((const fb_data *)slot->art.cover_data,
                         CF_COVER_SIZE, CF_COVER_SIZE, x, y, fade);
             blit_dimmed((const fb_data *)slot->art.reflection_data,
-                        CF_COVER_SIZE, CF_COVER_SIZE / 2, x, y + CF_COVER_SIZE, fade);
+                        CF_COVER_SIZE, CF_REFLECTION_H, x, y + CF_COVER_SIZE, fade);
         }
         else
         {

@@ -11,6 +11,7 @@
 
 #include "aura_albumart.h"
 #include "apple2026_shell.h"
+#include "aura_art.h"
 
 /* Buffer de trabajo para decodificar+remuestrear (FORMAT_RESIZE
  * necesita bastante mas espacio que el bitmap final, ver
@@ -49,38 +50,13 @@ static bool find_any_track_in_album(int32_t album_seek, char *path, size_t path_
 
 static void generate_reflection(const aura_albumart_t *art)
 {
-    fb_data *cover = (fb_data *)art->cover_data;
-    fb_data *refl = (fb_data *)art->reflection_data;
-    int size = art->size;
-    int refl_h = size / 2;
-    unsigned bg = a26_color(A26_SHELL_BG);
-    int bg_r = RGB_UNPACK_RED(bg);
-    int bg_g = RGB_UNPACK_GREEN(bg);
-    int bg_b = RGB_UNPACK_BLUE(bg);
-    int y, x;
-
-    for (y = 0; y < refl_h; y++)
-    {
-        /* Fila y del reflejo = fila (size-1-y) de la caratula, invertida
-         * verticalmente, difuminada hacia el fondo segun se aleja. */
-        fb_data *src_row = cover + (size_t)(size - 1 - y) * size;
-        fb_data *dst_row = refl + (size_t)y * size;
-        int fade = 255 - (255 * y) / refl_h; /* 255=espejo nitido .. 0=fondo puro */
-
-        for (x = 0; x < size; x++)
-        {
-            unsigned px = src_row[x];
-            int r = RGB_UNPACK_RED(px);
-            int g = RGB_UNPACK_GREEN(px);
-            int b = RGB_UNPACK_BLUE(px);
-
-            r = bg_r + ((r - bg_r) * fade) / 255;
-            g = bg_g + ((g - bg_g) * fade) / 255;
-            b = bg_b + ((b - bg_b) * fade) / 255;
-
-            dst_row[x] = LCD_RGBPACK(r, g, b);
-        }
-    }
+    /* Delega en el modulo compartido (Fase 29, D-076/D-077): esta era la
+     * unica implementacion del sistema hasta ahora, extraida para que
+     * Cover Flow (aura_coverflow.c) y Ahora suena (Fase 30) usen la
+     * misma en vez de reimplementarla cada uno. */
+    aura_art_generate_reflection((const fb_data *)art->cover_data,
+                                  (fb_data *)art->reflection_data,
+                                  art->size, a26_color(A26_SHELL_BG));
 }
 
 bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)

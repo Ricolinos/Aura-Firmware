@@ -8,4 +8,9 @@
 
 void aura_main(void) NORETURN_ATTR;
 
+/* Velocidad angular (grados/seg) del ultimo BUTTON_SCROLL_FWD/BACK
+ * procesado -- 0 para cualquier otro boton o para eventos sinteticos sin
+ * dato real (doc SS7, aura_wheel.h la consume). */
+long aura_main_wheel_velocity(void);
+
 #endif /* AURA_MAIN_H */

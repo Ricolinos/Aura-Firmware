@@ -14,6 +14,21 @@
 #include "aura_music.h"
 #include "aura_widgets.h"
 
+/* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
+ * calculada y suavizada por el driver real del clickwheel
+ * (firmware/target/arm/ipod/button-clickwheel.c, HAVE_SCROLLWHEEL) y
+ * leida via button_get_data() antes de que otro button_get() la pise
+ * (button_data es una variable global de button_queue.c, no una cola).
+ * Los eventos sinteticos (arnes de botones pautado, sim_tasks.c) SIEMPRE
+ * la reportan en 0 -- aura_wheel_step() ya trata 0 como "girar lento",
+ * asi que degrada bien sin dato real. */
+static long s_wheel_velocity;
+
+long aura_main_wheel_velocity(void)
+{
+    return s_wheel_velocity;
+}
+
 /* Boton crudo normalizado: se ignoran eventos de soltar (BUTTON_REL) y
  * se trata un repeat igual que una pulsacion nueva (mismo idioma que
  * usa el resto de Rockbox, ver apps/action.c). timeout_ticks < 0 =
@@ -28,7 +43,12 @@ static long next_button(int timeout_ticks)
                                       : button_get_w_tmo(timeout_ticks);
         if (b & BUTTON_REL)
             continue;
-        return b & ~BUTTON_REPEAT;
+
+        b &= ~BUTTON_REPEAT;
+        s_wheel_velocity = (b == BUTTON_SCROLL_FWD || b == BUTTON_SCROLL_BACK)
+            ? (button_get_data() & 0xFFFFFF)
+            : 0;
+        return b;
     }
 }
 

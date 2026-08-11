@@ -7,12 +7,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Bitmap cuadrado de lado `size` mas su reflejo (mismo ancho, la mitad
- * de alto) ya pre-renderizado -- ver aura_albumart_load(). */
+/* Bitmap cuadrado de lado `size` mas su reflejo (mismo ancho, alto =
+ * aura_art_reflection_height(size) -- 35% de `size`, doc SS5.4) ya
+ * pre-renderizado -- ver aura_albumart_load(). */
 typedef struct {
     int size;
     unsigned char *cover_data;      /* size*size, formato nativo del LCD */
-    unsigned char *reflection_data; /* size*(size/2) */
+    unsigned char *reflection_data; /* size*aura_art_reflection_height(size) */
     bool valid;
 } aura_albumart_t;
 
@@ -25,9 +26,10 @@ typedef struct {
  *
  * El llamador es dueno de la memoria: antes de llamar debe fijar
  * out->size y out->cover_data/out->reflection_data apuntando a
- * buffers de al menos size*size*FB_DATA_SZ y size*(size/2)*FB_DATA_SZ
- * bytes respectivamente (para poder mantener varias caratulas
- * cacheadas a la vez, p.ej. en Coverflow). */
+ * buffers de al menos size*size*FB_DATA_SZ y
+ * size*aura_art_reflection_height(size)*FB_DATA_SZ bytes respectivamente
+ * (para poder mantener varias caratulas cacheadas a la vez, p.ej. en
+ * Coverflow). */
 bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out);
 
 #endif /* AURA_ALBUMART_H */
