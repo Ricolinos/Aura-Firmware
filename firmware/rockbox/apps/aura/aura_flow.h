@@ -58,9 +58,11 @@ int aura_flow_fcos(int iangle);
 /* -- Proyeccion por columnas -------------------------------------------- */
 
 /* Un slide a proyectar: angulo (unidades IANGLE, 0 = de frente a la
- * camara), distancia adicional de camara en punto fijo (0 = el centro,
- * ver zoom en pictureflow.c) y posicion horizontal de su centro en
- * punto fijo (coordenadas de pantalla, PFreal). */
+ * camara), distancia adicional de camara (0 = posicion de reposo -- SIN
+ * escalar por AURA_FLOW_ONE, es un entero simple igual que
+ * slide_data.distance en pictureflow.c; aura_flow_begin_projection() lo
+ * escala internamente) y posicion horizontal de su centro en punto fijo
+ * (coordenadas de pantalla, PFreal). */
 typedef struct {
     int angle;
     int distance;

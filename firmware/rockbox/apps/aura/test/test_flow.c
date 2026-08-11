@@ -112,8 +112,11 @@ static void test_rotated_slide_terminates(void)
 {
     /* Un slide lateral (angulo ~45 grados, IANGLE_MAX/8=128) tambien
      * debe terminar en un numero acotado de columnas -- es el caso que
-     * usa la recurrencia de Mobius (has_rotation), no el paso fijo. */
-    aura_flow_slide_t slide = { 128, AURA_FLOW_ONE * 20, AURA_FLOW_ONE * 40 };
+     * usa la recurrencia de Mobius (has_rotation), no el paso fijo.
+     * `distance` es un entero simple (NO preescalado por ONE, ver
+     * aura_flow.h) -- 5 es un valor de prueba chico, no un numero real
+     * de ningun layout. */
+    aura_flow_slide_t slide = { 128, 5, AURA_FLOW_ONE * 40 };
     aura_flow_projection_t proj;
     int width = 80;
     int steps = 0;
@@ -144,6 +147,49 @@ static void test_vertical_scale_is_positive(void)
     CHECK(aura_flow_vertical_scale(&proj) > 0);
 }
 
+/* Parametros reales del layout "en reposo" de un coverflow clasico
+ * (pictureflow.c reset_slides(), resueltos a numeros concretos para
+ * 320x240 -- ver D-079/D-080 en DECISIONS.md para la derivacion
+ * completa): inclinacion ~70 grados para las tapas laterales, separadas
+ * `offsetX` del centro. Sirve de documentacion viva ademas de test: si
+ * alguien cambia AURA_FLOW_DISPLAY_W o el tamano de pantalla, este test
+ * es la primera señal de que itilt/offsetX tambien hay que recalcularlos. */
+#define TEST_ITILT   199    /* 70 grados: 70*1024/360 */
+#define TEST_OFFSETX 144060 /* separacion centro-a-lateral, zoom=100 */
+
+static void test_realistic_side_slide_layout(void)
+{
+    aura_flow_slide_t center = { 0, 0, 0 };
+    aura_flow_slide_t left   = { TEST_ITILT, 0, -TEST_OFFSETX };
+    aura_flow_slide_t right  = { -TEST_ITILT, 0, TEST_OFFSETX };
+    aura_flow_projection_t proj;
+    int width = 56; /* CF_COVER_SIZE de aura_coverflow.c */
+    int steps;
+
+    aura_flow_begin_projection(&proj, &center, width);
+    CHECK(proj.screen_x < AURA_FLOW_SCREEN_W);
+
+    /* Las tapas laterales, inclinadas y corridas, tienen que seguir
+     * siendo processables sin colgarse -- si la compensacion de
+     * inclinacion (zo) estuviera mal, esto facilmente diverge o nunca
+     * marca "visible". */
+    aura_flow_begin_projection(&proj, &left, width);
+    if (proj.screen_x < AURA_FLOW_SCREEN_W)
+    {
+        steps = 0;
+        do { steps++; } while (aura_flow_advance_column(&proj) && steps < AURA_FLOW_SCREEN_W + 10);
+        CHECK(steps <= AURA_FLOW_SCREEN_W);
+    }
+
+    aura_flow_begin_projection(&proj, &right, width);
+    if (proj.screen_x < AURA_FLOW_SCREEN_W)
+    {
+        steps = 0;
+        do { steps++; } while (aura_flow_advance_column(&proj) && steps < AURA_FLOW_SCREEN_W + 10);
+        CHECK(steps <= AURA_FLOW_SCREEN_W);
+    }
+}
+
 int main(void)
 {
     test_fixed_point_basics();
@@ -152,6 +198,7 @@ int main(void)
     test_offscreen_slide_is_not_visible();
     test_rotated_slide_terminates();
     test_vertical_scale_is_positive();
+    test_realistic_side_slide_layout();
 
     printf("%d/%d checks OK\n", checks - failures, checks);
     if (failures)

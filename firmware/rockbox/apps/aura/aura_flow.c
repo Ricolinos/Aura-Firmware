@@ -43,6 +43,16 @@ int aura_flow_fdiv(int num, int den)
     return num / den;
 }
 
+/* fmuln de pictureflow.c: multiplicacion preescalada, para casos donde
+ * se conoce de antemano cuantos bits bajos van a quedar vacios (evita
+ * desbordar el intermedio de 32 bits sin necesitar 64 bits). Portada tal
+ * cual, con los mismos corrimientos (SHIFT-2, 0) que usa render_slide()
+ * para el termino de compensacion de inclinacion. */
+static int fmuln(int a, int b, int ps1, int ps2)
+{
+    return (int)((long)(a >> ps1) * (long)(b >> ps2)) >> (AURA_FLOW_SHIFT - ps1 - ps2);
+}
+
 /* Tabla de seno de pictureflow.c (33 muestras, un cuarto de vuelta cada
  * 8 entradas -- IANGLE_MAX=1024 por vuelta completa). Portada tal cual,
  * NO regenerada: son las mismas constantes que ya probo el firmware
@@ -82,7 +92,19 @@ void aura_flow_begin_projection(aura_flow_projection_t *proj,
 {
     int cosr = aura_flow_fcos(slide->angle);
     int sinr = aura_flow_fsin(slide->angle);
-    int zo = slide->distance;
+    int abs_sinr = sinr < 0 ? -sinr : sinr;
+    /* zo real de render_slide() (pictureflow.c): "PFREAL_ONE*distance +
+     * CAM_DIST_R*100/zoom - CAM_DIST_R - fmuln(MAXSLIDE_LEFT_R,
+     * fabs(sinr), SHIFT-2, 0)". Aura fija zoom=100 siempre (geometria
+     * fija, ver aura_flow.h), asi que el termino del medio se cancela
+     * (CAM_DIST_R*100/100 - CAM_DIST_R = 0) y queda afuera de la formula
+     * -- no es una omision, es la misma simplificacion que ya declara el
+     * header para el resto de las constantes de camara. Sin este
+     * termino de compensacion, los slides inclinados (angle != 0)
+     * proyectan mal: es lo que empuja la cara tilteada hacia atras para
+     * que no quede recortada contra la camara. */
+    int zo = AURA_FLOW_ONE * slide->distance
+           - fmuln(AURA_FLOW_MAXSLIDE_LEFT_R, abs_sinr, AURA_FLOW_SHIFT - 2, 0);
     int slide_left = -slide_width_px * AURA_FLOW_HALF + AURA_FLOW_HALF;
     int xs = slide_left;
     int xp, xi;
