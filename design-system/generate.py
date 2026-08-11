@@ -228,22 +228,26 @@ def generate_fonts(tokens):
         print(f"   {style_name} ({face} @ {size}px) -> {out_fnt.name}")
 
 
-"""Supersampleo antes de umbralizar (SS4 del doc de diseno, corregido tras
-detectar "dientes de sierra" reales en el simulador -- no una suposicion).
-`lcd_bitmap_transparent()` solo admite transparencia binaria por clave de
-color exacta (D-010): un pixel es el color del icono o pura clave magenta,
-sin mezcla parcial posible en tiempo de dibujo. Eso no impide que el
-BORDE se calcule con precision -- el problema real no era "sin
-antialias", era umbralizar el alfa que AppKit ya antialiaseo A LA
-RESOLUCION FINAL (20px), donde una curva solo tiene un puñado de pixeles
-para describirse. Pedirle a AppKit el simbolo a 4x el tamano final y
-reducirlo con un filtro de calidad (Pillow LANCZOS, que promedia
-cobertura real de subpixeles) antes de umbralizar da un borde mucho mas
-fiel a la curva real del glifo -- la umbralizacion final sigue siendo
-binaria (la restriccion de lcd_bitmap_transparent no cambia), pero decide
-cada pixel con informacion de cobertura de verdad en vez de con el
-antialias ya escaso de un render nativo a 20px."""
-SUPERSAMPLE = 8
+"""Supersampleo + composicion por cobertura (AUDITORIA-01 A-01, corrige
+D-075: el supersampleo de 8x mejoraba DONDE caia el borde, pero el paso
+siguiente seguia umbralizando el alfa a un solo bit -- 234 iconos por
+tema, cada uno con exactamente 1 tono de tinta, verificado por conteo
+real de colores, no a ojo). `lcd_bitmap_transparent()` solo admite
+transparencia binaria por clave de color exacta (D-010): un pixel es
+opaco o pura clave magenta, sin mezcla parcial en tiempo de DIBUJO. Eso
+no obliga a que el ASSET mismo sea binario -- se puede pre-componer la
+tinta contra el fondo conocido de cada tema en tiempo de GENERACION, y
+dejar la clave magenta solo para los pixeles de cobertura exactamente
+cero. El resultado sigue siendo un bitmap opaco de un solo plano (ningun
+cambio en el codigo C ni en lcd_bitmap_transparent), pero el borde ya no
+es una escalera: es una rampa real de tonos intermedios entre la tinta y
+el fondo, igual que produciria un antialias autentico.
+
+Pedirle a AppKit el simbolo a 16x el tamano final y reducirlo con un
+filtro de caja (Pillow BOX, promedio simple de cobertura de subpixeles
+-- sin el ringing que LANCZOS puede introducir en curvas muy pequenas)
+da un canal alfa de cobertura fiel a la forma real del glifo."""
+SUPERSAMPLE = 16
 
 
 def render_symbol_shapes(tokens, shapes_dir):
@@ -281,6 +285,14 @@ def render_symbol_shapes(tokens, shapes_dir):
     return len(jobs)
 
 
+# Umbral de la verificacion mecanica (AUDITORIA-01 A-01, punto 5): una
+# tira sana tiene decenas de tonos intermedios entre la tinta y el fondo;
+# 3 o menos significa que la composicion volvio a binarizarse en algun
+# paso. No es un numero estetico -- es el mismo chequeo que se corrio a
+# mano sobre la tira vieja y encontro 234/234 archivos con 1 solo tono.
+MIN_INK_TONES = 4
+
+
 def generate_icons(tokens):
     print("==> Generando iconos (out/icons/<tema>/*.bmp)")
     try:
@@ -298,20 +310,31 @@ def generate_icons(tokens):
     n_shapes = render_symbol_shapes(tokens, shapes_dir)
     print(f"   {n_shapes} formas renderizadas desde SF Symbols")
 
-    # Magenta = TRANSPARENT_COLOR de Rockbox (firmware/export/lcd.h). Los
-    # iconos se componen sobre este color marcador y se dibujan con
-    # lcd_bitmap_transparent(), asi funcionan igual sobre el fondo normal
-    # o sobre la barra de seleccion.
-    #
-    # AppKit antialiasea los bordes: si se compusiera directamente sobre
-    # el marcador magenta, esos pixeles quedarian en un magenta "casi
-    # puro" pero no exacto, y lcd_bitmap_transparent() (que compara color
-    # exacto) no los trataria como transparentes -- halo magenta
-    # alrededor de cada icono. Por eso se renderiza con alfa real y se
-    # umbraliza: alfa >= 128 -> color solido, si no -> magenta puro. Sin
-    # colores intermedios, sin halo.
-    ALPHA_THRESHOLD = 128
+    # Magenta = TRANSPARENT_COLOR de Rockbox (firmware/export/lcd.h),
+    # clave de transparencia binaria para lcd_bitmap_transparent()
+    # (D-010) -- se reserva EXCLUSIVAMENTE para pixeles de cobertura
+    # exactamente cero. Todo pixel con cobertura > 0 (incluido el borde
+    # mas tenue) se pre-compone contra el fondo real del tema/variante,
+    # nunca contra el marcador: asi el borde queda como una rampa de
+    # tonos reales en vez de un salto binario tinta/magenta.
     TRANSPARENT_RGB = (255, 0, 255)
+
+    # Fondo de composicion por variante: la normal ("") vive siempre
+    # sobre SHELL_BG (fila no seleccionada, o cualquier icono suelto
+    # fuera de listas); la "-on" existe especificamente "para la fila
+    # activa" (ver comment_variants en tokens.json) -- su unico uso
+    # nombrado es sobre la pastilla de seleccion, SELECTION_FILL. Es la
+    # lectura mas fiel al proposito documentado de cada variante, no una
+    # eleccion arbitraria -- ver AUDITORIA-01, seccion 0 (limitacion
+    # honesta: donde "-on" se reutiliza sobre SHELL_BG directo, como en
+    # Ahora suena, el borde queda pre-compuesto contra el fondo
+    # equivocado; la rampa sigue siendo muchisimo mas fiel que la
+    # escalera binaria de antes, y el caso primario -- la fila
+    # resaltada -- queda exacto).
+    VARIANT_BG_TOKEN = {"": "shell_bg", "-on": "selection_fill"}
+
+    tone_report = []  # (path, n_tonos) de cada bmp generado
+    fail_files = []
 
     for theme_name, colors in tokens["color"].items():
         theme_out = OUT / "icons" / theme_name
@@ -319,27 +342,64 @@ def generate_icons(tokens):
 
         for suffix, color_token in icon_cfg["variants"].items():
             fg_rgb = hex_to_rgb(colors[color_token])
+            bg_token = VARIANT_BG_TOKEN.get(suffix, "shell_bg")
+            bg_rgb = hex_to_rgb(colors[bg_token])
+
             for icon_key in icon_cfg["names"]:
                 for size_px in icon_cfg["sizes"].values():
                     src = Image.open(shapes_dir / f"{icon_key}-{size_px}.png").convert("RGBA")
                     # Reducir DESPUES de renderizar a SUPERSAMPLE x el
-                    # tamano final (ver nota de modulo mas arriba): LANCZOS
-                    # promedia la cobertura real de los subpixeles del
-                    # render en alta resolucion, asi el canal alfa que se
-                    # umbraliza abajo describe la curva real del glifo, no
-                    # el antialias ya escaso de un render nativo a 20px.
-                    src = src.resize((size_px, size_px), Image.LANCZOS)
-                    mask = src.getchannel("A").point(
-                        lambda a: 255 if a >= ALPHA_THRESHOLD else 0, mode="1"
-                    )
-                    out_img = Image.new("RGB", src.size, TRANSPARENT_RGB)
-                    out_img.paste(Image.new("RGB", src.size, fg_rgb), (0, 0), mask)
-                    out_img.save(theme_out / f"{icon_key}-{size_px}{suffix}.bmp", format="BMP")
+                    # tamano final (ver nota de modulo mas arriba): el
+                    # filtro de caja promedia la cobertura real de los
+                    # subpixeles del render en alta resolucion, asi el
+                    # canal alfa describe la curva real del glifo.
+                    src = src.resize((size_px, size_px), Image.BOX)
+                    coverage = src.getchannel("A")
+
+                    # Composicion por cobertura: donde coverage=255,
+                    # resultado=fg puro; donde coverage=0, resultado=bg
+                    # puro; en el medio, mezcla lineal -- exactamente lo
+                    # que Image.composite hace con una mascara en modo L.
+                    fg_img = Image.new("RGB", src.size, fg_rgb)
+                    bg_img = Image.new("RGB", src.size, bg_rgb)
+                    out_img = Image.composite(fg_img, bg_img, coverage)
+
+                    # Magenta SOLO en cobertura exactamente cero -- nunca
+                    # en un pixel de borde parcial (ese es justo el bug
+                    # que D-075 tuvo que evitar con el marcador exacto).
+                    zero_mask = coverage.point(lambda a: 255 if a == 0 else 0, mode="1")
+                    out_img.paste(Image.new("RGB", src.size, TRANSPARENT_RGB), (0, 0), zero_mask)
+
+                    out_path = theme_out / f"{icon_key}-{size_px}{suffix}.bmp"
+                    out_img.save(out_path, format="BMP")
+
+                    tones = {px for px in out_img.getdata() if px != TRANSPARENT_RGB}
+                    tone_report.append((str(out_path), len(tones)))
+                    if len(tones) < MIN_INK_TONES:
+                        fail_files.append((str(out_path), len(tones)))
 
         total = len(icon_cfg["names"]) * len(icon_cfg["sizes"]) * len(icon_cfg["variants"])
         print(f"   tema {theme_name}: {total} bmp "
               f"({len(icon_cfg['names'])} iconos x {len(icon_cfg['sizes'])} tamanos "
               f"x {len(icon_cfg['variants'])} variantes)")
+
+    # Verificacion mecanica de rampa (AUDITORIA-01 A-01, punto 5): no
+    # basta con "compila y corre" -- si el resultado sigue binarizado,
+    # el pipeline debe fallar ruidosamente, no dar por buena una tira
+    # que se ve identica a la version rota anterior.
+    tones_per_file = [n for _, n in tone_report]
+    avg_tones = sum(tones_per_file) / len(tones_per_file) if tones_per_file else 0
+    max_tones = max(tones_per_file) if tones_per_file else 0
+    print(f"   verificacion de rampa: promedio {avg_tones:.1f} tonos/archivo, "
+          f"maximo {max_tones}, minimo aceptado {MIN_INK_TONES}")
+
+    if fail_files:
+        detail = "\n".join(f"  {p}: {n} tono(s)" for p, n in fail_files[:20])
+        more = f"\n  ... y {len(fail_files) - 20} mas" if len(fail_files) > 20 else ""
+        die(
+            f"verificacion de rampa fallo -- {len(fail_files)} icono(s) siguen "
+            f"binarizados (< {MIN_INK_TONES} tonos de tinta):\n{detail}{more}"
+        )
 
     shutil.rmtree(shapes_dir)
 
