@@ -2,7 +2,7 @@
 #include "aura_settings.h"
 
 static const char *const strings_es[AURA_STR_COUNT] = {
-    [AURA_STR_MUSIC]              = "Musica",
+    [AURA_STR_MUSIC]              = "Música",
     [AURA_STR_VIDEOS]             = "Videos",
     [AURA_STR_PHOTOS]             = "Fotos",
     [AURA_STR_NOWPLAYING]         = "Ahora suena",
@@ -10,7 +10,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
 
     [AURA_STR_SETTINGS_THEME]       = "Tema",
     [AURA_STR_SETTINGS_ANIMATIONS]  = "Animaciones",
-    [AURA_STR_SETTINGS_GRAPHICS]    = "Graficos",
+    [AURA_STR_SETTINGS_GRAPHICS]    = "Gráficos",
     [AURA_STR_SETTINGS_EQ]          = "Ecualizador",
     [AURA_STR_SETTINGS_BRIGHTNESS]  = "Brillo",
     [AURA_STR_SETTINGS_LANGUAGE]    = "Idioma",
@@ -24,29 +24,29 @@ static const char *const strings_es[AURA_STR_COUNT] = {
 
     [AURA_STR_SETTINGS_BACKLIGHT]    = "Temporiz. luz",
     [AURA_STR_SETTINGS_SLEEPTIMER]   = "Temporiz. reposo",
-    [AURA_STR_SETTINGS_VOLUME_LIMIT] = "Limite volumen",
+    [AURA_STR_SETTINGS_VOLUME_LIMIT] = "Límite volumen",
     [AURA_STR_SETTINGS_CLICKER]      = "Sonido de clic",
-    [AURA_STR_SETTINGS_MAINMENU]     = "Menu principal",
+    [AURA_STR_SETTINGS_MAINMENU]     = "Menú principal",
     [AURA_STR_SETTINGS_RESET]        = "Restablecer ajustes",
 
     [AURA_STR_TIMEOUT_OFF]          = "Desactivado",
     [AURA_STR_TIMEOUT_ALWAYS]       = "Siempre",
 
-    [AURA_STR_MAINMENU_RESTORE]     = "Restaurar menu principal",
+    [AURA_STR_MAINMENU_RESTORE]     = "Restaurar menú principal",
 
     [AURA_STR_RESET_CONFIRM_TITLE]  = "Restablecer ajustes",
-    [AURA_STR_RESET_CONFIRM_BODY]   = "Esto vuelve todos los ajustes a su valor de fabrica.",
+    [AURA_STR_RESET_CONFIRM_BODY]   = "Esto vuelve todos los ajustes a su valor de fábrica.",
     [AURA_STR_RESET_DONE]           = "Ajustes restablecidos",
 
     [AURA_STR_THEME_LIGHT]        = "Claro",
     [AURA_STR_THEME_DARK]         = "Oscuro",
 
     [AURA_STR_ANIM_NONE]          = "Ninguna",
-    [AURA_STR_ANIM_MINIMAL]       = "Minimas",
+    [AURA_STR_ANIM_MINIMAL]       = "Mínimas",
     [AURA_STR_ANIM_ALL]           = "Todas",
 
     [AURA_STR_GFX_NONE]           = "Ninguno",
-    [AURA_STR_GFX_MINIMAL]        = "Minimos",
+    [AURA_STR_GFX_MINIMAL]        = "Mínimos",
     [AURA_STR_GFX_ALL]            = "Todos",
 
     [AURA_STR_EQ_FLAT]            = "Plano",
@@ -54,31 +54,31 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_EQ_VOCAL]           = "Voz",
     [AURA_STR_EQ_TREBLE_BOOST]    = "Realce de agudos",
 
-    [AURA_STR_LANG_ES]            = "Espanol",
-    [AURA_STR_LANG_EN]            = "Ingles",
+    [AURA_STR_LANG_ES]            = "Español",
+    [AURA_STR_LANG_EN]            = "Inglés",
 
     [AURA_STR_ABOUT_BUILT_ON]     = "Basado en Rockbox",
-    [AURA_STR_ABOUT_MUSIC]        = "Musica",
+    [AURA_STR_ABOUT_MUSIC]        = "Música",
     [AURA_STR_ABOUT_VIDEOS]       = "Video",
     [AURA_STR_ABOUT_PHOTOS]       = "Fotos",
     [AURA_STR_ABOUT_PLAYLISTS]    = "Listas",
-    [AURA_STR_ABOUT_NO_SYNC]      = "Todavia no sincronizaste con Aura Studio.",
+    [AURA_STR_ABOUT_NO_SYNC]      = "Aún no te has sincronizado con Aura Studio.",
 
-    [AURA_STR_EMPTY_MUSIC]        = "Sin musica todavia",
-    [AURA_STR_EMPTY_VIDEOS]       = "Sin videos todavia",
-    [AURA_STR_EMPTY_PHOTOS]       = "Sin fotos todavia",
+    [AURA_STR_EMPTY_MUSIC]        = "Sin música todavía",
+    [AURA_STR_EMPTY_VIDEOS]       = "Sin videos todavía",
+    [AURA_STR_EMPTY_PHOTOS]       = "Sin fotos todavía",
     [AURA_STR_NOTHING_PLAYING]    = "Nada sonando",
 
     [AURA_STR_MUSIC_ARTISTS]      = "Artistas",
-    [AURA_STR_MUSIC_ALBUMS]       = "Albumes",
+    [AURA_STR_MUSIC_ALBUMS]       = "Álbumes",
     [AURA_STR_MUSIC_SONGS]        = "Canciones",
     [AURA_STR_MUSIC_PLAYLISTS]    = "Listas",
-    [AURA_STR_MUSIC_GENRES]       = "Generos",
-    [AURA_STR_DB_NOT_READY]       = "Preparando la biblioteca...",
+    [AURA_STR_MUSIC_GENRES]       = "Géneros",
+    [AURA_STR_DB_NOT_READY]       = "Preparando la biblioteca…",
     [AURA_STR_EMPTY_LIST]         = "Sin resultados",
     [AURA_STR_UNSUPPORTED_FORMAT] = "Formato no soportado",
 
-    [AURA_STR_YES]                = "Si",
+    [AURA_STR_YES]                = "Sí",
     [AURA_STR_NO]                 = "No",
 
     [AURA_STR_PLAYLIST_ADDED]     = "Agregada a la lista",

@@ -29,9 +29,9 @@ static const splash_rule_t s_rules[] = {
     { "Database is not ready",                     1,
       "Terminando de preparar la biblioteca...",     "Finishing up your library..." },
     { "WARNING! Low Battery! Shutting down...",    1,
-      "Bateria baja. Apagando...",                   "Low battery. Shutting down..." },
+      "Batería baja. Apagando...",                   "Low battery. Shutting down..." },
     { "Battery empty! RECHARGE! Shutting down...", 1,
-      "Bateria agotada. Conecta el cargador.",       "Battery empty. Plug in your charger." },
+      "Batería agotada. Conecta el cargador.",       "Battery empty. Plug in your charger." },
     { "Committing database [",                     0,
       "Preparando la biblioteca [",                  "Preparing your library [" },
 };
