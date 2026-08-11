@@ -110,7 +110,12 @@ void aura_statusbar_draw(int x, int width, const char *title, int centered)
     {
         int w, h, text_x, text_y;
 
-        lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+        /* Semibold, no Regular (AUDITORIA-01 A-04/A-a, doc SS3: "Semibold
+         * -> titulos de pantalla") -- el titulo de la barra es un titulo
+         * de pantalla, no texto secundario; antes usaba CAPTION (13px
+         * Regular) por descuido, ninguna cara Semibold de 13px existia
+         * todavia en el pipeline. */
+        lcd_setfont(a26_font(A26_FONT_STYLE_HEADER));
         lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
         lcd_getstringsize((const unsigned char *)title, &w, &h);
         /* Centrado vertical por altura medida: es el equivalente

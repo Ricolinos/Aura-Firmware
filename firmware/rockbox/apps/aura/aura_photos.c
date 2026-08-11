@@ -27,6 +27,7 @@
 
 typedef struct {
     char filename[PHOTO_NAME_LEN];
+    char display[PHOTO_NAME_LEN]; /* filename sin extension, AUDITORIA-01 A-05 */
     bool supported; /* jpg/bmp = true; png/gif listados pero no decodificables (D-028) */
 } photo_item_t;
 
@@ -55,6 +56,22 @@ static bool is_listable_image(const char *name)
     return is_supported_image(name) || has_ext(name, ".png") || has_ext(name, ".gif");
 }
 
+/* Nombre para mostrar sin extension de archivo (AUDITORIA-01 A-05, doc
+ * de diseno Principio 7: "nunca jerga" -- un nombre crudo de archivo con
+ * extension es jerga tecnica, mismo principio que ya corrigio D-081 en
+ * los nombres de playlist). Solo pela la extension para la lista; el
+ * nombre real con extension sigue viviendo en filename para abrir el
+ * archivo. */
+static void strip_ext_for_display(const char *filename, char *out, size_t outsz)
+{
+    char *dot;
+
+    strlcpy(out, filename, outsz);
+    dot = strrchr(out, '.');
+    if (dot)
+        *dot = '\0';
+}
+
 static void ensure_photo_list(void)
 {
     DIR *d;
@@ -73,6 +90,7 @@ static void ensure_photo_list(void)
         if (!is_listable_image(entry->d_name))
             continue;
         strlcpy(s_photos[s_photo_count].filename, entry->d_name, PHOTO_NAME_LEN);
+        strip_ext_for_display(entry->d_name, s_photos[s_photo_count].display, PHOTO_NAME_LEN);
         s_photos[s_photo_count].supported = is_supported_image(entry->d_name);
         s_photo_count++;
     }
@@ -105,8 +123,12 @@ void aura_photos_draw(aura_nav_t *nav)
 
     for (i = 0; i < s_photo_count; i++)
     {
-        items[i].label = s_photos[i].filename;
-        items[i].icon_name = "image";
+        items[i].label = s_photos[i].display;
+        /* Sin icono por fila (AUDITORIA-01 A-06, anti-patron SS8: "icono
+         * repetido sin variacion entre hermanos") -- el original tampoco
+         * lo tiene en listas de contenido; una miniatura real por foto
+         * es mejora futura, no un icono generico repetido N veces. */
+        items[i].icon_name = NULL;
         items[i].checked = 0;
         items[i].toggle = -1;
     }

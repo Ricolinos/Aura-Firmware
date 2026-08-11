@@ -218,12 +218,25 @@ static void aura_format_track_time(unsigned long ms, char *buf, size_t bufsz)
 
 /* -- Caratula + reflejo (doc SS3) ---------------------------------------- */
 
+/* Radio de esquina de la caratula (doc "Reproductor - Ahora suena.md"
+ * SS3: "cuadrado, radio de esquina 8px" -- nivel 2 de la escala
+ * concentrica, doc de diseno SS5.4). AUDITORIA-01 A-07: la caratula se
+ * dibujaba con lcd_bitmap() directo, esquinas vivas -- vacio real, no
+ * decision. Se recorta DESPUES de dibujar (la imagen ya existe en el
+ * framebuffer), con la misma primitiva de corte por distancia que el
+ * resto del sistema. */
+#define COVER_RADIUS A26_LAYOUT_CORNER_RADIUS_CARD
+
 static void draw_cover(void)
 {
     if (s_art_valid)
     {
         int refl_h = aura_art_reflection_height(ART_SIZE);
+        unsigned bg = a26_color(A26_SHELL_BG);
+
         lcd_bitmap((const fb_data *)s_art_bm.data, ART_X, ART_Y, ART_SIZE, ART_SIZE);
+        a26_shell_round_bitmap_corners(ART_X, ART_Y, ART_SIZE, ART_SIZE, COVER_RADIUS, bg);
+
         lcd_bitmap((const fb_data *)s_reflection_buf, ART_X, ART_Y + ART_SIZE + REFL_GAP,
                    ART_SIZE, refl_h);
     }

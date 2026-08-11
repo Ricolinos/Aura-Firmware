@@ -900,6 +900,29 @@ static int is_music_browse_screen(aura_screen_id_t screen)
     }
 }
 
+/* Nivel 2 real (hijos directos de Musica: Artistas/Albumes/Canciones/
+ * Generos) -- AUDITORIA-01 A-03: doc de comportamiento SS1, "regla de
+ * profundidad por defecto": nivel 1-2 -> SPLIT, nivel 3 en adelante ->
+ * LISTA-COMPLETA. is_music_browse_screen() (mas abajo) sigue agrupando
+ * las 7 pantallas para el resto de la logica (dispatch de dibujo/boton,
+ * cache compartido) porque todas comparten el mismo mecanismo de
+ * navegacion por tagcache -- separada solo para decidir layout, que es
+ * donde el doc distingue nivel 2 (Artistas/Albumes/Canciones/Generos)
+ * de nivel 3+ (Albumes por artista, Canciones por album/genero). */
+static int is_music_browse_screen_level2(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_MUSIC_ARTISTS:
+    case AURA_SCREEN_MUSIC_ALBUMS:
+    case AURA_SCREEN_MUSIC_SONGS:
+    case AURA_SCREEN_MUSIC_GENRES:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 /* En modo grafico Pro, Albumes se navega con Coverflow en vez de la
  * lista plana (D-025); en Ultra/Minimalista sigue siendo una lista
  * como cualquier otra pantalla de is_music_browse_screen(). La raiz ya
@@ -1022,6 +1045,14 @@ static void draw_playlists(aura_nav_t *nav)
  * transicion abarca solo el panel izquierdo o toda la pantalla). */
 static int screen_uses_split_layout(aura_screen_id_t screen)
 {
+    /* is_music_browse_screen_level2(), no is_music_browse_screen():
+     * AUDITORIA-01 A-03 -- las 3 pantallas de nivel 3+ (Albumes por
+     * artista, Canciones por album, Canciones por genero) violaban la
+     * regla de profundidad del doc de comportamiento (SS1) dibujandose
+     * SPLIT como si fueran hijos directos de Musica. El push T1/T3 ya
+     * decide su ancho consultando esta misma tabla (ver el comentario
+     * en aura_screens_handle_button), asi que la transicion se corrige
+     * sola sin tocarla. */
     return screen == AURA_SCREEN_ROOT
         || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC
@@ -1029,7 +1060,7 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
         || screen == AURA_SCREEN_SETTINGS_SLEEPTIMER
         || screen == AURA_SCREEN_SETTINGS_MAINMENU
-        || is_music_browse_screen(screen)
+        || is_music_browse_screen_level2(screen)
         || screen == AURA_SCREEN_MUSIC_PLAYLISTS
         || screen == AURA_SCREEN_VIDEOS
         || screen == AURA_SCREEN_PHOTOS;

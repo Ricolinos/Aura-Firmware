@@ -14,6 +14,7 @@ void a26_shell_init(void)
         [A26_FONT_STYLE_TITLE]   = FONT_DIR "/" A26_FONT_TITLE,
         [A26_FONT_STYLE_BODY]    = FONT_DIR "/" A26_FONT_BODY,
         [A26_FONT_STYLE_CAPTION] = FONT_DIR "/" A26_FONT_CAPTION,
+        [A26_FONT_STYLE_HEADER]  = FONT_DIR "/" A26_FONT_HEADER,
         [A26_FONT_STYLE_MICRO]   = FONT_DIR "/" A26_FONT_MICRO,
     };
     int i;
@@ -146,6 +147,22 @@ void a26_shell_fill_rounded_rect(int x, int y, int w, int h, int radius,
     lcd_fillrect(x, y, w, h);
     lcd_set_drawmode(DRMODE_FG);
 
+    if (radius <= 0)
+        return;
+
+    stamp_corner(x,         y,          1,  1, radius, bg); /* superior izquierda */
+    stamp_corner(x + w - 1, y,         -1,  1, radius, bg); /* superior derecha   */
+    stamp_corner(x,         y + h - 1,  1, -1, radius, bg); /* inferior izquierda */
+    stamp_corner(x + w - 1, y + h - 1, -1, -1, radius, bg); /* inferior derecha   */
+}
+
+void a26_shell_round_bitmap_corners(int x, int y, int w, int h, int radius,
+                                     unsigned bg)
+{
+    if (radius > w / 2)
+        radius = w / 2;
+    if (radius > h / 2)
+        radius = h / 2;
     if (radius <= 0)
         return;
 

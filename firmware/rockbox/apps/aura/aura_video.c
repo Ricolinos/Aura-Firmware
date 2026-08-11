@@ -29,6 +29,7 @@
 #define VIDEO_NAME_LEN 64
 
 static char s_videos[MAX_VIDEOS][VIDEO_NAME_LEN];
+static char s_videos_display[MAX_VIDEOS][VIDEO_NAME_LEN]; /* sin extension, AUDITORIA-01 A-05 */
 static int s_video_count = -1;
 
 static bool has_ext(const char *name, const char *ext)
@@ -40,6 +41,19 @@ static bool has_ext(const char *name, const char *ext)
 static bool is_video_file(const char *name)
 {
     return has_ext(name, ".mpg") || has_ext(name, ".mpeg");
+}
+
+/* Nombre para mostrar sin extension de archivo (AUDITORIA-01 A-05, doc
+ * de diseno Principio 7: "nunca jerga"). Solo pela la extension para la
+ * lista; s_videos[] con extension sigue siendo lo que se abre. */
+static void strip_ext_for_display(const char *filename, char *out, size_t outsz)
+{
+    char *dot;
+
+    strlcpy(out, filename, outsz);
+    dot = strrchr(out, '.');
+    if (dot)
+        *dot = '\0';
 }
 
 static void ensure_video_list(void)
@@ -60,6 +74,7 @@ static void ensure_video_list(void)
         if (!is_video_file(entry->d_name))
             continue;
         strlcpy(s_videos[s_video_count], entry->d_name, VIDEO_NAME_LEN);
+        strip_ext_for_display(entry->d_name, s_videos_display[s_video_count], VIDEO_NAME_LEN);
         s_video_count++;
     }
     closedir(d);
@@ -86,8 +101,11 @@ void aura_video_draw(aura_nav_t *nav)
 
     for (i = 0; i < s_video_count; i++)
     {
-        items[i].label = s_videos[i];
-        items[i].icon_name = "video";
+        items[i].label = s_videos_display[i];
+        /* Sin icono por fila (AUDITORIA-01 A-06, mismo criterio que
+         * Fotos): "video" repetido en cada fila es el anti-patron SS8,
+         * no una decision. */
+        items[i].icon_name = NULL;
         items[i].checked = 0;
         items[i].toggle = -1;
     }

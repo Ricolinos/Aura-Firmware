@@ -34,6 +34,11 @@ typedef enum {
     A26_FONT_STYLE_TITLE = 0,
     A26_FONT_STYLE_BODY,
     A26_FONT_STYLE_CAPTION,
+    /* Mismo tamano que CAPTION (13px) pero cara Semibold -- doc SS3:
+     * "Semibold -> titulos de pantalla". CAPTION (Regular) sigue
+     * existiendo para texto secundario real (artista en Ahora suena);
+     * no se reemplaza, se agrega (AUDITORIA-01 A-04/A-a). */
+    A26_FONT_STYLE_HEADER,
     A26_FONT_STYLE_MICRO,
     A26_FONT_STYLE_COUNT,
 } a26_font_style_t;
@@ -76,6 +81,17 @@ void a26_shell_stamp_corners(void);
  * progreso flotante (SS5.2). */
 void a26_shell_fill_rounded_rect(int x, int y, int w, int h, int radius,
                                   unsigned fill, unsigned bg);
+
+/* Recorta las 4 esquinas de un rectangulo YA DIBUJADO (p. ej. un
+ * lcd_bitmap() de una imagen) al radio dado, pintandolas con `bg` --
+ * mismo corte por distancia que a26_shell_stamp_corners()/
+ * a26_shell_fill_rounded_rect(), pero sin rellenar el rectangulo
+ * primero (el contenido interior ya existe). `bg` es el color que
+ * rodea al rectangulo, igual que en las otras dos primitivas. Unico
+ * consumidor hoy: la caratula de Ahora suena (doc "Reproductor - Ahora
+ * suena.md" SS3, radio 8px -- AUDITORIA-01 A-07). */
+void a26_shell_round_bitmap_corners(int x, int y, int w, int h, int radius,
+                                     unsigned bg);
 
 /* Igual que a26_shell_fill_rounded_rect(), con un borde de 1px encima
  * (radio interior = radio-1, misma jerarquia concentrica que pide SS5.4

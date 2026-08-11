@@ -769,4 +769,20 @@ Primeros dos lotes de la Fase B de `docs/design/AUDITORIA-01.md` (auditoría de 
 
 ---
 
+## D-083 — AUDITORIA-01, Lote 4 (altas A-03 a A-07): profundidad real, título Semibold, Fotos/Videos sin jerga, radio de carátula
+
+Tercer lote de la Fase B. Cinco hallazgos "Alta" del reporte, ejecutados de forma autónoma con el mismo permiso explícito de la sesión.
+
+**A-03 — regla de profundidad (doc de comportamiento §1)**: `screen_uses_split_layout()` trataba TODA pantalla de `is_music_browse_screen()` como dividida, incluidas las de nivel 3+ (Álbumes por artista, Canciones por álbum, Canciones por género) — el doc es explícito: "nivel 3 en adelante → LISTA-COMPLETA". Nueva `is_music_browse_screen_level2()` separa las 4 pantallas de nivel 2 reales (Artistas/Álbumes/Canciones/Géneros, hijos directos de Música) de las de nivel 3+; `screen_uses_split_layout()` usa la nueva función. El ancho de la transición T1/T3 ya se deriva de esta misma tabla (`aura_screens_handle_button()`), así que se corrigió solo, sin tocar `aura_transitions.c`. Verificado: "Canciones" (nivel 3, dentro de un álbum) ahora ancho completo, sin panel derecho (`docs/screenshots/auditoria01/lote4-music_songs_by_album-light.png`).
+
+**A-04/A-a — título de barra en Semibold**: el doc (§3) reserva Semibold para "títulos de pantalla"; `aura_statusbar_draw()` usaba `A26_FONT_STYLE_CAPTION` (13px Regular) porque no existía ninguna cara Semibold a 13px en el pipeline. Nuevo estilo `A26_FONT_STYLE_HEADER` (`tokens.json → type_scale.header = 13`, `styles_by_size.header = compact_semibold`) — no reemplaza CAPTION, que sigue siendo el texto secundario real (artista en Ahora suena, reloj de la barra). Cierra también la ambigüedad A-a del reporte sobre "tamaños fantasma": la línea base de §5 queda como estaba (centrado por altura medida), solo cambia la cara del título.
+
+**A-05/A-06 — Fotos y Videos sin jerga de archivo ni ícono repetido**: ambas listas mostraban el nombre crudo con extensión (`IMG_1234.jpg`) y el mismo ícono genérico (`"image"`/`"video"`) en cada fila — dos anti-patrones §8 juntos (jerga técnica + ícono sin variación entre hermanos). Nueva `strip_ext_for_display()` (duplicada en ambos archivos, deliberado: son 6 líneas cada una, distinto criterio de extensión por dominio — no vale la pena una abstracción compartida por tan poco) pela la extensión solo para mostrar; el nombre con extensión sigue siendo lo que se abre. Íconos de fila retirados (`icon_name = NULL`) — el original tampoco los tiene en listas de contenido. **No verificado visualmente con archivos reales**: el fixture del simulador no incluye fotos de prueba (`simdisk/Photos/` vacío) — el mismo vacío ya existía antes de este cambio, no es nuevo. El código comparte el patrón exacto ya verificado en D-081 para nombres de playlist (`strlcpy` + `strrchr` sobre el último punto).
+
+**A-07 — radio de esquina en la carátula de Ahora suena**: doc "Reproductor - Ahora suena.md" §3 pide "radio de esquina 8px" (nivel 2 de la escala concéntrica); `draw_cover()` dibujaba con `lcd_bitmap()` directo, esquinas vivas. Nueva `a26_shell_round_bitmap_corners()` (`apple2026_shell.c`) — misma primitiva de corte por distancia que ya usan `a26_shell_stamp_corners()`/`a26_shell_fill_rounded_rect()`, pero aplicada DESPUÉS de dibujar en vez de antes de rellenar (el contenido ya existe, no hay nada que rellenar). Solo la carátula, no el reflejo (que ya se desvanece por máscara de opacidad, redondear sus 2 esquinas superiores es un acabado posible pero no lo pide el documento — se deja fuera para no exceder el hallazgo).
+
+**Aceptación**: sim reconstruido, compila limpio (0 warnings nuevos); 566/566 tests host-side sin cambios (ninguno de los 5 hallazgos toca módulos puros). Verificado en el simulador: título "Aura" en Semibold visible en el menú raíz, "Canciones" (nivel 3) ahora ancho completo, carátula de Ahora suena con esquinas redondeadas en ambos temas (`docs/screenshots/auditoria01/lote4-*.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
