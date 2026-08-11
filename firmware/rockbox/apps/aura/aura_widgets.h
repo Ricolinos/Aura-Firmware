@@ -65,11 +65,19 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name);
  * usado por aura_screens.c para el scroll. */
 int aura_widgets_visible_rows(void);
 
-/* True mientras la barra de deslizamiento (doc SS5.3) todavia esta
- * apareciendo o desvaneciendose -- aura_main.c la consulta igual que
- * aura_widgets_panel_pending() para pedir un timeout corto y seguir
- * animando el fundido sin bloquear esperando el proximo boton. */
+/* True mientras la barra de deslizamiento (doc SS5.3) sigue en su
+ * ventana de aparecer/persistir/desvanecer -- aura_main.c la consulta
+ * con la misma cadencia gruesa (HZ/4) que aura_widgets_panel_pending()
+ * para no perderse el momento en que termina la persistencia y arranca
+ * el desvanecido. */
 int aura_widgets_scrollbar_pending(void);
+
+/* True SOLO durante los tramos donde el alpha de la barra realmente
+ * cambia cuadro a cuadro (entrada o salida) -- aura_main.c pide la
+ * cadencia fina de 20fps unicamente aca, no durante toda la ventana de
+ * pending() (D-074: pedirla durante la persistencia, que no cambia
+ * visualmente, sobrecargaba el bucle principal sin necesidad). */
+int aura_widgets_scrollbar_animating(void);
 
 /* Dibuja el icono <name>-<size>.bmp del tema activo en (x, y) via
  * lcd_bitmap_transparent(). Devuelve su ancho (0 si no se encontro el

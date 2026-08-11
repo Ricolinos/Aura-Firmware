@@ -605,4 +605,18 @@ Segunda fase del plan. Ejecutada de forma autónoma (el usuario dio permiso expl
 
 ---
 
+## D-074 — Crash real en el simulador interactivo: cola de botones desbordada durante transiciones encadenadas
+
+Encontrado con uso interactivo real (el usuario pidió abrir el simulador para mirar Ajustes), no con el arnés de botones pautado -- el simulador se cerró con `KERNEL_ASSERT "queue_post ovf"` (cola de eventos desbordada, `firmware/kernel/queue.c`) tras varios segundos de navegación.
+
+**Causa real, no la primera hipótesis**: la primera sospecha fue la cadencia de 20fps (`HZ/20`) que Fase 27 agregó para el fundido de la barra de deslizamiento (D-073) -- pero esa cadencia solo se activa mientras una lista larga está en pantalla, y el crash real ocurrió durante navegación pura (encadenando pantallas, disparando transiciones). Revisando `aura_transitions.c`: `aura_transition_slide()`/`aura_transition_reveal()` son bucles síncronos que duermen entre cuadros (`sleep(frame_delay)`) sin leer nunca el botón durante la animación -- comportamiento preexistente, no de esta sesión. Con el usuario sosteniendo o repitiendo un botón rápido mientras se encadenan varias transiciones seguidas (cada una ~9-15 ticks sin drenar la cola), los eventos de repetición de teclado de SDL se acumulan sin consumirse hasta superar `QUEUE_LENGTH` (32).
+
+**Corrección aplicada**: `drain_button_queue_if_full()` en `aura_transitions.c`, llamado una vez por cuadro en ambos bucles de transición (`button_queue_full()` + `button_clear_queue()` si hace falta) -- no intenta atender el botón a mitad de animación (complicaría el estado a medio dibujar), solo evita que la cola crezca sin límite. `button_clear_queue()` es API real de Rockbox, ya usada en varios puntos del árbol (`apps/action.c`, `apps/misc.c`, `apps/screens.c`).
+
+**Corrección secundaria, de eficiencia real (no solo cautelar)**: revisando el mecanismo, `aura_widgets_scrollbar_pending()` (D-073) sí pedía la cadencia de 20fps durante TODA la ventana de fundido (~1.3s: entrada + persistencia + salida), incluida la persistencia donde el alpha es constante y no hay nada que redibujar -- de sobra mientras se hojea una lista larga rápido. Separado en dos funciones: `aura_widgets_scrollbar_animating()` (20fps, solo en los ~480ms reales donde el alpha cambia) y `aura_widgets_scrollbar_pending()` (cadencia gruesa `HZ/4`, la misma que ya prueba segura el debounce del panel derecho, D-072) para el resto de la ventana. Reduce la cantidad total de redibujados forzados en el caso más común (navegar listas largas), aunque no era la causa raíz del crash.
+
+**Aceptación**: sim compila limpio; capturas de Ajustes (pastilla + scrollbar) re-verificadas sin cambio visual tras el fix. Pendiente: repetir la prueba interactiva real que disparó el crash original (sostener/repetir botones navegando varias pantallas seguidas) para confirmar en vivo -- no reproducible de forma confiable con el arnés de botones pautado (ritmo fijo, más lento que la repetición real de teclado de SDL).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

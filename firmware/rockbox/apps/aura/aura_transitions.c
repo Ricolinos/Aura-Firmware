@@ -5,6 +5,7 @@
 #include "tick.h"
 #include "gui/viewport.h"
 #include "debug.h"
+#include "button.h"
 
 #include "aura_transitions.h"
 #include "aura_screens.h"
@@ -21,6 +22,22 @@
                (name), (frames), (long)(current_tick - (start_tick))); \
         (void)(start_tick); /* evita -Wunused-variable en builds sin DEBUG */ \
     } while (0)
+
+/* Bug real encontrado con el simulador interactivo, no con el arnes de
+ * botones pautado (D-074): estos bucles de cuadros son sincronicos --
+ * duermen entre cuadros sin leer el boton en ningun momento -- y con el
+ * usuario sosteniendo o repitiendo un boton rapido mientras se encadenan
+ * varias transiciones seguidas (navegar rapido = varias pantallas =
+ * varios push/reveal uno atras del otro), los eventos de repeticion del
+ * teclado se acumulan en la cola sin drenarse hasta desbordarla
+ * (KERNEL_ASSERT "queue_post ovf"). No hace falta ATENDER el boton
+ * durante la animacion (séria una complicacion real de estado a medio
+ * dibujar); alcanza con no dejar que la cola crezca sin limite. */
+static void drain_button_queue_if_full(void)
+{
+    if (button_queue_full())
+        button_clear_queue();
+}
 
 /* -- Push real (Fase 26 / D-068) ---------------------------------------
  *
@@ -155,6 +172,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
         }
 
         lcd_update_rect(0, 0, width, A26_SCREEN_HEIGHT);
+        drain_button_queue_if_full();
 
         d_prev = d;
         if (i < frames)
@@ -214,6 +232,7 @@ void aura_transition_reveal(aura_nav_t *nav)
         lcd_set_viewport(saved);
 
         lcd_update();
+        drain_button_queue_if_full();
 
         if (i < frames)
             sleep(frame_delay);

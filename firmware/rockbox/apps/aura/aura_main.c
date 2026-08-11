@@ -109,12 +109,18 @@ void aura_main(void)
         if (aura_widgets_panel_pending() && timeout_ticks < 0)
             timeout_ticks = HZ / 4;
 
-        /* Fundido de la barra de deslizamiento (SS5.3): mientras esta
-         * apareciendo o desvaneciendose hace falta seguir redibujando a
-         * la cadencia de fundidos del doc (20fps, SS6) para que el
-         * cambio de opacidad se vea continuo, no a saltos. */
-        if (aura_widgets_scrollbar_pending() && timeout_ticks < 0)
+        /* Fundido de la barra de deslizamiento (SS5.3): la cadencia fina
+         * de 20fps (doc SS6) solo hace falta en los tramos reales de
+         * entrada/salida -- pending() a secas cubre tambien la
+         * persistencia (alpha fijo, nada que redibujar), y pedir 20fps
+         * ahi de mas fue justamente lo que sobrecargo el bucle principal
+         * y desbordo la cola de botones con el simulador interactivo
+         * (D-074). Con solo pending() (sin animating()) alcanza la misma
+         * cadencia gruesa que ya usa el debounce del panel. */
+        if (aura_widgets_scrollbar_animating() && timeout_ticks < 0)
             timeout_ticks = HZ / 20;
+        else if (aura_widgets_scrollbar_pending() && timeout_ticks < 0)
+            timeout_ticks = HZ / 4;
 
         button = next_button(timeout_ticks);
 

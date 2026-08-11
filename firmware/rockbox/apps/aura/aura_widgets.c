@@ -218,12 +218,41 @@ int aura_widgets_scrollbar_pending(void)
      * pending() mirara solo el alpha actual, el bucle principal nunca
      * pediria un timeout corto para el SIGUIENTE cuadro y la barra se
      * quedaria congelada invisible hasta el proximo boton real. Lo que
-     * importa es si releva seguir animando: toda la ventana
-     * entrada+persistencia+salida, no el valor de un instante. */
+     * importa es si falta seguir animando: toda la ventana
+     * entrada+persistencia+salida, no el valor de un instante. Cadencia
+     * gruesa (HZ/4, aura_main.c) -- ver aura_widgets_scrollbar_animating()
+     * para cuando hace falta la cadencia fina de 20fps. */
     long elapsed = current_tick - s_scrollbar_activity_since;
     if (elapsed < 0)
         elapsed = 0;
     return elapsed < SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS + SCROLLBAR_FADE_OUT_TICKS;
+}
+
+int aura_widgets_scrollbar_animating(void)
+{
+    /* Distinto de pending(): true SOLO durante los dos tramos donde el
+     * alpha realmente cambia cuadro a cuadro (entrada y salida) -- NO
+     * durante la persistencia (alpha=256 fijo, nada que redibujar). Bug
+     * real encontrado tras un crash del simulador interactivo
+     * (queue_post ovf, D-074): la version anterior pedia la cadencia de
+     * 20fps (HZ/20, 5 ticks) durante TODA la ventana de ~1.3s, incluida
+     * la persistencia -- con el usuario hojeando listas largas rapido
+     * (Ajustes navegado sin pausas), eso mantenia el bucle principal
+     * redibujando a 20fps de forma casi continua, compitiendo por CPU
+     * con el bombeo de eventos de teclado de SDL hasta desbordar la cola
+     * de botones. Ahora pending() (cadencia HZ/4, la misma que ya prueba
+     * segura el debounce del panel derecho) cubre el tramo de
+     * persistencia solo para notar cuando termina, y esta funcion pide
+     * la cadencia fina unicamente en los ~480ms reales de fundido. */
+    long elapsed = current_tick - s_scrollbar_activity_since;
+    if (elapsed < 0)
+        elapsed = 0;
+
+    if (elapsed < SCROLLBAR_FADE_IN_TICKS)
+        return 1;
+
+    elapsed -= SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS;
+    return elapsed >= 0 && elapsed < SCROLLBAR_FADE_OUT_TICKS;
 }
 
 static void draw_scrollbar(int width, int visible, int count, int first)
