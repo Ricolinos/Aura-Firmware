@@ -132,6 +132,20 @@
 #define HAVE_BACKLIGHT
 #define HAVE_BACKLIGHT_BRIGHTNESS
 
+/* Fase 19 (PLAN-UX.md) / D-06x: la retroiluminacion se apagaba de
+ * golpe (CONFIG_BACKLIGHT_FADING ausente = BACKLIGHT_NO_FADING por
+ * default, inventario de la Fase 12). El PMU cs42l55-adyacente de este
+ * SoC SI tiene un registro de brillo controlable por software
+ * (backlight_hw_brightness(), 0x28) restaurado "en hardware" al
+ * encender (backlight_hw_on()) -- exactamente lo que
+ * BACKLIGHT_FADING_SW_HW_REG describe (usado ya por otros targets
+ * reales: iriverh300, cowond2, etc.). Se reusa el motor de fade de
+ * software ya existente en firmware/backlight.c (BACKLIGHT_FADE_IN_THREAD,
+ * backlight_setup_fade_up/down) en vez de escribir logica de fade
+ * propia -- ningun archivo de este target necesito cambios ademas de
+ * esta macro. */
+#define CONFIG_BACKLIGHT_FADING BACKLIGHT_FADING_SW_HW_REG
+
 /* Define this if you have a software controlled poweroff */
 #define HAVE_SW_POWEROFF
 
@@ -243,9 +257,18 @@
 #define USB_PRODUCT_ID 0x1261
 #define USB_DEVBSS_ATTR __attribute__((aligned(32)))
 #define HAVE_BOOTLOADER_USB_MODE
-#ifdef BOOTLOADER
+/* Fase 19 (PLAN-UX.md) / D-06x: antes solo definido para BOOTLOADER --
+ * en el firmware principal, firmware/usb.c:461-471 usa
+ * button_status() & ~USBPOWER_BTN_IGNORE para decidir "solo carga" al
+ * conectar el cable; con el default de usb.h (0, no ignorar nada),
+ * CUALQUIER boton sostenido en el instante exacto de conectar el cable
+ * disparaba modo solo-carga en silencio -- ni pantalla, ni disco
+ * montado, sin ningun aviso al usuario (inventario de la Fase 12,
+ * hallazgo de nivel 2). Aura siempre quiere montarse como
+ * almacenamiento al conectar (todavia no expone un selector de modo
+ * USB propio, ver Fase 19 en DECISIONS.md), asi que el modo
+ * solo-carga por accidente no debe existir. */
 #define USBPOWER_BTN_IGNORE (~0)
-#endif
 
 #define USB_READ_BUFFER_SIZE (1024*24)
 

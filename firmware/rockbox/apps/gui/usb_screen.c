@@ -148,7 +148,12 @@ static void usb_screen_fix_viewports(struct screen *screen,
         logo_height = parent->height;
 
     *logo = *parent;
-    logo->x = parent->x + parent->width - logo_width;
+    /* Fase 19 (PLAN-UX.md): centrado en vez de pegado al borde derecho
+     * -- el logo original quedaba asimetrico contra el resto de la
+     * pantalla (inventario de la Fase 12, superficie de nivel 1). Solo
+     * geometria de viewport, sin tocar la logica de USB/HID de esta
+     * pantalla. */
+    logo->x = parent->x + (parent->width - logo_width) / 2;
 #ifdef HAVE_LCD_SPLIT
     switch (statusbar_position(screen))
     {
