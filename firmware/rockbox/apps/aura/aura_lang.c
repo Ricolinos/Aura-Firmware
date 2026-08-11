@@ -14,6 +14,12 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_BRIGHTNESS]  = "Brillo",
     [AURA_STR_SETTINGS_LANGUAGE]    = "Idioma",
     [AURA_STR_SETTINGS_ABOUT]       = "Acerca de",
+    [AURA_STR_SETTINGS_SHUFFLE]     = "Aleatorio",
+    [AURA_STR_SETTINGS_REPEAT]      = "Repetir",
+
+    [AURA_STR_REPEAT_OFF]           = "Desactivado",
+    [AURA_STR_REPEAT_ALL]           = "Todo",
+    [AURA_STR_REPEAT_ONE]           = "Uno",
 
     [AURA_STR_THEME_LIGHT]        = "Claro",
     [AURA_STR_THEME_DARK]         = "Oscuro",
@@ -63,6 +69,12 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_BRIGHTNESS]  = "Brightness",
     [AURA_STR_SETTINGS_LANGUAGE]    = "Language",
     [AURA_STR_SETTINGS_ABOUT]       = "About",
+    [AURA_STR_SETTINGS_SHUFFLE]     = "Shuffle",
+    [AURA_STR_SETTINGS_REPEAT]      = "Repeat",
+
+    [AURA_STR_REPEAT_OFF]           = "Off",
+    [AURA_STR_REPEAT_ALL]           = "All",
+    [AURA_STR_REPEAT_ONE]           = "One",
 
     [AURA_STR_THEME_LIGHT]        = "Light",
     [AURA_STR_THEME_DARK]         = "Dark",

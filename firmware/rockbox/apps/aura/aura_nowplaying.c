@@ -14,6 +14,11 @@
 #include "recorder/albumart.h"
 #include "recorder/bmp.h"
 #include "recorder/jpeg_load.h"
+#include "misc.h"
+#include "sound.h"
+#include "settings.h"
+#include "status.h"
+#include "tick.h"
 
 #include "aura_nowplaying.h"
 #include "aura_theme.h"
@@ -22,12 +27,18 @@
 #include "aura_lrc.h"
 #include "aura_tokens.h"
 #include "aura_statusbar.h"
+#include "aura_widgets.h"
 
 #define ART_SIZE   100
 #define ART_X      ((AURA_SCREEN_WIDTH - ART_SIZE) / 2)
 #define ART_Y      (AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_SM)
 
 #define LRC_FILE_BUF_SIZE 8192
+
+/* Overlay de volumen (Fase 17, PLAN-UX.md, wheel=volumen): visible
+ * ~1.5s despues del ultimo scroll. */
+#define VOLUME_OVERLAY_TICKS (HZ + HZ / 2)
+static long s_volume_overlay_until = 0;
 
 static unsigned char s_art_buf[64 * 1024];
 static struct bitmap s_art_bm;
@@ -116,7 +127,10 @@ static void reload_for_track(const struct mp3entry *id3)
     s_show_lyrics = false;
 }
 
-static void format_time(unsigned long ms, char *buf, size_t bufsz)
+/* Nombre propio (no "format_time" a secas): apps/misc.h -- ahora
+ * incluido para adjust_volume() -- ya declara un format_time() publico
+ * con firma distinta; colisionaban. */
+static void aura_format_track_time(unsigned long ms, char *buf, size_t bufsz)
 {
     unsigned long total_s = ms / 1000;
     snprintf(buf, bufsz, "%lu:%02lu", total_s / 60, total_s % 60);
@@ -190,8 +204,8 @@ static void draw_player(const struct mp3entry *id3)
     lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
     lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_SM);
 
-    format_time(id3->elapsed, timebuf, sizeof(timebuf));
-    format_time(id3->length, timebuf2, sizeof(timebuf2));
+    aura_format_track_time(id3->elapsed, timebuf, sizeof(timebuf));
+    aura_format_track_time(id3->length, timebuf2, sizeof(timebuf2));
     lcd_setfont(aura_font(AURA_FONT_STYLE_MICRO));
     lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
     lcd_putsxy(bar_x, bar_y + AURA_SPACING_SM + AURA_SPACING_XS,
@@ -202,6 +216,52 @@ static void draw_player(const struct mp3entry *id3)
                (const unsigned char *)line);
     /* El estado de pausa ya lo indica el icono de la barra de estado
      * (Fase 13, PLAN-UX.md, L5) -- sin duplicarlo aca dentro. */
+}
+
+/* Overlay temporal encima del reproductor (o de la letra) mientras el
+ * usuario gira el clickwheel -- no limpia pantalla, se dibuja sobre lo
+ * que ya esta. El rango va contra el limite efectivo (el menor entre
+ * el maximo real del hardware y volume_limit, D-051), no el maximo
+ * absoluto, para que la barra siempre se vea llena al tope real. */
+static void draw_volume_overlay(void)
+{
+    int box_w = 200, box_h = 40;
+    int box_x = (AURA_SCREEN_WIDTH - box_w) / 2;
+    int box_y = AURA_SCREEN_HEIGHT - box_h - AURA_SPACING_XXL;
+    int bar_x = box_x + AURA_SPACING_LG;
+    int bar_w = box_w - 2 * AURA_SPACING_LG;
+    int bar_y = box_y + box_h / 2;
+    int vol_min = sound_min(SOUND_VOLUME);
+    int vol_max = sound_max(SOUND_VOLUME);
+    int fill_w;
+    char buf[8];
+
+    if (global_settings.volume_limit < vol_max)
+        vol_max = global_settings.volume_limit;
+
+    lcd_set_foreground(aura_color(AURA_TOK_SURFACE));
+    lcd_fillrect(box_x, box_y, box_w, box_h);
+    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
+    lcd_drawrect(box_x, box_y, box_w, box_h);
+
+    lcd_set_foreground(aura_color(AURA_TOK_BORDER));
+    lcd_drawrect(bar_x, bar_y, bar_w, AURA_SPACING_SM);
+    fill_w = (vol_max > vol_min)
+        ? (bar_w * (global_status.volume - vol_min)) / (vol_max - vol_min)
+        : 0;
+    if (fill_w < 0)      fill_w = 0;
+    if (fill_w > bar_w)  fill_w = bar_w;
+    lcd_set_foreground(aura_color(AURA_TOK_ACCENT));
+    lcd_fillrect(bar_x, bar_y, fill_w, AURA_SPACING_SM);
+
+    lcd_setfont(aura_font(AURA_FONT_STYLE_MICRO));
+    lcd_set_foreground(aura_color(AURA_TOK_TEXT_SECONDARY));
+    snprintf(buf, sizeof(buf), "%d%%",
+             (vol_max > vol_min)
+                 ? (100 * (global_status.volume - vol_min)) / (vol_max - vol_min)
+                 : 0);
+    lcd_putsxy(box_x + AURA_SPACING_LG, box_y + AURA_SPACING_XS,
+               (const unsigned char *)buf);
 }
 
 void aura_nowplaying_draw(void)
@@ -220,6 +280,14 @@ void aura_nowplaying_draw(void)
         draw_lyrics(id3);
     else
         draw_player(id3);
+
+    if (current_tick < s_volume_overlay_until)
+        draw_volume_overlay();
+}
+
+bool aura_nowplaying_needs_tick(void)
+{
+    return current_tick < s_volume_overlay_until;
 }
 
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
@@ -241,6 +309,17 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
         break;
     case BUTTON_LEFT:
         audio_prev();
+        break;
+    case BUTTON_SCROLL_FWD:
+        /* Wheel = volumen (PLAN-UX.md, Fase 17) -- adjust_volume() ya
+         * reusa el backend real (sound_set_volume(), que respeta
+         * volume_limit, D-051) en vez de reimplementar el clamp. */
+        adjust_volume(1);
+        s_volume_overlay_until = current_tick + VOLUME_OVERLAY_TICKS;
+        break;
+    case BUTTON_SCROLL_BACK:
+        adjust_volume(-1);
+        s_volume_overlay_until = current_tick + VOLUME_OVERLAY_TICKS;
         break;
     case BUTTON_MENU:
         if (s_show_lyrics)

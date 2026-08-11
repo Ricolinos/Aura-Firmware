@@ -50,6 +50,8 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_GRAPHICS,   NULL, AURA_SCREEN_SETTINGS_GRAPHICS },
     { AURA_STR_SETTINGS_EQ,         NULL, AURA_SCREEN_SETTINGS_EQ },
     { AURA_STR_SETTINGS_BRIGHTNESS, NULL, AURA_SCREEN_SETTINGS_BRIGHTNESS },
+    { AURA_STR_SETTINGS_SHUFFLE,    NULL, AURA_SCREEN_SETTINGS_SHUFFLE },
+    { AURA_STR_SETTINGS_REPEAT,     NULL, AURA_SCREEN_SETTINGS_REPEAT },
     { AURA_STR_SETTINGS_LANGUAGE,   NULL, AURA_SCREEN_SETTINGS_LANGUAGE },
     { AURA_STR_SETTINGS_ABOUT,      NULL, AURA_SCREEN_SETTINGS_ABOUT },
 };
@@ -96,6 +98,8 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_BRIGHTNESS: return AURA_STR_SETTINGS_BRIGHTNESS;
     case AURA_SCREEN_SETTINGS_LANGUAGE:   return AURA_STR_SETTINGS_LANGUAGE;
     case AURA_SCREEN_SETTINGS_ABOUT:      return AURA_STR_SETTINGS_ABOUT;
+    case AURA_SCREEN_SETTINGS_SHUFFLE:    return AURA_STR_SETTINGS_SHUFFLE;
+    case AURA_SCREEN_SETTINGS_REPEAT:     return AURA_STR_SETTINGS_REPEAT;
     default:                              return AURA_STR_SETTINGS;
     }
 }
@@ -114,13 +118,22 @@ static const aura_str_id_t eq_choice_labels[] = {
 static const aura_str_id_t language_choice_labels[] = {
     AURA_STR_LANG_ES, AURA_STR_LANG_EN,
 };
+/* Solo Desactivado/Todo/Uno -- REPEAT_SHUFFLE y REPEAT_AB quedan fuera
+ * del modelo simplificado de Aura (el aleatorio ya es su propio
+ * booleano independiente, D-014/Fase 17). El indice de esta lista
+ * coincide 1:1 con REPEAT_OFF/REPEAT_ALL/REPEAT_ONE de Rockbox
+ * (apps/settings.h), asi que no hace falta traducir indices. */
+static const aura_str_id_t repeat_choice_labels[] = {
+    AURA_STR_REPEAT_OFF, AURA_STR_REPEAT_ALL, AURA_STR_REPEAT_ONE,
+};
 
 static int is_choice_screen(aura_screen_id_t screen)
 {
     return screen == AURA_SCREEN_SETTINGS_THEME
         || screen == AURA_SCREEN_SETTINGS_GRAPHICS
         || screen == AURA_SCREEN_SETTINGS_EQ
-        || screen == AURA_SCREEN_SETTINGS_LANGUAGE;
+        || screen == AURA_SCREEN_SETTINGS_LANGUAGE
+        || screen == AURA_SCREEN_SETTINGS_REPEAT;
 }
 
 static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
@@ -139,6 +152,9 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
     case AURA_SCREEN_SETTINGS_LANGUAGE:
         *out = language_choice_labels;
         return sizeof(language_choice_labels) / sizeof(language_choice_labels[0]);
+    case AURA_SCREEN_SETTINGS_REPEAT:
+        *out = repeat_choice_labels;
+        return sizeof(repeat_choice_labels) / sizeof(repeat_choice_labels[0]);
     default:
         *out = NULL;
         return 0;
@@ -153,12 +169,24 @@ static int get_choice_current(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_GRAPHICS: return (int)aura_settings.graphics_mode;
     case AURA_SCREEN_SETTINGS_EQ:       return (int)aura_settings.eq_preset;
     case AURA_SCREEN_SETTINGS_LANGUAGE: return (int)aura_settings.language;
+    case AURA_SCREEN_SETTINGS_REPEAT:   return global_settings.repeat_mode;
     default:                            return 0;
     }
 }
 
 static void apply_choice(aura_screen_id_t screen, int index)
 {
+    /* AURA_SCREEN_SETTINGS_REPEAT es un ajuste real de Rockbox
+     * (global_settings.repeat_mode, motor de playlist -- D-021), no
+     * uno propio de Aura: se persiste con settings_save(), no
+     * aura_settings_save(). */
+    if (screen == AURA_SCREEN_SETTINGS_REPEAT)
+    {
+        global_settings.repeat_mode = index;
+        settings_save();
+        return;
+    }
+
     switch (screen)
     {
     case AURA_SCREEN_SETTINGS_THEME:
@@ -178,6 +206,31 @@ static void apply_choice(aura_screen_id_t screen, int index)
         break;
     }
     aura_settings_save();
+}
+
+/* -- Aleatorio: booleano real de Rockbox (playlist_start() ya lo lee
+ * solo, D-021) -- pantalla propia con el widget de fila booleana. */
+static void draw_shuffle(void)
+{
+    aura_widgets_draw_bool_row(aura_str(AURA_STR_SETTINGS_SHUFFLE),
+                                aura_str(AURA_STR_SETTINGS_SHUFFLE),
+                                global_settings.playlist_shuffle);
+}
+
+static void handle_shuffle(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_SELECT:
+        global_settings.playlist_shuffle = !global_settings.playlist_shuffle;
+        settings_save();
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
 }
 
 /* -- Dibujo -------------------------------------------------------------- */
@@ -407,6 +460,8 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_brightness();
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
         draw_about();
+    else if (screen == AURA_SCREEN_SETTINGS_SHUFFLE)
+        draw_shuffle();
     else if (is_coverflow_screen(screen))
         aura_coverflow_draw(nav, screen);
     else if (is_music_browse_screen(screen))
@@ -607,6 +662,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_choice_list(nav, screen, button);
     else if (screen == AURA_SCREEN_SETTINGS_BRIGHTNESS)
         handle_brightness(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_SHUFFLE)
+        handle_shuffle(nav, button);
     else if (is_coverflow_screen(screen))
         aura_coverflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))

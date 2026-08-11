@@ -64,7 +64,7 @@ void aura_main(void)
 
         if (aura_nav_current(&nav) == AURA_SCREEN_NOWPLAYING
             && aura_nowplaying_active()
-            && !(audio_status() & AUDIO_STATUS_PAUSE))
+            && (!(audio_status() & AUDIO_STATUS_PAUSE) || aura_nowplaying_needs_tick()))
         {
             timeout_ticks = HZ / 2;
         }

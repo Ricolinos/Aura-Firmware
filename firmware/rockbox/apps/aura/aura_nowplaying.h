@@ -12,4 +12,9 @@ bool aura_nowplaying_active(void);
 void aura_nowplaying_draw(void);
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button);
 
+/* True mientras el overlay de volumen (Fase 17, PLAN-UX.md) sigue
+ * visible y necesita un redibujo propio para desaparecer solo, aunque
+ * el usuario no vuelva a tocar el clickwheel. */
+bool aura_nowplaying_needs_tick(void);
+
 #endif /* AURA_NOWPLAYING_H */
