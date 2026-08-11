@@ -10,6 +10,12 @@ typedef struct {
     const char *label;
     const char *icon_name; /* NULL = sin icono */
     int checked;           /* 1 = dibuja una marca (usado en listas de eleccion) */
+    int toggle;            /* -1 = fila normal; 0/1 = dibuja un switch en ese
+                             * estado en vez de checkmark (SELECT lo invierte
+                             * in situ -- doc de comportamiento SS1: `[OPCION]`
+                             * booleano "sigue la regla de profundidad por
+                             * defecto, no tiene mecanica propia", es decir
+                             * vive en la fila misma, nunca en pantalla propia) */
 } aura_list_item_t;
 
 /* Dibuja una pantalla de lista completa: limpia con el color de fondo
@@ -94,6 +100,14 @@ int aura_widgets_draw_icon_selected(const char *name, int size, int x, int y);
  * decide que hacer con el nuevo valor, este widget solo dibuja. */
 void aura_widgets_draw_bool_row(const char *title, const char *label,
                                  int value);
+
+/* Switch iOS-like: pista capsula + circulo que se desliza. `bg` es el
+ * color que rodea la pista -- SHELL_BG en una fila normal, o
+ * SELECTION_FILL si la fila esta bajo la pastilla de seleccion (D-010:
+ * el redondeo recorta contra lo que hay detras, igual que el resto de
+ * los rectangulos redondeados del sistema). Dibuja, no decide estado --
+ * mismo contrato que el resto de aura_widgets. */
+void aura_widgets_draw_toggle(int x, int y, int value, unsigned bg);
 
 /* Slider horizontal generico: titulo arriba, pista+relleno al centro,
  * "value_text" (p. ej. "32 / 63") debajo. `fraction` en [0, 256]. */

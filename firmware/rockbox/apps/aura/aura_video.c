@@ -89,6 +89,7 @@ void aura_video_draw(aura_nav_t *nav)
         items[i].label = s_videos[i];
         items[i].icon_name = "video";
         items[i].checked = 0;
+        items[i].toggle = -1;
     }
     aura_widgets_draw_list(aura_str(AURA_STR_VIDEOS), items, s_video_count,
                             aura_nav_get_selection(nav));

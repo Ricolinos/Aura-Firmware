@@ -38,6 +38,17 @@
 #define PILL_MARGIN_Y 2
 #define PILL_RADIUS   A26_LAYOUT_CORNER_RADIUS_PILL
 
+/* Switch inline para filas booleanas (SS5.1-bis, ver DECISIONS D-075):
+ * pista capsula (radio = alto/2, geometria concentrica igual que el
+ * resto de pastillas del sistema, SS5.4) + circulo que se desliza --
+ * NUNCA una pantalla propia para un Si/No (doc de comportamiento SS1,
+ * `[OPCION]`: "sigue la regla de profundidad por defecto, no tiene
+ * mecanica propia"). Proporcion ~1.8:1 igual que el switch de iOS,
+ * escalada a la fila de 21px del sistema. */
+#define TOGGLE_W      32
+#define TOGGLE_H      18
+#define TOGGLE_MARGIN 2
+
 static const char *theme_dir_name(void)
 {
     return (aura_settings.theme == AURA_THEME_DARK) ? "dark" : "light";
@@ -353,7 +364,15 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         lcd_putsxy(text_x, row_y + A26_SPACING_SM,
                    (const unsigned char *)items[i].label);
 
-        if (items[i].checked)
+        if (items[i].toggle >= 0)
+        {
+            int toggle_x = width - ROW_PAD_X - TOGGLE_W;
+            int toggle_y = row_y + (ROW_HEIGHT - TOGGLE_H) / 2;
+            unsigned row_bg = is_selected ? a26_color(A26_SELECTION_FILL)
+                                           : a26_color(A26_SHELL_BG);
+            aura_widgets_draw_toggle(toggle_x, toggle_y, items[i].toggle, row_bg);
+        }
+        else if (items[i].checked)
         {
             int check_x = width - ROW_PAD_X - A26_ICON_SIZE_MENU;
             int check_y = row_y + (ROW_HEIGHT - A26_ICON_SIZE_MENU) / 2;
@@ -368,6 +387,19 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         draw_right_panel_debounced(count > 0 ? items[selected].icon_name : NULL);
 
     draw_scrollbar(width, visible, count, first);
+}
+
+void aura_widgets_draw_toggle(int x, int y, int value, unsigned bg)
+{
+    int thumb_d = TOGGLE_H - 2 * TOGGLE_MARGIN;
+    int thumb_x = value ? (x + TOGGLE_W - TOGGLE_MARGIN - thumb_d)
+                         : (x + TOGGLE_MARGIN);
+    unsigned track = value ? a26_color(A26_ACCENT) : a26_color(A26_SHELL_RAIL);
+
+    a26_shell_fill_rounded_rect(x, y, TOGGLE_W, TOGGLE_H, TOGGLE_H / 2,
+                                 track, bg);
+    a26_shell_fill_rounded_rect(thumb_x, y + TOGGLE_MARGIN, thumb_d, thumb_d,
+                                 thumb_d / 2, a26_color(A26_SHELL_BG), track);
 }
 
 /* -- Fila booleana (L11) --------------------------------------------- */

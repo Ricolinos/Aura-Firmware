@@ -228,8 +228,28 @@ def generate_fonts(tokens):
         print(f"   {style_name} ({face} @ {size}px) -> {out_fnt.name}")
 
 
+"""Supersampleo antes de umbralizar (SS4 del doc de diseno, corregido tras
+detectar "dientes de sierra" reales en el simulador -- no una suposicion).
+`lcd_bitmap_transparent()` solo admite transparencia binaria por clave de
+color exacta (D-010): un pixel es el color del icono o pura clave magenta,
+sin mezcla parcial posible en tiempo de dibujo. Eso no impide que el
+BORDE se calcule con precision -- el problema real no era "sin
+antialias", era umbralizar el alfa que AppKit ya antialiaseo A LA
+RESOLUCION FINAL (20px), donde una curva solo tiene un puñado de pixeles
+para describirse. Pedirle a AppKit el simbolo a 4x el tamano final y
+reducirlo con un filtro de calidad (Pillow LANCZOS, que promedia
+cobertura real de subpixeles) antes de umbralizar da un borde mucho mas
+fiel a la curva real del glifo -- la umbralizacion final sigue siendo
+binaria (la restriccion de lcd_bitmap_transparent no cambia), pero decide
+cada pixel con informacion de cobertura de verdad en vez de con el
+antialias ya escaso de un render nativo a 20px."""
+SUPERSAMPLE = 8
+
+
 def render_symbol_shapes(tokens, shapes_dir):
-    """Renderiza cada (simbolo, tamano) una sola vez, negro sobre alfa 0.
+    """Renderiza cada (simbolo, tamano) una sola vez a SUPERSAMPLE x el
+    tamano final, negro sobre alfa 0 -- generate_icons() reduce con
+    filtro de calidad antes de umbralizar (ver nota de modulo).
 
     La forma no depende del tema ni de la variante -- solo el color, que
     se aplica despues con Pillow. Un unico proceso de Swift para todo el
@@ -242,9 +262,10 @@ def render_symbol_shapes(tokens, shapes_dir):
     jobs = []
     for icon_key, symbol_name in icon_cfg["names"].items():
         for size_name, size_px in icon_cfg["sizes"].items():
+            render_px = size_px * SUPERSAMPLE
             jobs.append({
                 "symbol": symbol_name,
-                "px": size_px,
+                "px": render_px,
                 "weight": icon_cfg["weight_by_size"][size_name],
                 "out": str(shapes_dir / f"{icon_key}-{size_px}.png"),
             })
@@ -301,6 +322,13 @@ def generate_icons(tokens):
             for icon_key in icon_cfg["names"]:
                 for size_px in icon_cfg["sizes"].values():
                     src = Image.open(shapes_dir / f"{icon_key}-{size_px}.png").convert("RGBA")
+                    # Reducir DESPUES de renderizar a SUPERSAMPLE x el
+                    # tamano final (ver nota de modulo mas arriba): LANCZOS
+                    # promedia la cobertura real de los subpixeles del
+                    # render en alta resolucion, asi el canal alfa que se
+                    # umbraliza abajo describe la curva real del glifo, no
+                    # el antialias ya escaso de un render nativo a 20px.
+                    src = src.resize((size_px, size_px), Image.LANCZOS)
                     mask = src.getchannel("A").point(
                         lambda a: 255 if a >= ALPHA_THRESHOLD else 0, mode="1"
                     )

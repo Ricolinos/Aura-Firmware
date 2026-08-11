@@ -34,6 +34,11 @@ typedef enum {
     AURA_SCREEN_SETTINGS_BRIGHTNESS,
     AURA_SCREEN_SETTINGS_LANGUAGE,
     AURA_SCREEN_SETTINGS_ABOUT,
+    /* SHUFFLE y CLICKER ya NO son pantallas navegables (D-075): son
+     * booleanos que viven inline en la fila de Ajustes con un switch.
+     * El identificador se conserva como token estable para esa fila
+     * (nav_entry_t.target, aura_screens.c) -- aura_nav_push() nunca se
+     * llama con ellos. */
     AURA_SCREEN_SETTINGS_SHUFFLE,
     AURA_SCREEN_SETTINGS_REPEAT,
     AURA_SCREEN_SETTINGS_BACKLIGHT,

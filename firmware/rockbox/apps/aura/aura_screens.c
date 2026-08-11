@@ -72,22 +72,25 @@ static const nav_entry_t music_entries[] = {
     { AURA_STR_MUSIC_GENRES,    NULL, AURA_SCREEN_MUSIC_GENRES },
 };
 
+/* Iconos elegidos y verificados contra el catalogo real de SF Symbols
+ * (D-075) -- ninguno se repite dentro de la lista (doc SS4, "hermanos se
+ * distinguen"). */
 static const nav_entry_t settings_entries[] = {
-    { AURA_STR_SETTINGS_THEME,      NULL, AURA_SCREEN_SETTINGS_THEME },
-    { AURA_STR_SETTINGS_ANIMATIONS, NULL, AURA_SCREEN_SETTINGS_ANIMATIONS },
-    { AURA_STR_SETTINGS_GRAPHICS,   NULL, AURA_SCREEN_SETTINGS_GRAPHICS },
-    { AURA_STR_SETTINGS_EQ,         NULL, AURA_SCREEN_SETTINGS_EQ },
-    { AURA_STR_SETTINGS_BRIGHTNESS, NULL, AURA_SCREEN_SETTINGS_BRIGHTNESS },
-    { AURA_STR_SETTINGS_SHUFFLE,    NULL, AURA_SCREEN_SETTINGS_SHUFFLE },
-    { AURA_STR_SETTINGS_REPEAT,     NULL, AURA_SCREEN_SETTINGS_REPEAT },
-    { AURA_STR_SETTINGS_BACKLIGHT,     NULL, AURA_SCREEN_SETTINGS_BACKLIGHT },
-    { AURA_STR_SETTINGS_SLEEPTIMER,    NULL, AURA_SCREEN_SETTINGS_SLEEPTIMER },
-    { AURA_STR_SETTINGS_VOLUME_LIMIT,  NULL, AURA_SCREEN_SETTINGS_VOLUME_LIMIT },
-    { AURA_STR_SETTINGS_CLICKER,       NULL, AURA_SCREEN_SETTINGS_CLICKER },
-    { AURA_STR_SETTINGS_MAINMENU,      NULL, AURA_SCREEN_SETTINGS_MAINMENU },
-    { AURA_STR_SETTINGS_LANGUAGE,   NULL, AURA_SCREEN_SETTINGS_LANGUAGE },
-    { AURA_STR_SETTINGS_ABOUT,      NULL, AURA_SCREEN_SETTINGS_ABOUT },
-    { AURA_STR_SETTINGS_RESET,         NULL, AURA_SCREEN_SETTINGS_RESET },
+    { AURA_STR_SETTINGS_THEME,      "theme",             AURA_SCREEN_SETTINGS_THEME },
+    { AURA_STR_SETTINGS_ANIMATIONS, "motion",            AURA_SCREEN_SETTINGS_ANIMATIONS },
+    { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
+    { AURA_STR_SETTINGS_EQ,         "sliders-horizontal", AURA_SCREEN_SETTINGS_EQ },
+    { AURA_STR_SETTINGS_BRIGHTNESS, "sun",               AURA_SCREEN_SETTINGS_BRIGHTNESS },
+    { AURA_STR_SETTINGS_SHUFFLE,    "shuffle",           AURA_SCREEN_SETTINGS_SHUFFLE },
+    { AURA_STR_SETTINGS_REPEAT,     "repeat",            AURA_SCREEN_SETTINGS_REPEAT },
+    { AURA_STR_SETTINGS_BACKLIGHT,     "backlight",      AURA_SCREEN_SETTINGS_BACKLIGHT },
+    { AURA_STR_SETTINGS_SLEEPTIMER,    "sleep",          AURA_SCREEN_SETTINGS_SLEEPTIMER },
+    { AURA_STR_SETTINGS_VOLUME_LIMIT,  "volume-limit",   AURA_SCREEN_SETTINGS_VOLUME_LIMIT },
+    { AURA_STR_SETTINGS_CLICKER,       "tap",            AURA_SCREEN_SETTINGS_CLICKER },
+    { AURA_STR_SETTINGS_MAINMENU,      "menu-list",      AURA_SCREEN_SETTINGS_MAINMENU },
+    { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
+    { AURA_STR_SETTINGS_ABOUT,      "info",              AURA_SCREEN_SETTINGS_ABOUT },
+    { AURA_STR_SETTINGS_RESET,         "reset",          AURA_SCREEN_SETTINGS_RESET },
 };
 
 static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
@@ -261,29 +264,33 @@ static void apply_choice(aura_screen_id_t screen, int index)
     aura_settings_save();
 }
 
-/* -- Aleatorio: booleano real de Rockbox (playlist_start() ya lo lee
- * solo, D-021) -- pantalla propia con el widget de fila booleana. */
-static void draw_shuffle(void)
+/* -- Aleatorio y Clicker: booleanos reales de Rockbox (playlist_shuffle,
+ * D-021; keyclick != 0, D-06x) -- viven inline en la fila de Ajustes con
+ * un switch (D-075), no en pantalla propia: el doc de comportamiento ya
+ * los describe como `[OPCION]` simple, "sigue la regla de profundidad
+ * por defecto, no tiene mecanica propia". `settings_row_toggle_value()`
+ * lee el valor actual para dibujar el switch; `toggle_settings_row()`
+ * lo invierte in situ. Ambas viven aca porque son las dos unicas filas
+ * de Ajustes con este comportamiento hoy -- si aparece una tercera, se
+ * generaliza. */
+static int settings_row_toggle_value(aura_screen_id_t target)
 {
-    aura_widgets_draw_bool_row(aura_str(AURA_STR_SETTINGS_SHUFFLE),
-                                aura_str(AURA_STR_SETTINGS_SHUFFLE),
-                                global_settings.playlist_shuffle);
+    if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
+        return global_settings.playlist_shuffle;
+    if (target == AURA_SCREEN_SETTINGS_CLICKER)
+        return global_settings.keyclick != 0;
+    return -1;
 }
 
-static void handle_shuffle(aura_nav_t *nav, long button)
+static void toggle_settings_row(aura_screen_id_t target)
 {
-    switch (button)
-    {
-    case BUTTON_SELECT:
+    if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
         global_settings.playlist_shuffle = !global_settings.playlist_shuffle;
-        settings_save();
-        break;
-    case BUTTON_MENU:
-        aura_nav_pop(nav);
-        break;
-    default:
-        break;
-    }
+    else if (target == AURA_SCREEN_SETTINGS_CLICKER)
+        global_settings.keyclick = global_settings.keyclick ? 0 : 2;
+    else
+        return;
+    settings_save();
 }
 
 /* -- Dibujo -------------------------------------------------------------- */
@@ -300,6 +307,7 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].label = aura_str(entries[i].label_id);
         items[i].icon_name = entries[i].icon_name;
         items[i].checked = 0;
+        items[i].toggle = settings_row_toggle_value(entries[i].target);
     }
 
     /* "Aura" es el nombre de la marca, igual en ambos idiomas: no va en
@@ -320,8 +328,17 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
     for (i = 0; i < count; i++)
     {
         items[i].label = aura_str(labels[i]);
-        items[i].icon_name = NULL;
+        /* Iconos canonicos del doc de diseno SS4 ("sun.max.circle /
+         * moon.circle = temas") -- unica lista de eleccion con icono
+         * propio por fila hoy: el resto (Graficos/EQ/Idioma/Repetir) son
+         * niveles o presets abstractos sin un simbolo 1:1 natural, y
+         * forzar uno repetido violaria "hermanos se distinguen" mas de
+         * lo que ayudaria (D-075). */
+        items[i].icon_name = (screen == AURA_SCREEN_SETTINGS_THEME)
+            ? (i == 0 ? "theme-light" : "theme-dark")
+            : NULL;
         items[i].checked = (i == current);
+        items[i].toggle = -1;
     }
 
     aura_widgets_draw_list(aura_str(screen_title_id(screen)), items, count,
@@ -425,6 +442,7 @@ static void draw_backlight(aura_nav_t *nav)
         items[i].label = s_numeric_labels[i];
         items[i].icon_name = NULL;
         items[i].checked = (v == global_settings.backlight_timeout);
+        items[i].toggle = -1;
     }
     aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
                             aura_nav_get_selection(nav));
@@ -479,6 +497,7 @@ static void draw_sleeptimer(aura_nav_t *nav)
         items[i].label = s_numeric_labels[i];
         items[i].icon_name = NULL;
         items[i].checked = (v == (int)global_settings.sleeptimer_duration);
+        items[i].toggle = -1;
     }
     aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
                             aura_nav_get_selection(nav));
@@ -556,33 +575,6 @@ static void handle_volume_limit(aura_nav_t *nav, long button)
     }
 }
 
-/* -- Clicker: booleano real de Rockbox (global_settings.keyclick, 0..3
- * off/weak/moderate/strong) -- Aura lo simplifica a Si/No, aplicando
- * "moderate" (2) al activar. Ver D-06x en DECISIONS.md: system_sound_play()
- * solo suena si algo lo llama -- aura_main.c lo hace en cada boton real. */
-static void draw_clicker(void)
-{
-    aura_widgets_draw_bool_row(aura_str(AURA_STR_SETTINGS_CLICKER),
-                                aura_str(AURA_STR_SETTINGS_CLICKER),
-                                global_settings.keyclick != 0);
-}
-
-static void handle_clicker(aura_nav_t *nav, long button)
-{
-    switch (button)
-    {
-    case BUTTON_SELECT:
-        global_settings.keyclick = global_settings.keyclick ? 0 : 2;
-        settings_save();
-        break;
-    case BUTTON_MENU:
-        aura_nav_pop(nav);
-        break;
-    default:
-        break;
-    }
-}
-
 /* -- Menu principal configurable (L14) --------------------------------- */
 
 #define MAINMENU_ROWS 4
@@ -592,17 +584,21 @@ static void draw_mainmenu(aura_nav_t *nav)
     aura_list_item_t items[MAINMENU_ROWS];
 
     items[0].label = aura_str(AURA_STR_VIDEOS);
-    items[0].icon_name = NULL;
+    items[0].icon_name = "video";
     items[0].checked = aura_settings.show_videos;
+    items[0].toggle = -1;
     items[1].label = aura_str(AURA_STR_PHOTOS);
-    items[1].icon_name = NULL;
+    items[1].icon_name = "image";
     items[1].checked = aura_settings.show_photos;
+    items[1].toggle = -1;
     items[2].label = aura_str(AURA_STR_NOWPLAYING);
-    items[2].icon_name = NULL;
+    items[2].icon_name = "play";
     items[2].checked = aura_settings.show_nowplaying;
+    items[2].toggle = -1;
     items[3].label = aura_str(AURA_STR_MAINMENU_RESTORE);
-    items[3].icon_name = NULL;
+    items[3].icon_name = "reset";
     items[3].checked = 0;
+    items[3].toggle = -1;
 
     aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
                             aura_nav_get_selection(nav));
@@ -810,6 +806,7 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
         s_music_items_buf[i].label = s_music_cache[i].label;
         s_music_items_buf[i].icon_name = NULL;
         s_music_items_buf[i].checked = 0;
+        s_music_items_buf[i].toggle = -1;
     }
 
     aura_widgets_draw_list(aura_str(screen_title_id(screen)), s_music_items_buf,
@@ -846,6 +843,7 @@ static void draw_playlists(aura_nav_t *nav)
         s_music_items_buf[i].label = s_playlist_cache[i];
         s_music_items_buf[i].icon_name = NULL;
         s_music_items_buf[i].checked = 0;
+        s_music_items_buf[i].toggle = -1;
     }
 
     aura_widgets_draw_list(aura_str(AURA_STR_MUSIC_PLAYLISTS), s_music_items_buf,
@@ -894,16 +892,12 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_brightness();
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
         draw_about();
-    else if (screen == AURA_SCREEN_SETTINGS_SHUFFLE)
-        draw_shuffle();
     else if (screen == AURA_SCREEN_SETTINGS_BACKLIGHT)
         draw_backlight(nav);
     else if (screen == AURA_SCREEN_SETTINGS_SLEEPTIMER)
         draw_sleeptimer(nav);
     else if (screen == AURA_SCREEN_SETTINGS_VOLUME_LIMIT)
         draw_volume_limit();
-    else if (screen == AURA_SCREEN_SETTINGS_CLICKER)
-        draw_clicker();
     else if (screen == AURA_SCREEN_SETTINGS_MAINMENU)
         draw_mainmenu(nav);
     else if (screen == AURA_SCREEN_SETTINGS_RESET)
@@ -945,6 +939,15 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
             aura_nav_set_selection(nav, sel - 1);
         break;
     case BUTTON_SELECT:
+        /* Filas booleanas (Aleatorio, Clicker): SELECT invierte el
+         * switch in situ y NO navega -- doc de comportamiento SS1,
+         * `[OPCION]` "no tiene mecanica propia" (D-075). Distinto de
+         * cualquier otra fila de Ajustes, que si empuja su pantalla. */
+        if (settings_row_toggle_value(entries[sel].target) >= 0)
+        {
+            toggle_settings_row(entries[sel].target);
+            break;
+        }
         if (screen == AURA_SCREEN_MUSIC)
             aura_music_reset_filters();
         aura_nav_push(nav, entries[sel].target);
@@ -1108,16 +1111,12 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_choice_list(nav, screen, button);
     else if (screen == AURA_SCREEN_SETTINGS_BRIGHTNESS)
         handle_brightness(nav, button);
-    else if (screen == AURA_SCREEN_SETTINGS_SHUFFLE)
-        handle_shuffle(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_BACKLIGHT)
         handle_backlight(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_SLEEPTIMER)
         handle_sleeptimer(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_VOLUME_LIMIT)
         handle_volume_limit(nav, button);
-    else if (screen == AURA_SCREEN_SETTINGS_CLICKER)
-        handle_clicker(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_MAINMENU)
         handle_mainmenu(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_RESET)

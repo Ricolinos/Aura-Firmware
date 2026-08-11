@@ -70,7 +70,8 @@ Todos los colores del código C salen de `a26_color()` (tokens `a26_token_t`, `f
 
 ## 4. Iconografía
 
-- **Solo SF Symbols**, rasterizados de macOS (`design-system/scripts/apple2026_sf_render.swift`, un solo proceso Swift por lote via AppKit). Nunca dibujar glifos a mano ni usar paquetes externos.
+- **Solo SF Symbols**, rasterizados de macOS (`design-system/scripts/apple2026_sf_render.swift`, un solo proceso Swift por lote via AppKit). Nunca dibujar glifos a mano ni usar paquetes externos. Es la misma fuente que usaría cualquier app de Apple -- no hay un catálogo alternativo más "oficial" que pedirle al sistema directamente.
+- **Supersampleo antes de umbralizar (D-075)**: `lcd_bitmap_transparent()` solo admite transparencia binaria por clave de color exacta (D-010) -- un pixel es el color del ícono o la clave magenta pura, sin mezcla parcial en tiempo de dibujo. Eso no obliga a que el borde se vea en escalera: se le pide a AppKit el símbolo a 8× el tamaño final y se reduce con un filtro de calidad (LANCZOS) antes de umbralizar a 128 -- la decisión de cada pixel final sale de cobertura real de subpixeles, no del antialias ya escaso de un render nativo a 20px. Bordes sensiblemente más limpios en ambos temas, verificado en el simulador, dentro de la misma restricción de transparencia binaria (una alternativa real pero mayor -- BMP de 32 bits con plano alfa + `lcd_alpha_bitmap_part`, que Rockbox sí soporta -- queda fuera de esta pasada, ver D-075).
 - **Siempre la variante lineal, nunca `.fill`.** El juego de íconos de menú es de trazo; una variante rellena al lado del resto se lee como una mancha maciza y rompe la fila. Si un símbolo solo existe relleno, se busca otro que signifique lo mismo. Única excepción documentada: `star`/`star.fill` como control de valor (rating) en Ahora suena, no un ícono de menú — ver `Reproductor - Ahora suena.md` §4.
 - Íconos de menú: **20 px, decidido (Fase 27)** — es el tamaño real de icono de menú de Aura, no un valor provisorio. El frame de 30×30/tinta 18px que proponía la v1 de este documento habría exigido crecer `ROW_HEIGHT` (13 px de cuerpo + 2×4 px de margen = 21 px hoy) a unos 38-40 px para que el icono entre con margen — eso casi duplica el alto de fila y baja las filas visibles en 240 px de pantalla de ~10 a ~5-6, una regresión real de navegación con rueda para una ganancia puramente decorativa. Sin lienzo de 30×30 aparte; dos variantes por ícono (color de texto normal y de acento, para la fila activa), un bmp por combinación de tema/tamaño/variante en `design-system/out/icons/<tema>/`. **Diferido, sin fecha**: empaquetar el set en dos tiras únicas (`icons/Apple2026Icons.bmp`/`...Dark.bmp`) en vez de archivos sueltos — es una optimización de empaquetado/IO, no de apariencia; se evaluará si el número de íconos crece lo suficiente para que el costo de abrir un archivo por ícono se note.
 - Símbolos que ya representan algo en iOS se respetan: `gear` = Configuración, `square.grid.2x2` = Extras, `play.rectangle` = Videos, `sun.max.circle`/`moon.circle` = temas, `cable.connector.horizontal` = USB, `magnifyingglass` = solo búsqueda.
@@ -95,6 +96,14 @@ Ya no es una barra de ancho completo como en 2007: es un rectángulo que **no to
 - Radio de esquina: 8 px.
 - Relleno: `SELECTION_FILL`, sin borde ni sombra.
 - Se desplaza entre filas con fundido/deslizamiento corto (ver Movimiento), nunca con un salto.
+
+### 5.1-bis — Switch inline *(especificación nueva, Fase 27 — D-075)*
+Filas booleanas simples (Aleatorio, Clicker — doc de comportamiento §1, `[OPCIÓN]`: "sigue la regla de profundidad por defecto, no tiene mecánica propia") se resuelven **en la fila misma de la lista**, nunca con una pantalla propia de Sí/No. SELECT sobre la fila invierte el valor in situ; la lista no navega.
+- Pista cápsula: 32×18 px, radio = alto/2 (9 px) — geometría concéntrica, no un valor suelto.
+- Círculo: diámetro 14 px (2 px de margen dentro de la pista), se desliza a la derecha cuando está activo.
+- Color de pista: `ACCENT` activo / `SHELL_RAIL` inactivo. Círculo siempre `SHELL_BG` (contraste sobre ambos).
+- Reemplaza el checkmark de fila en las filas que son booleanas reales; las filas de checklist multi-selección (Menú pral., Menú Música) conservan el checkmark — son mecánicas distintas (una fila = un estado binario propio vs. una fila = pertenece o no a un conjunto).
+- Sin animación de deslizamiento propia todavía (Fase 28, motor de movimiento, la añade junto con el resto de los controles).
 
 ### 5.2 — Pastilla de progreso canónica
 4 px de alto, extremos redondeados (filas 0 y 3 con inset 1), carril `PROGRESS_TRACK` + relleno `PROGRESS_FILL`. La flotante va en x=40, ancho−80, y=alto−14, dentro de una cápsula (alto 12, radio 6, retranqueos {4,2,1,1,0,0}, fondo `SHELL_BG`, borde `SHELL_RAIL`).

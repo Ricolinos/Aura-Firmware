@@ -108,6 +108,7 @@ void aura_photos_draw(aura_nav_t *nav)
         items[i].label = s_photos[i].filename;
         items[i].icon_name = "image";
         items[i].checked = 0;
+        items[i].toggle = -1;
     }
     aura_widgets_draw_list(aura_str(AURA_STR_PHOTOS), items, s_photo_count,
                             aura_nav_get_selection(nav));
