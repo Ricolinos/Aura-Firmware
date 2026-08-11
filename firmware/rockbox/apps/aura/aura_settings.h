@@ -42,10 +42,25 @@ typedef struct {
     aura_gfx_mode_t graphics_mode;
     aura_eq_preset_t eq_preset;
     aura_lang_t language;
+    /* Menu principal configurable (L14, Fase 18): Musica y Ajustes
+     * siempre se muestran; estos tres son opcionales. */
+    bool show_videos;
+    bool show_photos;
+    bool show_nowplaying;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */
 extern aura_settings_t aura_settings;
+
+/* True si AURA_CFG_PATH todavia no existe -- primer arranque de Aura
+ * en este dispositivo (o tras un "Restablecer ajustes"). Consultar
+ * *antes* de aura_settings_load() si hace falta distinguir "nunca se
+ * guardo nada" de "el usuario ya elige valores". Ver D-06x, Fase 18:
+ * asi es como aura_main() decide si forzar los defaults opinados sobre
+ * ajustes reales de Rockbox (backlight, volume_limit, poweroff,
+ * sleeptimer) solo una vez, en vez de pisar la eleccion del usuario en
+ * cada arranque. */
+bool aura_settings_is_first_boot(void);
 
 /* Carga aura_settings desde disco (o aplica los valores por defecto si
  * el archivo no existe o esta corrupto) y aplica el preset de EQ
@@ -55,7 +70,23 @@ void aura_settings_load(void);
 /* Persiste aura_settings a disco. */
 void aura_settings_save(void);
 
+/* Vuelve aura_settings a sus valores de fabrica (tema, modo grafico,
+ * EQ, idioma, menu principal) y los persiste -- "Restablecer ajustes"
+ * (Fase 18). No toca ningun ajuste real de Rockbox; para eso ver
+ * aura_settings_apply_core_defaults(). */
+void aura_settings_reset_to_defaults(void);
+
 /* Aplica aura_settings.eq_preset al DSP real de Rockbox. */
 void aura_settings_apply_eq(void);
+
+/* Aplica los defaults opinados de Aura sobre ajustes reales de
+ * Rockbox que tienen pantalla propia en Ajustes desde la Fase 18
+ * (Temporiz. luz, Temporiz. reposo, Limite volumen, apagado por
+ * inactividad) y los persiste con settings_save(). Dos llamadores:
+ * aura_main() en el primer arranque (aura_settings_is_first_boot()),
+ * y "Restablecer ajustes" -- para que un reset vuelva a los defaults
+ * de Aura, no a los de fabrica de Rockbox (que settings_reset() por
+ * si solo restauraria). */
+void aura_settings_apply_core_defaults(void);
 
 #endif /* AURA_SETTINGS_H */

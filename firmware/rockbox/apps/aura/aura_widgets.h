@@ -72,4 +72,11 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
 /* Barra de progreso simple con texto arriba. `fraction` en [0, 256]. */
 void aura_widgets_draw_progress(const char *text, int fraction);
 
+/* Aviso bloqueante con 2 opciones (Si/No), estilo el "aviso" de
+ * PLAN-UX.md S3.8 -- SELECT confirma la opcion resaltada. El llamador
+ * lleva su propio estado de cual esta seleccionada (`yes_selected`);
+ * este widget solo dibuja. */
+void aura_widgets_draw_confirm(const char *title, const char *body,
+                                int yes_selected);
+
 #endif /* AURA_WIDGETS_H */

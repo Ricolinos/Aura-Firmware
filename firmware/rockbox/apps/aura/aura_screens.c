@@ -6,6 +6,9 @@
 #include "backlight.h"
 #include "settings.h"
 #include "version.h"
+#include "sound.h"
+#include "powermgmt.h"
+#include "string-extra.h"
 
 #include "aura_screens.h"
 #include "aura_widgets.h"
@@ -21,7 +24,7 @@
 #include "aura_photos.h"
 #include "aura_video.h"
 
-#define MAX_MENU_ENTRIES 8
+#define MAX_MENU_ENTRIES 16
 
 typedef struct {
     aura_str_id_t label_id;
@@ -29,13 +32,35 @@ typedef struct {
     aura_screen_id_t target;
 } nav_entry_t;
 
-static const nav_entry_t root_entries[] = {
+static const nav_entry_t root_entries_all[] = {
     { AURA_STR_MUSIC,      "music",    AURA_SCREEN_MUSIC },
     { AURA_STR_VIDEOS,     "video",    AURA_SCREEN_VIDEOS },
     { AURA_STR_PHOTOS,     "image",    AURA_SCREEN_PHOTOS },
     { AURA_STR_NOWPLAYING, "play",     AURA_SCREEN_NOWPLAYING },
     { AURA_STR_SETTINGS,   "settings", AURA_SCREEN_SETTINGS },
 };
+/* Musica y Ajustes son fijos; Videos/Fotos/Ahora suena son opcionales
+ * (Menu principal configurable, L14, Fase 18) -- se filtran en tiempo
+ * de dibujo/manejo de boton, no se recorta la tabla fuente. */
+static nav_entry_t root_entries[sizeof(root_entries_all) / sizeof(root_entries_all[0])];
+static int root_entries_count;
+
+static void rebuild_root_entries(void)
+{
+    int i, n = 0;
+    for (i = 0; i < (int)(sizeof(root_entries_all) / sizeof(root_entries_all[0])); i++)
+    {
+        const nav_entry_t *e = &root_entries_all[i];
+        if (e->target == AURA_SCREEN_VIDEOS && !aura_settings.show_videos)
+            continue;
+        if (e->target == AURA_SCREEN_PHOTOS && !aura_settings.show_photos)
+            continue;
+        if (e->target == AURA_SCREEN_NOWPLAYING && !aura_settings.show_nowplaying)
+            continue;
+        root_entries[n++] = *e;
+    }
+    root_entries_count = n;
+}
 
 static const nav_entry_t music_entries[] = {
     { AURA_STR_MUSIC_ARTISTS,   NULL, AURA_SCREEN_MUSIC_ARTISTS },
@@ -52,8 +77,14 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_BRIGHTNESS, NULL, AURA_SCREEN_SETTINGS_BRIGHTNESS },
     { AURA_STR_SETTINGS_SHUFFLE,    NULL, AURA_SCREEN_SETTINGS_SHUFFLE },
     { AURA_STR_SETTINGS_REPEAT,     NULL, AURA_SCREEN_SETTINGS_REPEAT },
+    { AURA_STR_SETTINGS_BACKLIGHT,     NULL, AURA_SCREEN_SETTINGS_BACKLIGHT },
+    { AURA_STR_SETTINGS_SLEEPTIMER,    NULL, AURA_SCREEN_SETTINGS_SLEEPTIMER },
+    { AURA_STR_SETTINGS_VOLUME_LIMIT,  NULL, AURA_SCREEN_SETTINGS_VOLUME_LIMIT },
+    { AURA_STR_SETTINGS_CLICKER,       NULL, AURA_SCREEN_SETTINGS_CLICKER },
+    { AURA_STR_SETTINGS_MAINMENU,      NULL, AURA_SCREEN_SETTINGS_MAINMENU },
     { AURA_STR_SETTINGS_LANGUAGE,   NULL, AURA_SCREEN_SETTINGS_LANGUAGE },
     { AURA_STR_SETTINGS_ABOUT,      NULL, AURA_SCREEN_SETTINGS_ABOUT },
+    { AURA_STR_SETTINGS_RESET,         NULL, AURA_SCREEN_SETTINGS_RESET },
 };
 
 static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
@@ -61,8 +92,9 @@ static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
     switch (screen)
     {
     case AURA_SCREEN_ROOT:
+        rebuild_root_entries();
         *out = root_entries;
-        return sizeof(root_entries) / sizeof(root_entries[0]);
+        return root_entries_count;
     case AURA_SCREEN_MUSIC:
         *out = music_entries;
         return sizeof(music_entries) / sizeof(music_entries[0]);
@@ -100,6 +132,12 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_ABOUT:      return AURA_STR_SETTINGS_ABOUT;
     case AURA_SCREEN_SETTINGS_SHUFFLE:    return AURA_STR_SETTINGS_SHUFFLE;
     case AURA_SCREEN_SETTINGS_REPEAT:     return AURA_STR_SETTINGS_REPEAT;
+    case AURA_SCREEN_SETTINGS_BACKLIGHT:    return AURA_STR_SETTINGS_BACKLIGHT;
+    case AURA_SCREEN_SETTINGS_SLEEPTIMER:   return AURA_STR_SETTINGS_SLEEPTIMER;
+    case AURA_SCREEN_SETTINGS_VOLUME_LIMIT: return AURA_STR_SETTINGS_VOLUME_LIMIT;
+    case AURA_SCREEN_SETTINGS_CLICKER:      return AURA_STR_SETTINGS_CLICKER;
+    case AURA_SCREEN_SETTINGS_MAINMENU:     return AURA_STR_SETTINGS_MAINMENU;
+    case AURA_SCREEN_SETTINGS_RESET:        return AURA_STR_SETTINGS_RESET;
     default:                              return AURA_STR_SETTINGS;
     }
 }
@@ -302,6 +340,304 @@ static void draw_about(void)
                (const unsigned char *)rbversion);
 }
 
+/* -- Temporiz. luz / Temporiz. reposo: listas de opciones numericas,
+ * no de cadenas fijas -- formateadas al vuelo (Fase 18). ------------- */
+
+#define NUMERIC_CHOICE_MAX 8
+static char s_numeric_labels[NUMERIC_CHOICE_MAX][16];
+
+static const int backlight_values[] = { 0, 2, 5, 10, 20, 30, -1 };
+#define BACKLIGHT_VALUES_N ((int)(sizeof(backlight_values) / sizeof(backlight_values[0])))
+
+static const int sleeptimer_values[] = { 0, 15, 30, 60, 90, 120 };
+#define SLEEPTIMER_VALUES_N ((int)(sizeof(sleeptimer_values) / sizeof(sleeptimer_values[0])))
+
+static void draw_backlight(aura_nav_t *nav)
+{
+    aura_list_item_t items[BACKLIGHT_VALUES_N];
+    int i;
+
+    for (i = 0; i < BACKLIGHT_VALUES_N; i++)
+    {
+        int v = backlight_values[i];
+        if (v == 0)
+            strlcpy(s_numeric_labels[i], aura_str(AURA_STR_TIMEOUT_OFF), sizeof(s_numeric_labels[i]));
+        else if (v < 0)
+            strlcpy(s_numeric_labels[i], aura_str(AURA_STR_TIMEOUT_ALWAYS), sizeof(s_numeric_labels[i]));
+        else
+            snprintf(s_numeric_labels[i], sizeof(s_numeric_labels[i]), "%d s", v);
+
+        items[i].label = s_numeric_labels[i];
+        items[i].icon_name = NULL;
+        items[i].checked = (v == global_settings.backlight_timeout);
+    }
+    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
+                            aura_nav_get_selection(nav));
+}
+
+static void handle_backlight(aura_nav_t *nav, long button)
+{
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (sel < BACKLIGHT_VALUES_N - 1)
+            aura_nav_set_selection(nav, sel + 1);
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (sel > 0)
+            aura_nav_set_selection(nav, sel - 1);
+        break;
+    case BUTTON_SELECT:
+        /* Aura simplifica a un solo ajuste (en vez de separar
+         * desenchufado/enchufado, D-051): aplica el mismo valor a
+         * ambos backends reales de Rockbox. */
+        global_settings.backlight_timeout = backlight_values[sel];
+        global_settings.backlight_timeout_plugged = backlight_values[sel];
+        backlight_set_timeout(global_settings.backlight_timeout);
+        backlight_set_timeout_plugged(global_settings.backlight_timeout_plugged);
+        settings_save();
+        aura_nav_pop(nav);
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+static void draw_sleeptimer(aura_nav_t *nav)
+{
+    aura_list_item_t items[SLEEPTIMER_VALUES_N];
+    int i;
+
+    for (i = 0; i < SLEEPTIMER_VALUES_N; i++)
+    {
+        int v = sleeptimer_values[i];
+        if (v == 0)
+            strlcpy(s_numeric_labels[i], aura_str(AURA_STR_TIMEOUT_OFF), sizeof(s_numeric_labels[i]));
+        else
+            snprintf(s_numeric_labels[i], sizeof(s_numeric_labels[i]), "%d min", v);
+
+        items[i].label = s_numeric_labels[i];
+        items[i].icon_name = NULL;
+        items[i].checked = (v == (int)global_settings.sleeptimer_duration);
+    }
+    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
+                            aura_nav_get_selection(nav));
+}
+
+static void handle_sleeptimer(aura_nav_t *nav, long button)
+{
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (sel < SLEEPTIMER_VALUES_N - 1)
+            aura_nav_set_selection(nav, sel + 1);
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (sel > 0)
+            aura_nav_set_selection(nav, sel - 1);
+        break;
+    case BUTTON_SELECT:
+        global_settings.sleeptimer_duration = sleeptimer_values[sel];
+        set_sleeptimer_duration(sleeptimer_values[sel]);
+        settings_save();
+        aura_nav_pop(nav);
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+/* -- Limite de volumen: slider sobre el rango real del DAC ------------ */
+
+static void draw_volume_limit(void)
+{
+    int vol_min = sound_min(SOUND_VOLUME);
+    int vol_max = sound_max(SOUND_VOLUME);
+    int fraction = (vol_max > vol_min)
+        ? (256 * (global_settings.volume_limit - vol_min)) / (vol_max - vol_min)
+        : 0;
+    char buf[16];
+
+    snprintf(buf, sizeof(buf), "%d dB", global_settings.volume_limit);
+    aura_widgets_draw_slider(aura_str(AURA_STR_SETTINGS_VOLUME_LIMIT), fraction, buf);
+}
+
+static void handle_volume_limit(aura_nav_t *nav, long button)
+{
+    int vol_min = sound_min(SOUND_VOLUME);
+    int vol_max = sound_max(SOUND_VOLUME);
+    int step = sound_steps(SOUND_VOLUME);
+
+    if (step <= 0)
+        step = 1;
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (global_settings.volume_limit + step <= vol_max)
+            global_settings.volume_limit += step;
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (global_settings.volume_limit - step >= vol_min)
+            global_settings.volume_limit -= step;
+        break;
+    case BUTTON_SELECT:
+    case BUTTON_MENU:
+        settings_save();
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+/* -- Clicker: booleano real de Rockbox (global_settings.keyclick, 0..3
+ * off/weak/moderate/strong) -- Aura lo simplifica a Si/No, aplicando
+ * "moderate" (2) al activar. Ver D-06x en DECISIONS.md: system_sound_play()
+ * solo suena si algo lo llama -- aura_main.c lo hace en cada boton real. */
+static void draw_clicker(void)
+{
+    aura_widgets_draw_bool_row(aura_str(AURA_STR_SETTINGS_CLICKER),
+                                aura_str(AURA_STR_SETTINGS_CLICKER),
+                                global_settings.keyclick != 0);
+}
+
+static void handle_clicker(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_SELECT:
+        global_settings.keyclick = global_settings.keyclick ? 0 : 2;
+        settings_save();
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+/* -- Menu principal configurable (L14) --------------------------------- */
+
+#define MAINMENU_ROWS 4
+
+static void draw_mainmenu(aura_nav_t *nav)
+{
+    aura_list_item_t items[MAINMENU_ROWS];
+
+    items[0].label = aura_str(AURA_STR_VIDEOS);
+    items[0].icon_name = NULL;
+    items[0].checked = aura_settings.show_videos;
+    items[1].label = aura_str(AURA_STR_PHOTOS);
+    items[1].icon_name = NULL;
+    items[1].checked = aura_settings.show_photos;
+    items[2].label = aura_str(AURA_STR_NOWPLAYING);
+    items[2].icon_name = NULL;
+    items[2].checked = aura_settings.show_nowplaying;
+    items[3].label = aura_str(AURA_STR_MAINMENU_RESTORE);
+    items[3].icon_name = NULL;
+    items[3].checked = 0;
+
+    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
+                            aura_nav_get_selection(nav));
+}
+
+static void handle_mainmenu(aura_nav_t *nav, long button)
+{
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (sel < MAINMENU_ROWS - 1)
+            aura_nav_set_selection(nav, sel + 1);
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (sel > 0)
+            aura_nav_set_selection(nav, sel - 1);
+        break;
+    case BUTTON_SELECT:
+        switch (sel)
+        {
+        case 0: aura_settings.show_videos = !aura_settings.show_videos; break;
+        case 1: aura_settings.show_photos = !aura_settings.show_photos; break;
+        case 2: aura_settings.show_nowplaying = !aura_settings.show_nowplaying; break;
+        case 3:
+            aura_settings.show_videos = true;
+            aura_settings.show_photos = true;
+            aura_settings.show_nowplaying = true;
+            break;
+        }
+        aura_settings_save();
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+/* -- Restablecer ajustes: aviso bloqueante con confirmacion (S3.8) ----- */
+
+static bool s_reset_confirm_yes = false;
+
+static void draw_reset_confirm(void)
+{
+    aura_widgets_draw_confirm(aura_str(AURA_STR_RESET_CONFIRM_TITLE),
+                               aura_str(AURA_STR_RESET_CONFIRM_BODY),
+                               s_reset_confirm_yes);
+}
+
+static void handle_reset_confirm(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+    case BUTTON_SCROLL_BACK:
+        s_reset_confirm_yes = !s_reset_confirm_yes;
+        break;
+    case BUTTON_SELECT:
+        if (s_reset_confirm_yes)
+        {
+            /* settings_reset() vuelve TODO ajuste real de Rockbox a su
+             * default de fabrica -- incluidos los que la Fase 18 opina
+             * distinto (backlight/volume_limit/poweroff/sleeptimer);
+             * aura_settings_apply_core_defaults() los vuelve a poner
+             * en los valores de Aura justo despues, igual que en el
+             * primer arranque. Los ajustes de higiene "siempre en cada
+             * boot" (D-051/D-055: statusbar, colores, usb_hid, etc.)
+             * tambien vuelven al default de Rockbox hasta el proximo
+             * reinicio -- apps/main.c los reaplica en cada arranque de
+             * cualquier forma, asi que se autocorrigen solos. */
+            settings_reset();
+            settings_save();
+            aura_settings_reset_to_defaults();
+            aura_settings_apply_core_defaults();
+        }
+        s_reset_confirm_yes = false;
+        aura_nav_pop(nav);
+        break;
+    case BUTTON_MENU:
+        s_reset_confirm_yes = false;
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
 static void draw_message_centered(aura_str_id_t msg_id)
 {
     int w, h;
@@ -462,6 +798,18 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_about();
     else if (screen == AURA_SCREEN_SETTINGS_SHUFFLE)
         draw_shuffle();
+    else if (screen == AURA_SCREEN_SETTINGS_BACKLIGHT)
+        draw_backlight(nav);
+    else if (screen == AURA_SCREEN_SETTINGS_SLEEPTIMER)
+        draw_sleeptimer(nav);
+    else if (screen == AURA_SCREEN_SETTINGS_VOLUME_LIMIT)
+        draw_volume_limit();
+    else if (screen == AURA_SCREEN_SETTINGS_CLICKER)
+        draw_clicker();
+    else if (screen == AURA_SCREEN_SETTINGS_MAINMENU)
+        draw_mainmenu(nav);
+    else if (screen == AURA_SCREEN_SETTINGS_RESET)
+        draw_reset_confirm();
     else if (is_coverflow_screen(screen))
         aura_coverflow_draw(nav, screen);
     else if (is_music_browse_screen(screen))
@@ -664,6 +1012,18 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_brightness(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_SHUFFLE)
         handle_shuffle(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_BACKLIGHT)
+        handle_backlight(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_SLEEPTIMER)
+        handle_sleeptimer(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_VOLUME_LIMIT)
+        handle_volume_limit(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_CLICKER)
+        handle_clicker(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_MAINMENU)
+        handle_mainmenu(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_RESET)
+        handle_reset_confirm(nav, button);
     else if (is_coverflow_screen(screen))
         aura_coverflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))

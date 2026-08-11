@@ -21,6 +21,22 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_REPEAT_ALL]           = "Todo",
     [AURA_STR_REPEAT_ONE]           = "Uno",
 
+    [AURA_STR_SETTINGS_BACKLIGHT]    = "Temporiz. luz",
+    [AURA_STR_SETTINGS_SLEEPTIMER]   = "Temporiz. reposo",
+    [AURA_STR_SETTINGS_VOLUME_LIMIT] = "Limite volumen",
+    [AURA_STR_SETTINGS_CLICKER]      = "Clicker",
+    [AURA_STR_SETTINGS_MAINMENU]     = "Menu principal",
+    [AURA_STR_SETTINGS_RESET]        = "Restablecer ajustes",
+
+    [AURA_STR_TIMEOUT_OFF]          = "Desactivado",
+    [AURA_STR_TIMEOUT_ALWAYS]       = "Siempre",
+
+    [AURA_STR_MAINMENU_RESTORE]     = "Restaurar menu principal",
+
+    [AURA_STR_RESET_CONFIRM_TITLE]  = "Restablecer ajustes",
+    [AURA_STR_RESET_CONFIRM_BODY]   = "Esto vuelve todos los ajustes a su valor de fabrica.",
+    [AURA_STR_RESET_DONE]           = "Ajustes restablecidos",
+
     [AURA_STR_THEME_LIGHT]        = "Claro",
     [AURA_STR_THEME_DARK]         = "Oscuro",
 
@@ -75,6 +91,22 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_REPEAT_OFF]           = "Off",
     [AURA_STR_REPEAT_ALL]           = "All",
     [AURA_STR_REPEAT_ONE]           = "One",
+
+    [AURA_STR_SETTINGS_BACKLIGHT]    = "Backlight timer",
+    [AURA_STR_SETTINGS_SLEEPTIMER]   = "Sleep timer",
+    [AURA_STR_SETTINGS_VOLUME_LIMIT] = "Volume limit",
+    [AURA_STR_SETTINGS_CLICKER]      = "Clicker",
+    [AURA_STR_SETTINGS_MAINMENU]     = "Main menu",
+    [AURA_STR_SETTINGS_RESET]        = "Reset settings",
+
+    [AURA_STR_TIMEOUT_OFF]          = "Off",
+    [AURA_STR_TIMEOUT_ALWAYS]       = "Always",
+
+    [AURA_STR_MAINMENU_RESTORE]     = "Restore main menu",
+
+    [AURA_STR_RESET_CONFIRM_TITLE]  = "Reset settings",
+    [AURA_STR_RESET_CONFIRM_BODY]   = "This resets every setting back to its default.",
+    [AURA_STR_RESET_DONE]           = "Settings reset",
 
     [AURA_STR_THEME_LIGHT]        = "Light",
     [AURA_STR_THEME_DARK]         = "Dark",

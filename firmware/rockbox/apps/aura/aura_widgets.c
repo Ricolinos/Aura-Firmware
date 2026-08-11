@@ -274,6 +274,121 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
 
 /* -- Progreso ----------------------------------------------------------- */
 
+/* -- Aviso bloqueante con 2 opciones (S3.8) ---------------------------- */
+
+#define CONFIRM_MAX_LINES 4
+
+/* Word-wrap simple y propio: no hace falta la generalidad de
+ * apps/gui/splash.c (tabs, multi-pantalla, memoria de tamano maximo)
+ * para un cuerpo corto de 2-3 lineas fijas. */
+static int wrap_text(const char *text, int max_width, const char **lines, int *lens, int max_lines)
+{
+    int n = 0;
+    const char *p = text;
+
+    while (*p && n < max_lines)
+    {
+        const char *line_start = p;
+        const char *last_space = NULL;
+        const char *cursor = p;
+        char buf[128];
+
+        while (*cursor)
+        {
+            int len = (int)(cursor - line_start) + 1;
+            int w, h;
+            if (len >= (int)sizeof(buf))
+                break;
+            memcpy(buf, line_start, len);
+            buf[len] = '\0';
+            lcd_getstringsize((const unsigned char *)buf, &w, &h);
+            if (w > max_width && last_space)
+                break;
+            if (*cursor == ' ')
+                last_space = cursor;
+            cursor++;
+        }
+
+        if (*cursor == '\0')
+        {
+            lines[n] = line_start;
+            lens[n] = (int)(cursor - line_start);
+            n++;
+            break;
+        }
+
+        if (last_space)
+        {
+            lines[n] = line_start;
+            lens[n] = (int)(last_space - line_start);
+            p = last_space + 1;
+        }
+        else
+        {
+            lines[n] = line_start;
+            lens[n] = (int)(cursor - line_start);
+            p = cursor;
+        }
+        n++;
+    }
+    return n;
+}
+
+void aura_widgets_draw_confirm(const char *title, const char *body, int yes_selected)
+{
+    const char *lines[CONFIRM_MAX_LINES];
+    int lens[CONFIRM_MAX_LINES];
+    int box_w = AURA_SCREEN_WIDTH - 2 * AURA_SPACING_XXL;
+    int box_x = AURA_SPACING_XXL;
+    int text_y, i, n;
+    int btn_y, btn_w, yes_x, no_x;
+    const char *yes_label = aura_str(AURA_STR_YES);
+    const char *no_label = aura_str(AURA_STR_NO);
+
+    aura_theme_clear_screen();
+    aura_statusbar_draw(0, AURA_SCREEN_WIDTH, title, 0);
+
+    lcd_setfont(aura_font(AURA_FONT_STYLE_BODY));
+    lcd_set_foreground(aura_color(AURA_TOK_TEXT_PRIMARY));
+
+    n = wrap_text(body, box_w, lines, lens, CONFIRM_MAX_LINES);
+    text_y = AURA_LAYOUT_STATUSBAR_HEIGHT + AURA_SPACING_XXL;
+    for (i = 0; i < n; i++)
+    {
+        /* lcd_putsxy no acepta longitud: se corta a un buffer chico con
+         * terminador nulo antes de dibujar cada linea envuelta. */
+        char buf[128];
+        int len = lens[i];
+        if (len >= (int)sizeof(buf))
+            len = sizeof(buf) - 1;
+        memcpy(buf, lines[i], len);
+        buf[len] = '\0';
+        lcd_putsxy(box_x, text_y, (const unsigned char *)buf);
+        text_y += AURA_TYPE_BODY + AURA_SPACING_SM;
+    }
+
+    btn_w = 100;
+    btn_y = AURA_SCREEN_HEIGHT - AURA_SPACING_XXL - 32;
+    no_x = box_x;
+    yes_x = box_x + box_w - btn_w;
+
+    lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_ACCENT : AURA_TOK_SURFACE));
+    lcd_fillrect(no_x, btn_y, btn_w, 32);
+    lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_ACCENT : AURA_TOK_SURFACE));
+    lcd_fillrect(yes_x, btn_y, btn_w, 32);
+
+    {
+        int w, h;
+        lcd_set_foreground(aura_color(!yes_selected ? AURA_TOK_ACCENT_ON : AURA_TOK_TEXT_PRIMARY));
+        lcd_getstringsize((const unsigned char *)no_label, &w, &h);
+        lcd_putsxy(no_x + (btn_w - w) / 2, btn_y + (32 - h) / 2, (const unsigned char *)no_label);
+
+        lcd_set_foreground(aura_color(yes_selected ? AURA_TOK_ACCENT_ON : AURA_TOK_TEXT_PRIMARY));
+        lcd_getstringsize((const unsigned char *)yes_label, &w, &h);
+        lcd_putsxy(yes_x + (btn_w - w) / 2, btn_y + (32 - h) / 2, (const unsigned char *)yes_label);
+    }
+}
+
 void aura_widgets_draw_progress(const char *text, int fraction)
 {
     int bar_x = AURA_SPACING_XXL;

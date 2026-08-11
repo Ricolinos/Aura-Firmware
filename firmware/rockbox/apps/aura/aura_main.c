@@ -35,8 +35,29 @@ static long next_button(int timeout_ticks)
 void aura_main(void)
 {
     aura_nav_t nav;
+    bool first_boot = aura_settings_is_first_boot();
 
+    /* Fase 18 (PLAN-UX.md) / D-06x: aplica los defaults opinados de
+     * Aura sobre ajustes reales de Rockbox (backlight, volume_limit,
+     * poweroff, sleeptimer) una sola vez, en el primer arranque -- ya
+     * no se fuerzan en cada boot desde apps/main.c (eso pisaria en
+     * silencio lo que el usuario elija y guarde desde las pantallas de
+     * Ajustes que la Fase 18 agrega). */
+    if (first_boot)
+        aura_settings_apply_core_defaults();
     aura_settings_load();
+    if (first_boot)
+        /* aura_settings_is_first_boot() se basa en si aura.cfg ya
+         * existe -- pero aura_settings_save() solo se llama hoy desde
+         * las pantallas de Tema/Graficos/EQ/Idioma. Si el usuario
+         * jamas toca esas 4 y solo cambia, por ejemplo, Temporiz. luz
+         * (que persiste con el settings_save() de Rockbox, no con
+         * este), aura.cfg nunca se crearia y el proximo arranque
+         * volveria a pisar su eleccion pensando que sigue siendo el
+         * primero. Se crea aca, de una vez, para que la marca de
+         * "primer arranque ya hecho" no dependa de que pantallas
+         * visito el usuario. */
+        aura_settings_save();
     aura_theme_init();
     aura_nav_init(&nav, AURA_SCREEN_ROOT);
 
@@ -100,6 +121,14 @@ void aura_main(void)
          * propio evento si lo manejo, o 0 para un boton normal. */
         if (default_event_handler(button) != 0)
             continue;
+
+        /* Clicker (Fase 18, PLAN-UX.md): Aura no usa apps/action.c (D-022),
+         * asi que keyclick_click() -- su unico llamador real -- nunca
+         * corre; hay que pedir el beep directamente aca en cada boton
+         * real. system_sound_play() ya no hace nada si
+         * global_settings.keyclick esta en 0 (Desactivado). */
+        if (button != BUTTON_NONE)
+            system_sound_play(SOUND_KEYCLICK);
 
         aura_screens_handle_button(&nav, button);
     }

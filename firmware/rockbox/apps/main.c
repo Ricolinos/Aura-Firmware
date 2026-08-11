@@ -479,10 +479,14 @@ static void init(void)
     global_settings.show_shutdown_message = false;   /* sin "Shutting down..." de Rockbox */
     global_settings.talk_menu = false;               /* Aura no tiene voces .talk propias */
     global_settings.clear_settings_on_hold = false;   /* un flip de Hold no debe borrar ajustes */
-    global_settings.volume_limit = -6;               /* limite de volumen razonable (antes: sin limite) */
-    global_settings.poweroff = 30;                   /* apagado por inactividad, en minutos */
-    global_settings.backlight_timeout = 10;          /* segundos, desenchufado */
-    global_settings.backlight_timeout_plugged = 30;  /* segundos, enchufado */
+    /* volume_limit/poweroff/backlight_timeout(_plugged)/sleeptimer_duration
+     * YA NO se fuerzan aca: desde la Fase 18 tienen pantallas propias en
+     * Ajustes que llaman settings_save(), y forzarlos en cada arranque
+     * pisaria silenciosamente la eleccion del usuario. aura_main()
+     * aplica esos defaults opinados una sola vez, en el primer
+     * arranque (aura_settings_is_first_boot()), no en cada boot. Ver
+     * D-051 (higiene original) y la actualizacion de la Fase 18 en
+     * DECISIONS.md. */
     /* Fase 14 (PLAN-UX.md) / D-055: re-skin de apps/gui/splash.c (y de
      * cualquier otra pantalla que use el tema "core" de Rockbox, como
      * los menus del plugin mpegplayer) a la paleta y tipografia de
@@ -786,10 +790,9 @@ static void init(void)
     global_settings.show_shutdown_message = false;
     global_settings.talk_menu = false;
     global_settings.clear_settings_on_hold = false;
-    global_settings.volume_limit = -6;
-    global_settings.poweroff = 30;
-    global_settings.backlight_timeout = 10;
-    global_settings.backlight_timeout_plugged = 30;
+    /* volume_limit/poweroff/backlight_timeout(_plugged)/sleeptimer_duration:
+     * ver el comentario equivalente en la otra variante de init() mas
+     * arriba -- se aplican una sola vez desde aura_main(), no aca. */
     /* Fase 14 (PLAN-UX.md) / D-055: ver el comentario equivalente en la
      * otra variante de init() mas arriba. */
 #ifdef HAVE_LCD_COLOR

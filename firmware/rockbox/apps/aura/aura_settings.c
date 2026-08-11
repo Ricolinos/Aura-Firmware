@@ -7,6 +7,7 @@
 #include "rbpaths.h"
 #include "settings.h"
 #include "eq.h"
+#include "backlight.h"
 
 #include "aura_settings.h"
 
@@ -20,6 +21,9 @@ static const aura_settings_t aura_settings_defaults = {
     .graphics_mode = AURA_GFX_MINIMAL,
     .eq_preset = AURA_EQ_FLAT,
     .language = AURA_LANG_ES,
+    .show_videos = true,
+    .show_photos = true,
+    .show_nowplaying = true,
 };
 
 /* Ganancia (dB) por banda para cada preset; el resto de cada banda
@@ -55,6 +59,30 @@ void aura_settings_apply_eq(void)
     sound_settings_apply();
 }
 
+bool aura_settings_is_first_boot(void)
+{
+    return !file_exists(AURA_CFG_PATH);
+}
+
+void aura_settings_reset_to_defaults(void)
+{
+    aura_settings = aura_settings_defaults;
+    aura_settings_apply_eq();
+    aura_settings_save();
+}
+
+void aura_settings_apply_core_defaults(void)
+{
+    global_settings.volume_limit = -6;
+    global_settings.poweroff = 30;
+    global_settings.backlight_timeout = 10;
+    global_settings.backlight_timeout_plugged = 30;
+    global_settings.sleeptimer_duration = 0;
+    backlight_set_timeout(global_settings.backlight_timeout);
+    backlight_set_timeout_plugged(global_settings.backlight_timeout_plugged);
+    settings_save();
+}
+
 void aura_settings_load(void)
 {
     int fd;
@@ -80,6 +108,12 @@ void aura_settings_load(void)
                 aura_settings.eq_preset = clamp_enum(v, AURA_EQ_COUNT);
             else if (!strcmp(name, "language"))
                 aura_settings.language = clamp_enum(v, AURA_LANG_COUNT);
+            else if (!strcmp(name, "show_videos"))
+                aura_settings.show_videos = (v != 0);
+            else if (!strcmp(name, "show_photos"))
+                aura_settings.show_photos = (v != 0);
+            else if (!strcmp(name, "show_nowplaying"))
+                aura_settings.show_nowplaying = (v != 0);
         }
         close(fd);
     }
@@ -102,6 +136,9 @@ void aura_settings_save(void)
     fdprintf(fd, "graphics_mode: %d\n", (int)aura_settings.graphics_mode);
     fdprintf(fd, "eq_preset: %d\n", (int)aura_settings.eq_preset);
     fdprintf(fd, "language: %d\n", (int)aura_settings.language);
+    fdprintf(fd, "show_videos: %d\n", (int)aura_settings.show_videos);
+    fdprintf(fd, "show_photos: %d\n", (int)aura_settings.show_photos);
+    fdprintf(fd, "show_nowplaying: %d\n", (int)aura_settings.show_nowplaying);
 
     close(fd);
 }
