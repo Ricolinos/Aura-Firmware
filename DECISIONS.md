@@ -427,6 +427,10 @@ Esto dejó **8 funciones sin llamador** (`show_start_menu`, y en cascada `get_st
 
 **Aceptación**: sim y build ARM real compilan limpio, **sin ningún warning nuevo** (se verificó explícitamente que la remoción en cascada de las 7 funciones muertas no dejó ninguna advertencia de `-Wunused-function` pendiente); `rockbox.ipod` actualizado. 95/95 tests host-side sin cambios. Verificado en el simulador con el fixture de video de prueba: reproduce directo, sin menú, sin regresión.
 
+## D-063 — Fase 21 (PLAN-UX.md): Extras (cronómetro, bloqueo de pantalla) — omitida
+
+El propio plan marca esta fase como opcional, "decidir al llegar". Se decide **no implementarla** en esta pasada: son dos pantallas nuevas y autocontenidas (sin dependencias de fases posteriores ni bloqueos para el resto del plan), pero el tiempo restante de esta sesión rinde más invertido en el trabajo de Aura Studio (Fases 23-24, una base de código completamente distinta — Swift/SwiftUI — todavía sin tocar) y en la verificación cruzada final (Fase 25) que en dos funciones que el propio plan calificó de secundarias frente a la fidelidad de navegación/interacción central. Sin cambios de código en esta fase. Si se retoma más adelante, el diseño ya está especificado en PLAN-UX.md §6 Fase 21 y no depende de nada que haya cambiado desde entonces.
+
 ---
 
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
