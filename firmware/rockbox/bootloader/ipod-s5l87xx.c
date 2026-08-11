@@ -844,7 +844,21 @@ void main(void)
     lcd_update();
     sleep(HZ/40);  /* wait for lcd update */
 
+#ifdef IPOD_6G
+    /* Fase 22 (PLAN-UX.md) / D-06x: arranque silencioso -- un iPod real
+     * no muestra texto de fabricante en cada encendido. `verbose` solo
+     * decide si printf() (common.c) fuerza lcd_update() de inmediato
+     * despues de escribir en el framebuffer -- error()/fatal_error()
+     * siguen llamando lcd_update() por su cuenta sin importar este
+     * flag, asi que los mensajes de error real y de bateria critica
+     * (battery_trap() mas abajo) se siguen viendo igual. Guardado con
+     * IPOD_6G (no IPOD_NANO3G, que comparte este archivo fuente pero
+     * no es el objetivo de este fork, D-002) para no cambiar el
+     * comportamiento de otro target real de Rockbox. */
+    verbose = false;
+#else
     verbose = true;
+#endif
 
     printf("Rockbox boot loader");
     printf("Version: %s", rbversion);

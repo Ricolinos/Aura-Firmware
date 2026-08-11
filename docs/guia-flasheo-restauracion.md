@@ -16,7 +16,7 @@ Aura usa un **bootloader dual-boot** (`bootloader/ipod-s5l87xx.c` en el fork, co
 | SELECT + RIGHT | Modo Bootloader USB |
 | Hold activado al encender | Firmware original de Apple |
 
-Esto es el comportamiento estándar de los bootloaders duales de Rockbox para iPod (ver el manual de Rockbox, sección "Dual boot") — Aura no lo reinventa, lo hereda del fork.
+Esto es el comportamiento estándar de los bootloaders duales de Rockbox para iPod (ver el manual de Rockbox, sección "Dual boot") — Aura no lo reinventa, lo hereda del fork. La tabla de combinaciones de botones **no cambió** con la Fase 22 (PLAN-UX.md): lo único que cambió es que el arranque normal (primera fila, "Arranca Aura") ya no muestra el texto "Rockbox boot loader" / "Version: ..." en pantalla — queda en negro hasta que aparece el logo de Aura. Los mensajes de error real (falla de almacenamiento, batería crítica, `Hold MENU+SELECT to reboot`, etc.) **se siguen mostrando igual que antes**, sin ningún cambio — solo se silenció el camino feliz. Sin verificar todavía contra hardware real (ver la última sección de esta guía): si algo se ve distinto a lo esperado durante una sesión de flasheo, es la primera señal a reportar.
 
 ## Qué hace Aura Studio por vos, paso a paso
 
