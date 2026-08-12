@@ -14,6 +14,8 @@
 #include "aura_wheel.h"
 #include "aura_main.h"
 #include "aura_flow.h"
+#include "aura_motion.h"
+#include "aura_patterns.h"
 #include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "aura_lang.h"
@@ -58,12 +60,59 @@ typedef struct {
 } cf_slot_t;
 
 static cf_slot_t s_slots[CF_CACHE_SLOTS];
-static int s_current_index = 0;
+
+/* -- Estados idle/scrolling (PLAN.md T3.2(b), componentes/cover-flow.md:
+ * "idle -- carrusel quieto en un album" / "scrolling -- desplazandose
+ * entre albumes") --------------------------------------------------------
+ *
+ * pictureflow.c entra a pf_scrolling mientras el boton de avance esta
+ * FISICAMENTE sostenido y vuelve a pf_idle al soltarlo -- ese modelo no
+ * mapea directo al clickwheel de Aura (eventos discretos de giro, no un
+ * boton mantenido). La lectura equivalente para Aura: "scrolling" es
+ * mientras la posicion animada todavia no alcanzo el indice objetivo
+ * (`s_target_index`), "idle" es cuando ya coinciden -- mismo resultado
+ * observable (el carrusel se desliza mientras el usuario gira la rueda
+ * y hasta un instante despues, se asienta cuando termina), sin depender
+ * de un modelo de boton sostenido que Aura no tiene.
+ *
+ * `s_target_index` es la seleccion COMPROMETIDA (la que usan SELECT y
+ * la etiqueta) -- nunca la posicion visual a medio deslizar. La posicion
+ * animada real se recalcula cada cuadro con aura_pattern_lerp() (T1.1,
+ * cero matematica nueva) desde `s_anim_from_x256` (snapshot de portada
+ * animada al momento en que arranco el paso ACTUAL, para poder
+ * redirigir sin salto si el usuario sigue girando la rueda antes de que
+ * el paso anterior termine de asentarse -- mismo patron ya usado en
+ * CoverDrift/T2.9 y el morph de NowPlaying/T3.1c). */
+#define CF_SCROLL_ANIM_MS 220 /* TODO(pendiente-doc): el documento no da un timing de "snap con aceleracion", ver DECISIONS.md D-103 */
+static int s_target_index = 0;
+static int s_anim_from_x256 = 0;
+static long s_anim_since = 0;
 
 static aura_screen_id_t s_cache_screen = AURA_SCREEN_COUNT;
 static int s_cache_generation = -1;
 static aura_music_item_t s_albums[AURA_MUSIC_MAX_ITEMS];
 static int s_album_count = 0;
+
+/* Posicion animada actual, en unidades de "indice de album" x256 --
+ * interpola desde `s_anim_from_x256` hacia `s_target_index*256` en
+ * CF_SCROLL_ANIM_MS. Nunca se llama dos veces por cuadro con resultados
+ * distintos: current_tick es estable dentro de un mismo cuadro. */
+static int anim_pos_x256(void)
+{
+    long elapsed_ms = (current_tick - s_anim_since) * 1000L / HZ;
+    int t = aura_motion_linear(elapsed_ms, CF_SCROLL_ANIM_MS);
+    return aura_pattern_lerp(s_anim_from_x256, s_target_index * 256, t);
+}
+
+int aura_coverflow_pending(void)
+{
+    return anim_pos_x256() != s_target_index * 256;
+}
+
+int aura_coverflow_animating(void)
+{
+    return aura_coverflow_pending();
+}
 
 static void ensure_albums(aura_screen_id_t screen)
 {
@@ -76,7 +125,9 @@ static void ensure_albums(aura_screen_id_t screen)
     s_cache_screen = screen;
     s_cache_generation = gen;
     s_album_count = aura_music_browse(screen, s_albums, AURA_MUSIC_MAX_ITEMS);
-    s_current_index = 0;
+    s_target_index = 0;
+    s_anim_from_x256 = 0;
+    s_anim_since = current_tick;
 
     for (i = 0; i < CF_CACHE_SLOTS; i++)
         s_slots[i].album_index = -1;
@@ -98,7 +149,7 @@ static cf_slot_t *get_slot_for(int album_index)
             free_slot = i;
             break;
         }
-        dist = abs(s_slots[i].album_index - s_current_index);
+        dist = abs(s_slots[i].album_index - s_target_index);
         if (dist > farthest_dist)
         {
             farthest_dist = dist;
@@ -136,7 +187,7 @@ static fb_data fade_pixel(unsigned px, int fade, int bg_r, int bg_g, int bg_b)
 }
 
 /* -- Perspectiva real (Fase 31.1/31.2, D-079/D-080; T3.2(a) extiende a
- * datos transpuestos) --------------------------------------------------
+ * datos transpuestos; T3.2(b) generaliza a offset CONTINUO) -------------
  *
  * Geometria de "reposo" de un coverflow clasico (pictureflow.c
  * reset_slides(), resuelta a numeros concretos para 320x240 -- ver
@@ -151,20 +202,24 @@ static fb_data fade_pixel(unsigned px, int fade, int bg_r, int bg_g, int bg_b)
 #define CF_OFFSETX_R       90000  /* separacion centro-a-lateral, re-derivada para CF_COVER_SIZE=100 (antes 56px), ver DECISIONS.md D-102 */
 #define CF_SLIDE_SPACING_R 40000  /* separacion entre laterales consecutivos, misma re-derivacion */
 
-/* Primer intento de implementacion, deliberadamente simple (un
- * lcd_bitmap() de una columna por columna de pantalla, sin componer un
- * buffer completo antes de blitear) -- suficiente para verificar la
- * proyeccion en el simulador, que es todo lo que se pidio esta pasada
- * ("sin tocar hardware"). El costo real en el ARM926EJ-S del dispositivo
- * NO esta medido: si hace falta, la version para hardware compone en un
- * buffer y blitea una vez -- optimizacion pendiente de la sesion guiada
- * (D-079/D-080), no de esta pasada. */
-static void draw_slide_perspective(const cf_slot_t *slot, int offset, int fade)
+/* `offset_x256` es la distancia (en unidades de "album", x256) entre
+ * esta tapa y la posicion animada actual del carrusel -- puede ser
+ * fraccionaria mientras el carrusel esta "scrolling" (T3.2(b)). angulo,
+ * cx y fade se interpolan CONTINUOS a partir de esa distancia (con
+ * aura_pattern_lerp, T1.1) en vez de tomar solo los valores discretos
+ * de reposo -- exactos en los offsets enteros (fmuln con offset=k*256
+ * da identico resultado a la formula discreta anterior), suaves entre
+ * medio. Es lo que hace que las tapas se DESLICEN entre posiciones en
+ * vez de saltar. */
+static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
 {
     aura_flow_slide_t slide;
     aura_flow_projection_t proj;
-    int sign = (offset < 0) ? -1 : (offset > 0 ? 1 : 0);
-    int n = (offset < 0 ? -offset : offset) - 1; /* lateral 0-esimo, 1-esimo... (sin sentido si offset==0, no se usa) */
+    int sign = (offset_x256 < 0) ? -1 : (offset_x256 > 0 ? 1 : 0);
+    int abs_x256 = (offset_x256 < 0) ? -offset_x256 : offset_x256;
+    int t_center = abs_x256 < 256 ? abs_x256 : 256; /* 0..256: 0=centro, 256=primera lateral en reposo */
+    int extra_x256 = abs_x256 - 256;
+    int fade;
     const fb_data *cover = (const fb_data *)slot->art.cover_data;   /* transpuesto: cover[col*size+row] */
     const fb_data *refl = (const fb_data *)slot->art.reflection_data; /* transpuesto: refl[col*refl_h+row] */
     int refl_h = aura_art_reflection_height(CF_COVER_SIZE, CF_REFLECTION_PCT);
@@ -175,13 +230,20 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset, int fade)
     int bg_b = RGB_UNPACK_BLUE(bg);
     static fb_data col_buf[CF_COVER_SIZE + CF_REFLECTION_H];
 
+    if (extra_x256 < 0)
+        extra_x256 = 0;
+
     /* Mismo signo que pictureflow.c reset_slides(): la lateral izquierda
      * (offset<0) angulo positivo y cx negativo, la derecha al reves --
-     * la carga muestra su borde hacia el centro de la pantalla. Central
-     * (offset==0, sign==0): angulo y cx en cero, sin distorsion. */
-    slide.angle = -sign * CF_ITILT;
+     * la carga muestra su borde hacia el centro de la pantalla. En
+     * offset==0 (sign==0) todo colapsa a angulo/cx cero, sin distorsion,
+     * igual que antes. */
+    slide.angle = -sign * aura_pattern_lerp(0, CF_ITILT, t_center);
     slide.distance = 0;
-    slide.cx = sign * (CF_OFFSETX_R + n * CF_SLIDE_SPACING_R);
+    slide.cx = sign * (aura_pattern_lerp(0, CF_OFFSETX_R, t_center)
+                        + (int)((long)CF_SLIDE_SPACING_R * extra_x256 / 256));
+
+    fade = aura_pattern_lerp(255, CF_SIDE_FADE, t_center);
 
     aura_flow_begin_projection(&proj, &slide, CF_COVER_SIZE);
 
@@ -225,10 +287,12 @@ static void draw_message(aura_str_id_t msg_id)
                (const unsigned char *)aura_str(msg_id));
 }
 
+typedef struct { int idx; int offset_x256; } cf_entry_t;
+
 void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 {
-    int order[2 * CF_VISIBLE_RADIUS + 1];
-    int oi, r;
+    int pos_x256, center_idx, i, n;
+    cf_entry_t entries[2 * CF_VISIBLE_RADIUS + 3];
     (void)nav;
 
     a26_shell_clear_screen();
@@ -253,33 +317,60 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         return;
     }
 
-    /* De afuera hacia adentro (radio maximo -> 0), no de izquierda a
-     * derecha: las laterales ahora se proyectan en coordenadas de
-     * pantalla reales (perspectiva, no una grilla de columnas fijas) y
-     * pueden solaparse con la central cerca del borde -- dibujando la
-     * central al final garantiza que quede siempre encima, como en
-     * cualquier coverflow real. */
-    oi = 0;
-    for (r = CF_VISIBLE_RADIUS; r >= 1; r--)
-    {
-        order[oi++] = -r;
-        order[oi++] = r;
-    }
-    order[oi++] = 0;
+    /* Ventana de indices alrededor de la posicion ANIMADA (no del
+     * objetivo comprometido) -- mientras "scrolling" (T3.2(b)), la
+     * ventana se desliza cuadro a cuadro con la posicion real, dejando
+     * ver de paso los albumes intermedios de un salto acelerado en vez
+     * de solo aparecer/desaparecer en los extremos. */
+    pos_x256 = anim_pos_x256();
+    center_idx = (pos_x256 + (pos_x256 >= 0 ? 128 : -128)) / 256; /* redondeo al mas cercano */
 
-    for (oi = 0; oi < 2 * CF_VISIBLE_RADIUS + 1; oi++)
+    n = 0;
+    for (i = -(CF_VISIBLE_RADIUS + 1); i <= CF_VISIBLE_RADIUS + 1; i++)
     {
-        int offset = order[oi];
-        int idx = s_current_index + offset;
-        int x, y, fade;
-        cf_slot_t *slot;
-
+        int idx = center_idx + i;
         if (idx < 0 || idx >= s_album_count)
             continue;
+        entries[n].idx = idx;
+        entries[n].offset_x256 = idx * 256 - pos_x256;
+        n++;
+    }
+
+    /* De afuera hacia adentro (mayor |offset| -> menor), no de izquierda
+     * a derecha: las laterales se proyectan en coordenadas de pantalla
+     * reales (perspectiva, no una grilla de columnas fijas) y pueden
+     * solaparse con la central cerca del borde -- dibujar la mas
+     * cercana al final garantiza que quede siempre encima, como en
+     * cualquier coverflow real. Insercion simple: `n` nunca pasa de
+     * 2*radio+3 (un puñado de elementos). */
+    {
+        int a, b;
+        for (a = 1; a < n; a++)
+        {
+            cf_entry_t key = entries[a];
+            int key_abs = key.offset_x256 < 0 ? -key.offset_x256 : key.offset_x256;
+            b = a - 1;
+            while (b >= 0)
+            {
+                int b_abs = entries[b].offset_x256 < 0 ? -entries[b].offset_x256 : entries[b].offset_x256;
+                if (b_abs >= key_abs)
+                    break;
+                entries[b + 1] = entries[b];
+                b--;
+            }
+            entries[b + 1] = key;
+        }
+    }
+
+    for (i = 0; i < n; i++)
+    {
+        int idx = entries[i].idx;
+        int offset_x256 = entries[i].offset_x256;
+        int x, y;
+        cf_slot_t *slot;
 
         slot = get_slot_for(idx);
         y = CF_TOP_Y;
-        fade = (offset == 0) ? 255 : CF_SIDE_FADE;
 
         if (!slot->art.valid)
         {
@@ -287,8 +378,8 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
              * caratula -- CF_FALLBACK_SPACING es un valor de layout
              * aproximado para este caso limite, no la geometria real
              * del carrusel (esa es CF_OFFSETX_R/CF_SLIDE_SPACING_R). */
-            x = A26_SCREEN_WIDTH / 2 + offset * CF_FALLBACK_SPACING - CF_COVER_SIZE / 2;
-            lcd_set_foreground(a26_color(offset == 0 ? A26_TEXT_PRIMARY : A26_SHELL_RAIL));
+            x = A26_SCREEN_WIDTH / 2 + (offset_x256 / 256) * CF_FALLBACK_SPACING - CF_COVER_SIZE / 2;
+            lcd_set_foreground(a26_color(idx == s_target_index ? A26_TEXT_PRIMARY : A26_SHELL_RAIL));
             lcd_drawrect(x, y, CF_COVER_SIZE, CF_COVER_SIZE);
             continue;
         }
@@ -299,13 +390,14 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
          * vs CF_SIDE_FADE), tamano y perspectiva, igual que en
          * cualquier coverflow real; el marco era decoracion, no
          * significado. Un solo camino de render para central y
-         * laterales (ver comentario de draw_slide_perspective). */
-        draw_slide_perspective(slot, offset, fade);
+         * laterales, con distancia CONTINUA (ver comentario de
+         * draw_slide_perspective). */
+        draw_slide_perspective(slot, offset_x256);
     }
 
     {
         int w, h;
-        const char *label = s_albums[s_current_index].label;
+        const char *label = s_albums[s_target_index].label;
 
         lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
         lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
@@ -326,12 +418,22 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 static void scroll_step(int dir)
 {
     int step = aura_wheel_step((int)aura_main_wheel_velocity());
+    int new_target = s_target_index + dir * step;
 
-    s_current_index += dir * step;
-    if (s_current_index < 0)
-        s_current_index = 0;
-    if (s_current_index >= s_album_count)
-        s_current_index = s_album_count > 0 ? s_album_count - 1 : 0;
+    if (new_target < 0)
+        new_target = 0;
+    if (new_target >= s_album_count)
+        new_target = s_album_count > 0 ? s_album_count - 1 : 0;
+
+    /* Redirige desde la posicion animada ACTUAL (no desde el objetivo
+     * viejo) -- si el usuario sigue girando la rueda antes de que el
+     * paso anterior termine de asentarse, el carrusel no da un salto
+     * brusco al nuevo destino, sigue deslizandose suave desde donde
+     * ya estaba (mismo patron que el cross-fade de CoverDrift/T2.9 y
+     * el morph de NowPlaying/T3.1c). */
+    s_anim_from_x256 = anim_pos_x256();
+    s_target_index = new_target;
+    s_anim_since = current_tick;
 }
 
 void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button)
@@ -349,7 +451,7 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
     case BUTTON_SELECT:
         if (s_album_count > 0)
         {
-            aura_music_select_album(s_albums[s_current_index].seek);
+            aura_music_select_album(s_albums[s_target_index].seek);
             aura_nav_push(nav, AURA_SCREEN_MUSIC_SONGS_BY_ALBUM);
         }
         break;

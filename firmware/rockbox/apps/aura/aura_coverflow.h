@@ -12,4 +12,12 @@
 void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen);
 void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button);
 
+/* Estados idle/scrolling (PLAN.md T3.2(b), componentes/cover-flow.md).
+ * Movimiento continuo mientras "scrolling" (sin tramo estatico real,
+ * mismo criterio que CoverDrift/T2.9) -- pending() y animating()
+ * coinciden, expuestos ambos por consistencia con el resto de la
+ * puerta de energia en aura_main.c. */
+int aura_coverflow_pending(void);
+int aura_coverflow_animating(void);
+
 #endif /* AURA_COVERFLOW_H */

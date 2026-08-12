@@ -17,6 +17,7 @@
 #include "aura_menu_list.h"
 #include "aura_selection_summary.h"
 #include "aura_coverdrift.h"
+#include "aura_coverflow.h"
 
 /* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
  * calculada y suavizada por el driver real del clickwheel
@@ -209,6 +210,11 @@ void aura_main(void)
              * montado, sin tramo estatico real (a diferencia del resto
              * de esta puerta): pending()/animating() coinciden. */
             if (aura_coverdrift_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+
+            /* CoverFlow (T3.2(b)) -- idle/scrolling, mismo criterio de
+             * movimiento continuo que CoverDrift. */
+            if (aura_coverflow_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
         }
 

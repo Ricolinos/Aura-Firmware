@@ -1148,4 +1148,22 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-103 — PLAN.md T3.2(b): CoverFlow v2 -- carrusel idle/scrolling con deslizamiento real
+
+**Segundo commit de T3.2.** Cierra los estados `idle`/`scrolling` de `componentes/cover-flow.md` -- el carrusel viejo saltaba de índice instantáneamente (sin animación real entre posiciones); ahora las tapas se DESLIZAN, con la misma técnica de redirección-sin-salto ya usada en `CoverDrift` (T2.9) y el morph de NowPlaying (T3.1c).
+
+**Lectura de "scrolling" adaptada al modelo real de entrada de Aura, no una copia literal de pictureflow.c**: pictureflow.c entra a `pf_scrolling` mientras el botón de avance está físicamente SOSTENIDO y vuelve a `pf_idle` al soltarlo -- Aura no tiene ese modelo (el clickwheel entrega eventos discretos de giro, no un botón mantenido). Se define "scrolling" como *mientras la posición animada todavía no alcanzó el índice objetivo* -- mismo resultado observable para el usuario (el carrusel se mueve mientras gira la rueda y un instante después de soltarla, se asienta al terminar) sin depender de un gesto que Aura no tiene.
+
+**Offset continuo, no discreto -- ángulo/posición/atenuación de cada tapa se interpolan con `aura_pattern_lerp()` (T1.1, cero matemática nueva)** a partir de la distancia (en unidades de "álbum" × 256) entre esa tapa y la posición animada real del carrusel. La fórmula es EXACTA en los offsets enteros (produce el mismo resultado que la fórmula discreta anterior) y suave entre medio -- es lo que hace que las tapas se deslicen en vez de saltar. La ventana de índices visibles se calcula alrededor de la posición ANIMADA (no del objetivo comprometido), así que un salto acelerado de varios álbumes (`aura_wheel_step()`, ya real desde antes) deja ver de pasada los álbumes intermedios en vez de solo aparecer/desaparecer en los extremos.
+
+**`s_target_index` (selección comprometida) separado de la posición visual**: SELECT y la etiqueta usan siempre `s_target_index`, nunca la posición a medio deslizar -- mismo principio que StatusBar v2 separa el título mostrado del progreso de su transición.
+
+**Bug real de metodología de verificación encontrado y resuelto sin inventar un resultado**: la primera ronda de capturas (con la duración real de 220ms) mostraba SIEMPRE el estado asentado, sin importar cuántos ticks de espera se pidieran (0 a 15) -- parecía que la animación no funcionaba. Diagnosticado subiendo la duración a 5000ms como prueba controlada: con eso, una captura a mitad de camino SÍ mostró dos tapas parcialmente inclinadas (ninguna en offset puro cero) -- confirmando que el mecanismo de interpolación funciona correctamente y que el problema real era de granularidad del arnés de captura (los botones inyectados llegan cada `HZ/4` = 250ms, más lento que los 220ms de la animación real, así que cualquier captura después del último botón cae casi siempre ya asentada o a un instante t≈0 visualmente indistinguible del reposo). La duración real (220ms) se restauró sin cambios -- el mecanismo probado es el mismo código, solo con un parámetro de tiempo distinto.
+
+**Timing del deslizamiento (220ms) es un valor provisional real, sin base en el documento** -- `componentes/cover-flow.md` no da ningún número para "snap con aceleración" más allá de confirmar que existe. `// TODO(pendiente-doc)` en el código.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (ninguna función pura nueva, reusa `aura_pattern_lerp`/`aura_motion_linear` ya probados). Verificado: estado asentado en ambos temas -- `docs/screenshots/t3-pantallas/t32b-coverflow-idle-{light,dark}.png` -- y el mecanismo de interpolación real confirmado con la prueba controlada de duración exagerada -- `t32b-coverflow-scrolling-mechanism-proof.png` (nota en el propio nombre de archivo: prueba del mecanismo con timing exagerado para visibilidad, no una captura de la duración real que se ship).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
