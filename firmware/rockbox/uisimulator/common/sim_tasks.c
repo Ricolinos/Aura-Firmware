@@ -61,6 +61,13 @@ static long autodump_settle_ticks = 0;
 #define AURA_MAX_INJECT_BUTTONS 32
 #define AURA_INJECT_RELEASE_GAP (HZ / 20)
 #define AURA_INJECT_PRESS_GAP   (HZ / 4)
+/* Token "WAIT" en AURA_SIM_BUTTONS: pausa de ~1s sin postear boton --
+ * para secuencias deterministas a traves de transiciones sincronas
+ * largas (coverflow_enter, flip, morph), donde el gap fijo de 250ms
+ * dejaba botones cayendo dentro de la animacion y drenados por
+ * drain_button_queue_if_full() de forma aleatoria. */
+#define AURA_INJECT_WAIT_CODE  (-1L)
+#define AURA_INJECT_WAIT_TICKS (HZ)
 
 static long inject_codes[AURA_MAX_INJECT_BUTTONS];
 static int inject_count = 0;
@@ -77,6 +84,7 @@ static long aura_button_name_to_code(const char *name)
     if (!strcmp(name, "PLAY"))        return BUTTON_PLAY;
     if (!strcmp(name, "LEFT"))        return BUTTON_LEFT;
     if (!strcmp(name, "RIGHT"))       return BUTTON_RIGHT;
+    if (!strcmp(name, "WAIT"))        return AURA_INJECT_WAIT_CODE;
     return BUTTON_NONE;
 }
 
@@ -130,7 +138,17 @@ void sim_thread(void)
 
         if (inject_pos < inject_count && TIME_AFTER(current_tick, inject_next_tick))
         {
-            if (!inject_release_pending)
+            if (inject_codes[inject_pos] == AURA_INJECT_WAIT_CODE)
+            {
+                inject_pos++;
+                inject_next_tick = current_tick + AURA_INJECT_WAIT_TICKS;
+                if (inject_pos == inject_count && autodump_settle_ticks >= 0)
+                {
+                    autodump_pending = true;
+                    autodump_tick = current_tick + AURA_INJECT_WAIT_TICKS + autodump_settle_ticks;
+                }
+            }
+            else if (!inject_release_pending)
             {
                 button_queue_post(inject_codes[inject_pos], 0);
                 inject_release_pending = true;

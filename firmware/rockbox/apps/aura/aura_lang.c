@@ -93,6 +93,10 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ACCENT_PURPLE]      = "Morado",
     [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Sombra de panel",
     [AURA_STR_MUSIC_COVERFLOW]    = "Cover Flow",
+    [AURA_STR_UNKNOWN_ALBUM]      = "Álbum desconocido",
+    [AURA_STR_UNKNOWN_ARTIST]     = "Artista desconocido",
+    [AURA_STR_UNKNOWN_GENRE]      = "Género desconocido",
+    [AURA_STR_UNKNOWN_TITLE]      = "Sin título",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -187,6 +191,10 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ACCENT_PURPLE]      = "Purple",
     [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Panel shadow",
     [AURA_STR_MUSIC_COVERFLOW]    = "Cover Flow",
+    [AURA_STR_UNKNOWN_ALBUM]      = "Unknown album",
+    [AURA_STR_UNKNOWN_ARTIST]     = "Unknown artist",
+    [AURA_STR_UNKNOWN_GENRE]      = "Unknown genre",
+    [AURA_STR_UNKNOWN_TITLE]      = "Untitled",
 };
 
 const char *aura_str(aura_str_id_t id)

@@ -16,6 +16,7 @@
 #include "string-extra.h"
 
 #include "aura_music.h"
+#include "aura_lang.h"
 
 /* Contexto de filtro para las pantallas "hijas" de una eleccion previa
  * (p.ej. AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST filtra por el artista
@@ -85,6 +86,17 @@ bool aura_music_db_ready(void)
     return tagcache_is_usable();
 }
 
+static aura_str_id_t untagged_label_for(int tag)
+{
+    switch (tag)
+    {
+    case tag_artist: return AURA_STR_UNKNOWN_ARTIST;
+    case tag_genre:  return AURA_STR_UNKNOWN_GENRE;
+    case tag_title:  return AURA_STR_UNKNOWN_TITLE;
+    default:         return AURA_STR_UNKNOWN_ALBUM;
+    }
+}
+
 /* Ejecuta una busqueda tagcache sobre `tag`, aplicando los filtros que
  * correspondan segun la pantalla, y vuelca hasta `max` resultados en
  * `out`. Devuelve la cantidad de items. */
@@ -111,7 +123,14 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
 
     while (n < max && tagcache_get_next(&tcs, buf, sizeof(buf)))
     {
-        strlcpy(out[n].label, buf, AURA_MUSIC_ITEM_LEN);
+        /* "<Untagged>" (tagcache.h) es jerga tecnica -- regla dura del
+         * proyecto: nunca visible. Se sustituye por la etiqueta natural
+         * del tipo de tag; el seek se conserva tal cual, el filtro
+         * sigue funcionando sobre la entrada real. */
+        if (!strcmp(buf, UNTAGGED))
+            strlcpy(out[n].label, aura_str(untagged_label_for(tag)), AURA_MUSIC_ITEM_LEN);
+        else
+            strlcpy(out[n].label, buf, AURA_MUSIC_ITEM_LEN);
         out[n].seek = (tag == tag_title) ? tcs.idx_id : tcs.result_seek;
         n++;
     }
@@ -161,6 +180,8 @@ bool aura_music_album_artist(int32_t album_seek, char *out, size_t outsz)
     tagcache_search_finish(&tcs);
     if (!found)
         out[0] = '\0';
+    else if (!strcmp(out, UNTAGGED))
+        strlcpy(out, aura_str(AURA_STR_UNKNOWN_ARTIST), outsz);
     return found;
 }
 

@@ -1502,8 +1502,13 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
      * en el resto de la app BUTTON_PLAY no hacia nada, un vacio real
      * contra el doc, no una decision. Mismo guard que ya usaba
      * aura_nowplaying_active(): sin nada cargado (audio_status()==0)
-     * no hace nada, no fuerza una pausa sin sentido. */
-    if (button == BUTTON_PLAY)
+     * no hace nada, no fuerza una pausa sin sentido.
+     *
+     * Excepcion (encargo del dueno del diseno, 2026-08-12): en Cover
+     * Flow, PLAY tiene semantica propia -- reproduce el album enfocado
+     * al instante sin salir del carrusel (aura_coverflow_handle_button)
+     * -- asi que ahi NO se intercepta globalmente. */
+    if (button == BUTTON_PLAY && !is_coverflow_screen(screen))
     {
         int status = audio_status();
         if (status & AUDIO_STATUS_PAUSE)

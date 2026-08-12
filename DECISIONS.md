@@ -1362,4 +1362,22 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-115 — Cover Flow: PLAY reproduce el álbum en el lugar, saltos rápidos de ±10, sin loop; "<Untagged>" traducido; token WAIT en el arnés
+
+**Comportamientos nuevos encargados por el dueño del diseño (2026-08-12):**
+
+**1) PLAY sobre la tapa enfocada reproduce el álbum completo al instante, sin navegar al reproductor** — el usuario sigue en el carrusel y puede seguir hojeando mientras suena (la confirmación visual es el icono de reproducción de la StatusBar). Si la tapa enfocada ES el álbum que este mismo carrusel puso a sonar, PLAY alterna pausa/reanudar — provisional razonable (sin esto no habría forma de pausar dentro del Cover Flow; el encargo solo define el caso "reproducir"), TODO(pendiente-doc). Para que el botón llegue al carrusel, el interceptor global de PLAY (SS7, `aura_screens_handle_button`) exime a las pantallas de Cover Flow — documentado en el propio bloque. Funciona igual en el carrusel y con la lista de canciones abierta.
+
+**2) BACKWARD/FORWARD = salto rápido de 10 álbumes** (`CF_FAST_JUMP`), con el mismo deslizamiento suave con redirección del scroll normal (el recorrido más largo en la misma duración de animación se lee como el barrido veloz pedido).
+
+**3) Sin loop, confirmado y extendido**: el scroll de rueda ya estaba acotado; los saltos también clampan en ambos extremos — el carrusel nunca salta de inicio a final ni viceversa. Verificado: 2×RIGHT se detiene en el último álbum; 3×LEFT desde ahí se detiene en el primero.
+
+**Hallazgos resueltos de paso:**
+- **"<Untagged>" visible** (los AIFF de la biblioteca real no llevan tags): jerga técnica de tagcache que la regla dura del proyecto prohíbe — sustituida en `aura_music.c` por etiquetas naturales según el tipo de tag (`Álbum/Artista/Género desconocido`, `Sin título`; 4 cadenas nuevas ES/EN al final de ambas tablas). El seek se conserva intacto: los filtros siguen operando sobre la entrada real.
+- **Verificación no determinista del arnés**: los botones inyectados con gap fijo de 250ms caían dentro de las transiciones síncronas (coverflow_enter/flip/morph) y se drenaban aleatoriamente — dos rondas de capturas contradictorias hasta ubicarlo. Nuevo token `WAIT` en `AURA_SIM_BUTTONS` (sim_tasks.c): pausa de ~1s sin postear botón, para secuencias deterministas a través de animaciones largas. Regla operativa reafirmada: nunca capturar con el simulador interactivo vivo (comparte simdisk/db y contaminó una ronda entera, incluida una base de datos que "resucitaba" desde su ramcache — segunda vez, ver D-114).
+
+**Aceptación**: 0 warnings, 8/8 suites host-side. Verificado determinista con WAIT: reproducción en el lugar con icono en barra y carrusel intacto (`fix5-coverflow-play-in-place.png`), salto al extremo (`fix5-coverflow-fast-jump.png`), no-loop + etiquetas en español (`fix5-coverflow-noloop-untagged-es.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -105,6 +105,15 @@ typedef enum {
 
     AURA_STR_MUSIC_COVERFLOW,
 
+    /* Etiquetas para entradas sin tag en la base de datos -- tagcache
+     * genera el literal "<Untagged>", jerga tecnica que la regla dura
+     * del proyecto prohibe mostrar; se sustituye por espanol natural en
+     * aura_music.c segun el tipo de tag. */
+    AURA_STR_UNKNOWN_ALBUM,
+    AURA_STR_UNKNOWN_ARTIST,
+    AURA_STR_UNKNOWN_GENRE,
+    AURA_STR_UNKNOWN_TITLE,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

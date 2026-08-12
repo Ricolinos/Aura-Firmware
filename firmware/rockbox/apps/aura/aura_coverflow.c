@@ -4,6 +4,7 @@
 #include "lcd.h"
 #include "font.h"
 #include "button.h"
+#include "audio.h"
 #include "tick.h"
 
 #include "aura_coverflow.h"
@@ -633,6 +634,65 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
  * aura_wheel_step() con la velocidad angular real del driver. Las
  * listas ya migraron en D-077/Fase 29; coverflow habia quedado afuera,
  * vacio real no anotado en su momento. */
+/* Salto rapido por bloque (encargo del dueno del diseno, 2026-08-12):
+ * los botones backward/forward desplazan el carrusel 10 albumes de un
+ * golpe, con el mismo deslizamiento suave con redireccion del scroll
+ * normal (el recorrido mas largo en la misma duracion de animacion se
+ * lee como un barrido veloz). Acotado en los extremos, sin loop -- el
+ * carrusel nunca salta de inicio a final ni viceversa, igual que el
+ * scroll de la rueda. */
+#define CF_FAST_JUMP 10
+
+static void jump_albums(int delta)
+{
+    int new_target = s_target_index + delta;
+
+    if (new_target < 0)
+        new_target = 0;
+    if (new_target >= s_album_count)
+        new_target = s_album_count > 0 ? s_album_count - 1 : 0;
+    if (new_target == s_target_index)
+        return;
+
+    s_anim_from_x256 = anim_pos_x256();
+    s_target_index = new_target;
+    s_anim_since = current_tick;
+}
+
+/* PLAY sobre la tapa enfocada (encargo del dueno del diseno,
+ * 2026-08-12): reproduce el album COMPLETO al instante, sin navegar al
+ * reproductor -- el usuario sigue en el carrusel y puede seguir
+ * hojeando mientras suena (el icono de reproduccion de la StatusBar es
+ * la confirmacion visual). Si la tapa enfocada ES el album que este
+ * mismo carrusel ya puso a sonar, PLAY alterna pausa/reanudar
+ * (semantica natural de play/pausa; sin esto no habria forma de pausar
+ * dentro del Cover Flow) -- provisional razonable, el encargo solo
+ * define el caso "reproducir", TODO(pendiente-doc). */
+static int32_t s_playing_album_seek = -1;
+
+static void play_or_toggle_focused_album(void)
+{
+    int status;
+
+    if (s_album_count <= 0)
+        return;
+
+    status = audio_status();
+    if (s_playing_album_seek == s_albums[s_target_index].seek
+        && (status & (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)))
+    {
+        if (status & AUDIO_STATUS_PAUSE)
+            audio_resume();
+        else
+            audio_pause();
+        return;
+    }
+
+    aura_music_select_album(s_albums[s_target_index].seek);
+    if (aura_music_play_songs(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, 0))
+        s_playing_album_seek = s_albums[s_target_index].seek;
+}
+
 static void scroll_step(int dir)
 {
     int step = aura_wheel_step((int)aura_main_wheel_velocity());
@@ -686,6 +746,12 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
                 aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek,
                                                CF_TOP_Y + CF_COVER_SIZE / 2);
             break;
+        case BUTTON_PLAY:
+            /* Mismo comportamiento que en el carrusel: el album
+             * enfocado se reproduce completo (o alterna pausa si ya
+             * era el que sonaba), sin salir de la lista. */
+            play_or_toggle_focused_album();
+            break;
         case BUTTON_MENU:
             /* "El album gira de nuevo (vuelve a mostrar la caratula)"
              * (doc, coreografia de salida) -- cover_out, no un pop de
@@ -721,6 +787,15 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
             s_state = CF_STATE_COVER_IN;
             s_state_since = current_tick;
         }
+        break;
+    case BUTTON_PLAY:
+        play_or_toggle_focused_album();
+        break;
+    case BUTTON_LEFT:
+        jump_albums(-CF_FAST_JUMP);
+        break;
+    case BUTTON_RIGHT:
+        jump_albums(CF_FAST_JUMP);
         break;
     case BUTTON_MENU:
         aura_nav_pop(nav);
