@@ -979,4 +979,20 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-094 — PLAN.md T2.5: ClockIndicator -- modo persistente completo, dos bloqueos reales registrados en BLOCKED.md
+
+**Primera tarea de esta ejecución con un BLOCKED.md real**, no solo una simplificación documentada -- diferencia importante: las simplificaciones anteriores (difuminado de MarqueeText, seguimiento suave de ScrollIndicator) tienen una implementación funcionando con un recorte real; esto tiene partes de la spec que genuinamente no se pueden empezar a construir todavía.
+
+**`aura_clock_indicator.c/.h`**: formato HH:MM reusando `global_settings.timeformat` -- se expuso `aura_format_clock()` desde `aura_statusbar.h` (antes `static` dentro de `aura_statusbar.c`) para no duplicar la lógica de 12/24h en dos archivos. Entrada `Drop-and-Lift` vía `aura_pattern_lerp()` (T1.1) directo, sin matemática nueva -- confirma otra vez que T1.1 cubrió los patrones de un paso con la función genérica correcta.
+
+**Dos bloqueos reales, no una elección de alcance** (`BLOCKED.md` B-01/B-02): el modo "auto-oculta" no tiene disparador definido -- el propio documento se pregunta a sí mismo "¿qué dispara la revelación inicial?" sin responder. El atajo "mantener Select" depende de un gesto de hold que no existe en el vocabulario de botones de Aura -- mismo límite raíz que ya bloqueó Quickscreen en la fase anterior del proyecto (D-077), señal de que es una pieza de infraestructura de entrada real que falta, no una casualidad de dos features distintas. Ninguno de los dos se "intentó y se revirtió" -- se identificaron como no-implementables ANTES de escribir código, cumpliendo la regla del encargo de no adivinar un pendiente marcado.
+
+**Sin fila de Ajustes para `clock_visible`**: a diferencia de T0.3/T0.4 (donde el ajuste nuevo tenía un efecto visible inmediato en un consumidor real prestado), un toggle para un componente que hoy no vive en ninguna pantalla real sería una fila que no hace nada visible -- peor que no tener la fila. El campo `aura_settings.clock_visible` (persistido, default `true`) queda listo para cuando T2.7 (StatusBar v2) le dé un hogar real y entonces sí valga la pena exponerlo.
+
+**Verificación de humo, no integración real**: sin `DynamicTitle` (T2.6) ni `StatusBar v2` (T2.7), no existe todavía el lugar donde el documento dice que este componente vive -- se verificó con un overlay temporal en el menú raíz (posición fuera de cualquier colisión con el título), confirmando formato/tamaño/render correctos, y se revirtió antes de este commit. La integración real (posición split centrada, interacción Push-and-Pull con `DynamicTitle` en full) es trabajo de T2.7, anotado como B-03 en `BLOCKED.md` (dependencia de orden ya prevista en `PLAN.md`, no un bloqueo de spec).
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios. Verificado con overlay temporal (`docs/screenshots/t2-componentes/t25-clock-smoke.png`, revertido antes de este commit) y captura de regresión confirmando que el menú raíz real no cambió (`t25-regression-root.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

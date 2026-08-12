@@ -7,6 +7,13 @@
 #ifndef AURA_STATUSBAR_H
 #define AURA_STATUSBAR_H
 
+#include <stddef.h>
+
+/* HH:MM, reusando global_settings.timeformat (D-021) -- ningun formato
+ * propio. Compartida con aura_clock_indicator.c (T2.5) para no duplicar
+ * la logica de 12/24h en dos lugares. */
+void aura_format_clock(char *buf, size_t bufsz);
+
 /* Dibuja la franja [x, x+width) x [0, A26_LAYOUT_STATUSBAR_HEIGHT).
  * `title` puede ser NULL (sin texto, solo bateria/reproduccion/hold).
  * `centered` = 0 alinea a la izquierda (menus), 1 centra (pantallas

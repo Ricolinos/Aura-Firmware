@@ -70,6 +70,13 @@ typedef struct {
      * T0.4, efectos/01-sombras.md: "el usuario puede desactivarlo desde
      * Ajustes... la sombra activada es el comportamiento base"). */
     bool left_panel_shadow;
+    /* Visibilidad de ClockIndicator (T2.5, componentes/clock-indicator.md).
+     * Solo el modo "persistente" (true=siempre visible) tiene disparador
+     * definido hoy -- "auto-oculta" y el atajo por mantener Select
+     * quedan bloqueados (ver BLOCKED.md), asi que este bool cubre
+     * persistente/oculto; el tercer valor se agrega cuando el
+     * disparador exista de verdad. */
+    bool clock_visible;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

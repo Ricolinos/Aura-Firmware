@@ -83,7 +83,7 @@ int aura_statusbar_title_animating(void)
     return t >= AURA_DS_METRICS_MARQUEE_STATIC_MS;
 }
 
-static void format_clock(char *buf, size_t bufsz)
+void aura_format_clock(char *buf, size_t bufsz)
 {
     struct tm *now = get_time();
     int hour = now->tm_hour;
@@ -232,7 +232,7 @@ void aura_statusbar_draw(int x, int width, const char *title, int centered)
         char clock[16];
         int w, h, clock_x;
 
-        format_clock(clock, sizeof(clock));
+        aura_format_clock(clock, sizeof(clock));
         lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
         lcd_getstringsize((const unsigned char *)clock, &w, &h);
         clock_x = x + (width - w) / 2;
