@@ -1454,4 +1454,22 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-121 — Crash al reproducir desde el reverso: cascada de CODEC_ERROR de los AIFF de Apple; códec arreglado y Cover Flow documentado en el design system
+
+**Crash reportado por el dueño del diseño (2026-08-12)**: el simulador se cerraba al reproducir una canción desde el reverso del álbum. El log del proceso caído lo reveló completo: cada pista AIFF de "CD - Amigo Martha" fallaba con `CODEC_ERROR: AIFF header size > 1024`, el motor saltaba de pista fallida en pista fallida por todo el álbum, y esa cascada desbordaba una cola del kernel (`queue_post ovf`) — panic y cierre.
+
+**Causa raíz (dos defectos del códec AIFF de Rockbox con archivos de Apple):**
+1. El parser asumía el header completo en un buffer de 1024 bytes; los AIFF exportados por Música.app/iTunes llevan un chunk `ID3 ` (metadata + carátula embebida) que supera eso con facilidad y suele ir ANTES de `SSND`. Reescrito: cada chunk se visita por su POSICIÓN en el archivo (`seek_buffer` + cabeceras de 38 bytes) y los chunks que no interesan se saltan sin cargarlos — sin límite de tamaño de header.
+2. Superado el header, el códec rechazaba `compressionType 'sowt'` — que es simplemente **PCM little-endian, el AIFF-C estándar de Apple**. Añadido: `'sowt'` mapea al códec PCM lineal con `is_little_endian`.
+
+Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono de reproducción activo (`fix11-aiff-sowt-playing.png`). Ojo operativo: los códecs son bibliotecas dinámicas del disco simulado — `make` no basta, hace falta `make install` (una verificación intermedia corrió con el códec viejo por esto).
+
+**Riesgo conocido documentado, no resuelto**: la cascada pista-fallida→pista-fallida que desborda la cola es un defecto de robustez del core de Rockbox (un playlist donde todo falla no debería tumbar el firmware). El fix del códec elimina el disparador para esta biblioteca; el caso genérico (álbum entero corrupto) sigue latente — arreglo profundo del motor, fuera del alcance de esta pasada.
+
+**Documentación del design system actualizada con permiso explícito del dueño** (primera escritura del proyecto en `docs/aura-design-system/`): `componentes/cover-flow.md` reescrito incorporando TODO lo confirmado en D-112–D-120 — geometría medida del original (130px central, laterales traslapadas, reflejo 25%/45%, radio 8px universal), carátula Default con la imagen de referencia, carátulas embebidas, comportamientos (PLAY en el lugar, saltos de ±10, sin loop, estado persistente), el reverso de 200px con estilos de menú y orden de disco real, y las tres transiciones (entrada Push-and-Drop, vuelo de media vuelta a 500ms, regreso con morph de frente); pendientes viejos ya decididos retirados de la lista. `componentes/now-playing.md` gana la sección "Salida hacia CoverFlow" y la referencia al vuelo actualizado.
+
+**Aceptación**: 0 warnings (`make -q` limpio), 8/8 suites host-side, códec reinstalado y verificado contra la biblioteca real.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

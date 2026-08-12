@@ -35,6 +35,9 @@ enum {
     AIFC_FORMAT_IEEE_FLOAT32 = FOURCC('f', 'l', '3', '2'), /* AIFC IEEE float 32 bit */
     AIFC_FORMAT_IEEE_FLOAT64 = FOURCC('f', 'l', '6', '4'), /* AIFC IEEE float 64 bit */
     AIFC_FORMAT_QT_IMA_ADPCM = FOURCC('i', 'm', 'a', '4'), /* AIFC QuickTime IMA ADPCM */
+    AIFC_FORMAT_PCM_LE       = FOURCC('s', 'o', 'w', 't'), /* AIFC PCM little endian --
+                                el AIFF-C estandar que exporta Apple
+                                Music/iTunes (Aura, 2026-08-12) */
 };
 
 static const struct pcm_entry pcm_codecs[] = {
@@ -101,9 +104,16 @@ enum codec_status codec_run(void)
     param = ci->id3->elapsed;
     bytesdone = ci->id3->offset;
 
-    /* assume the AIFF header is less than 1024 bytes */
+    /* Los AIFF exportados por Apple Music/iTunes llevan un chunk 'ID3 '
+     * (metadata + caratula embebida) que facilmente supera 1KB y suele
+     * ir ANTES de 'SSND' -- la version anterior de este parser asumia
+     * el header completo en un buffer de 1024 bytes y devolvia
+     * CODEC_ERROR con esos archivos (Aura, 2026-08-12: albums enteros
+     * inreproducibles). Ahora cada chunk se visita por su POSICION en
+     * el archivo y los chunks que no interesan se saltan sin leerlos,
+     * sin limite de tamano de header. */
     ci->seek_buffer(0);
-    buf = ci->request_buffer(&n, 1024);
+    buf = ci->request_buffer(&n, 54);
     if (n < 54) {
         return CODEC_ERROR;
     }
@@ -123,9 +133,6 @@ enum codec_status codec_run(void)
         return CODEC_ERROR;
     }
 
-    buf += 12;
-    n -= 12;
-
     ci->memset(&format, 0, sizeof(struct libpcm_pcm_format));
     format.is_signed = true;
     format.is_little_endian = false;
@@ -134,12 +141,23 @@ enum codec_status codec_run(void)
     codec = 0;
 
     /* read until 'SSND' chunk, which typically is last */
-    while (format.numbytes == 0 && n >= 8)
     {
+    uint32_t file_pos = 12; /* tras FORM+size+AIFF/AIFC */
+    while (format.numbytes == 0)
+    {
+        ci->seek_buffer(file_pos);
+        /* 8 de cabecera + los 30 bytes que COMM (AIFC) llega a
+         * inspeccionar -- ningun chunk se carga completo. */
+        buf = ci->request_buffer(&n, 8 + 30);
+        if (n < 8) {
+            DEBUGF("CODEC_ERROR: 'SSND' chunk not found (EOF)\n");
+            return CODEC_ERROR;
+        }
         /* chunkSize */
         size = ((buf[4]<<24)|(buf[5]<<16)|(buf[6]<<8)|buf[7]);
         if (memcmp(buf, "COMM", 4) == 0) {
-            if ((!is_aifc && size < 18) || (is_aifc && size < 22))
+            if ((!is_aifc && size < 18) || (is_aifc && size < 22)
+                || n < (size_t)(8 + ((is_aifc) ? 22 : 18)))
             {
                 DEBUGF("CODEC_ERROR: 'COMM' chunk size=%lu < %d\n",
                        (unsigned long)size, (is_aifc)?22:18);
@@ -176,13 +194,20 @@ enum codec_status codec_run(void)
                     format.bitspersample = 8;
                 else if (format.formattag == AIFC_FORMAT_QT_IMA_ADPCM)
                     format.bitspersample = 4;
+                else if (format.formattag == AIFC_FORMAT_PCM_LE)
+                {
+                    /* 'sowt' es PCM lineal con los bytes al reves --
+                     * mismo codec PCM, solo cambia el endianness. */
+                    format.formattag = AIFC_FORMAT_PCM;
+                    format.is_little_endian = true;
+                }
             }
             else
                 format.formattag = AIFC_FORMAT_PCM;
             /* calc average bytes per second */
             format.avgbytespersec = format.samplespersec*format.channels*format.bitspersample/8;
         } else if (memcmp(buf, "SSND", 4)==0) {
-            if (format.bitspersample == 0) {
+            if (format.bitspersample == 0 || n < 16) {
                 DEBUGF("CODEC_ERROR: unsupported chunk order\n");
                 return CODEC_ERROR;
             }
@@ -208,13 +233,13 @@ enum codec_status codec_run(void)
 
         size += 8 + (size & 0x01); /* odd chunk sizes must be padded */
 
-        buf += size;
-        if (n < size) {
-            DEBUGF("CODEC_ERROR: AIFF header size > 1024\n");
-            return CODEC_ERROR;
-        }
-        n -= size;
+        file_pos += size; /* siguiente chunk: por posicion de archivo,
+                           * los chunks grandes (ID3/caratula) se
+                           * saltan sin cargarlos */
     } /* while 'SSND' */
+
+    firstblockposn = file_pos;
+    }
 
     if (format.channels == 0) {
         DEBUGF("CODEC_ERROR: 'COMM' chunk not found or 0-channels file\n");
@@ -270,8 +295,7 @@ enum codec_status codec_run(void)
         return CODEC_ERROR;
     }
 
-    firstblockposn = 1024 - n;
-    ci->advance_buffer(firstblockposn);
+    ci->seek_buffer(firstblockposn);
 
     /* make sure we're at the correct offset */
     if (bytesdone > (uint32_t) firstblockposn || param) {
