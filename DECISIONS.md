@@ -1030,4 +1030,26 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-097 — PLAN.md T2.8: SelectionSummary -- tile con degradado calculado del acento, un bloqueo real de arquitectura
+
+**`aura_selection_summary.c/.h`**: tile de 90×90 r8 con el símbolo (variante `-selector`, blanco constante, reusa G5/T2.2) centrado, degradado diagonal de 3 puntos (`aura_accent_light()` → `aura_accent()` → `aura_accent_dark()`, T0.3/G9 -- **ninguno fijo, los tres se leen en runtime del acento vigente**, tal como exige el encargo explícitamente para este componente), dos slots de texto con `MarqueeText` (T2.1) en overflow, sombra de `LeftPanel` (misma primitiva de T0.4/D-088). Cambio de valor instantáneo, sin `Fade-Slide`/`Scroll-Slide` -- el propio documento lo pide así, a diferencia de `DynamicTitle`.
+
+**Degradado dibujado por líneas anti-diagonales, no por píxel**: `draw_diagonal_gradient()` recorre `2*(size-1)` líneas de `x+y` constante (una `lcd_drawline()` por línea, color pre-mezclado con `a26_shell_blend()`) en vez de 8100 llamadas a `lcd_drawpixel()` -- mismo principio de "barato sin GPU" que ya justificó otras decisiones de esta sesión, aplicado aquí por primera vez a un relleno en vez de a un trazo.
+
+**Bug real encontrado verificando, no en teoría**: el símbolo no aparecía en el primer build -- `aura_widgets_draw_icon()` devuelve 0 (nada dibujado) cuando el archivo `<icono>-<size>-selector.bmp` no existe, y **60px nunca estuvo en `icon.sizes`** (`tokens.json` solo tenía 12/14/20/48, ninguno pensado para este componente). Cerrado agregando `icon.sizes.selection_summary_symbol: 60` (peso `regular`, mismo criterio que `preview`/48px -- símbolo grande y solo) y regenerando con `generate.py` real (Pillow, vía `design-system/.venv/`) -- **no** con el `python3` de sistema, que no tiene Pillow instalado y el script lo tolera en silencio saltándose la generación de íconos sin fallar el build (deuda de tooling preexistente, anotada aquí, no de esta tarea). Confirmado con capturas reales: el símbolo aparece.
+
+**Rol de tipografía nuevo, sin fila en el documento (🔴 real, no una interpretación)**: `fundamentos/02-tipografia.md` se marca a sí mismo *"🟡 Parcial... resto pendiente"* y no tiene ninguna fila para `SelectionSummary`. Se agregó `type_scale_roles.selection_summary_text: ds_reg_10` (mismo tamaño que `menu_item`, ya cargado -- **sin consumir un octavo slot de fuente**, el presupuesto de `MAXUSERFONTS` sigue exacto en 12/12) para ambos slots, sin distinción de peso entre título/valor/descripción porque el documento tampoco la da. `// TODO(pendiente-doc)` en el código, registrado aquí.
+
+**Dirección del degradado, provisional documentada**: claro arriba-izquierda, oscuro abajo-derecha -- convención común de "luz desde arriba", el documento deja la dirección exacta como pendiente real (`🔴 dirección exacta de la diagonal`). El porcentaje de aclarado/oscurecido NO es una decisión nueva de esta tarea -- ya estaba resuelto desde T0.3 (G9/D-086, `aura_accent_light()`/`_dark()` construidas específicamente para este componente).
+
+**Un bloqueo real de arquitectura, no de valor** (`BLOCKED.md` B-04): la variante dinámica del ícono (reloj analógico con manecillas reales, hoja de calendario con mes/día reales -- caso Ajustes → Fecha y Hora) depende de una pregunta que el propio documento deja abierta -- *"todavía sin resolver si esto es una variante de `SelectionSummary` o un componente distinto"*. Implementar cualquiera de las dos lecturas sería tomar esa decisión de arquitectura por cuenta propia. El caso general (ícono estático + dos slots de texto) sí está completo y cubre el ejemplo que el documento resuelve sin ambigüedad.
+
+**Cross-fade con `CoverDrift` explícitamente diferido, no bloqueado**: `CoverDrift` (T2.9) todavía no existe -- se conecta cuando exista, con el mismo mecanismo (`a26_shell_blend()`) ya usado en el resto del sistema para fundidos, sin pieza faltante de información.
+
+**Sin consumidor real todavía** (mismo criterio que T2.5/T2.6): verificado con overlay temporal en el menú raíz -- tres casos (solo descripción, "No hay música"; título+descripción con textos cortos; título+descripción forzando overflow del slot inferior) confirmando degradado, símbolo, centrado, `MarqueeText` y el par `pending()`/`animating()` (cableado en `aura_main.c` correcto desde el primer intento, mismo aprendizaje aplicado en T2.4/T2.7). Revertido antes de este commit; capturas del caso representativo (título+descripción) conservadas en ambos temas.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (tarea de renderizado). Verificado en ambos temas con overlay temporal revertido -- `docs/screenshots/t2-componentes/t28-selection-summary-smoke-{light,dark}.png`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

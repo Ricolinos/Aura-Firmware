@@ -15,6 +15,7 @@
 #include "aura_widgets.h"
 #include "aura_statusbar.h"
 #include "aura_menu_list.h"
+#include "aura_selection_summary.h"
 
 /* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
  * calculada y suavizada por el driver real del clickwheel
@@ -192,6 +193,15 @@ void aura_main(void)
             if (aura_menu_list_scroll_indicator_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
             else if (aura_menu_list_scroll_indicator_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
+
+            /* MarqueeText de los dos slots de texto de SelectionSummary
+             * (T2.8) -- mismo par pending()/animating(), escrito
+             * correcto desde el primer intento (D-093 ya establecio
+             * este aprendizaje, no se repite el bug de D-091). */
+            if (aura_selection_summary_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+            else if (aura_selection_summary_pending() && timeout_ticks < 0)
                 timeout_ticks = HZ / 4;
         }
 
