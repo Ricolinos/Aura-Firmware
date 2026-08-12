@@ -1478,4 +1478,20 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-123 — Reproductor: barra unificada progreso/volumen, transporte solo play/pausa, bocina dinámica, tap-vs-hold en backward/forward
+
+**Encargo del dueño del diseño (2026-08-12), primera ronda del reproductor:**
+
+**1) Transporte sin backward/forward** — solo play/pausa al centro (la interacción vive en los botones físicos); repetir/aleatorio siguen en los extremos.
+
+**2) Barra unificada** (una pieza, cuatro caras — spec completa ahora en `now-playing.md`): carril 300×7 centrado del color del Selector con puntas completamente redondeadas, relleno 298×5 BLANCO en reposo y SIN números de tiempo. Buscando: acento + tiempos solo mientras dura. Scrub: acento + indicador de 15×11 blanco con sombra paralela sutil centrado en el borde del relleno. Volumen: la misma barra muestra el nivel en acento, `speaker.minus`/`plus` donde vivían los tiempos, y el play/pausa se convierte en la bocina dinámica de 5 estados (0-2/2-15/15-50/50-80/80-100%), todo con fade sutil al soltar (tramo final de la ventana, iconos vía `draw_icon_dimmed`). El overlay flotante de volumen viejo (caja con %) se retiró.
+
+**3) Tap vs. mantener en LEFT/RIGHT** — como el iPod original, la decisión es al soltar: un tap salta de pista tras una ventana corta sin repeats (~350ms, `LR_TAP_WINDOW`); si llegan repeats es búsqueda dentro de la canción (3s por repeat) y el salto pendiente se cancela. Nuevo `aura_main_last_was_repeat()` en el bucle principal — los handlers distinguen pulsación fresca de botón sostenido sin romper la normalización global de D-022.
+
+**Tokens nuevos**: `progress_track_height` 6→7, `fill` 4→5, `progress_width` 300, `scrub_thumb_w/h` 15/11; siete iconos de bocina (`speaker-slash/speaker/wave-1/2/3/minus/plus`, los cinco de estado en variante .fill por pedido explícito — excepción a la línea "solo lineales" registrada aquí).
+
+**Aceptación**: 0 warnings (`make -q` limpio), 8/8 suites host-side. Capturas: reposo (barra sin números, transporte solo pausa — `fix13-player-bar-rest.png`) y ajuste de volumen (nivel en acento + bocinas minus/plus + bocina dinámica de una onda al centro — `fix13-player-bar-volume.png`). Seek por hold y fade del volumen requieren dedos reales — confirmación del dueño en vivo.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -34,6 +34,7 @@
 #include "aura_albumart.h"
 #include "aura_motion.h"
 #include "aura_music.h"
+#include "aura_main.h"
 #include "aura_flow.h"
 
 /* -- Layout (PLAN.md T3.1, componentes/now-playing.md) -------------------
@@ -58,9 +59,30 @@
 #define PROGRESS_Y       (A26_SCREEN_HEIGHT - 34)
 #define PROGRESS_TRACK_H AURA_DS_METRICS_NOW_PLAYING_PROGRESS_TRACK_HEIGHT
 #define PROGRESS_FILL_H  AURA_DS_METRICS_NOW_PLAYING_PROGRESS_FILL_HEIGHT
-#define PROGRESS_X       40
-#define PROGRESS_W       (A26_SCREEN_WIDTH - 2 * PROGRESS_X)
+/* Barra unificada progreso/volumen (encargo 2026-08-12): carril de
+ * 300x7 centrado, relleno de 298x5 (1px de aire por lado), puntas
+ * completamente redondeadas. Sin numeros de tiempo en reposo. */
+#define PROGRESS_W       AURA_DS_METRICS_NOW_PLAYING_PROGRESS_WIDTH
+#define PROGRESS_X       ((A26_SCREEN_WIDTH - PROGRESS_W) / 2)
 #define TRANSPORT_Y      (A26_SCREEN_HEIGHT - 14)
+
+/* Ventanas de estado de la barra (ver draw_progress): buscar con
+ * botones sostenidos muestra tiempos + acento; el ajuste de volumen la
+ * convierte en barra de nivel con bocinas; ambos vuelven solos al
+ * reposo. El "fade muy sutil" de la bocina vive en el ultimo tramo de
+ * la ventana de volumen. */
+#define SEEK_SHOW_TICKS   (HZ / 2)
+#define VOLUME_FADE_TICKS (HZ / 3)
+static long s_seek_show_until = 0;
+/* Tap vs mantener en LEFT/RIGHT (encargo 2026-08-12, mismo criterio
+ * del iPod original: la decision es al soltar): un tap salta de pista
+ * DESPUES de una ventana corta sin repeats; si llegan repeats, es
+ * busqueda dentro de la cancion y el salto pendiente se cancela. */
+#define LR_TAP_WINDOW     (HZ * 35 / 100)
+#define SEEK_STEP_MS      3000L
+static long s_lr_pending_until = 0;
+static int  s_lr_pending_dir = 0;
+static long s_scrub_show_until = 0; /* ventana del indicador del modo scrub */
 
 /* -- Modo 4 (Letras), panel comprimido (PLAN.md T3.1(c),
  * componentes/now-playing.md) --------------------------------------------
@@ -589,46 +611,111 @@ static void draw_text_and_modes(const struct mp3entry *id3, bool compact)
 
 /* -- Pastilla de progreso + transporte (doc SS2) -------------------------- */
 
-/* Barra de dos capas (componentes/now-playing.md, "Barra de progreso"):
- * track persistente 6px negro-60% (opacidad simulada, misma tecnica de
- * a26_shell_blend() ya usada en StatusBar v2/T2.7) + avance 4px encima,
- * puntas redondeadas, centrado dentro del track. Blanca en reposo,
- * --color-accent mientras se manipula (Modo 2/scrub). */
-/* `x`/`width`: normal (PROGRESS_X/PROGRESS_W) o comprimida a
- * MORPH_PROGRESS_X/MORPH_PROGRESS_W dentro del panel de 130px en Modo 4
- * ("la barra de progreso pasa a medir 122px de ancho"). */
+/* Barra unificada de progreso/volumen (encargo 2026-08-12):
+ * - Reposo: carril 300x7 del color del Selector (SELECTION_FILL),
+ *   puntas completamente redondeadas; relleno 298x5 BLANCO. SIN
+ *   numeros de tiempo.
+ * - Buscando (mantener backward/forward): relleno en ACENTO y los
+ *   tiempos (00:00 / -00:00) visibles solo mientras dura la busqueda.
+ * - Scrub (modo avance, rueda): relleno en ACENTO + indicador de
+ *   avance de 15x11 blanco con sombra paralela sutil, centrado en el
+ *   borde derecho del relleno.
+ * - Volumen (rueda en modo volumen): la MISMA barra muestra el nivel
+ *   de volumen en ACENTO; speaker-minus/plus en los extremos donde
+ *   vivian los tiempos.
+ * `x`/`width`: normal o comprimida al panel de 130px en Modo 4. */
 static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int x, int width)
 {
-    char timebuf[24], timebuf2[24];
-    int w, h;
+    int fill_x = x + 1;
+    int fill_max = width - 2;
     int fill_w;
     int fill_y = PROGRESS_Y + (PROGRESS_TRACK_H - PROGRESS_FILL_H) / 2;
-    unsigned track_color = a26_shell_blend(a26_color(A26_SHELL_BG), LCD_RGBPACK(0, 0, 0),
-                                            AURA_DS_OPACITY_PROGRESS_TRACK_PCT * 256 / 100);
-    unsigned fill_color = (scrub_preview_ms >= 0) ? aura_accent()
-                                                   : AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
+    unsigned track_color = a26_color(A26_SELECTION_FILL);
+    unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
+    bool vol_active = current_tick < s_volume_overlay_until;
+    bool seeking = current_tick < s_seek_show_until;
+    bool scrubbing = (current_tick < s_scrub_show_until) && !vol_active;
+    unsigned fill_color = (vol_active || seeking || scrubbing) ? aura_accent() : white;
     unsigned long elapsed = (scrub_preview_ms >= 0) ? (unsigned long)scrub_preview_ms : id3->elapsed;
-    unsigned long remaining = (id3->length > elapsed) ? (id3->length - elapsed) : 0;
 
     a26_shell_fill_rounded_rect(x, PROGRESS_Y, width, PROGRESS_TRACK_H,
                                  PROGRESS_TRACK_H / 2, track_color, a26_color(A26_SHELL_BG));
-    fill_w = id3->length ? (int)((unsigned long long)width * elapsed / id3->length) : 0;
+
+    if (vol_active)
+    {
+        /* Nivel de volumen en la misma barra. */
+        int vol_min = sound_min(SOUND_VOLUME);
+        int vol_max = sound_max(SOUND_VOLUME);
+        if (global_settings.volume_limit < vol_max)
+            vol_max = global_settings.volume_limit;
+        fill_w = (vol_max > vol_min)
+            ? (fill_max * (global_status.volume - vol_min)) / (vol_max - vol_min)
+            : 0;
+    }
+    else
+        fill_w = id3->length ? (int)((unsigned long long)fill_max * elapsed / id3->length) : 0;
+
+    if (fill_w < 0)        fill_w = 0;
+    if (fill_w > fill_max) fill_w = fill_max;
     if (fill_w > 0)
-        a26_shell_fill_rounded_rect(x, fill_y, fill_w, PROGRESS_FILL_H,
+        a26_shell_fill_rounded_rect(fill_x, fill_y, fill_w, PROGRESS_FILL_H,
                                      PROGRESS_FILL_H / 2, fill_color, track_color);
 
-    /* Formato del original (doc confirmado): transcurrido a la
-     * izquierda, restante con signo negativo a la derecha. */
-    aura_format_track_time(elapsed, timebuf, sizeof(timebuf));
-    timebuf2[0] = '-';
-    aura_format_track_time(remaining, timebuf2 + 1, sizeof(timebuf2) - 1);
+    if (vol_active)
+    {
+        /* speaker-minus / speaker-plus en los extremos, con el fade
+         * sutil del tramo final de la ventana. */
+        long left_ticks = s_volume_overlay_until - current_tick;
+        int alpha = (left_ticks < VOLUME_FADE_TICKS)
+            ? (int)(256L * left_ticks / VOLUME_FADE_TICKS) : 256;
+        int icon_y = PROGRESS_Y - A26_ICON_SIZE_STATUS - A26_SPACING_XS;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
-    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-    lcd_putsxy(x, PROGRESS_Y - A26_SPACING_MD, (const unsigned char *)timebuf);
-    lcd_getstringsize((const unsigned char *)timebuf2, &w, &h);
-    lcd_putsxy(x + width - w, PROGRESS_Y - A26_SPACING_MD,
-               (const unsigned char *)timebuf2);
+        aura_widgets_draw_icon_dimmed("speaker-minus", A26_ICON_SIZE_STATUS,
+                                       x, icon_y, alpha);
+        aura_widgets_draw_icon_dimmed("speaker-plus", A26_ICON_SIZE_STATUS,
+                                       x + width - A26_ICON_SIZE_STATUS, icon_y, alpha);
+    }
+    else if (seeking)
+    {
+        /* Tiempos SOLO mientras se busca (formato del original:
+         * transcurrido / restante con signo). */
+        char timebuf[24], timebuf2[24];
+        int w, h;
+        unsigned long remaining = (id3->length > elapsed) ? (id3->length - elapsed) : 0;
+
+        aura_format_track_time(elapsed, timebuf, sizeof(timebuf));
+        timebuf2[0] = '-';
+        aura_format_track_time(remaining, timebuf2 + 1, sizeof(timebuf2) - 1);
+
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_putsxy(x, PROGRESS_Y - A26_SPACING_MD - A26_SPACING_XS,
+                   (const unsigned char *)timebuf);
+        lcd_getstringsize((const unsigned char *)timebuf2, &w, &h);
+        lcd_putsxy(x + width - w, PROGRESS_Y - A26_SPACING_MD - A26_SPACING_XS,
+                   (const unsigned char *)timebuf2);
+    }
+
+    if (scrubbing)
+    {
+        /* Indicador de avance (15x11) con su CENTRO en el borde
+         * derecho del relleno: sombra paralela sutil primero (mismo
+         * mecanismo de opacidad simulada del resto del sistema),
+         * despues la perilla blanca. */
+        int tw = AURA_DS_METRICS_NOW_PLAYING_SCRUB_THUMB_W;
+        int th = AURA_DS_METRICS_NOW_PLAYING_SCRUB_THUMB_H;
+        int tx = fill_x + fill_w - tw / 2;
+        int ty = PROGRESS_Y + PROGRESS_TRACK_H / 2 - th / 2;
+        unsigned shadow = a26_shell_blend(a26_color(A26_SHELL_BG), LCD_RGBPACK(0, 0, 0), 64);
+
+        if (tx < x) tx = x;
+        if (tx + tw > x + width) tx = x + width - tw;
+
+        a26_shell_fill_rounded_rect(tx + 1, ty + 2, tw, th, th / 2 - 1,
+                                     shadow, a26_color(A26_SHELL_BG));
+        a26_shell_fill_rounded_rect(tx, ty, tw, th, th / 2 - 1,
+                                     white, a26_color(A26_SHELL_BG));
+    }
 }
 
 /* `compact`: Modo 4 -- "de los controles solo se visualiza el icono de
@@ -672,18 +759,41 @@ static void draw_transport(bool compact)
         aura_widgets_draw_icon("shuffle", A26_ICON_SIZE_STATUS,
                                 A26_SCREEN_WIDTH - A26_SPACING_XXL - A26_ICON_SIZE_STATUS, y);
 
-    /* play-fill/pause-fill, no las lineales (AUDITORIA-01 A-b, ambiguedad
-     * resuelta): backward.fill/forward.fill ya eran rellenos: dejar el
-     * boton central lineal en medio de dos rellenos se veia mixto sin
-     * razon. Unifica la fila entera de transporte a rellenos -- excepcion
-     * de la variante lineal documentada en tokens.json, no aplica a la
-     * tira de iconos de menu (SS4). */
-    aura_widgets_draw_icon("backward", A26_ICON_SIZE_STATUS,
-                            cx - A26_ICON_SIZE_STATUS - A26_SPACING_LG - A26_ICON_SIZE_STATUS / 2, y);
-    aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_STATUS,
-                            cx - A26_ICON_SIZE_STATUS / 2, y);
-    aura_widgets_draw_icon("forward", A26_ICON_SIZE_STATUS,
-                            cx + A26_SPACING_LG + A26_ICON_SIZE_STATUS / 2, y);
+    /* Solo play/pausa al centro (encargo 2026-08-12: los glifos de
+     * backward/forward se retiraron -- la interaccion vive en los
+     * botones fisicos, la fila no necesita duplicarla). Mientras se
+     * ajusta el volumen, el mismo lugar muestra la BOCINA DINAMICA de
+     * 5 estados segun el nivel, con el fade sutil del tramo final. */
+    if (current_tick < s_volume_overlay_until)
+    {
+        int vol_min = sound_min(SOUND_VOLUME);
+        int vol_max = sound_max(SOUND_VOLUME);
+        int pct;
+        const char *icon;
+        long left_ticks = s_volume_overlay_until - current_tick;
+        int alpha = (left_ticks < VOLUME_FADE_TICKS)
+            ? (int)(256L * left_ticks / VOLUME_FADE_TICKS) : 256;
+
+        if (global_settings.volume_limit < vol_max)
+            vol_max = global_settings.volume_limit;
+        pct = (vol_max > vol_min)
+            ? (100 * (global_status.volume - vol_min)) / (vol_max - vol_min)
+            : 0;
+
+        /* Umbrales del encargo: 0-2 mute, 2-15 bocina sola, 15-50 una
+         * onda, 50-80 dos, 80-100 tres. */
+        if (pct <= 2)       icon = "speaker-slash";
+        else if (pct <= 15) icon = "speaker";
+        else if (pct <= 50) icon = "speaker-wave-1";
+        else if (pct <= 80) icon = "speaker-wave-2";
+        else                icon = "speaker-wave-3";
+
+        aura_widgets_draw_icon_dimmed(icon, A26_ICON_SIZE_STATUS,
+                                       cx - A26_ICON_SIZE_STATUS / 2, y, alpha);
+    }
+    else
+        aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_STATUS,
+                                cx - A26_ICON_SIZE_STATUS / 2, y);
 }
 
 /* -- Modo 5.3: anadir a lista (doc SS5.3) --------------------------------- */
@@ -829,59 +939,6 @@ static void draw_player(const struct mp3entry *id3, int scrub_preview_ms, bool c
         draw_playlist_panel();
 }
 
-/* Overlay temporal encima del reproductor mientras el usuario gira el
- * clickwheel en modo Volumen -- no limpia pantalla, se dibuja sobre lo
- * que ya esta. El rango va contra el limite efectivo (el menor entre el
- * maximo real del hardware y volume_limit, D-051), no el maximo
- * absoluto, para que la barra siempre se vea llena al tope real. */
-static void draw_volume_overlay(void)
-{
-    int box_w = 200, box_h = 40;
-    int box_x = (A26_SCREEN_WIDTH - box_w) / 2;
-    int box_y = A26_SCREEN_HEIGHT - box_h - A26_SPACING_XXL;
-    int bar_x = box_x + A26_SPACING_LG;
-    int bar_w = box_w - 2 * A26_SPACING_LG;
-    int bar_y = box_y + box_h / 2;
-    int vol_min = sound_min(SOUND_VOLUME);
-    int vol_max = sound_max(SOUND_VOLUME);
-    int fill_w;
-    char buf[8];
-
-    if (global_settings.volume_limit < vol_max)
-        vol_max = global_settings.volume_limit;
-
-    a26_shell_outline_rounded_rect(box_x, box_y, box_w, box_h,
-                                    A26_LAYOUT_CORNER_RADIUS_CAPSULE,
-                                    a26_color(A26_SHELL_BG), a26_color(A26_SHELL_RAIL),
-                                    a26_color(A26_SHELL_BG));
-
-    /* Misma pieza que el resto del sistema (AUDITORIA-01 A-14/A-f):
-     * carril PROGRESS_TRACK relleno + PROGRESS_FILL, extremos
-     * redondeados -- no un rectangulo delineado con relleno en ACCENT.
-     * Ambiguedad A-f resuelta: PROGRESS_FILL es siempre el relleno de
-     * progreso/nivel, ACCENT se reserva para iconos y estado (mismo
-     * criterio que D-081 ya aplico a Brillo/Limite volumen). */
-    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, A26_SPACING_SM, A26_SPACING_SM / 2,
-                                 a26_color(A26_PROGRESS_TRACK), a26_color(A26_SHELL_BG));
-    fill_w = (vol_max > vol_min)
-        ? (bar_w * (global_status.volume - vol_min)) / (vol_max - vol_min)
-        : 0;
-    if (fill_w < 0)      fill_w = 0;
-    if (fill_w > bar_w)  fill_w = bar_w;
-    if (fill_w > 0)
-        a26_shell_fill_rounded_rect(bar_x, bar_y, fill_w, A26_SPACING_SM, A26_SPACING_SM / 2,
-                                     a26_color(A26_PROGRESS_FILL), a26_color(A26_SHELL_BG));
-
-    lcd_setfont(a26_font(A26_FONT_STYLE_MICRO));
-    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-    snprintf(buf, sizeof(buf), "%d%%",
-             (vol_max > vol_min)
-                 ? (100 * (global_status.volume - vol_min)) / (vol_max - vol_min)
-                 : 0);
-    lcd_putsxy(box_x + A26_SPACING_LG, box_y + A26_SPACING_XS,
-               (const unsigned char *)buf);
-}
-
 void aura_nowplaying_draw(void)
 {
     struct mp3entry *id3 = audio_current_track();
@@ -895,6 +952,27 @@ void aura_nowplaying_draw(void)
 
     reload_for_track(id3);
 
+    /* Barra de vuelta al reposo: cuando las ventanas de busqueda y
+     * scrub expiraron, el preview suelta la barra (el elapsed real ya
+     * absorbio el salto de audio_ff_rewind). */
+    if (s_scrub_preview_ms >= 0
+        && current_tick >= s_seek_show_until
+        && current_tick >= s_scrub_show_until)
+        s_scrub_preview_ms = -1;
+
+    /* Tap pendiente de LEFT/RIGHT: si su ventana expiro sin repeats,
+     * era un tap de verdad -- pista anterior/siguiente ahora. */
+    if (s_lr_pending_dir != 0 && current_tick >= s_lr_pending_until)
+    {
+        int dir = s_lr_pending_dir;
+        s_lr_pending_dir = 0;
+        s_scrub_preview_ms = -1;
+        if (dir > 0)
+            audio_next();
+        else
+            audio_prev();
+    }
+
     /* Modo 4 (componentes/now-playing.md): el panel izquierdo
      * comprimido y el LyricsPanel conviven -- ya no es "o uno o el
      * otro" como en la simplificacion anterior (D-078), que trataba
@@ -904,13 +982,14 @@ void aura_nowplaying_draw(void)
     if (lyrics_mode)
         draw_lyrics_panel(id3);
 
-    if (current_tick < s_volume_overlay_until)
-        draw_volume_overlay();
 }
 
 bool aura_nowplaying_needs_tick(void)
 {
     return current_tick < s_volume_overlay_until
+        || current_tick < s_seek_show_until
+        || current_tick < s_scrub_show_until
+        || s_lr_pending_dir != 0
         || aura_nowplaying_wheel_animating();
 }
 
@@ -1003,11 +1082,41 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
         }
         break;
     case BUTTON_RIGHT:
-        audio_next();
-        break;
     case BUTTON_LEFT:
-        audio_prev();
+    {
+        int dir = (button == BUTTON_RIGHT) ? 1 : -1;
+
+        if (aura_main_last_was_repeat())
+        {
+            /* Mantener = adelantar/atrasar rapido dentro de la cancion
+             * (encargo 2026-08-12): cada repeat avanza SEEK_STEP_MS;
+             * la barra pasa a acento y muestra los tiempos SOLO
+             * mientras dura la busqueda. El salto de pista pendiente
+             * de este mismo press queda cancelado. */
+            if (id3 && id3->length)
+            {
+                long base = (s_scrub_preview_ms >= 0) ? s_scrub_preview_ms
+                                                       : (long)id3->elapsed;
+                long next = base + dir * SEEK_STEP_MS;
+
+                if (next < 0) next = 0;
+                if ((unsigned long)next > id3->length) next = (long)id3->length;
+                s_scrub_preview_ms = next;
+                audio_ff_rewind(next);
+                s_seek_show_until = current_tick + SEEK_SHOW_TICKS;
+            }
+            s_lr_pending_dir = 0;
+        }
+        else
+        {
+            /* Tap: decidir al "soltar" (ventana corta sin repeats),
+             * como el iPod original -- si llegan repeats, era un hold
+             * y el salto no ocurre. */
+            s_lr_pending_dir = dir;
+            s_lr_pending_until = current_tick + LR_TAP_WINDOW;
+        }
         break;
+    }
     case BUTTON_SCROLL_FWD:
     case BUTTON_SCROLL_BACK:
     {
@@ -1032,6 +1141,7 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
 
                 s_scrub_preview_ms = next;
                 audio_ff_rewind(next);
+                s_scrub_show_until = current_tick + SEEK_SHOW_TICKS;
             }
             break;
 

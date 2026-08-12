@@ -23,6 +23,13 @@ long aura_main_wheel_velocity(void);
  * sostenga) = una navegacion. */
 void aura_main_swallow_repeats(long raw);
 
+/* True si el ultimo boton entregado por el bucle principal venia de un
+ * BUTTON_REPEAT (boton sostenido) y no de una pulsacion fresca -- el
+ * reproductor lo usa para distinguir "tap = pista anterior/siguiente"
+ * de "mantener = adelantar/atrasar la cancion" (encargo 2026-08-12)
+ * sin romper la normalizacion global de D-022. */
+bool aura_main_last_was_repeat(void);
+
 /* Gesto de "mantener presionado" (vocabulario de botones de Aura,
  * B-02 en BLOCKED.md -- pieza de infraestructura general, no atada a
  * un boton en particular). Bit 0x40000000 -- fuera del rango real de

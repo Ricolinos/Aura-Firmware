@@ -22,6 +22,21 @@ dispositivo o el prototipo):
 | Inclinación | **7° (fijado formalmente)** — rotación sutil en Y: el borde derecho ligeramente comprimido/retrocedido, la carátula "mira" apenas hacia la derecha |
 | Reflejo | Debajo de la carátula, hereda la misma perspectiva, con desvanecimiento hacia abajo. **Proporción: "más sutil que el original", idéntica a la definida en CoverFlow** — mismo reflejo en ambas pantallas, sin cambio durante la transición |
 
+## Barra unificada de progreso/volumen (confirmada 2026-08-12)
+
+Una sola pieza con cuatro caras:
+
+| Estado | Aspecto |
+|---|---|
+| Reposo | Carril **300×7px centrado**, color del Selector de menús (`SELECTION_FILL`), puntas completamente redondeadas; relleno **298×5px BLANCO**. **Sin números de tiempo.** |
+| Buscando (mantener backward/forward) | El relleno pasa a **ACENTO** y los tiempos (`00:00` / `-00:00`) aparecen SOLO mientras dura la búsqueda. Tap corto = pista anterior/siguiente (la decisión es al soltar, como el iPod original). |
+| Scrub (modo avance, rueda) | Relleno en ACENTO + **indicador de avance de 15×11px blanco con sombra paralela sutil**, su centro en el borde derecho del relleno. |
+| Volumen (rueda en modo volumen) | La misma barra muestra el **nivel de volumen** en acento; `speaker.minus`/`speaker.plus` en los extremos donde vivían los tiempos; el play/pausa del transporte se convierte en la **bocina dinámica de 5 estados** (0-2% mute, 2-15% bocina sola, 15-50/50-80/80-100% una/dos/tres ondas) y todo se desvanece con un fade sutil al soltar. |
+
+El transporte muestra **solo play/pausa al centro** (los glifos de
+backward/forward se retiraron — la interacción vive en los botones
+físicos). Repetir y aleatorio siguen en los extremos.
+
 **Punto clave de continuidad:** esa inclinación sutil ES el ángulo de
 aterrizaje de `Flip-and-Flow` — el original ya estaba diseñado como si la
 carátula viniera de Cover Flow. La spec de ambos componentes queda acoplada

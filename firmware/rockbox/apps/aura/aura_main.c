@@ -68,6 +68,12 @@ static bool is_hold_button(long raw)
  * saltar pistas rapido manteniendo LEFT/RIGHT en Ahora suena dependen
  * de este comportamiento exacto. */
 static long s_swallow_btn = BUTTON_NONE;
+static bool s_last_was_repeat = false;
+
+bool aura_main_last_was_repeat(void)
+{
+    return s_last_was_repeat;
+}
 
 void aura_main_swallow_repeats(long raw)
 {
@@ -107,10 +113,12 @@ static long next_button(int timeout_ticks)
                     continue; /* ya disparado para esta pulsacion */
                 s_hold_tracking = raw;
                 s_wheel_velocity = 0;
+                s_last_was_repeat = true;
                 return raw | AURA_BUTTON_HOLD;
             }
 
             b = raw;
+            s_last_was_repeat = true;
         }
         else if (b != BUTTON_NONE)
         {
@@ -119,6 +127,7 @@ static long next_button(int timeout_ticks)
              * termino. */
             s_hold_tracking = BUTTON_NONE;
             s_swallow_btn = BUTTON_NONE;
+            s_last_was_repeat = false;
         }
 
         s_wheel_velocity = (b == BUTTON_SCROLL_FWD || b == BUTTON_SCROLL_BACK)
