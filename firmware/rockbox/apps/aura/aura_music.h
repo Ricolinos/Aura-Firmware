@@ -41,6 +41,12 @@ void aura_music_select_genre(int32_t seek);
  * no arrastrar filtros de una sesion de navegacion anterior. */
 void aura_music_reset_filters(void);
 
+/* Artista del album identificado por `album_seek` (el del primer track
+ * encontrado -- suficiente para la linea de artista de Cover Flow;
+ * albumes multi-artista mostraran el primero, mismo criterio que la
+ * busqueda de caratula). false = sin resultado, `out` queda vacio. */
+bool aura_music_album_artist(int32_t album_seek, char *out, size_t outsz);
+
 /* Se incrementa en cada llamada a aura_music_select_xxx o a
  * aura_music_reset_filters. aura_screens.c lo usa como parte de la
  * clave de su cache de listas:

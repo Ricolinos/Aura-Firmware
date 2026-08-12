@@ -164,4 +164,9 @@ void a26_shell_outline_rounded_rect(int x, int y, int w, int h, int radius,
  * el documento pide sin tocar el framebuffer por debajo. */
 unsigned a26_shell_blend(unsigned from, unsigned to, int alpha_256);
 
+/* sqrt entera en punto fijo 24.8 (isqrt256(v) ~= sqrt(v)*256) --
+ * compartida por los recortes de esquina antialiasados (stamp_corner
+ * de este modulo, mask_corners_* de caratulas). */
+unsigned a26_shell_isqrt256(unsigned v);
+
 #endif /* APPLE2026_SHELL_H */

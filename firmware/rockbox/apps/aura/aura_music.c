@@ -144,6 +144,26 @@ int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_i
     }
 }
 
+bool aura_music_album_artist(int32_t album_seek, char *out, size_t outsz)
+{
+    struct tagcache_search tcs;
+    bool found = false;
+
+    out[0] = '\0';
+    if (!tagcache_is_usable())
+        return false;
+    if (!tagcache_search(&tcs, tag_artist))
+        return false;
+
+    tagcache_search_add_filter(&tcs, tag_album, album_seek);
+    if (tagcache_get_next(&tcs, out, outsz))
+        found = true;
+    tagcache_search_finish(&tcs);
+    if (!found)
+        out[0] = '\0';
+    return found;
+}
+
 static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
 {
     struct tagcache_search tcs;

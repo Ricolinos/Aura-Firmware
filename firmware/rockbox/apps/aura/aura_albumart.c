@@ -122,7 +122,7 @@ static void transpose(const fb_data *src, fb_data *dst, int size)
  * cacheado ya viene enmascarado"). */
 static void mask_corners_transposed(fb_data *buf, int size, int radius, unsigned bg)
 {
-    int r2 = radius * radius;
+    int r256 = radius * 256;
     int row, col;
 
     for (row = 0; row < radius; row++)
@@ -131,44 +131,75 @@ static void mask_corners_transposed(fb_data *buf, int size, int radius, unsigned
         {
             int rr = radius - 1 - row;
             int rc = radius - 1 - col;
+            int dist256 = (int)a26_shell_isqrt256((unsigned)(rr * rr + rc * rc));
+            size_t idx[4];
+            int k, t;
 
-            if (rr * rr + rc * rc > r2)
+            if (dist256 <= r256 - 128)
+                continue;
+
+            idx[0] = (size_t)col * size + row;
+            idx[1] = (size_t)(size - 1 - col) * size + row;
+            idx[2] = (size_t)col * size + (size - 1 - row);
+            idx[3] = (size_t)(size - 1 - col) * size + (size - 1 - row);
+
+            if (dist256 >= r256 + 128)
             {
-                buf[(size_t)col * size + row] = bg;
-                buf[(size_t)(size - 1 - col) * size + row] = bg;
-                buf[(size_t)col * size + (size - 1 - row)] = bg;
-                buf[(size_t)(size - 1 - col) * size + (size - 1 - row)] = bg;
+                for (k = 0; k < 4; k++)
+                    buf[idx[k]] = bg;
+                continue;
             }
+            /* Borde antialiasado (misma rampa de 1px que stamp_corner,
+             * apple2026_shell.c) -- cobertura de fondo lineal. */
+            t = dist256 - (r256 - 128);
+            for (k = 0; k < 4; k++)
+                buf[idx[k]] = a26_shell_blend(buf[idx[k]], bg, t);
         }
     }
 }
 
-/* Degradado diagonal de 3 puntos, version buffer TRANSPUESTO -- mismo
- * calculo exacto que draw_diagonal_gradient() (aura_selection_summary.c,
- * componentes/selection-summary.md: claro arriba-izquierda, acento al
- * centro, oscuro abajo-derecha) pero escribiendo directo a un fb_data[]
- * en vez de lcd_drawline() sobre la pantalla real -- ese componente
- * pinta la pantalla, esta funcion pinta un bitmap que despues pasa por
- * el mismo camino de proyeccion/reflejo que una caratula real (regla
- * dura 7: mismo patron visual, no un segundo look-and-feel para el caso
- * "sin caratula"). */
-static void fill_diagonal_gradient_transposed(fb_data *buf, int size,
-                                               unsigned color_a, unsigned color_center,
-                                               unsigned color_b)
+/* Caratula "Default" (imagen de referencia del dueno del diseno,
+ * 2026-08-12): nota musical gris sobre un tile gris claro plano --
+ * reemplaza al degradado de acento de la primera version de D-109. Los
+ * grises salen de tokens existentes (SELECTION_FILL de fondo,
+ * SHELL_RAIL de tinta), asi el default respeta ambos temas sin colores
+ * nuevos. La nota es la MISMA mascara de cobertura del icono "music"
+ * (60px) que ya genera design-system/generate.py -- se compone contra
+ * el tile con la rampa de antialias real, ningun bitmap nuevo. */
+void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
 {
-    int max_k = 2 * (size - 1);
-    int row, col;
+    unsigned tile = a26_color(A26_SELECTION_FILL);
+    unsigned ink = a26_color(A26_SHELL_RAIL);
+    char path[MAX_PATH];
+    struct bitmap bm;
+    int i, row, col, ret, ox, oy;
+    const fb_data *mask;
 
-    for (row = 0; row < size; row++)
+    for (i = 0; i < size * size; i++)
+        buf[i] = tile;
+
+    snprintf(path, sizeof(path), "%s/aura/masks/music-%d.bmp",
+              ICON_DIR, A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL);
+    bm.data = (char *)s_decode_scratch;
+    ret = read_bmp_file(path, &bm, sizeof(s_decode_scratch), FORMAT_NATIVE, NULL);
+    if (ret <= 0)
+        return; /* tile plano sin nota -- mejor que nada si faltara el asset */
+
+    mask = (const fb_data *)bm.data;
+    ox = (size - bm.width) / 2;
+    oy = (size - bm.height) / 2;
+    for (row = 0; row < bm.height; row++)
     {
-        for (col = 0; col < size; col++)
+        for (col = 0; col < bm.width; col++)
         {
-            int t256 = (row + col) * 256 / max_k;
-            unsigned c = (t256 <= 128)
-                ? a26_shell_blend(color_a, color_center, t256 * 2)
-                : a26_shell_blend(color_center, color_b, (t256 - 128) * 2);
+            int cov = (mask[row * bm.width + col] >> 5) & 0x3F;
+            size_t di;
 
-            buf[(size_t)col * size + row] = c;
+            if (cov == 0)
+                continue;
+            di = transposed ? (size_t)(ox + col) * size + (oy + row)
+                             : (size_t)(oy + row) * size + (ox + col);
+            buf[di] = a26_shell_blend(tile, ink, cov * 256 / 63);
         }
     }
 }
@@ -177,8 +208,7 @@ void aura_albumart_load_default(aura_albumart_t *out)
 {
     unsigned bg = a26_color(A26_SHELL_BG);
 
-    fill_diagonal_gradient_transposed((fb_data *)out->cover_data, out->size,
-                                       aura_accent_light(), aura_accent(), aura_accent_dark());
+    aura_albumart_default_tile((fb_data *)out->cover_data, out->size, true);
     mask_corners_transposed((fb_data *)out->cover_data, out->size, out->radius, bg);
 
     aura_art_generate_reflection((const fb_data *)out->cover_data,

@@ -8,11 +8,17 @@ void aura_selector_draw(int x, int y, int w, int h, aura_selector_indicator_t in
 {
     unsigned bg = a26_color(A26_SHELL_BG);
 
-    /* La pastilla misma es del color de acento -- no SELECTION_FILL
-     * (gris) como el sistema viejo. aura_accent() lee el ajuste vigente
-     * en runtime (T0.3), nunca el default compilado. */
+    /* Pastilla GRIS (A26_SELECTION_FILL), contenido en acento --
+     * correccion directa del dueno del diseno (2026-08-12): "el color
+     * de acento sobre el elemento seleccionado aplica al texto y al
+     * icono, no al seleccionador; el seleccionador debe ser de un
+     * color gris". La primera lectura de selector.md ("usa
+     * --color-accent") habia pintado la pastilla misma de acento --
+     * el acento del documento se refiere al CONTENIDO del item
+     * seleccionado. El documento fuente queda por actualizar por su
+     * dueno (este repo no toca docs/aura-design-system/). */
     a26_shell_fill_rounded_rect(x, y, w, h, AURA_DS_METRICS_SELECTOR_CORNER_RADIUS,
-                                 aura_accent(), bg);
+                                 a26_color(A26_SELECTION_FILL), bg);
 
     if (indicator == AURA_SELECTOR_INDICATOR_CHEVRON)
     {
@@ -20,9 +26,9 @@ void aura_selector_draw(int x, int y, int w, int h, aura_selector_indicator_t in
         int icon_x = x + w - AURA_DS_METRICS_SELECTOR_INDICATOR_GAP_FROM_EDGE - icon_size;
         int icon_y = y + (h - icon_size) / 2;
 
-        /* Variante "-selector" (blanco constante, G5): el resto del
-         * contenido sobre esta pastilla (texto, iconos de fila) usa el
-         * mismo tinte -- ver el llamador real en aura_menu_list.c. */
-        aura_widgets_draw_icon_variant_selector("chevron-right", icon_size, icon_x, icon_y);
+        /* Acento, como el resto del contenido del item seleccionado
+         * (texto/icono) -- la variante "-on" resuelve la tinta contra
+         * el acento vigente en runtime. */
+        aura_widgets_draw_icon_selected("chevron-right", icon_size, icon_x, icon_y);
     }
 }

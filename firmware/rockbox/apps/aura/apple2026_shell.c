@@ -63,7 +63,16 @@ unsigned a26_color(a26_token_t token)
     case A26_TEXT_TERTIARY:
         return dark ? A26_COLOR_DARK_TEXT_TERTIARY : A26_COLOR_LIGHT_TEXT_TERTIARY;
     case A26_ACCENT:
-        return dark ? A26_COLOR_DARK_ACCENT : A26_COLOR_LIGHT_ACCENT;
+        /* El acento es CONFIGURABLE por el usuario (T0.3) -- resolver
+         * el token al ajuste vivo, no al default del tema compilado.
+         * Antes cada consumidor debia acordarse de llamar aura_accent()
+         * en vez del token; los que no (texto seleccionado de listas de
+         * contenido, tracklist de Cover Flow, toggles viejos) se
+         * quedaban en el rosa default aunque el usuario eligiera otro
+         * color -- inconsistencia real vista en el simulador con acento
+         * azul (2026-08-12). Un solo punto de verdad aca la elimina
+         * para todos. */
+        return aura_accent();
     case A26_SHELL_RAIL:
         return dark ? A26_COLOR_DARK_SHELL_RAIL : A26_COLOR_LIGHT_SHELL_RAIL;
     case A26_PROGRESS_FILL:
@@ -148,19 +157,40 @@ void a26_shell_clear_screen(void)
     lcd_set_drawmode(DRMODE_FG);
 }
 
-/* Mascara de cuarto de circulo por corte de distancia (sin trig, sin
- * antialias -- una pantalla LCD de 320x240 sin filtro no lo necesita a
- * radio 12): un pixel a (dx, dy) del vertice de la esquina se pinta con
- * el fondo del tema si cae fuera del cuarto de circulo de radio R. */
+/* Raiz cuadrada entera en punto fijo 24.8: isqrt256(v) ~= sqrt(v)*256,
+ * para `v` entero simple (distancias al cuadrado de radios <=16px --
+ * cabe holgado en 32 bits: 512*512*65536 no se alcanza nunca aca).
+ * Newton con semilla burda, converge en <6 iteraciones a estos rangos. */
+unsigned a26_shell_isqrt256(unsigned v)
+{
+    unsigned x, prev;
+
+    if (v == 0)
+        return 0;
+    v <<= 16; /* sqrt(v * 2^16) = sqrt(v) * 256 */
+    x = v / 2 + 1;
+    do {
+        prev = x;
+        x = (x + v / x) / 2;
+    } while (x < prev);
+    return prev;
+}
+
+/* Mascara de cuarto de circulo con ANTIALIAS por cobertura (correccion
+ * "dientes de sierra" del dueno del diseno, 2026-08-12 -- el corte
+ * binario por distancia si se nota como escalera, sobre todo en las
+ * pastillas de acento/gris y las esquinas de caratulas): cada pixel de
+ * la franja del borde se mezcla entre lo YA dibujado (leido del
+ * framebuffer, asi funciona igual sobre relleno plano, texto o
+ * degradado) y el fondo `bg`, con la fraccion de cobertura estimada
+ * por distancia al arco (borde de 1px: cobertura lineal entre r-0.5 y
+ * r+0.5). Fuera de esa franja el corte sigue siendo binario, igual de
+ * barato que antes. */
 static void stamp_corner(int corner_x, int corner_y, int step_x, int step_y,
                           int radius, unsigned bg)
 {
     int dx, dy;
-    int r2 = radius * radius;
-
-    lcd_set_drawmode(DRMODE_SOLID);
-    lcd_set_foreground(bg);
-    lcd_set_background(bg);
+    int r256 = radius * 256;
 
     for (dy = 0; dy < radius; dy++)
     {
@@ -168,12 +198,25 @@ static void stamp_corner(int corner_x, int corner_y, int step_x, int step_y,
         {
             int rx = radius - 1 - dx;
             int ry = radius - 1 - dy;
-            if (rx * rx + ry * ry > r2)
-                lcd_drawpixel(corner_x + dx * step_x, corner_y + dy * step_y);
+            int dist256 = (int)a26_shell_isqrt256((unsigned)(rx * rx + ry * ry));
+            int px = corner_x + dx * step_x;
+            int py = corner_y + dy * step_y;
+            fb_data *p;
+
+            if (dist256 <= r256 - 128)
+                continue; /* dentro del arco: se queda lo dibujado */
+
+            p = FBADDR(px, py);
+            if (dist256 >= r256 + 128)
+                *p = bg; /* fuera del arco: fondo pleno */
+            else
+            {
+                /* Franja del borde: cobertura de fondo 0..256 lineal. */
+                int t = dist256 - (r256 - 128);
+                *p = a26_shell_blend(*p, bg, t);
+            }
         }
     }
-
-    lcd_set_drawmode(DRMODE_FG);
 }
 
 void a26_shell_stamp_corners(void)

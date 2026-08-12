@@ -63,9 +63,10 @@ static long s_activity_since = 0;
  * dimensiones derivadas del indicador del Selector (alto max 12px,
  * selector.md) con proporcion ~1.8:1 -- el documento difiere las
  * medidas exactas de los elementos derechos, TODO(pendiente-doc).
- * Sobre el Selector (fondo de acento) los colores se invierten para
- * conservar contraste: pista blanca constante / perilla de acento
- * cuando esta encendido. */
+ * Mismos colores sobre fila en reposo y sobre el Selector (pastilla
+ * GRIS, no de acento): pista de acento encendida / riel apagada,
+ * perilla del fondo del shell -- solo cambia el color de las esquinas
+ * redondeadas segun el fondo real debajo. */
 #define SWITCH_W 22
 #define SWITCH_H 12
 #define SWITCH_MARGIN 2
@@ -75,21 +76,9 @@ static void draw_switch_v2(int x, int y, int value, int on_selector)
     int thumb_d = SWITCH_H - 2 * SWITCH_MARGIN;
     int thumb_x = value ? (x + SWITCH_W - SWITCH_MARGIN - thumb_d)
                          : (x + SWITCH_MARGIN);
-    unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
-    unsigned bg, track, thumb;
-
-    if (on_selector)
-    {
-        bg = aura_accent();
-        track = value ? white : a26_shell_blend(bg, white, 115);
-        thumb = value ? aura_accent() : white;
-    }
-    else
-    {
-        bg = a26_color(A26_SHELL_BG);
-        track = value ? aura_accent() : a26_color(A26_SHELL_RAIL);
-        thumb = bg;
-    }
+    unsigned bg = on_selector ? a26_color(A26_SELECTION_FILL) : a26_color(A26_SHELL_BG);
+    unsigned track = value ? aura_accent() : a26_color(A26_SHELL_RAIL);
+    unsigned thumb = a26_color(A26_SHELL_BG);
 
     a26_shell_fill_rounded_rect(x, y, SWITCH_W, SWITCH_H, SWITCH_H / 2, track, bg);
     a26_shell_fill_rounded_rect(thumb_x, y + SWITCH_MARGIN, thumb_d, thumb_d,
@@ -171,7 +160,7 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
             int icon_y = row_y + (ROW_H - ICON_SZ) / 2;
 
             if (is_selected)
-                aura_widgets_draw_icon_variant_selector(items[i].icon_name, ICON_SZ, icon_x, icon_y);
+                aura_widgets_draw_icon_selected(items[i].icon_name, ICON_SZ, icon_x, icon_y);
             else
                 aura_widgets_draw_icon(items[i].icon_name, ICON_SZ, icon_x, icon_y);
         }
@@ -190,8 +179,8 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         {
             int check_y = row_y + (ROW_H - ICON_SZ) / 2;
             if (is_selected)
-                aura_widgets_draw_icon_variant_selector("check", ICON_SZ,
-                                                         right_edge - ICON_SZ, check_y);
+                aura_widgets_draw_icon_selected("check", ICON_SZ,
+                                                 right_edge - ICON_SZ, check_y);
             else
                 aura_widgets_draw_icon("check", ICON_SZ, right_edge - ICON_SZ, check_y);
             text_right = right_edge - ICON_SZ - TEXT_GAP;
@@ -200,12 +189,11 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         max_text_w = text_right - text_x;
         truncate_to_fit(items[i].label, truncated, sizeof(truncated), max_text_w);
 
-        /* Blanco constante (G5) sobre la pastilla de acento, en AMBOS
-         * temas -- mismo tinte que ya hornea el icono "-selector".
-         * AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT es el
-         * mismo token que definio esa decision (D-086), reusado aca en
-         * vez de inventar un segundo valor para lo mismo. */
-        lcd_set_foreground(is_selected ? AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT
+        /* Contenido del item seleccionado en ACENTO sobre la pastilla
+         * gris (correccion del dueno del diseno 2026-08-12, ver
+         * aura_selector.c) -- mismo trato que el texto de las listas de
+         * contenido, un solo lenguaje de seleccion en toda la app. */
+        lcd_set_foreground(is_selected ? aura_accent()
                                         : a26_color(A26_TEXT_PRIMARY));
         lcd_putsxy(text_x, row_y + (ROW_H - 10) / 2, (const unsigned char *)truncated);
     }

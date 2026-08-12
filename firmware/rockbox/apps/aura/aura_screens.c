@@ -1560,7 +1560,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_screen_id_t to = aura_nav_current(nav);
 
         if (depth_after > depth_before && is_coverflow_screen(to))
-            aura_transition_reveal(nav);
+            aura_transition_coverflow_enter(nav);
         else
         {
             /* T1 vs T3 segun los DOS extremos de la navegacion (L4):

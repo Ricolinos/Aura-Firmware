@@ -1306,4 +1306,28 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-112 — Segunda ronda de correcciones del dueño del diseño: Selector gris, Cover Flow según el original de Apple, giro continuo, transición de entrada propia, antialias de esquinas
+
+**Siete correcciones dictadas en vivo (2026-08-12), todas verificadas por captura:**
+
+**1) Selector gris, contenido en acento.** El dueño del diseño precisó la lectura correcta de `selector.md`: el acento aplica al TEXTO y al ICONO del ítem seleccionado, no a la pastilla — la pastilla es gris (`A26_SELECTION_FILL`). `aura_selector.c` (pastilla + chevron en variante `-on`), `aura_menu_list.c` (texto `aura_accent()`, iconos `-on`, switch con colores normales sobre gris). Las listas de contenido ya eran así — ahora es UN lenguaje de selección en toda la app. El documento fuente queda por actualizar por su dueño (este repo no toca `docs/aura-design-system/`).
+
+**2) El token `A26_ACCENT` ahora resuelve al acento configurable.** Encontrado al verificar con el acento azul que el usuario dejó configurado en su simulador: los consumidores del token crudo (texto seleccionado de listas de contenido, tracklist de Cover Flow, toggles del sistema viejo) seguían en el rosa default compilado. `a26_color(A26_ACCENT)` ahora devuelve `aura_accent()` — un solo punto de verdad, ningún consumidor tiene que acordarse.
+
+**3) Antialias de esquinas redondeadas en TODO el sistema** ("que no se vean dientes de sierra en ningún elemento"): `stamp_corner()` (`apple2026_shell.c`, la primitiva compartida de pastillas/tarjetas/tiles/pantalla) pasó de corte binario por distancia a cobertura fraccional — franja de 1px del arco mezclada entre lo ya dibujado (leído del framebuffer, funciona sobre cualquier contenido) y el fondo, con `a26_shell_isqrt256()` (raíz entera 24.8, expuesta). Mismo tratamiento en `mask_corners_transposed()` (carátulas de Cover Flow) y `mask_corners_buffer()` (Ahora suena).
+
+**4) Cover Flow con la geometría del original de Apple** (captura de referencia aportada): central de 130px (token `center_slide_size` 100→130, medido de la referencia), `CF_TOP_Y` 30, laterales apretadas y traslapadas (`CF_SLIDE_SPACING_R` 40000→29000, `CF_OFFSETX_R` 92000), menos atenuadas (`CF_SIDE_FADE` 130→165), y texto de DOS líneas centradas bajo el central: título del álbum (bold 12) + artista (regular 12, secundario) — el artista se busca en tagcache solo al cambiar de álbum objetivo (nueva `aura_music_album_artist()`), nunca por cuadro.
+
+**5) Reflejo al 45% de pico** (`AURA_ART_REFLECTION_PEAK_PCT`, "muy visible... debe tener una opacidad menor, del 40-50%") — antes arrancaba en espejo nítido al 100%. Compartido por Cover Flow y Ahora suena.
+
+**6) Carátula "Default" = imagen de referencia del dueño** (nota musical gris sobre tile gris claro — reemplaza el degradado de acento de D-109): `aura_albumart_default_tile()` compone la máscara del icono `music` (60px) sobre `SELECTION_FILL` con tinta `SHELL_RAIL` — tokens existentes, respeta ambos temas. Usada por el carrusel, por el REPRODUCTOR (antes: rectángulo vacío) y por Flip-and-Flow (antes: saltaba la animación entera sin carátula).
+
+**7) Flip-and-Flow con giro continuo en un solo sentido**: el vuelo arranca desde el PERFIL (90° = 256 IANGLE, el estado visual en que quedó la tapa al abrir su lista) y desciende monótono hasta `AURA_NOWPLAYING_TILT_IANGLE` — la versión anterior saltaba en seco a 0° y giraba de vuelta (dos discontinuidades). Aterriza exacto en la geometría del reproductor.
+
+**8) Transición de entrada a Cover Flow propia** (`aura_transition_coverflow_enter()`, reemplaza el reveal simétrico T4): LeftPanel Y su barra split salen empujados a la izquierda mientras el Cover Flow entra desde la derecha POR ENCIMA del SelectionSummary (que queda quieto debajo hasta ser cubierto); al terminar el contenido, la barra (full) entra CAYENDO desde arriba — el Push-and-Drop de `status-bar.md`. La variante CON CoverDrift que el dueño describió (ambos paneles salen, el Cover Flow se revela DETRÁS, renderizándose desde el primer cuadro) queda documentada para cuando T2.9 exista — no implementable sin el componente.
+
+**Aceptación**: 0 warnings, 8/8 suites host-side; capturas `docs/screenshots/fix2-*.png`. Las dos transiciones nuevas son síncronas (no capturables a media animación con el arnés, limitación conocida D-105) — verificadas por su estado final correcto; el movimiento queda para confirmación del dueño en el simulador interactivo.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

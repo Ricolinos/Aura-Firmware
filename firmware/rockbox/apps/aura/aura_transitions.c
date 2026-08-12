@@ -197,16 +197,30 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
     TRANSITION_LOG("push", frames, start_tick);
 }
 
-/* T4 (Coverflow, L4): mismo truco seguro de "wipe" que aura_transition_slide
- * (D-030) -- nunca se instala un viewport fuera de [0, A26_SCREEN_WIDTH] --
- * pero revelando desde AMBOS bordes hacia el centro en vez de desde uno
- * solo, para que la entrada a Coverflow se sienta distinta de una
- * navegacion de lista comun ("el contenido emerge de detras", L4). */
-void aura_transition_reveal(aura_nav_t *nav)
+/* Entrada a Cover Flow (coreografia del dueno del diseno, 2026-08-12,
+ * caso SIN CoverDrift -- el unico posible hoy, CoverDrift/T2.9 no
+ * existe): LeftPanel Y su StatusBar (split) salen empujados hacia la
+ * izquierda ("la barra de estado se va junto con el panel izquierdo"),
+ * mientras la pantalla del Cover Flow entra desde el borde derecho POR
+ * ENCIMA del SelectionSummary, que se queda quieto debajo hasta ser
+ * cubierto. Cuando el contenido termino de entrar, la StatusBar (full)
+ * del Cover Flow entra CAYENDO desde arriba -- el mismo Push-and-Drop
+ * que status-bar.md describe para (split)->(full).
+ *
+ * Variante CON CoverDrift (documentada por el dueno del diseno, para
+ * cuando T2.9 exista): el panel derecho tambien sale, hacia la
+ * derecha, y el Cover Flow se revela DETRAS de ambos paneles
+ * (renderizado desde el primer cuadro). No implementable todavia sin
+ * el componente -- misma coreografia de barra. */
+void aura_transition_coverflow_enter(aura_nav_t *nav)
 {
-    int frames, frame_delay, i;
+    int frames, frame_delay, i, y;
+    int d_prev = 0;
+    const int panel_w = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+    const int bar_h = A26_LAYOUT_STATUSBAR_HEIGHT;
     struct viewport vp;
     struct viewport *saved;
+    unsigned bg = a26_color(A26_SHELL_BG);
     long start_tick = current_tick;
 
     /* AUDITORIA-01 A-08, mismo criterio que aura_transition_slide(). */
@@ -215,7 +229,7 @@ void aura_transition_reveal(aura_nav_t *nav)
 
     if (aura_settings.animation_mode == AURA_ANIM_ALL)
     {
-        frames = 10;
+        frames = 8;
         frame_delay = HZ / 60;
     }
     else /* AURA_ANIM_MINIMAL */
@@ -224,37 +238,101 @@ void aura_transition_reveal(aura_nav_t *nav)
         frame_delay = HZ / 45;
     }
 
+    /* Cover Flow completo (con su barra full incluida) renderizado UNA
+     * vez al framebuffer offscreen -- misma mecanica que el push. La
+     * franja de su barra (y < bar_h) NO se blitea en la fase de
+     * deslizamiento: cae despues, en la fase Drop. */
+    viewport_set_defaults(&vp, SCREEN_MAIN);
+    vp.x = 0;
+    vp.y = 0;
+    vp.width = A26_SCREEN_WIDTH;
+    vp.height = A26_SCREEN_HEIGHT;
+    viewport_set_buffer(&vp, &s_push_buffer, SCREEN_MAIN);
+
+    saved = lcd_set_viewport(&vp);
+    aura_screens_draw(nav);
+    lcd_set_viewport(saved);
+
+    /* Fase 1: deslizamiento simultaneo. El panel izquierdo (barra split
+     * incluida: TODAS las filas de x < panel_w) recorre panel_w px; el
+     * Cover Flow recorre la pantalla completa en el mismo numero de
+     * cuadros (entra "al doble de velocidad", asi ambos terminan
+     * juntos). El hueco entre el panel saliente y el contenido entrante
+     * muestra el fondo del shell -- el SelectionSummary sigue visible
+     * debajo hasta que el contenido lo cubre. */
     for (i = 1; i <= frames; i++)
     {
-        int half = (A26_SCREEN_WIDTH / 2 * i) / frames;
+        int d = eased_offset(panel_w, i, frames);          /* salida del panel */
+        int d_cf = eased_offset(A26_SCREEN_WIDTH, i, frames); /* entrada del CF */
+        int delta = d - d_prev;
+        int cf_left = A26_SCREEN_WIDTH - d_cf;
 
-        viewport_set_defaults(&vp, SCREEN_MAIN);
-        vp.y = 0;
-        vp.height = A26_SCREEN_HEIGHT;
+        for (y = 0; y < A26_SCREEN_HEIGHT; y++)
+        {
+            fb_data *row = FBADDR(0, y);
 
-        /* Mitad izquierda: revela desde x=0 hacia el centro. */
-        vp.x = 0;
-        vp.width = half;
-        saved = lcd_set_viewport(&vp);
-        aura_screens_draw(nav);
-        lcd_set_viewport(saved);
+            /* Panel izquierdo saliendo (remanente [0, panel_w-d)). */
+            if (delta > 0 && d < panel_w)
+                memmove(row, row + delta, (panel_w - d) * sizeof(fb_data));
 
-        /* Mitad derecha: revela desde el borde derecho hacia el
-         * centro. x+width se mantiene siempre en A26_SCREEN_WIDTH. */
-        vp.x = A26_SCREEN_WIDTH - half;
-        vp.width = half;
-        saved = lcd_set_viewport(&vp);
-        aura_screens_draw(nav);
-        lcd_set_viewport(saved);
+            /* Hueco revelado tras el panel: fondo plano. */
+            if (d > 0 && panel_w - d < panel_w && cf_left > panel_w - d)
+            {
+                int gap_end = cf_left < panel_w ? cf_left : panel_w;
+                int gx;
+                for (gx = panel_w - d; gx < gap_end; gx++)
+                    row[gx] = bg;
+            }
+        }
+
+        /* Cover Flow entrando desde la derecha (solo el cuerpo, la
+         * barra cae en la fase 2): sus columnas [0, d_cf) aparecen en
+         * x = [320-d_cf, 320). La franja superior queda en fondo plano
+         * mientras tanto. */
+        if (d_cf > 0)
+        {
+            lcd_bitmap_part(s_push_fb, 0, bar_h, A26_SCREEN_WIDTH,
+                            cf_left, bar_h, d_cf, A26_SCREEN_HEIGHT - bar_h);
+            for (y = 0; y < bar_h; y++)
+            {
+                fb_data *row = FBADDR(cf_left, y);
+                int gx;
+                for (gx = 0; gx < d_cf; gx++)
+                    row[gx] = bg;
+            }
+        }
 
         lcd_update();
         drain_button_queue_if_full();
-
+        d_prev = d;
         if (i < frames)
             sleep(frame_delay);
     }
 
-    TRANSITION_LOG("reveal", frames, start_tick);
+    /* Fase 2: Drop de la StatusBar (full) -- entra cayendo desde arriba
+     * una vez que el contenido termino de entrar (status-bar.md,
+     * Push-and-Drop, paso 3). En el cuadro `i`, las primeras `dd` filas
+     * de pantalla muestran las ULTIMAS `dd` filas de la barra (la barra
+     * asomando desde el borde superior). */
+    {
+        int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+
+        for (i = 1; i <= drop_frames; i++)
+        {
+            int dd = eased_offset(bar_h, i, drop_frames);
+
+            if (dd > 0)
+                lcd_bitmap_part(s_push_fb, 0, bar_h - dd, A26_SCREEN_WIDTH,
+                                0, 0, A26_SCREEN_WIDTH, dd);
+
+            lcd_update_rect(0, 0, A26_SCREEN_WIDTH, bar_h);
+            drain_button_queue_if_full();
+            if (i < drop_frames)
+                sleep(frame_delay);
+        }
+    }
+
+    TRANSITION_LOG("coverflow-enter", frames, start_tick);
 }
 
 /* -- Flip-and-Flow (PLAN.md T3.2(d), componentes/cover-flow.md) --------
@@ -306,14 +384,19 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
     art.cover_data = cover_buf;
     art.reflection_data = refl_buf;
 
-    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE
-        || !aura_albumart_load_for_album(album_seek, &art))
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE)
     {
-        /* Sin animacion (ajuste del usuario) o sin caratula real --
-         * nada que volar, el llamador navega directo. */
+        /* Sin animacion (ajuste del usuario) -- navegar directo. */
         aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
         return;
     }
+
+    /* Sin caratula real, vuela la Default (misma imagen que el carrusel
+     * y el reproductor ya muestran para ese album) -- antes este caso
+     * saltaba la animacion por completo, un corte seco que ya no tiene
+     * razon de ser. */
+    if (!aura_albumart_load_for_album(album_seek, &art))
+        aura_albumart_load_default(&art);
 
     frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 14 : 6;
     frame_delay = HZ / 60;
@@ -326,15 +409,20 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
         aura_flow_slide_t slide;
         aura_flow_projection_t proj;
 
-        /* Signo positivo, no negativo -- mismo signo que
-         * draw_cover_tilted() (aura_nowplaying.c) usa ahora, ver el
-         * comentario ahi: con el signo negativo original el lado
-         * izquierdo quedaba corto y el derecho alto, al reves de lo
-         * pedido. Esta funcion nunca inventa su propio destino (lee
-         * los mismos AURA_NOWPLAYING_TILT_IANGLE/_CX), asi que tiene
-         * que seguir el mismo cambio de signo o la caratula "saltaria"
-         * de direccion en el ultimo cuadro del vuelo. */
-        slide.angle = aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_IANGLE, t);
+        /* Giro CONTINUO en un solo sentido (correccion del dueno del
+         * diseno 2026-08-12: "el album tiene que girar siempre en la
+         * misma direccion, y transicionar a la geometria y posicion
+         * exacta ya establecida en el reproductor"): el vuelo arranca
+         * desde el PERFIL (90 grados = 256 IANGLE, el estado visual en
+         * que quedo la tapa al abrir su lista de canciones -- la
+         * version anterior saltaba en seco a 0 grados y giraba de
+         * vuelta hacia el tilt, dos discontinuidades) y desciende
+         * monotono hasta AURA_NOWPLAYING_TILT_IANGLE (+20, el mismo
+         * signo/valor exacto que draw_cover_tilted() en
+         * aura_nowplaying.c): un solo sentido de giro de principio a
+         * fin, aterrizando en la geometria del reproductor sin salto
+         * en el ultimo cuadro. */
+        slide.angle = aura_pattern_lerp(256, AURA_NOWPLAYING_TILT_IANGLE, t);
         slide.distance = 0;
         slide.cx = aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_CX, t);
 

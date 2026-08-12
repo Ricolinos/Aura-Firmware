@@ -25,6 +25,12 @@
  * consumidor pasa la suya en vez de que este modulo elija por todos. */
 #define AURA_ART_REFLECTION_HEIGHT_PCT 35
 
+/* Opacidad maxima del reflejo (primera fila, pegada a la caratula) --
+ * 40-50% pedido por el dueno del diseno (2026-08-12); se desvanece
+ * linealmente a 0% hacia abajo. Compartida por Cover Flow y Ahora
+ * suena: mismo material, mismo reflejo. */
+#define AURA_ART_REFLECTION_PEAK_PCT 45
+
 int aura_art_reflection_height(int size, int height_pct);
 
 /* Genera el reflejo de `cover` (size x size, fb_data, formato nativo

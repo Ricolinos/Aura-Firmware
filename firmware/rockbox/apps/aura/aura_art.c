@@ -29,7 +29,12 @@ void aura_art_generate_reflection(const fb_data *cover, fb_data *out,
          * verticalmente, difuminada hacia el fondo segun se aleja del
          * borde. */
         int source_row = size - 1 - y;
-        int fade = 255 - (255 * y) / refl_h; /* 255=espejo nitido .. 0=fondo puro */
+        /* Pico de opacidad del reflejo: 45% (correccion del dueno del
+         * diseno 2026-08-12, "el reflejo es muy visible, debe tener una
+         * opacidad menor, del 40-50%") -- antes arrancaba en espejo
+         * nitido (100%) y solo se desvanecia hacia abajo. */
+        int peak = 255 * AURA_ART_REFLECTION_PEAK_PCT / 100;
+        int fade = peak - (peak * y) / refl_h;
 
         for (x = 0; x < size; x++)
         {

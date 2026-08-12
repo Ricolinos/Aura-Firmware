@@ -31,6 +31,7 @@
 #include "aura_status_bar_v2.h"
 #include "aura_widgets.h"
 #include "aura_art.h"
+#include "aura_albumart.h"
 #include "aura_motion.h"
 #include "aura_music.h"
 #include "aura_flow.h"
@@ -167,7 +168,7 @@ static void derive_sibling_path(const char *audio_path, const char *new_ext,
  * aplicada aca sobre el buffer en vez de sobre el framebuffer. */
 static void mask_corners_buffer(fb_data *buf, int size, int radius, unsigned bg)
 {
-    int r2 = radius * radius;
+    int r256 = radius * 256;
     int dx, dy;
 
     for (dy = 0; dy < radius; dy++)
@@ -176,14 +177,28 @@ static void mask_corners_buffer(fb_data *buf, int size, int radius, unsigned bg)
         {
             int rx = radius - 1 - dx;
             int ry = radius - 1 - dy;
+            int dist256 = (int)a26_shell_isqrt256((unsigned)(rx * rx + ry * ry));
+            size_t idx[4];
+            int k, t;
 
-            if (rx * rx + ry * ry > r2)
+            if (dist256 <= r256 - 128)
+                continue;
+
+            idx[0] = (size_t)dy * size + dx;
+            idx[1] = (size_t)dy * size + (size - 1 - dx);
+            idx[2] = (size_t)(size - 1 - dy) * size + dx;
+            idx[3] = (size_t)(size - 1 - dy) * size + (size - 1 - dx);
+
+            if (dist256 >= r256 + 128)
             {
-                buf[dy * size + dx] = bg;
-                buf[dy * size + (size - 1 - dx)] = bg;
-                buf[(size - 1 - dy) * size + dx] = bg;
-                buf[(size - 1 - dy) * size + (size - 1 - dx)] = bg;
+                for (k = 0; k < 4; k++)
+                    buf[idx[k]] = bg;
+                continue;
             }
+            /* Borde antialiasado, misma rampa que stamp_corner. */
+            t = dist256 - (r256 - 128);
+            for (k = 0; k < 4; k++)
+                buf[idx[k]] = a26_shell_blend(buf[idx[k]], bg, t);
         }
     }
 }
@@ -253,6 +268,28 @@ static void reload_for_track(const struct mp3entry *id3)
 
     strlcpy(s_loaded_path, id3->path, sizeof(s_loaded_path));
     s_art_valid = load_album_art(id3);
+    if (!s_art_valid)
+    {
+        /* Caratula "Default" (imagen de referencia del dueno del
+         * diseno): nota gris sobre tile gris claro, mismo pipeline de
+         * esquinas + reflejo que una caratula real -- reemplaza al
+         * recuadro vacio que draw_cover_tilted() dibujaba antes para
+         * este caso. */
+        s_art_bm.width = ART_SIZE;
+        s_art_bm.height = ART_SIZE;
+        s_art_bm.data = (char *)s_art_buf;
+#if (LCD_DEPTH > 1)
+        s_art_bm.maskdata = NULL;
+#endif
+        aura_albumart_default_tile((fb_data *)s_art_bm.data, ART_SIZE, false);
+        mask_corners_buffer((fb_data *)s_art_bm.data, ART_SIZE, ART_RADIUS,
+                             a26_color(A26_SHELL_BG));
+        aura_art_generate_reflection((const fb_data *)s_art_bm.data,
+                                      (fb_data *)s_reflection_buf,
+                                      ART_SIZE, ART_REFLECTION_PCT,
+                                      a26_color(A26_SHELL_BG), false);
+        s_art_valid = true;
+    }
     s_lrc_valid = load_lyrics(id3->path);
     s_scrub_preview_ms = -1; /* la cancion nueva arranca en su propio elapsed real */
     /* El modo NO se reinicia entre canciones (doc: no lo pide, y volver

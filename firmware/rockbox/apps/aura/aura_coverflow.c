@@ -43,15 +43,20 @@
 #define CF_COVER_SIZE     AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE
 #define CF_CORNER_RADIUS  AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
 #define CF_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
-#define CF_TOP_Y          28
+#define CF_TOP_Y          30 /* borde superior del central, medido de la referencia de Apple */
 #define CF_VISIBLE_RADIUS AURA_DS_METRICS_COVER_FLOW_SIDE_SLIDES_PER_SIDE
 #define CF_CACHE_SLOTS    (2 * CF_VISIBLE_RADIUS + 3) /* visibles + margen para scroll suave */
-#define CF_SIDE_FADE      130 /* de 255 */
+#define CF_SIDE_FADE      165 /* de 255 -- laterales visibles como en la referencia, no apagadas */
 /* Alto del reflejo en tiempo de compilacion -- mismo calculo que
  * aura_art_reflection_height(), pero constante en tiempo de
  * compilacion (hace falta para dimensionar el buffer estatico de cada
  * slot). */
 #define CF_REFLECTION_H   (CF_COVER_SIZE * CF_REFLECTION_PCT / 100)
+/* Lineas de texto bajo el central (titulo bold + artista regular,
+ * posiciones medidas de la referencia del original: ~y182/y202 en
+ * 320x240 con central de 130 a partir de y30). */
+#define CF_TITLE_Y  (CF_TOP_Y + CF_COVER_SIZE + 22)
+#define CF_ARTIST_Y (CF_TITLE_Y + 18)
 
 typedef struct {
     int album_index; /* -1 = slot libre/no cargado */
@@ -235,8 +240,8 @@ static fb_data fade_pixel(unsigned px, int fade, int bg_r, int bg_g, int bg_b)
  * (T3.2(a)) empezo a guardar las caratulas TRANSPUESTAS -- unificar en
  * una sola funcion evita mantener dos formatos de lectura de pixel. */
 #define CF_ITILT           199    /* ~70 grados: 70*1024/360, mismo valor fijo de pictureflow.c (no depende del tamano del slide) */
-#define CF_OFFSETX_R       90000  /* separacion centro-a-lateral, re-derivada para CF_COVER_SIZE=100 (antes 56px), ver DECISIONS.md D-102 */
-#define CF_SLIDE_SPACING_R 40000  /* separacion entre laterales consecutivos, misma re-derivacion */
+#define CF_OFFSETX_R       92000  /* separacion centro-a-lateral, re-derivada para CF_COVER_SIZE=130 contra la referencia del original de Apple (la primera lateral queda pegada al borde del central) */
+#define CF_SLIDE_SPACING_R 29000  /* laterales apretadas y traslapadas (~28px entre vecinas), como la referencia */
 
 /* `offset_x256` es la distancia (en unidades de "album", x256) entre
  * esta tapa y la posicion animada actual del carrusel -- puede ser
@@ -556,12 +561,36 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         int w, h;
         const char *label = s_albums[s_target_index].label;
 
-        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        /* Dos lineas centradas bajo el central, como el original de
+         * Apple: titulo del album (bold) + artista (regular, un tono
+         * abajo). Se dibujan DESPUES del carrusel, encima de la zona
+         * del reflejo (45% de pico, legible). El artista se busca en
+         * tagcache solo cuando cambia el album objetivo (cache
+         * estatico), nunca por cuadro. */
+        static int s_artist_for_index = -1;
+        static char s_artist[64];
+
+        if (s_artist_for_index != s_target_index)
+        {
+            s_artist_for_index = s_target_index;
+            aura_music_album_artist(s_albums[s_target_index].seek,
+                                     s_artist, sizeof(s_artist));
+        }
+
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
         lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
         lcd_getstringsize((const unsigned char *)label, &w, &h);
-        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2,
-                   CF_TOP_Y + CF_COVER_SIZE + CF_COVER_SIZE / 2 + A26_SPACING_LG,
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_TITLE_Y,
                    (const unsigned char *)label);
+
+        if (s_artist[0])
+        {
+            lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+            lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+            lcd_getstringsize((const unsigned char *)s_artist, &w, &h);
+            lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_ARTIST_Y,
+                       (const unsigned char *)s_artist);
+        }
     }
 }
 

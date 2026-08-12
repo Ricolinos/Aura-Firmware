@@ -17,6 +17,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "lcd.h" /* fb_data */
+
 typedef struct {
     int size;
     int radius;                     /* esquina redondeada a hornear/verificar contra el cache */
@@ -45,15 +47,17 @@ typedef struct {
  * bytes respectivamente. */
 bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out);
 
-/* Caratula "Default" para un album sin arte real (aura_albumart_load_for_album()
- * devolvio false) -- mismo lenguaje visual que SelectionSummary
- * (componentes/selection-summary.md: degradado diagonal del acento,
- * tres puntos claro/centro/oscuro) en vez del recuadro vacio que
- * dibujaba antes el llamador para este caso. Mismo formato (transpuesto,
- * esquinas horneadas al `out->radius` ya fijado, reflejo generado) que
- * una caratula real -- el consumidor (draw_slide_perspective) no
- * necesita distinguir entre los dos casos. Nunca falla (computo puro,
- * sin disco ni decodificacion) -- `out->valid` siempre queda en true. */
+/* Caratula "Default" para un album sin arte real (imagen de referencia
+ * del dueno del diseno: nota musical gris sobre tile gris claro plano).
+ * Mismo formato (transpuesto, esquinas horneadas al `out->radius` ya
+ * fijado, reflejo generado) que una caratula real -- el consumidor
+ * (draw_slide_perspective) no necesita distinguir entre los dos casos.
+ * `out->valid` siempre queda en true. */
 void aura_albumart_load_default(aura_albumart_t *out);
+
+/* Solo el tile default (fondo gris + nota), sin esquinas ni reflejo --
+ * para consumidores con su propio pipeline de enmascarado/reflejo
+ * (Ahora suena usa layout fila-contigua, `transposed`=false). */
+void aura_albumart_default_tile(fb_data *buf, int size, bool transposed);
 
 #endif /* AURA_ALBUMART_H */

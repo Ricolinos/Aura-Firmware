@@ -34,7 +34,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width);
  * ambos bordes hacia el centro en vez de deslizar desde uno solo --
  * distingue visualmente la entrada a Coverflow de una navegacion de
  * lista comun. No hace nada en modo Ultra (Coverflow no existe ahi). */
-void aura_transition_reveal(aura_nav_t *nav);
+void aura_transition_coverflow_enter(aura_nav_t *nav);
 
 /* `Flip-and-Flow` (PLAN.md T3.2(d), componentes/cover-flow.md,
  * transiciones/00-vocabulario.md): al elegir una cancion en Cover
