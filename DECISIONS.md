@@ -917,4 +917,16 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-090 — PLAN.md T1.2: coreografía de Push-and-Drop, cierre reducido y justificado
+
+**Alcance real recortado frente al PLAN.md original, con razón explícita** -- el plan describía T1.2 como "Push-and-Drop real sobre el motor offscreen existente" (separar la franja de la barra del push, hueco intencional, drop desde arriba). Al empezar a implementarlo aparece una dependencia real que el plan no había anticipado en detalle: el patrón exige renderizar el CONTENIDO de la pantalla destino **sin** su banda de `--layer-chrome` durante la Fase A (el "hueco intencional" es literalmente la ausencia de chrome mientras el contenido ya se está moviendo) -- pero `aura_screens_draw()` del sistema viejo dibuja la barra de estado **inline**, como parte del mismo dibujo de cada pantalla, no como una capa separable que se pueda omitir u omitir-y-agregar-después. Separar chrome de contenido de verdad es precisamente el trabajo de T2.7 (StatusBar v2, donde `--layer-chrome` se vuelve un concepto real del código, no solo del documento) -- construir el renderizado de Push-and-Drop ahora habría significado o (a) adivinar una separación provisional que T2.7 probablemente tendría que rehacer, o (b) escribir una versión que en la práctica sigue moviendo la barra vieja junto con el contenido (el comportamiento QUE YA EXISTE, `aura_transition_slide()`, sin cambiar nada real).
+
+**Lo que sí se construyó, y por qué es real trabajo, no relleno**: `aura_pattern_push_and_drop()` -- la máquina de tiempo/fases pura (¿en qué fase estoy, qué tan avanzada?), sin nada de renderizado. Separar "cuándo pasa qué" de "cómo se dibuja" es exactamente el mismo criterio que ya aplicó T1.1 (núcleo matemático primero, consumidor de render después) y significa que cuando T2.7 exista de verdad, la mitad más fácil de equivocarse (la aritmética de fases) ya está escrita y probada, y lo único que falta es la wiring de dibujo.
+
+**`reverse` como mismo mecanismo para la inversa (G6, "no definida todavía")**: en vez de una segunda función paralela para `(full)→(split)`, un flag que invierte ORDEN y DURACIÓN de las dos fases -- la interpretación geométrica exacta (qué significa "Fase A" en cada sentido) queda para el llamador real en T2.7, que es quien sabe qué se está animando. Sigue siendo un espejo provisional del patrón documentado, no una definición nueva -- el plan ya registró esto como pendiente de doc.
+
+**Aceptación**: 18 checks nuevos en `test_patterns.c` (fases/progreso en el sentido documentado, la inversión completa de `reverse=1`, el caso borde de una fase de duración 0). 694/694 tests host-side totales sin regresiones. Sim reconstruido, compila limpio, 0 warnings -- módulo puramente aditivo, sin consumidor de render todavía (arranca en T2.7). Ningún código de `aura_transitions.c` se tocó en esta tarea: el push/reveal existentes siguen intactos y en uso por todas las pantallas del sistema viejo, sin riesgo de regresión (mitiga directamente el riesgo R2 que el propio PLAN.md ya había señalado).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

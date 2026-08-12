@@ -97,3 +97,34 @@ aura_pattern_point_t aura_pattern_drift_pos(int angle_deg, int distance_px,
     p.dy = (int)(dist_now * sin256 / 256);
     return p;
 }
+
+aura_push_drop_state_t aura_pattern_push_and_drop(long elapsed_ms, long push_ms,
+                                                     long drop_ms, int reverse)
+{
+    aura_push_drop_state_t s;
+    long first_ms = reverse ? drop_ms : push_ms;
+    long second_ms = reverse ? push_ms : drop_ms;
+
+    if (elapsed_ms < 0) elapsed_ms = 0;
+    if (first_ms < 0) first_ms = 0;
+    if (second_ms < 0) second_ms = 0;
+
+    if (elapsed_ms < first_ms)
+    {
+        s.phase = AURA_PUSH_DROP_PHASE_A;
+        s.progress_256 = (first_ms > 0) ? (int)(elapsed_ms * 256 / first_ms) : 256;
+        return s;
+    }
+
+    elapsed_ms -= first_ms;
+    if (elapsed_ms < second_ms)
+    {
+        s.phase = AURA_PUSH_DROP_PHASE_B;
+        s.progress_256 = (second_ms > 0) ? (int)(elapsed_ms * 256 / second_ms) : 256;
+        return s;
+    }
+
+    s.phase = AURA_PUSH_DROP_DONE;
+    s.progress_256 = 256;
+    return s;
+}

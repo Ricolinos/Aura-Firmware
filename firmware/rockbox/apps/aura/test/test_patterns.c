@@ -129,6 +129,59 @@ static void test_drift_unknown_angle_is_noop(void)
     CHECK(p.dx == 0 && p.dy == 0);
 }
 
+static void test_push_and_drop_forward(void)
+{
+    /* reverse=0: Fase A (push, 100ms) primero, Fase B (drop, 50ms) despues. */
+    aura_push_drop_state_t s = aura_pattern_push_and_drop(0, 100, 50, 0);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_A);
+    CHECK(s.progress_256 == 0);
+
+    s = aura_pattern_push_and_drop(50, 100, 50, 0);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_A);
+    CHECK(s.progress_256 == 128);
+
+    s = aura_pattern_push_and_drop(100, 100, 50, 0);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_B);
+    CHECK(s.progress_256 == 0);
+
+    s = aura_pattern_push_and_drop(100 + 25, 100, 50, 0);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_B);
+    CHECK(s.progress_256 == 128);
+
+    s = aura_pattern_push_and_drop(100 + 50, 100, 50, 0);
+    CHECK(s.phase == AURA_PUSH_DROP_DONE);
+    CHECK(s.progress_256 == 256);
+
+    s = aura_pattern_push_and_drop(999999, 100, 50, 0);
+    CHECK(s.phase == AURA_PUSH_DROP_DONE);
+}
+
+static void test_push_and_drop_reverse_swaps_order_and_duration(void)
+{
+    /* reverse=1 (G6, espejo provisional de (full)->(split)): Fase A
+     * dura lo que antes duraba el drop (50ms), Fase B lo que antes
+     * duraba el push (100ms) -- orden Y duracion invertidos. */
+    aura_push_drop_state_t s = aura_pattern_push_and_drop(0, 100, 50, 1);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_A);
+
+    s = aura_pattern_push_and_drop(49, 100, 50, 1);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_A);
+
+    s = aura_pattern_push_and_drop(50, 100, 50, 1);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_B);
+    CHECK(s.progress_256 == 0);
+
+    s = aura_pattern_push_and_drop(50 + 100, 100, 50, 1);
+    CHECK(s.phase == AURA_PUSH_DROP_DONE);
+}
+
+static void test_push_and_drop_zero_duration_phase_skips_instantly(void)
+{
+    aura_push_drop_state_t s = aura_pattern_push_and_drop(0, 0, 50, 0);
+    CHECK(s.phase == AURA_PUSH_DROP_PHASE_B);
+    CHECK(s.progress_256 == 0);
+}
+
 int main(void)
 {
     test_lerp();
@@ -143,6 +196,9 @@ int main(void)
     test_drift_midpoint_is_half_distance();
     test_drift_all_8_documented_angles_are_valid();
     test_drift_unknown_angle_is_noop();
+    test_push_and_drop_forward();
+    test_push_and_drop_reverse_swaps_order_and_duration();
+    test_push_and_drop_zero_duration_phase_skips_instantly();
 
     printf("%d/%d checks OK\n", checks - failures, checks);
     return failures ? 1 : 0;

@@ -71,4 +71,43 @@ typedef struct {
 aura_pattern_point_t aura_pattern_drift_pos(int angle_deg, int distance_px,
                                               long elapsed_ms, long duration_ms);
 
+/* -- Push-and-Drop (coreografia, PLAN.md T1.2) ---------------------------
+ * componentes/status-bar.md + transiciones/00-vocabulario.md: 3 fases
+ * secuenciales -- push del contenido (sin su chrome, "hueco
+ * intencional") seguido de drop del chrome nuevo cayendo desde arriba.
+ * Esta funcion es SOLO la maquina de tiempo/fases (que fase, que tan
+ * avanzada) -- el renderizado real (offscreen del contenido SIN su
+ * banda de status bar durante la Fase A, blit del chrome cayendo en la
+ * Fase B) necesita un chrome separable del contenido, que el sistema
+ * viejo no tiene: aura_screens_draw() dibuja la barra de estado inline
+ * como parte de cada pantalla, no como una capa aparte. Esa separacion
+ * es el trabajo real de T2.7 (StatusBar v2, --layer-chrome como
+ * concepto de verdad) -- esta funcion queda lista y probada para
+ * cuando exista ese consumidor, en vez de construir un renderizado a
+ * medias contra una arquitectura que todavia no lo permite.
+ *
+ * `reverse`=0 (split->full, el caso documentado): Fase A = empuje del
+ * contenido (duracion `push_ms`), Fase B = caida del chrome (duracion
+ * `drop_ms`). `reverse`=1 ((full)->(split), G6 -- "no definida
+ * todavia", espejo provisional del patron): se invierte el ORDEN de
+ * las fases ademas de la duracion de cada una (Fase A pasa a durar
+ * `drop_ms`, Fase B a durar `push_ms`) -- el llamador interpreta el
+ * significado geometrico exacto de cada fase segun `reverse` (en
+ * split->full, Fase A mueve contenido y Fase B mueve chrome; en la
+ * inversa, Fase A es el chrome "subiendo" -- espejo de caer -- y Fase B
+ * el contenido "jalado" -- espejo de empujar). */
+typedef enum {
+    AURA_PUSH_DROP_PHASE_A = 0,
+    AURA_PUSH_DROP_PHASE_B,
+    AURA_PUSH_DROP_DONE,
+} aura_push_drop_phase_t;
+
+typedef struct {
+    aura_push_drop_phase_t phase;
+    int progress_256; /* progreso DENTRO de la fase actual, [0,256] */
+} aura_push_drop_state_t;
+
+aura_push_drop_state_t aura_pattern_push_and_drop(long elapsed_ms, long push_ms,
+                                                     long drop_ms, int reverse);
+
 #endif /* AURA_PATTERNS_H */
