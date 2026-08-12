@@ -45,4 +45,15 @@ typedef struct {
  * bytes respectivamente. */
 bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out);
 
+/* Caratula "Default" para un album sin arte real (aura_albumart_load_for_album()
+ * devolvio false) -- mismo lenguaje visual que SelectionSummary
+ * (componentes/selection-summary.md: degradado diagonal del acento,
+ * tres puntos claro/centro/oscuro) en vez del recuadro vacio que
+ * dibujaba antes el llamador para este caso. Mismo formato (transpuesto,
+ * esquinas horneadas al `out->radius` ya fijado, reflejo generado) que
+ * una caratula real -- el consumidor (draw_slide_perspective) no
+ * necesita distinguir entre los dos casos. Nunca falla (computo puro,
+ * sin disco ni decodificacion) -- `out->valid` siempre queda en true. */
+void aura_albumart_load_default(aura_albumart_t *out);
+
 #endif /* AURA_ALBUMART_H */

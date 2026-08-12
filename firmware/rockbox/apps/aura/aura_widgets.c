@@ -15,6 +15,7 @@
 #include "aura_statusbar.h"
 #include "aura_lang.h"
 #include "aura_motion.h"
+#include "aura_selection_summary.h"
 
 /* Layout: barra de estado arriba (Fase 13, PLAN-UX.md), filas de lista
  * debajo. Pantalla dividida izquierda/derecha (Fase 15, L2): en
@@ -27,8 +28,6 @@
 #define ROW_HEIGHT    (A26_TYPE_BODY + 2 * A26_SPACING_SM)
 #define ROW_PAD_X     A26_LAYOUT_LIST_INSET
 #define ICON_TEXT_GAP A26_SPACING_MD
-#define PANEL_RIGHT_X (A26_LAYOUT_PANEL_LEFT_WIDTH + 1)
-#define PANEL_RIGHT_W (A26_SCREEN_WIDTH - PANEL_RIGHT_X)
 #define PANEL_RETARDO_TICKS HZ
 
 /* Pastilla de seleccion de lista (doc SS5.1): rectangulo que no toca los
@@ -235,23 +234,19 @@ int aura_widgets_panel_pending(void)
 
 void aura_widgets_draw_right_panel_icon(const char *icon_name)
 {
-    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
-    lcd_vline(A26_LAYOUT_PANEL_LEFT_WIDTH, 0, A26_SCREEN_HEIGHT - 1);
-
-    /* Sombra de panel (PLAN.md T0.4): mismo ancho de panel (160px) que
-     * LeftPanel del sistema nuevo -- primer consumidor real de la
-     * primitiva mientras las pantallas de docs/aura-design-system/
-     * todavia no existen (T2.8/T2.9 la reutilizaran para
-     * SelectionSummary/CoverDrift). Se dibuja ANTES del icono para que
-     * quede detras, nunca tape el contenido. */
-    aura_shell_draw_left_panel_shadow(A26_LAYOUT_PANEL_LEFT_WIDTH + 1, 0, A26_SCREEN_HEIGHT);
-
-    if (!icon_name)
-        return;
-
-    aura_widgets_draw_icon(icon_name, A26_ICON_SIZE_PREVIEW,
-        PANEL_RIGHT_X + (PANEL_RIGHT_W - A26_ICON_SIZE_PREVIEW) / 2,
-        (A26_SCREEN_HEIGHT - A26_ICON_SIZE_PREVIEW) / 2);
+    /* Panel derecho real: SelectionSummary (componentes/selection-summary.md)
+     * -- icono sobre tile con degradado del acento, en vez del icono
+     * "suelto" que dibujaba esta funcion antes de que el componente
+     * existiera (T2.8). Mismo hueco (160..320) que usa draw_root_v2()
+     * para el menu raiz -- todo consumidor de aura_widgets_draw_list()
+     * en (split) es, por regla, una lista de MENUS
+     * (sistema/02-navegacion-menus-contenido.md), asi que el mismo
+     * tratamiento aplica aca sin excepcion. Sin texto todavia: ningun
+     * item de estas listas tiene una Descripcion definida en el
+     * documento fuente mas alla del caso ya resuelto en el menu raiz. */
+    aura_selection_summary_draw(A26_LAYOUT_PANEL_LEFT_WIDTH,
+                                 A26_SCREEN_WIDTH - A26_LAYOUT_PANEL_LEFT_WIDTH,
+                                 icon_name, NULL, NULL);
 }
 
 /* Barra de deslizamiento (doc SS5.3): aparece/persiste/desvanece segun
@@ -270,6 +265,7 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name)
 #define SCROLLBAR_FADE_OUT_TICKS (HZ * 330 / 1000)
 
 static const aura_list_item_t *s_scrollbar_items;
+static const char *s_scrollbar_title;
 static int s_scrollbar_selected = -1;
 static long s_scrollbar_activity_since;
 
@@ -378,19 +374,32 @@ static void draw_scrollbar(int width, int visible, int count, int first)
 #define PILL_SPRING_TICKS (HZ * AURA_MOTION_SPRING_MS / 1000)
 
 static const aura_list_item_t *s_pill_items;
+static const char *s_pill_title;
 static int s_pill_drawn_y = -1;    /* donde se dibujo el cuadro anterior */
 static int s_pill_anim_from_y;
 static int s_pill_anim_to_y;
 static long s_pill_anim_since;
 
-static int pill_animated_y(const aura_list_item_t *items, int target_y)
+/* Identidad de la lista actual: `items` NO alcanza solo -- es un arreglo
+ * local de `draw_nav_list()`/pantallas equivalentes, y el compilador le
+ * da la MISMA direccion de stack en cada invocacion de esa funcion sin
+ * importar que pantalla (Musica, Ajustes...) se este dibujando, asi que
+ * dos listas distintas podian comparar como "la misma" y la pastilla
+ * arrancaba un resorte real entre la fila de una lista y la fila de
+ * otra -- bug real, visto en pantalla como una pastilla gris flotante
+ * sin fila debajo tras entrar a Ajustes. `title` (un puntero estable
+ * dentro de la tabla de aura_str(), distinto por pantalla) es la
+ * identidad real; se comparan ambos por compatibilidad con cualquier
+ * llamador que ya dependa de la deteccion por `items`. */
+static int pill_animated_y(const aura_list_item_t *items, const char *title, int target_y)
 {
     long elapsed;
     int eased;
 
-    if (items != s_pill_items)
+    if (items != s_pill_items || title != s_pill_title)
     {
         s_pill_items = items;
+        s_pill_title = title;
         s_pill_anim_from_y = target_y;
         s_pill_anim_to_y = target_y;
         s_pill_anim_since = current_tick - PILL_SPRING_TICKS; /* ya "asentada" */
@@ -450,9 +459,10 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
             first = count - visible;
     }
 
-    if (items != s_scrollbar_items || selected != s_scrollbar_selected)
+    if (items != s_scrollbar_items || title != s_scrollbar_title || selected != s_scrollbar_selected)
     {
         s_scrollbar_items = items;
+        s_scrollbar_title = title;
         s_scrollbar_selected = selected;
         s_scrollbar_activity_since = current_tick;
     }
@@ -474,7 +484,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     if (selected >= first && selected < first + visible)
     {
         int sel_row_y = LIST_TOP + (selected - first) * ROW_HEIGHT;
-        int pill_y = pill_animated_y(items, sel_row_y + PILL_MARGIN_Y);
+        int pill_y = pill_animated_y(items, title, sel_row_y + PILL_MARGIN_Y);
         a26_shell_fill_rounded_rect(PILL_MARGIN_X, pill_y,
                                      width - 2 * PILL_MARGIN_X,
                                      ROW_HEIGHT - 2 * PILL_MARGIN_Y,

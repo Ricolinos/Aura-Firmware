@@ -325,7 +325,15 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
         aura_flow_slide_t slide;
         aura_flow_projection_t proj;
 
-        slide.angle = -aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_IANGLE, t);
+        /* Signo positivo, no negativo -- mismo signo que
+         * draw_cover_tilted() (aura_nowplaying.c) usa ahora, ver el
+         * comentario ahi: con el signo negativo original el lado
+         * izquierdo quedaba corto y el derecho alto, al reves de lo
+         * pedido. Esta funcion nunca inventa su propio destino (lee
+         * los mismos AURA_NOWPLAYING_TILT_IANGLE/_CX), asi que tiene
+         * que seguir el mismo cambio de signo o la caratula "saltaria"
+         * de direccion en el ultimo cuadro del vuelo. */
+        slide.angle = aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_IANGLE, t);
         slide.distance = 0;
         slide.cx = aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_CX, t);
 

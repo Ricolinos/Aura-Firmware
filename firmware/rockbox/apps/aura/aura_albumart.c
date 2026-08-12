@@ -143,6 +143,51 @@ static void mask_corners_transposed(fb_data *buf, int size, int radius, unsigned
     }
 }
 
+/* Degradado diagonal de 3 puntos, version buffer TRANSPUESTO -- mismo
+ * calculo exacto que draw_diagonal_gradient() (aura_selection_summary.c,
+ * componentes/selection-summary.md: claro arriba-izquierda, acento al
+ * centro, oscuro abajo-derecha) pero escribiendo directo a un fb_data[]
+ * en vez de lcd_drawline() sobre la pantalla real -- ese componente
+ * pinta la pantalla, esta funcion pinta un bitmap que despues pasa por
+ * el mismo camino de proyeccion/reflejo que una caratula real (regla
+ * dura 7: mismo patron visual, no un segundo look-and-feel para el caso
+ * "sin caratula"). */
+static void fill_diagonal_gradient_transposed(fb_data *buf, int size,
+                                               unsigned color_a, unsigned color_center,
+                                               unsigned color_b)
+{
+    int max_k = 2 * (size - 1);
+    int row, col;
+
+    for (row = 0; row < size; row++)
+    {
+        for (col = 0; col < size; col++)
+        {
+            int t256 = (row + col) * 256 / max_k;
+            unsigned c = (t256 <= 128)
+                ? a26_shell_blend(color_a, color_center, t256 * 2)
+                : a26_shell_blend(color_center, color_b, (t256 - 128) * 2);
+
+            buf[(size_t)col * size + row] = c;
+        }
+    }
+}
+
+void aura_albumart_load_default(aura_albumart_t *out)
+{
+    unsigned bg = a26_color(A26_SHELL_BG);
+
+    fill_diagonal_gradient_transposed((fb_data *)out->cover_data, out->size,
+                                       aura_accent_light(), aura_accent(), aura_accent_dark());
+    mask_corners_transposed((fb_data *)out->cover_data, out->size, out->radius, bg);
+
+    aura_art_generate_reflection((const fb_data *)out->cover_data,
+                                  (fb_data *)out->reflection_data,
+                                  out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT,
+                                  bg, true);
+    out->valid = true;
+}
+
 static bool find_any_track_in_album(int32_t album_seek, char *path, size_t path_sz,
                                      char *artist, size_t artist_sz,
                                      char *album, size_t album_sz)

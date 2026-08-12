@@ -127,6 +127,7 @@ int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_i
     case AURA_SCREEN_MUSIC_ARTISTS:
         return run_search(tag_artist, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_ALBUMS:
+    case AURA_SCREEN_MUSIC_COVERFLOW:
         return run_search(tag_album, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST:
         return run_search(tag_album, true, false, false, out, max_items);

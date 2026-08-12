@@ -12,7 +12,14 @@
  * vuela desde Cover Flow tiene que aterrizar en este angulo/posicion
  * exactos, no una aproximacion recalculada aparte. */
 #define AURA_NOWPLAYING_TILT_IANGLE 20     /* 7 grados * 1024/360, redondeado */
-#define AURA_NOWPLAYING_TILT_CX     (-96300) /* PFreal, derivado para ART_SIZE=135 -- ver D-099 */
+/* PFreal, re-derivado (2026-08-12) para el signo de angulo corregido
+ * (ver draw_cover_tilted() en aura_nowplaying.c: el signo original
+ * dejaba el lado izquierdo corto/retrocedido y el derecho alto/completo,
+ * al reves de lo pedido por el dueno del diseno) -- mismo metodo de
+ * D-099, busqueda numerica contra aura_flow_begin_projection() para que
+ * el borde izquierdo de la proyeccion caiga en ART_X=10 con
+ * ART_SIZE=135 y este angulo exacto, verificado por render real. */
+#define AURA_NOWPLAYING_TILT_CX     (-85300)
 
 /* True si hay algo cargado para reproducir (pausado o sonando). Si es
  * false, aura_screens.c muestra el estado vacio en su lugar. */

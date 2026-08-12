@@ -43,7 +43,6 @@
 #define CF_CORNER_RADIUS  AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
 #define CF_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
 #define CF_TOP_Y          28
-#define CF_FALLBACK_SPACING (CF_COVER_SIZE + 20) /* solo para el caso sin caratula, ver el unico uso */
 #define CF_VISIBLE_RADIUS AURA_DS_METRICS_COVER_FLOW_SIDE_SLIDES_PER_SIDE
 #define CF_CACHE_SLOTS    (2 * CF_VISIBLE_RADIUS + 3) /* visibles + margen para scroll suave */
 #define CF_SIDE_FADE      130 /* de 255 */
@@ -198,7 +197,8 @@ static cf_slot_t *get_slot_for(int album_index)
     s_slots[target].art.radius = CF_CORNER_RADIUS;
     s_slots[target].art.cover_data = s_slots[target].cover_buf;
     s_slots[target].art.reflection_data = s_slots[target].reflection_buf;
-    aura_albumart_load_for_album(s_albums[album_index].seek, &s_slots[target].art);
+    if (!aura_albumart_load_for_album(s_albums[album_index].seek, &s_slots[target].art))
+        aura_albumart_load_default(&s_slots[target].art);
 
     return &s_slots[target];
 }
@@ -437,7 +437,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     (void)nav;
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_ALBUMS), 0);
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW), 0);
 
     if (!aura_music_db_ready())
     {
@@ -515,7 +515,6 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     {
         int idx = entries[i].idx;
         int offset_x256 = entries[i].offset_x256;
-        int x, y;
         cf_slot_t *slot;
 
         /* Flip/TrackList (T3.2(c)): mientras no este IDLE, la tapa
@@ -540,19 +539,6 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         }
 
         slot = get_slot_for(idx);
-        y = CF_TOP_Y;
-
-        if (!slot->art.valid)
-        {
-            /* Grilla simple (no proyectada) solo para el caso sin
-             * caratula -- CF_FALLBACK_SPACING es un valor de layout
-             * aproximado para este caso limite, no la geometria real
-             * del carrusel (esa es CF_OFFSETX_R/CF_SLIDE_SPACING_R). */
-            x = A26_SCREEN_WIDTH / 2 + (offset_x256 / 256) * CF_FALLBACK_SPACING - CF_COVER_SIZE / 2;
-            lcd_set_foreground(a26_color(idx == s_target_index ? A26_TEXT_PRIMARY : A26_SHELL_RAIL));
-            lcd_drawrect(x, y, CF_COVER_SIZE, CF_COVER_SIZE);
-            continue;
-        }
 
         /* Sin marco de acento (AUDITORIA-01 A-11, Principio 1 "nada de
          * marcos/biseles" + Principio 2 "el acento nunca es decoracion

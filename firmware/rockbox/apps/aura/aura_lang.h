@@ -103,6 +103,8 @@ typedef enum {
     AURA_STR_ACCENT_PURPLE,
     AURA_STR_SETTINGS_LEFT_PANEL_SHADOW,
 
+    AURA_STR_MUSIC_COVERFLOW,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

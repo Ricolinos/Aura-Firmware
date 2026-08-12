@@ -319,7 +319,17 @@ static void draw_cover_tilted(bool compact)
         return;
     }
 
-    slide.angle = -NP_TILT_IANGLE;
+    /* Signo positivo (no `-NP_TILT_IANGLE`): con el signo negativo
+     * original, el lado IZQUIERDO quedaba corto/retrocedido y el
+     * DERECHO alto/completo -- al reves de lo pedido por el dueno del
+     * diseno ("el lado alto, mas largo, deberia estar del lado
+     * izquierdo, y el mas corto del derecho"). Verificado con angulo
+     * exagerado (140) antes de fijar el real. Invertir el signo de
+     * `angle` desplaza el borde izquierdo de la proyeccion -- no es
+     * una reflexion en el lugar -- asi que `NP_TILT_CX` tambien se
+     * re-derivo (ver aura_nowplaying.h) para que ese borde siga
+     * cayendo en ART_X con el signo nuevo. */
+    slide.angle = NP_TILT_IANGLE;
     slide.distance = 0;
     slide.cx = NP_TILT_CX;
 

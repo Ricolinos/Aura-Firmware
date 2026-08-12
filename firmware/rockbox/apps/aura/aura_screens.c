@@ -30,6 +30,7 @@
 #include "aura_wheel.h"
 #include "aura_menu_list.h"
 #include "aura_status_bar_v2.h"
+#include "aura_selection_summary.h"
 
 #define MAX_MENU_ENTRIES 16
 
@@ -69,7 +70,18 @@ static void rebuild_root_entries(void)
     root_entries_count = n;
 }
 
+/* Orden de "Cover Flow" primero: unico orden que da un documento fuente
+ * (componentes/left-panel.md, ejemplo de LeftPanel persistente) --
+ * "Menu principal -> Musica -> (submenu con Cover Flow, Genius, Listas
+ * de reproduccion, Artista, Albumes...)". "Genius" no existe como
+ * funcion real en Aura, se omite -- el resto de items conserva el orden
+ * ya existente de este arreglo. Icono "square-on-square" (cuadrados
+ * superpuestos): eleccion provisional, no hay un icono dedicado de
+ * "pila de caratulas" todavia producido -- mismo tipo de pendiente de
+ * produccion de assets que selection-summary.md ya documenta para otros
+ * iconos 1:1. */
 static const nav_entry_t music_entries[] = {
+    { AURA_STR_MUSIC_COVERFLOW, "square-on-square", AURA_SCREEN_MUSIC_COVERFLOW },
     { AURA_STR_MUSIC_ARTISTS,   NULL, AURA_SCREEN_MUSIC_ARTISTS },
     { AURA_STR_MUSIC_ALBUMS,    NULL, AURA_SCREEN_MUSIC_ALBUMS },
     { AURA_STR_MUSIC_SONGS,     NULL, AURA_SCREEN_MUSIC_SONGS },
@@ -133,6 +145,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:   return AURA_STR_MUSIC_SONGS;
     case AURA_SCREEN_MUSIC_GENRES:        return AURA_STR_MUSIC_GENRES;
     case AURA_SCREEN_MUSIC_PLAYLISTS:     return AURA_STR_MUSIC_PLAYLISTS;
+    case AURA_SCREEN_MUSIC_COVERFLOW:     return AURA_STR_MUSIC_COVERFLOW;
     case AURA_SCREEN_VIDEOS:              return AURA_STR_VIDEOS;
     case AURA_SCREEN_PHOTOS:              return AURA_STR_PHOTOS;
     case AURA_SCREEN_NOWPLAYING:          return AURA_STR_NOWPLAYING;
@@ -364,11 +377,32 @@ static void toggle_settings_row(aura_screen_id_t target)
  * trabajo de seguimiento explicito, no de esta pasada (regla del
  * encargo: verificar en el simulador, no adivinar que 30 pantallas mas
  * se ven bien sin mirarlas). */
+/* Descripcion de "sin seleccion rica" por item del menu raiz
+ * (componentes/selection-summary.md: "Musica -> sin seleccion rica:
+ * solo texto inferior con la Descripcion 'No hay musica'"). Reusa las
+ * cadenas AURA_STR_EMPTY_MUSIC/VIDEOS/PHOTOS y AURA_STR_NOTHING_PLAYING
+ * ya existentes en la tabla de idioma -- Ajustes no tiene un equivalente
+ * natural de "vacio", se deja
+ * sin texto inferior, el caso limite que el propio documento contempla
+ * ("bottom_text... tambien acepta NULL"). */
+static const char *root_selection_description(aura_screen_id_t target)
+{
+    switch (target)
+    {
+    case AURA_SCREEN_MUSIC:      return aura_str(AURA_STR_EMPTY_MUSIC);
+    case AURA_SCREEN_VIDEOS:     return aura_str(AURA_STR_EMPTY_VIDEOS);
+    case AURA_SCREEN_PHOTOS:     return aura_str(AURA_STR_EMPTY_PHOTOS);
+    case AURA_SCREEN_NOWPLAYING: return aura_str(AURA_STR_NOTHING_PLAYING);
+    default:                     return NULL;
+    }
+}
+
 static void draw_root_v2(aura_nav_t *nav)
 {
     const nav_entry_t *entries;
     int count = get_nav_table(AURA_SCREEN_ROOT, &entries);
     aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    int selected = aura_nav_get_selection(nav);
     int i;
 
     for (i = 0; i < count; i++)
@@ -384,16 +418,23 @@ static void draw_root_v2(aura_nav_t *nav)
         int is_hold = button_hold();
 
         a26_shell_clear_screen();
-        /* Primera integracion REAL de StatusBar v2 (T2.7) -- ya no un
-         * overlay temporal revertido (T2.5/T2.6), reemplaza al
-         * aura_statusbar_draw() viejo en la unica pantalla ya migrada a
-         * la lista nueva (mismo criterio que el Selector/MenuList v2 en
-         * T2.2/T2.3). */
-        aura_status_bar_v2_draw(0, A26_SCREEN_WIDTH, "Aura",
-                                 is_playing, is_paused, is_hold);
+        /* Menu raiz en (split) (sistema/02-navegacion-menus-contenido.md:
+         * es una lista de "puertas", vive en LeftPanel) -- StatusBar v2
+         * a su ancho split (160px, no el full anterior) y
+         * SelectionSummary real en el panel derecho, en vez de dejarlo
+         * en blanco. */
+        aura_status_bar_v2_draw(0, AURA_DS_METRICS_STATUSBAR_WIDTH_SPLIT,
+                                 "Aura", is_playing, is_paused, is_hold);
     }
-    aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count,
-                         aura_nav_get_selection(nav));
+    aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count, selected);
+
+    if (selected >= 0 && selected < count)
+    {
+        aura_selection_summary_draw(AURA_DS_METRICS_LEFT_PANEL_WIDTH,
+                                     A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH,
+                                     entries[selected].icon_name, NULL,
+                                     root_selection_description(entries[selected].target));
+    }
 }
 
 static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
@@ -1033,17 +1074,18 @@ static int is_music_browse_screen_level2(aura_screen_id_t screen)
     }
 }
 
-/* En modo grafico Pro, Albumes se navega con Coverflow en vez de la
- * lista plana (D-025); en Ultra/Minimalista sigue siendo una lista
- * como cualquier otra pantalla de is_music_browse_screen(). La raiz ya
- * no tiene una pantalla especial propia (D-025 la retiro en la Fase
- * 15): aura_widgets_draw_list() dibuja la pantalla dividida
- * izquierda/derecha para *cualquier* lista en modo no-Ultra, root
- * incluida -- ver D-057 en DECISIONS.md. */
+/* Cover Flow es su propia puerta del submenu Musica (AURA_SCREEN_MUSIC_COVERFLOW,
+ * music_entries[] arriba) -- YA NO una variante automatica de Albumes
+ * segun aura_settings.graphics_mode (D-025 original). Ese diseno hacia
+ * que entrar a "Albumes", o a "Albumes" de un artista especifico via
+ * Artistas, disparara Cover Flow sin que el usuario lo hubiera elegido
+ * -- un bug real de navegacion, no una decision de UX (componentes/left-panel.md
+ * documenta Cover Flow como hermano de Artista/Albumes, no como su
+ * disfraz). Albumes vuelve a ser SIEMPRE la lista plana
+ * (is_music_browse_screen()), sin importar el modo grafico. */
 static int is_coverflow_screen(aura_screen_id_t screen)
 {
-    return aura_settings.graphics_mode == AURA_GFX_ALL
-        && (screen == AURA_SCREEN_MUSIC_ALBUMS || screen == AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST);
+    return screen == AURA_SCREEN_MUSIC_COVERFLOW;
 }
 
 static aura_screen_id_t s_music_cache_screen = AURA_SCREEN_COUNT;

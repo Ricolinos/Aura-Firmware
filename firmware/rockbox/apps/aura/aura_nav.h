@@ -55,6 +55,16 @@ typedef enum {
      * inline con switch (D-075), igual que SHUFFLE/CLICKER; el
      * identificador es solo el token estable de la fila. */
     AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW,
+    /* Cover Flow como puerta propia del submenu Musica (D-025 la tenia
+     * como una variante automatica de AURA_SCREEN_MUSIC_ALBUMS segun
+     * aura_settings.graphics_mode -- eso hacia que entrar a Albumes, o a
+     * Albumes-por-artista, disparara Cover Flow sin que el usuario lo
+     * eligiera. componentes/left-panel.md la documenta como una entrada
+     * de menu hermana de Artista/Albumes, asi que ahora es su propio
+     * destino: Albumes vuelve a ser SIEMPRE la lista plana). Agregada al
+     * final del enum, mismo criterio "solo-anadir-al-final" que el resto
+     * de este archivo. */
+    AURA_SCREEN_MUSIC_COVERFLOW,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 
