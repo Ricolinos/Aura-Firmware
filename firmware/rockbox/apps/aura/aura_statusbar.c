@@ -7,11 +7,13 @@
 #include "power.h"
 #include "timefuncs.h"
 #include "settings.h"
+#include "tick.h"
 
 #include "aura_statusbar.h"
 #include "aura_widgets.h"
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
+#include "aura_marquee.h"
 
 static const char *battery_icon_name(void)
 {
@@ -37,6 +39,50 @@ static const char *battery_icon_name(void)
  * asi que "Reloj 24 horas" hoy solo se puede cambiar indirectamente via
  * el ajuste crudo de Rockbox; cuando esa pantalla se construya, este
  * reloj ya la respeta sin cambios. */
+/* Estado del marquee del titulo (T2.1/MarqueeText) -- hoisted a estatico
+ * de archivo (no local a aura_statusbar_draw) para que
+ * aura_statusbar_title_animating() pueda consultarlo desde aura_main.c,
+ * mismo patron que aura_widgets_pill_animating()/
+ * aura_nowplaying_wheel_animating(). `s_marquee_overflowing` refleja el
+ * resultado real de la ULTIMA llamada a aura_marquee_draw() -- sin esto,
+ * un titulo que SI cabe (aura_marquee_draw devuelve 0, nada que animar)
+ * seguiria pidiendo cuadros extra en vano. */
+static int s_marquee_overflowing = 0;
+static long s_marquee_since = 0;
+
+/* Bug real encontrado verificando esta misma tarea (no en teoria): la
+ * primera version de esto solo devolvia 1 durante el TRAMO de
+ * movimiento -- pero durante el tramo estatico (los primeros 2s) nadie
+ * pedia un cuadro futuro, asi que el bucle principal se dormia
+ * indefinidamente (next_button(-1), sin timeout) y nunca volvia a
+ * despertar para notar que el tramo estatico ya habia terminado y
+ * tocaba empezar a mover el texto -- el marquee se congelaba en su
+ * primer cuadro para siempre. Mismo par pending()/animating() que ya
+ * usa aura_widgets_scrollbar_*(): _pending() cubre el CICLO COMPLETO
+ * mientras el texto siga desbordando (cadencia gruesa, solo para
+ * cruzar la frontera estatico->movimiento a tiempo), _animating() solo
+ * el tramo donde los pixeles realmente se mueven (cadencia fina). */
+int aura_statusbar_title_pending(void)
+{
+    return s_marquee_overflowing;
+}
+
+int aura_statusbar_title_animating(void)
+{
+    long elapsed_ms, cycle_ms, t;
+
+    if (!s_marquee_overflowing)
+        return 0;
+
+    elapsed_ms = (current_tick - s_marquee_since) * 1000L / HZ;
+    cycle_ms = AURA_DS_METRICS_MARQUEE_STATIC_MS + AURA_DS_METRICS_MARQUEE_SCROLL_MS;
+    if (cycle_ms <= 0)
+        return 0;
+    t = elapsed_ms % cycle_ms;
+
+    return t >= AURA_DS_METRICS_MARQUEE_STATIC_MS;
+}
+
 static void format_clock(char *buf, size_t bufsz)
 {
     struct tm *now = get_time();
@@ -131,7 +177,39 @@ void aura_statusbar_draw(int x, int width, const char *title, int centered)
          * el inset real de las filas de lista (doc SS5), no un
          * espaciado suelto que por coincidencia quedaba cerca. */
         text_x = centered ? x + (width - w) / 2 : x + A26_LAYOUT_LIST_INSET;
-        lcd_putsxy(text_x, text_y, (const unsigned char *)title);
+
+        if (centered)
+        {
+            /* Titulo centrado (Ahora suena, Fecha...): identidad propia
+             * de la pantalla, no el "nombre de menu" que MarqueeText
+             * modela (PLAN.md T2.1/T2.6) -- se queda estatico, igual
+             * que antes. */
+            lcd_putsxy(text_x, text_y, (const unsigned char *)title);
+        }
+        else
+        {
+            /* MarqueeText (T2.1), primer consumidor real mientras
+             * DynamicTitle (T2.6) todavia no existe -- mismo criterio
+             * que T0.4 con la sombra: reutilizar una superficie real ya
+             * en pantalla en vez de dejar el componente huerfano.
+             * Reinicia su propio reloj cada vez que el titulo cambia
+             * (comparacion por puntero: los titulos de este proyecto
+             * son siempre literales de cadena estables, mismo patron
+             * que el debounce del panel derecho). */
+            static const char *s_shown_title = NULL;
+            long elapsed_ms;
+
+            if (title != s_shown_title)
+            {
+                s_shown_title = title;
+                s_marquee_since = current_tick;
+            }
+            elapsed_ms = (current_tick - s_marquee_since) * 1000L / HZ;
+
+            s_marquee_overflowing = aura_marquee_draw(
+                text_x, text_y, right - text_x - A26_SPACING_SM, title, elapsed_ms);
+        }
+
         if (!centered)
             title_right_edge = text_x + w;
     }

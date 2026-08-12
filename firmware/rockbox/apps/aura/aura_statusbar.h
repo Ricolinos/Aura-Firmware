@@ -14,4 +14,16 @@
  * lcd_update(). */
 void aura_statusbar_draw(int x, int width, const char *title, int centered);
 
+/* True mientras el titulo actual siga desbordando (activo el patron
+ * Marquee Loop, T2.1), sin importar en que tramo del ciclo este --
+ * aura_main.c la consulta con cadencia GRUESA (mismo criterio que
+ * aura_widgets_scrollbar_pending()) para no perderse la frontera entre
+ * el tramo estatico y el de movimiento. False si el titulo actual cupo
+ * sin activar el patron. */
+int aura_statusbar_title_pending(void);
+
+/* True solo durante el tramo de MOVIMIENTO del ciclo -- cadencia FINA
+ * (mismo criterio que aura_widgets_scrollbar_animating()). */
+int aura_statusbar_title_animating(void);
+
 #endif /* AURA_STATUSBAR_H */

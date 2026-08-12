@@ -13,6 +13,7 @@
 #include "aura_nowplaying.h"
 #include "aura_music.h"
 #include "aura_widgets.h"
+#include "aura_statusbar.h"
 
 /* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
  * calculada y suavizada por el driver real del clickwheel
@@ -168,6 +169,22 @@ void aura_main(void)
              * criterio que la pastilla de arriba). */
             if (aura_nowplaying_wheel_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
+
+            /* MarqueeText del titulo de la barra (T2.1) -- mismo par
+             * pending()/animating() que ya usa la barra de
+             * deslizamiento (cadencia gruesa durante todo el ciclo
+             * mientras el texto desborde, fina solo cuando los pixeles
+             * se estan moviendo de verdad). Bug real encontrado en la
+             * propia verificacion de esta tarea (no en teoria): una
+             * primera version que solo pedia cuadros durante el tramo
+             * de movimiento dejaba el marquee congelado para siempre
+             * en cuanto el bucle se dormia durante el tramo estatico
+             * -- nunca volvia a despertar para notar que tocaba
+             * empezar a mover el texto. */
+            if (aura_statusbar_title_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+            else if (aura_statusbar_title_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
         }
 
         button = next_button(timeout_ticks);

@@ -313,6 +313,7 @@ aura/aura_albumart.c
 aura/aura_art.c
 aura/aura_color.c
 aura/aura_patterns.c
+aura/aura_marquee.c
 aura/aura_flow.c
 aura/aura_coverflow.c
 aura/aura_lang.c
