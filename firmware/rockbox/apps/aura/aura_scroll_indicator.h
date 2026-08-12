@@ -28,8 +28,16 @@
  * documento) -- diferido, no descartado; la posicion final SI es
  * exacta, solo la transicion entre posiciones es un salto en vez de un
  * deslizamiento. */
+/* `bg`/`ink`: fondo real debajo del carril y tinta del pulgar -- el
+ * fundido Fade-on-Idle se simula mezclando ink hacia bg, asi que ambos
+ * deben ser los colores REALES del contexto (en LeftPanel: fondo del
+ * shell + gris del riel; en el reverso de Cover Flow el fondo es el
+ * panel gris y la tinta necesita mas contraste). Antes ambos estaban
+ * fijos y el indicador se pintaba invisible sobre cualquier fondo que
+ * no fuera el del shell. */
 void aura_scroll_indicator_draw(int x, int track_y, int track_h,
                                  int first, int count, int visible,
-                                 long idle_elapsed_ms);
+                                 long idle_elapsed_ms,
+                                 unsigned bg, unsigned ink);
 
 #endif /* AURA_SCROLL_INDICATOR_H */

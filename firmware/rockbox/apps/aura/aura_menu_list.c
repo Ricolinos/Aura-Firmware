@@ -201,7 +201,8 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
     {
         long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
         aura_scroll_indicator_draw(x + panel_w, y, visible * ROW_H,
-                                    first, count, visible, idle_elapsed_ms);
+                                    first, count, visible, idle_elapsed_ms,
+                                    a26_color(A26_SHELL_BG), a26_color(A26_SHELL_RAIL));
     }
 }
 

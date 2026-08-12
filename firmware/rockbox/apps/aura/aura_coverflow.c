@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "lcd.h"
@@ -13,6 +14,7 @@
 #include "aura_art.h"
 #include "aura_widgets.h"
 #include "aura_wheel.h"
+#include "aura_scroll_indicator.h"
 #include "aura_main.h"
 #include "aura_transitions.h"
 #include "aura_flow.h"
@@ -48,6 +50,31 @@
 #define CF_VISIBLE_RADIUS AURA_DS_METRICS_COVER_FLOW_SIDE_SLIDES_PER_SIDE
 #define CF_CACHE_SLOTS    (2 * CF_VISIBLE_RADIUS + 3) /* visibles + margen para scroll suave */
 #define CF_SIDE_FADE      165 /* de 255 -- laterales visibles como en la referencia, no apagadas */
+
+/* Reverso crecido (encargo del dueno del diseno, 2026-08-12): al
+ * voltearse, el album pasa de 130px a 200x200 -- centrado en el area
+ * util bajo la StatusBar (220px), con una cabecera de 20px que muestra
+ * "Album - Artista" y ScrollIndicator si la lista no cabe. Los textos
+ * del carrusel se deslizan fuera de pantalla durante el giro para
+ * cederle el espacio. 200 elegido por el dueno del diseno sobre la
+ * tabla de opciones (180/200/220). Definidos aca arriba (no junto al
+ * render del panel) porque aura_coverflow_pending() -- que vive
+ * temprano en el archivo -- consulta la ventana del Fade-on-Idle. */
+#define CF_TRACK_ROW_H_EARLY 16 /* == CF_TRACK_ROW_H, ver abajo */
+#define CF_BACK_SIZE   200
+#define CF_BACK_X      ((A26_SCREEN_WIDTH - CF_BACK_SIZE) / 2)
+#define CF_BACK_Y      (A26_LAYOUT_STATUSBAR_HEIGHT \
+                        + (A26_SCREEN_HEIGHT - A26_LAYOUT_STATUSBAR_HEIGHT - CF_BACK_SIZE) / 2)
+#define CF_BACK_HEADER_H 20
+#define CF_BACK_VISIBLE_ROWS ((CF_BACK_SIZE - CF_BACK_HEADER_H) / CF_TRACK_ROW_H_EARLY)
+
+/* Reloj de actividad del ScrollIndicator del reverso (Fade-on-Idle) --
+ * a nivel de archivo porque la puerta de energia (pending()) tambien
+ * lo consulta: sin cuadros pedidos durante la ventana del fundido, la
+ * animacion nunca avanzaba y el indicador quedaba congelado invisible
+ * (mismo bug ya documentado para el marquee del titulo viejo, D-091). */
+static int s_prev_track_sel = -1;
+static long s_track_activity_since = 0;
 /* Alto del reflejo en tiempo de compilacion -- mismo calculo que
  * aura_art_reflection_height(), pero constante en tiempo de
  * compilacion (hace falta para dimensionar el buffer estatico de cada
@@ -146,6 +173,19 @@ static int flip_progress_256(void)
 
 int aura_coverflow_pending(void)
 {
+    /* Ventana del Fade-on-Idle del ScrollIndicador del reverso: pedir
+     * cuadros mientras el fundido (entrada + persistencia + salida)
+     * siga corriendo, o el pulgar se congela a medio aparecer. */
+    if (s_state == CF_STATE_SHOW_TRACKS && s_track_count > CF_BACK_VISIBLE_ROWS)
+    {
+        long idle_ms = (current_tick - s_track_activity_since) * 1000L / HZ;
+        long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS
+                        + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS
+                        + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS;
+        if (idle_ms < window_ms)
+            return 1;
+    }
+
     return anim_pos_x256() != s_target_index * 256
         || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
 }
@@ -425,19 +465,65 @@ static void draw_clipped_text(int x, int y, int w, const char *text)
  * literal: mismo lugar, no una pantalla nueva. */
 #define CF_TRACK_ROW_H 16
 
+/* Artista del album objetivo, cacheado por seleccion (lookup de
+ * tagcache solo al cambiar de album, nunca por cuadro) -- compartido
+ * entre las dos lineas del carrusel y la cabecera del reverso. */
+static int s_artist_for_index = -1;
+static char s_artist[64];
+
+static const char *target_artist(void)
+{
+    if (s_artist_for_index != s_target_index && s_album_count > 0)
+    {
+        s_artist_for_index = s_target_index;
+        aura_music_album_artist(s_albums[s_target_index].seek,
+                                 s_artist, sizeof(s_artist));
+    }
+    return s_artist;
+}
+
 static void draw_tracklist_panel(void)
 {
-    int panel_x = A26_SCREEN_WIDTH / 2 - CF_COVER_SIZE / 2;
-    int panel_y = CF_TOP_Y;
-    int visible = CF_COVER_SIZE / CF_TRACK_ROW_H;
-    int first, i;
+    int panel_x = CF_BACK_X;
+    int panel_y = CF_BACK_Y;
+    int list_y = panel_y + CF_BACK_HEADER_H;
+    int list_h = CF_BACK_SIZE - CF_BACK_HEADER_H;
+    int visible = list_h / CF_TRACK_ROW_H;
+    int first, i, w, h;
     unsigned bg = a26_color(A26_SHELL_BG);
-
-    a26_shell_fill_rounded_rect(panel_x, panel_y, CF_COVER_SIZE, CF_COVER_SIZE,
+    char header[160];
+    const char *artist = target_artist();
+    a26_shell_fill_rounded_rect(panel_x, panel_y, CF_BACK_SIZE, CF_BACK_SIZE,
                                  CF_CORNER_RADIUS, a26_color(A26_SHELL_RAIL), bg);
+
+    /* Cabecera de 20px: "Album - Artista" (formato pedido por el dueno
+     * del diseno) centrado, recortado al ancho util si desborda. */
+    if (artist[0])
+        snprintf(header, sizeof(header), "%s - %s",
+                  s_albums[s_target_index].label, artist);
+    else
+        snprintf(header, sizeof(header), "%s", s_albums[s_target_index].label);
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_getstringsize((const unsigned char *)header, &w, &h);
+    if (w <= CF_BACK_SIZE - 2 * A26_SPACING_MD)
+        lcd_putsxy(panel_x + (CF_BACK_SIZE - w) / 2,
+                   panel_y + (CF_BACK_HEADER_H - h) / 2,
+                   (const unsigned char *)header);
+    else
+        draw_clipped_text(panel_x + A26_SPACING_MD,
+                           panel_y + (CF_BACK_HEADER_H - h) / 2,
+                           CF_BACK_SIZE - 2 * A26_SPACING_MD, header);
 
     if (s_track_count == 0)
         return;
+
+    if (s_track_sel != s_prev_track_sel)
+    {
+        s_prev_track_sel = s_track_sel;
+        s_track_activity_since = current_tick;
+    }
 
     first = s_track_sel - visible / 2;
     if (first < 0)
@@ -449,11 +535,24 @@ static void draw_tracklist_panel(void)
     for (i = 0; i < visible && first + i < s_track_count; i++)
     {
         int idx = first + i;
-        int row_y = panel_y + i * CF_TRACK_ROW_H + (CF_TRACK_ROW_H - A26_TYPE_CAPTION) / 2;
+        int row_y = list_y + i * CF_TRACK_ROW_H + (CF_TRACK_ROW_H - A26_TYPE_CAPTION) / 2;
 
         lcd_set_foreground(a26_color(idx == s_track_sel ? A26_ACCENT : A26_TEXT_PRIMARY));
-        draw_clipped_text(panel_x + A26_SPACING_SM, row_y,
-                           CF_COVER_SIZE - 2 * A26_SPACING_SM, s_tracks[idx].label);
+        draw_clipped_text(panel_x + A26_SPACING_MD, row_y,
+                           CF_BACK_SIZE - 3 * A26_SPACING_MD, s_tracks[idx].label);
+    }
+
+    /* ScrollIndicator (T2.4, Fade-on-Idle) pegado al borde derecho
+     * interno del panel -- solo si la lista realmente desborda (el
+     * componente ademas exige >10 items por regla propia). */
+    if (s_track_count > visible)
+    {
+        long idle_ms = (current_tick - s_track_activity_since) * 1000L / HZ;
+        aura_scroll_indicator_draw(panel_x + CF_BACK_SIZE - A26_SPACING_SM,
+                                    list_y, visible * CF_TRACK_ROW_H,
+                                    first, s_track_count, visible, idle_ms,
+                                    a26_color(A26_SHELL_RAIL),
+                                    a26_color(A26_TEXT_SECONDARY));
     }
 }
 
@@ -596,33 +695,39 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 
         /* Dos lineas centradas bajo el central, como el original de
          * Apple: titulo del album (bold) + artista (regular, un tono
-         * abajo). Se dibujan DESPUES del carrusel, encima de la zona
-         * del reflejo (45% de pico, legible). El artista se busca en
-         * tagcache solo cuando cambia el album objetivo (cache
-         * estatico), nunca por cuadro. */
-        static int s_artist_for_index = -1;
-        static char s_artist[64];
+         * abajo). Durante el giro de la tapa se DESLIZAN hacia abajo
+         * hasta salir de pantalla (encargo del dueno del diseno,
+         * 2026-08-12: ceden su espacio al reverso crecido); ocultos
+         * mientras la lista esta abierta, regresan subiendo con el
+         * giro de vuelta. 64px de recorrido: suficiente para sacar
+         * ambas lineas (la mas alta esta a 58px del borde). */
+        const char *artist = target_artist();
+        int text_dy = 0;
+        int text_hidden = 0;
 
-        if (s_artist_for_index != s_target_index)
+        if (s_state == CF_STATE_COVER_IN)
+            text_dy = 64 * flip_progress_256() / 256;
+        else if (s_state == CF_STATE_SHOW_TRACKS)
+            text_hidden = 1;
+        else if (s_state == CF_STATE_COVER_OUT)
+            text_dy = 64 * (256 - flip_progress_256()) / 256;
+
+        if (!text_hidden)
         {
-            s_artist_for_index = s_target_index;
-            aura_music_album_artist(s_albums[s_target_index].seek,
-                                     s_artist, sizeof(s_artist));
-        }
+            lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+            lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+            lcd_getstringsize((const unsigned char *)label, &w, &h);
+            lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_TITLE_Y + text_dy,
+                       (const unsigned char *)label);
 
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
-        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
-        lcd_getstringsize((const unsigned char *)label, &w, &h);
-        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_TITLE_Y,
-                   (const unsigned char *)label);
-
-        if (s_artist[0])
-        {
-            lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-            lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-            lcd_getstringsize((const unsigned char *)s_artist, &w, &h);
-            lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_ARTIST_Y,
-                       (const unsigned char *)s_artist);
+            if (artist[0])
+            {
+                lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+                lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+                lcd_getstringsize((const unsigned char *)artist, &w, &h);
+                lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_ARTIST_Y + text_dy,
+                           (const unsigned char *)artist);
+            }
         }
     }
 }
@@ -744,7 +849,7 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
              * transicion ya hace el aura_nav_push() al terminar. */
             if (s_track_count > 0 && aura_music_play_songs(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, s_track_sel))
                 aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek,
-                                               CF_TOP_Y + CF_COVER_SIZE / 2);
+                                               CF_BACK_Y + CF_BACK_SIZE / 2);
             break;
         case BUTTON_PLAY:
             /* Mismo comportamiento que en el carrusel: el album

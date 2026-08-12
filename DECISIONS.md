@@ -1380,4 +1380,22 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-116 — Reverso del álbum crecido a 200×200 con cabecera y ScrollIndicator; textos que ceden el espacio; radio 8px universal
+
+**Encargo del dueño del diseño (2026-08-12), con decisión de tamaño tomada por él sobre una tabla de opciones (180/200/220 con sus filas visibles): 200×200.**
+
+**1) El reverso crece al voltearse**: de los 130px del carrusel a **200×200**, centrado en el área útil bajo la StatusBar (`CF_BACK_X/Y`). Cabecera de 20px con **"Álbum - Artista"** (ds_bold_10, centrado, recortado si desborda; solo el álbum si no hay artista). Lista de 11 filas (16px) + **ScrollIndicator** (T2.4, Fade-on-Idle) pegado al borde derecho interno cuando la lista desborda. El vuelo Flip-and-Flow ahora despega del centro del reverso crecido (y=130), no del centro del carrusel.
+
+**2) Los textos del carrusel ceden el espacio**: durante el giro de la tapa, título y artista se deslizan hacia abajo hasta salir de pantalla (64px de recorrido, atado al progreso real del flip); ocultos mientras la lista está abierta; regresan subiendo con el giro de vuelta.
+
+**3) Radio de esquina 8px en TODAS las pantallas con álbum** (token `cover_flow.corner_radius` 5→8 en tokens.json, confirmado por el dueño — antes provisional de G16): carrusel, reverso, reproductor y vuelo comparten el mismo token; los cachés .pfraw se invalidan solos (el radio es parte de su clave).
+
+**Dos bugs reales encontrados al verificar:**
+- **ScrollIndicator invisible fuera del shell**: sus colores estaban fijos (tinta SHELL_RAIL fundida contra SHELL_BG) — sobre el panel gris del reverso se pintaba del mismo color del fondo. La firma ahora recibe `bg`/`ink` explícitos del contexto real (LeftPanel: shell + riel, como antes; reverso: panel gris + TEXT_SECONDARY).
+- **Fade congelado en alfa 0**: nadie pedía cuadros durante la ventana del Fade-on-Idle del reverso — `aura_coverflow_pending()` ahora cubre esa ventana (mismo bug-patrón que el marquee del título viejo, D-091). De paso: ese fix no compiló a la primera (identificadores definidos más abajo que `pending()`) y **el fallo de build pasó inadvertido por filtrar el log con grep** — una captura se hizo con el binario viejo. Verificación de build reforzada con `make -q` + código de salida explícito.
+
+**Aceptación**: 0 warnings (`make -q` limpio), 8/8 suites host-side. Capturas: reverso 200 con cabecera + indicador sobre el disco de 34 pistas (`fix6-back-200-header-scrollind.png`), radio 8 sobre carátula real (`fix6-radius8-real-cover.png`), reverso del álbum sin tags con etiquetas naturales (`fix6-back-untagged-album.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
