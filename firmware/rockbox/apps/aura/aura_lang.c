@@ -84,6 +84,14 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_PLAYLIST_ADDED]     = "Agregada a la lista",
     [AURA_STR_ABOUT_STORAGE]      = "Almacenamiento",
     [AURA_STR_PLAYLIST_PICK]      = "Gira la rueda para elegir",
+
+    [AURA_STR_SETTINGS_ACCENT]    = "Color de acento",
+    [AURA_STR_ACCENT_PINK]        = "Rosa",
+    [AURA_STR_ACCENT_RED]         = "Rojo",
+    [AURA_STR_ACCENT_ORANGE]      = "Naranja",
+    [AURA_STR_ACCENT_GREEN]       = "Verde",
+    [AURA_STR_ACCENT_BLUE]        = "Azul",
+    [AURA_STR_ACCENT_PURPLE]      = "Morado",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -169,6 +177,14 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_PLAYLIST_ADDED]     = "Added to playlist",
     [AURA_STR_ABOUT_STORAGE]      = "Storage",
     [AURA_STR_PLAYLIST_PICK]      = "Turn the wheel to choose",
+
+    [AURA_STR_SETTINGS_ACCENT]    = "Accent color",
+    [AURA_STR_ACCENT_PINK]        = "Pink",
+    [AURA_STR_ACCENT_RED]         = "Red",
+    [AURA_STR_ACCENT_ORANGE]      = "Orange",
+    [AURA_STR_ACCENT_GREEN]       = "Green",
+    [AURA_STR_ACCENT_BLUE]        = "Blue",
+    [AURA_STR_ACCENT_PURPLE]      = "Purple",
 };
 
 const char *aura_str(aura_str_id_t id)

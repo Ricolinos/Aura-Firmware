@@ -61,6 +61,11 @@ typedef struct {
     bool show_videos;
     bool show_photos;
     bool show_nowplaying;
+    /* Acento configurable del sistema docs/aura-design-system/ (PLAN.md
+     * T0.3, fundamentos/01-color.md: "CONFIGURABLE por el usuario desde
+     * Ajustes"). 0xRRGGBB de 24 bits, no el formato nativo del LCD --
+     * ver aura_color.h/apple2026_shell.h (aura_accent()) para el uso. */
+    unsigned accent_rgb24;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

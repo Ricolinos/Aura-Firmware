@@ -47,6 +47,10 @@ typedef enum {
     AURA_SCREEN_SETTINGS_CLICKER,
     AURA_SCREEN_SETTINGS_MAINMENU,
     AURA_SCREEN_SETTINGS_RESET,
+    /* Acento configurable (PLAN.md T0.3, fundamentos/01-color.md) --
+     * agregada al final del enum, mismo criterio "solo-anadir-al-final"
+     * que D-013 usa para aura_lang.h. */
+    AURA_SCREEN_SETTINGS_ACCENT,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 

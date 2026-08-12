@@ -5,6 +5,7 @@
 #include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
+#include "aura_color.h"
 
 static int font_ids[A26_FONT_STYLE_COUNT];
 
@@ -66,6 +67,30 @@ unsigned a26_color(a26_token_t token)
         return dark ? A26_COLOR_DARK_SELECTION_FILL : A26_COLOR_LIGHT_SELECTION_FILL;
     }
     return dark ? A26_COLOR_DARK_TEXT_PRIMARY : A26_COLOR_LIGHT_TEXT_PRIMARY;
+}
+
+unsigned aura_accent(void)
+{
+    aura_rgb_t c = aura_color_from_rgb24(aura_settings.accent_rgb24);
+    return LCD_RGBPACK(c.r, c.g, c.b);
+}
+
+static unsigned aura_accent_toward(unsigned toward_rgb24, int pct)
+{
+    aura_rgb_t accent = aura_color_from_rgb24(aura_settings.accent_rgb24);
+    aura_rgb_t toward = aura_color_from_rgb24(toward_rgb24);
+    aura_rgb_t out = aura_color_blend_pct(accent, toward, pct);
+    return LCD_RGBPACK(out.r, out.g, out.b);
+}
+
+unsigned aura_accent_light(void)
+{
+    return aura_accent_toward(0xFFFFFFu, AURA_DS_COLOR_ACCENT_DERIVED_LIGHTEN_PCT);
+}
+
+unsigned aura_accent_dark(void)
+{
+    return aura_accent_toward(0x000000u, AURA_DS_COLOR_ACCENT_DERIVED_DARKEN_PCT);
 }
 
 void a26_shell_clear_screen(void)

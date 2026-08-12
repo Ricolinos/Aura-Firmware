@@ -8,7 +8,7 @@ BUILD := build
 
 .PHONY: test clean
 
-test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow
+test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow $(BUILD)/test_color
 	@echo "== test_nav =="
 	@$(BUILD)/test_nav
 	@echo "== test_lrc =="
@@ -21,6 +21,8 @@ test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/tes
 	@$(BUILD)/test_wheel
 	@echo "== test_flow =="
 	@$(BUILD)/test_flow
+	@echo "== test_color =="
+	@$(BUILD)/test_color
 
 $(BUILD)/test_nav: test_nav.c ../aura_nav.c ../aura_nav.h | $(BUILD)
 	$(CC) $(CFLAGS) test_nav.c ../aura_nav.c -o $@
@@ -33,6 +35,9 @@ $(BUILD)/test_wheel: test_wheel.c ../aura_wheel.c ../aura_wheel.h | $(BUILD)
 
 $(BUILD)/test_flow: test_flow.c ../aura_flow.c ../aura_flow.h | $(BUILD)
 	$(CC) $(CFLAGS) test_flow.c ../aura_flow.c -o $@
+
+$(BUILD)/test_color: test_color.c ../aura_color.c ../aura_color.h | $(BUILD)
+	$(CC) $(CFLAGS) test_color.c ../aura_color.c -o $@
 
 $(BUILD)/test_lrc: test_lrc.c ../aura_lrc.c ../aura_lrc.h | $(BUILD)
 	$(CC) $(CFLAGS) test_lrc.c ../aura_lrc.c -o $@

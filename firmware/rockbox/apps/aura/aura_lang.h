@@ -92,6 +92,17 @@ typedef enum {
     AURA_STR_ABOUT_STORAGE,
     AURA_STR_PLAYLIST_PICK,
 
+    /* Acento configurable (PLAN.md T0.3) -- presets provisionales, sin
+     * consumidor de UI de swatch todavia (lista de eleccion por texto,
+     * mismo patron que Tema/Idioma). */
+    AURA_STR_SETTINGS_ACCENT,
+    AURA_STR_ACCENT_PINK,
+    AURA_STR_ACCENT_RED,
+    AURA_STR_ACCENT_ORANGE,
+    AURA_STR_ACCENT_GREEN,
+    AURA_STR_ACCENT_BLUE,
+    AURA_STR_ACCENT_PURPLE,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

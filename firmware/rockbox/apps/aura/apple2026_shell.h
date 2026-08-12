@@ -58,6 +58,22 @@ void a26_shell_init(void);
  * lcd_set_foreground/background). */
 unsigned a26_color(a26_token_t token);
 
+/* Acento configurable del sistema docs/aura-design-system/ (PLAN.md T0.3,
+ * fundamentos/01-color.md). Lee aura_settings.accent_rgb24 en runtime --
+ * NUNCA usar AURA_DS_COLOR_ACCENT_DEFAULT directo en un componente, ese
+ * define es solo el valor de fabrica. Empaquetado al formato nativo del
+ * LCD, listo para lcd_set_foreground/background. */
+unsigned aura_accent(void);
+
+/* Version del acento vigente mezclada hacia blanco/negro en
+ * AURA_DS_COLOR_ACCENT_DERIVED_LIGHTEN_PCT/_DARKEN_PCT (D-086, G9) --
+ * los dos colores derivados del degradado de SelectionSummary. Se
+ * recalculan cada vez que se llaman (no cachean): son baratos (aura_color.c
+ * es aritmetica entera pura) y siempre reflejan el acento vigente aunque
+ * el usuario lo haya cambiado sin reiniciar. */
+unsigned aura_accent_light(void);
+unsigned aura_accent_dark(void);
+
 /* Font id (para lcd_setfont) del estilo dado. */
 int a26_font(a26_font_style_t style);
 

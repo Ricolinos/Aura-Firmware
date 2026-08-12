@@ -10,6 +10,7 @@
 #include "backlight.h"
 
 #include "aura_settings.h"
+#include "apple2026_tokens.h"
 
 #define AURA_DIR       ROCKBOX_DIR "/aura"
 #define AURA_CFG_PATH  AURA_DIR "/aura.cfg"
@@ -25,6 +26,9 @@ static const aura_settings_t aura_settings_defaults = {
     .show_videos = true,
     .show_photos = true,
     .show_nowplaying = true,
+    /* AURA_DS_COLOR_ACCENT_DEFAULT_RGB24 (design-system/tokens.json,
+     * generado -- 0xFF2D52, fundamentos/01-color.md). */
+    .accent_rgb24 = AURA_DS_COLOR_ACCENT_DEFAULT_RGB24,
 };
 
 /* Ganancia (dB) por banda para cada preset; el resto de cada banda
@@ -121,6 +125,12 @@ void aura_settings_load(void)
                 aura_settings.show_photos = (v != 0);
             else if (!strcmp(name, "show_nowplaying"))
                 aura_settings.show_nowplaying = (v != 0);
+            else if (!strcmp(name, "accent_rgb24"))
+                /* Hex (0xRRGGBB), no decimal como el resto de este
+                 * archivo -- strtoul en vez de atoi(), es un color, no
+                 * un indice de enum. */
+                aura_settings.accent_rgb24 =
+                    (unsigned)strtoul(value, NULL, 16) & 0xFFFFFFu;
         }
         close(fd);
 
@@ -156,6 +166,7 @@ void aura_settings_save(void)
     fdprintf(fd, "show_videos: %d\n", (int)aura_settings.show_videos);
     fdprintf(fd, "show_photos: %d\n", (int)aura_settings.show_photos);
     fdprintf(fd, "show_nowplaying: %d\n", (int)aura_settings.show_nowplaying);
+    fdprintf(fd, "accent_rgb24: %06lx\n", (unsigned long)aura_settings.accent_rgb24);
 
     close(fd);
 }

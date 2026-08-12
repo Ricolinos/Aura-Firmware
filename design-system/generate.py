@@ -167,6 +167,13 @@ def generate_aura_ds_defines(tokens):
                 r, g, b = hex_to_rgb(node)
                 name = prefix.removesuffix("_HEX")
                 lines.append(f"#define {name} LCD_RGBPACK({r}, {g}, {b})")
+                # Ademas del empaquetado nativo del LCD (para dibujar),
+                # el mismo valor en 0xRRGGBB de 24 bits -- necesario para
+                # persistir/comparar como entero plano (p. ej. el default
+                # de aura_settings.accent_rgb24, T0.3) sin depender del
+                # formato de pixel del target.
+                rgb24 = (r << 16) | (g << 8) | b
+                lines.append(f"#define {name}_RGB24 0x{rgb24:06X}")
             # otros strings (nombres de estilo de fuente, etc.) no generan
             # define C -- se resuelven en Python o se hardcodean en C.
         elif isinstance(node, list):

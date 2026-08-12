@@ -869,4 +869,20 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-087 — PLAN.md T0.3: acento configurable en runtime + colores derivados calculados
+
+**Módulo puro nuevo `aura_color.c/.h`** (mismo criterio que `aura_motion.c`/`aura_wheel.c`/`aura_flow.c`: C99 sin dependencias de Rockbox, compila igual en host que en firmware): desempaqueta/empaqueta `0xRRGGBB` de 24 bits y mezcla un color hacia otro por porcentaje entero, redondeando al más cercano. `test_color.c` nuevo, 20 checks (roundtrip, extremos 0%/100%, punto medio, clamp fuera de rango, simetría de los dos derivados del acento).
+
+**Persistencia**: `aura_settings.accent_rgb24` (nuevo campo, unsigned 24 bits) se guarda/lee de `aura.cfg` en hex (`accent_rgb24: 007aff`) — único campo del archivo en hex en vez de decimal, porque es un color, no un índice de enum; usa `strtoul`/`%06lx` en vez de `atoi`/`%d`. Default: `AURA_DS_COLOR_ACCENT_DEFAULT_RGB24` (generado desde `tokens.json`, D-086) — un solo lugar define el rosa de fábrica, no dos.
+
+**API de resolución** en `apple2026_shell.h/.c` (mismo lugar que ya resuelve tokens de tema, `a26_color()`): `aura_accent()` empaqueta el acento vigente al formato nativo del LCD; `aura_accent_light()`/`aura_accent_dark()` lo mezclan hacia blanco/negro en los porcentajes de `AURA_DS_COLOR_ACCENT_DERIVED_LIGHTEN_PCT`/`_DARKEN_PCT` (25%, D-086/G9) — se recalculan en cada llamada (aritmética entera barata) en vez de cachear, para reflejar siempre el valor vigente sin necesidad de invalidar una caché si el usuario cambia el ajuste. **Regla dura para todo componente futuro**: nunca leer `aura_settings.accent_rgb24` ni `AURA_DS_COLOR_ACCENT_DEFAULT*` directo — siempre estas tres funciones.
+
+**Pantalla de Ajustes → Color de acento, provisional documentado**: `fundamentos/01-color.md` confirma que el acento es "configurable por el usuario desde Ajustes" pero no especifica la interfaz. Se implementó con el mismo mecanismo de lista de elección que Tema/Idioma (6 presets con nombre: Rosa/Rojo/Naranja/Verde/Azul/Morado, Rosa = default de fábrica) en vez de un selector de swatches de color, porque `aura_widgets_draw_list()` no tiene hoy forma de pintar un color arbitrario por fila (mismo tipo de límite que ya encontró D-081 con el ícono de curva de EQ). Marcado `// TODO(pendiente-doc)` en el código -- un selector visual de color sería más fiel al espíritu del sistema nuevo, pero exige extender el widget de lista con un callback de dibujo por fila, cambio de arquitectura real que no se improvisa aquí. `get_choice_current()` busca el valor vigente entre los 6 presets por igualdad exacta; si no coincide con ninguno (nunca ocurre hoy, pero es una API abierta a futuro) cae a Rosa sin marcar una fila equivocada.
+
+**Bug propio encontrado al verificar, no al escribir el código**: el ícono `paintpalette` de la fila "Color de acento" se referenció en `aura_screens.c` sin registrarlo en `tokens.json → icon.names` — la fila habría quedado sin ícono en silencio (mismo patrón de vacío que el `ipod.slash` inexistente de sesiones anteriores, pero esta vez el símbolo sí existe, solo faltaba declararlo). Encontrado revisando el propio diff antes de dar la tarea por cerrada, no por un reporte externo; corregido antes del commit.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 636/636 tests host-side (566 + 20 nuevos de `test_color`, sin regresiones). Verificado en el simulador con el arnés de botones: pantalla "Color de acento" muestra los 6 presets con "Rosa" marcado por default; seleccionar "Azul" persiste `accent_rgb24: 007aff` en `aura.cfg` (confirmado leyendo el archivo directo, no solo la captura). Sin consumidor visual todavía más allá de la propia pantalla de ajustes -- ningún componente existente dibuja con `aura_accent()` aún; eso empieza en T2.2 (Selector nuevo).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

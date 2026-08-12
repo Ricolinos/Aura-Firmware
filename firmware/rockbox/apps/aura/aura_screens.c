@@ -92,6 +92,7 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_CLICKER,       "tap",            AURA_SCREEN_SETTINGS_CLICKER },
     { AURA_STR_SETTINGS_MAINMENU,      "menu-list",      AURA_SCREEN_SETTINGS_MAINMENU },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
+    { AURA_STR_SETTINGS_ACCENT,     "paintpalette",      AURA_SCREEN_SETTINGS_ACCENT },
     { AURA_STR_SETTINGS_ABOUT,      "info",              AURA_SCREEN_SETTINGS_ABOUT },
     { AURA_STR_SETTINGS_RESET,         "reset",          AURA_SCREEN_SETTINGS_RESET },
 };
@@ -139,6 +140,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_EQ:         return AURA_STR_SETTINGS_EQ;
     case AURA_SCREEN_SETTINGS_BRIGHTNESS: return AURA_STR_SETTINGS_BRIGHTNESS;
     case AURA_SCREEN_SETTINGS_LANGUAGE:   return AURA_STR_SETTINGS_LANGUAGE;
+    case AURA_SCREEN_SETTINGS_ACCENT:     return AURA_STR_SETTINGS_ACCENT;
     case AURA_SCREEN_SETTINGS_ABOUT:      return AURA_STR_SETTINGS_ABOUT;
     case AURA_SCREEN_SETTINGS_SHUFFLE:    return AURA_STR_SETTINGS_SHUFFLE;
     case AURA_SCREEN_SETTINGS_REPEAT:     return AURA_STR_SETTINGS_REPEAT;
@@ -178,6 +180,27 @@ static const aura_str_id_t repeat_choice_labels[] = {
     AURA_STR_REPEAT_OFF, AURA_STR_REPEAT_ALL, AURA_STR_REPEAT_ONE,
 };
 
+/* Acento configurable (PLAN.md T0.3, fundamentos/01-color.md): la doc
+ * confirma "configurable por el usuario" pero no dice COMO -- lista
+ * provisional de 6 presets con nombre (// TODO(pendiente-doc): un
+ * selector de swatches de color seria mas fiel al espiritu del sistema
+ * nuevo que una lista de texto, pero draw_choice_list() no tiene forma
+ * de pintar un color arbitrario por fila hoy; se resuelve con la misma
+ * mecanica de eleccion por texto que Tema/Idioma mientras tanto).
+ * Indice 0 = default de fabrica (AURA_DS_COLOR_ACCENT_DEFAULT_RGB24). */
+static const aura_str_id_t accent_choice_labels[] = {
+    AURA_STR_ACCENT_PINK, AURA_STR_ACCENT_RED, AURA_STR_ACCENT_ORANGE,
+    AURA_STR_ACCENT_GREEN, AURA_STR_ACCENT_BLUE, AURA_STR_ACCENT_PURPLE,
+};
+static const unsigned accent_choice_rgb24[] = {
+    AURA_DS_COLOR_ACCENT_DEFAULT_RGB24, /* Rosa, default */
+    0xFF3B30, /* Rojo */
+    0xFF9500, /* Naranja */
+    0x34C759, /* Verde */
+    0x007AFF, /* Azul */
+    0xAF52DE, /* Morado */
+};
+
 static int is_choice_screen(aura_screen_id_t screen)
 {
     return screen == AURA_SCREEN_SETTINGS_THEME
@@ -185,7 +208,8 @@ static int is_choice_screen(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS_GRAPHICS
         || screen == AURA_SCREEN_SETTINGS_EQ
         || screen == AURA_SCREEN_SETTINGS_LANGUAGE
-        || screen == AURA_SCREEN_SETTINGS_REPEAT;
+        || screen == AURA_SCREEN_SETTINGS_REPEAT
+        || screen == AURA_SCREEN_SETTINGS_ACCENT;
 }
 
 static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
@@ -210,6 +234,9 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
     case AURA_SCREEN_SETTINGS_REPEAT:
         *out = repeat_choice_labels;
         return sizeof(repeat_choice_labels) / sizeof(repeat_choice_labels[0]);
+    case AURA_SCREEN_SETTINGS_ACCENT:
+        *out = accent_choice_labels;
+        return sizeof(accent_choice_labels) / sizeof(accent_choice_labels[0]);
     default:
         *out = NULL;
         return 0;
@@ -226,6 +253,19 @@ static int get_choice_current(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_EQ:       return (int)aura_settings.eq_preset;
     case AURA_SCREEN_SETTINGS_LANGUAGE: return (int)aura_settings.language;
     case AURA_SCREEN_SETTINGS_REPEAT:   return global_settings.repeat_mode;
+    case AURA_SCREEN_SETTINGS_ACCENT:
+    {
+        /* El acento vigente puede no coincidir con ningun preset (el
+         * usuario podria haberlo llegado a fijar por otra via en el
+         * futuro) -- en ese caso no hay fila "actual" real, se cae al
+         * primer preset (Rosa) sin marcar un checkmark erroneo en otra
+         * fila con un valor distinto. */
+        size_t i, n = sizeof(accent_choice_rgb24) / sizeof(accent_choice_rgb24[0]);
+        for (i = 0; i < n; i++)
+            if (accent_choice_rgb24[i] == aura_settings.accent_rgb24)
+                return (int)i;
+        return 0;
+    }
     default:                            return 0;
     }
 }
@@ -260,6 +300,10 @@ static void apply_choice(aura_screen_id_t screen, int index)
         break;
     case AURA_SCREEN_SETTINGS_LANGUAGE:
         aura_settings.language = (aura_lang_t)index;
+        break;
+    case AURA_SCREEN_SETTINGS_ACCENT:
+        if (index >= 0 && (size_t)index < sizeof(accent_choice_rgb24) / sizeof(accent_choice_rgb24[0]))
+            aura_settings.accent_rgb24 = accent_choice_rgb24[index];
         break;
     default:
         break;
