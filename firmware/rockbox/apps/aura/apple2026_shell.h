@@ -44,6 +44,25 @@ typedef enum {
      * no se reemplaza, se agrega (AUDITORIA-01 A-04/A-a). */
     A26_FONT_STYLE_HEADER,
     A26_FONT_STYLE_MICRO,
+    /* Fuentes SF Pro del sistema nuevo (docs/aura-design-system/,
+     * fundamentos/02-tipografia.md -- PLAN.md T0.2 genero los .fnt,
+     * T2.3 los carga por primera vez). Nombradas por ESTILO real
+     * (tamano+peso), no por rol de componente -- varios roles
+     * documentados comparten un mismo estilo (np_album/np_artist/
+     * lyrics son los tres 12px Regular = DS_REG_12) y cargar un
+     * archivo repetido en mas de un slot desperdiciaria presupuesto de
+     * MAXUSERFONTS (12 exacto con estas 7 + las 5 de arriba, ver
+     * D-086). El mapeo rol->estilo vive en
+     * design-system/tokens.json -> aura_ds.type_scale_roles,
+     * documentacion para humanos; el codigo C usa el estilo
+     * directamente. */
+    A26_FONT_STYLE_DS_REG_8,   /* statusbar_time */
+    A26_FONT_STYLE_DS_BOLD_8,  /* statusbar_title */
+    A26_FONT_STYLE_DS_REG_10,  /* menu_item */
+    A26_FONT_STYLE_DS_BOLD_10, /* np_counter */
+    A26_FONT_STYLE_DS_REG_12,  /* np_album, np_artist, lyrics */
+    A26_FONT_STYLE_DS_BOLD_12, /* np_title */
+    A26_FONT_STYLE_DS_BOLD_14, /* lyrics_active */
     A26_FONT_STYLE_COUNT,
 } a26_font_style_t;
 

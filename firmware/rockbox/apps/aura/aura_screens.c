@@ -28,6 +28,7 @@
 #include "aura_manifest.h"
 #include "aura_main.h"
 #include "aura_wheel.h"
+#include "aura_menu_list.h"
 
 #define MAX_MENU_ENTRIES 16
 
@@ -357,12 +358,46 @@ static void toggle_settings_row(aura_screen_id_t target)
 
 /* -- Dibujo -------------------------------------------------------------- */
 
+/* Menu raiz con MenuList v2 + Selector nuevo (PLAN.md T2.2/T2.3) --
+ * consumidor real elegido para verificar la geometria nueva (152x22,
+ * radio 5, acento) contra un caso simple (5 items, sin switches/
+ * checkmarks/paginado) mientras dura la migracion parcial documentada
+ * en DECISIONS.md. El resto de las pantallas (Musica, Ajustes, listas
+ * de eleccion) siguen con aura_widgets_draw_list() -- migrarlas es
+ * trabajo de seguimiento explicito, no de esta pasada (regla del
+ * encargo: verificar en el simulador, no adivinar que 30 pantallas mas
+ * se ven bien sin mirarlas). */
+static void draw_root_v2(aura_nav_t *nav)
+{
+    const nav_entry_t *entries;
+    int count = get_nav_table(AURA_SCREEN_ROOT, &entries);
+    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    int i;
+
+    for (i = 0; i < count; i++)
+    {
+        items[i].label = aura_str(entries[i].label_id);
+        items[i].icon_name = entries[i].icon_name;
+    }
+
+    a26_shell_clear_screen();
+    aura_statusbar_draw(0, A26_SCREEN_WIDTH, "Aura", 0);
+    aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count,
+                         aura_nav_get_selection(nav));
+}
+
 static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
 {
     const nav_entry_t *entries;
     int count = get_nav_table(screen, &entries);
     aura_list_item_t items[MAX_MENU_ENTRIES];
     int i;
+
+    if (screen == AURA_SCREEN_ROOT)
+    {
+        draw_root_v2(nav);
+        return;
+    }
 
     for (i = 0; i < count; i++)
     {
@@ -372,10 +407,7 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].toggle = settings_row_toggle_value(entries[i].target);
     }
 
-    /* "Aura" es el nombre de la marca, igual en ambos idiomas: no va en
-     * la tabla de traduccion, solo el menu raiz lo usa como titulo. */
-    aura_widgets_draw_list(screen == AURA_SCREEN_ROOT ? "Aura"
-                                                        : aura_str(screen_title_id(screen)),
+    aura_widgets_draw_list(aura_str(screen_title_id(screen)),
                             items, count, aura_nav_get_selection(nav));
 }
 

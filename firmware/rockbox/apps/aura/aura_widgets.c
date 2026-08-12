@@ -111,6 +111,11 @@ int aura_widgets_draw_icon_rail(const char *name, int size, int x, int y)
     return draw_icon_variant(name, size, x, y, "-rail");
 }
 
+int aura_widgets_draw_icon_variant_selector(const char *name, int size, int x, int y)
+{
+    return draw_icon_variant(name, size, x, y, "-selector");
+}
+
 /* Layout declarado por la pantalla actual (lo fija aura_screens_draw
  * desde su tabla). Por defecto SPLIT: es el layout de la mayoria de los
  * menus del firmware original. */

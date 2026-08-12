@@ -110,6 +110,12 @@ int aura_widgets_draw_icon_tertiary(const char *name, int size, int x, int y);
  * (p. ej. estrellas sin llenar de Ahora suena, AUDITORIA-01 A-16). */
 int aura_widgets_draw_icon_rail(const char *name, int size, int x, int y);
 
+/* Misma firma, variante blanco constante (PLAN.md T2.2/G5) -- contenido
+ * (iconos, indicador del Selector) sobre la pastilla de acento del
+ * sistema nuevo, que a diferencia de SELECTION_FILL del sistema viejo
+ * no es gris. */
+int aura_widgets_draw_icon_variant_selector(const char *name, int size, int x, int y);
+
 /* Fila booleana: label a la izquierda, "Si"/"No" (localizado) a la
  * derecha. SELECT la alterna in situ (L11, PLAN-UX.md) -- el llamador
  * decide que hacer con el nuevo valor, este widget solo dibuja. */

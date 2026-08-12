@@ -392,11 +392,18 @@ def generate_icons(tokens):
     # variante normal -- se usan sobre contenido en reposo (icono de
     # modo inactivo, estrella vacia), nunca sobre la pastilla de
     # seleccion, asi que su fondo de composicion tambien es SHELL_BG.
+    # "-selector" (PLAN.md T2.2/G5): tinta blanca constante para
+    # contenido sobre el Selector nuevo (pastilla de acento, no gris) --
+    # compuesta contra SHELL_BG como aproximacion documentada, porque el
+    # fondo REAL (el acento, configurable en runtime) no se conoce en
+    # tiempo de generacion -- mismo limite ya aceptado para "-on"
+    # reutilizada fuera de una pastilla de seleccion (D-086).
     VARIANT_BG_TOKEN = {
         "": "shell_bg",
         "-on": "selection_fill",
         "-tertiary": "shell_bg",
         "-rail": "shell_bg",
+        "-selector": "shell_bg",
     }
 
     tone_report = []  # (path, n_tonos) de cada bmp generado
