@@ -101,6 +101,12 @@ int aura_widgets_draw_icon(const char *name, int size, int x, int y);
  * para el contenido que va sobre la barra de seleccion. */
 int aura_widgets_draw_icon_selected(const char *name, int size, int x, int y);
 
+/* Misma firma, con opacidad simulada arbitraria (0-256) mezclando cada
+ * pixel no transparente hacia el fondo del shell -- para estados
+ * "visible pero no seleccionable" que ninguna variante de color fija
+ * cubre (p. ej. el icono de Letras sin .lrc en Ahora suena, T3.1(b)). */
+int aura_widgets_draw_icon_dimmed(const char *name, int size, int x, int y, int alpha_256);
+
 /* Misma firma, variante TEXT_TERTIARY -- iconos en reposo/inactivos
  * fuera de una lista (p. ej. los 4 modos no activos de Ahora suena,
  * AUDITORIA-01 A-16). */

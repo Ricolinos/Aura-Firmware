@@ -67,12 +67,6 @@
 #define VOLUME_OVERLAY_TICKS (HZ + HZ / 2)
 static long s_volume_overlay_until = 0;
 
-/* Panel flotante de "anadir a lista" (modo 5.3, doc SS5): visible
- * mientras el modo esta activo; ~1.5s de confirmacion tras SELECT antes
- * de que el rotulo vuelva a mostrar el nombre de la lista resaltada. */
-#define PLAYLIST_CONFIRM_TICKS (HZ + HZ / 2)
-static long s_playlist_confirm_until = 0;
-
 static unsigned char s_art_buf[64 * 1024];
 static struct bitmap s_art_bm;
 static bool s_art_valid = false;
@@ -454,7 +448,16 @@ static void draw_text_and_modes(const struct mp3entry *id3)
             icon_y -= (4 * (256 - eased)) / 256;
         }
 
-        if (active)
+        if (i == (int)NP_MODE_LYRICS && !s_lrc_valid)
+        {
+            /* "Su icono sigue apareciendo... pero al 50% de opacidad"
+             * (componentes/now-playing.md) -- distinto de -tertiary
+             * (que es un color fijo para "inactivo pero disponible"):
+             * este estado es "no disponible en absoluto", el loop de
+             * modos ya lo salta (cycle_mode/mode_available). */
+            aura_widgets_draw_icon_dimmed(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y, 128);
+        }
+        else if (active)
             aura_widgets_draw_icon_selected(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y);
         else
             aura_widgets_draw_icon_tertiary(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y);
@@ -576,12 +579,7 @@ static void draw_playlist_panel(void)
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
 
-    if (current_tick < s_playlist_confirm_until)
-    {
-        label = aura_str(AURA_STR_PLAYLIST_ADDED);
-        lcd_set_foreground(a26_color(A26_ACCENT));
-    }
-    else if (n == 0)
+    if (n == 0)
     {
         label = aura_str(AURA_STR_EMPTY_LIST);
         lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
@@ -724,13 +722,44 @@ void aura_nowplaying_draw(void)
 bool aura_nowplaying_needs_tick(void)
 {
     return current_tick < s_volume_overlay_until
-        || aura_nowplaying_wheel_animating()
-        || current_tick < s_playlist_confirm_until;
+        || aura_nowplaying_wheel_animating();
+}
+
+static int playlist_count(void)
+{
+    char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+    return aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
+}
+
+/* Modos que pueden no estar disponibles se saltan en el loop (PLAN.md
+ * T3.1(b), componentes/now-playing.md: Letra "si la cancion no tiene
+ * letras, el modo se desactiva -- el loop de modos lo salta"; Playlist
+ * "si no hay playlists existentes, el modo no se activa". Volumen,
+ * Busqueda y Estrellas siempre estan disponibles. */
+static int mode_available(np_mode_t mode)
+{
+    if (mode == NP_MODE_LYRICS)
+        return s_lrc_valid;
+    if (mode == NP_MODE_PLAYLIST)
+        return playlist_count() > 0;
+    return 1;
 }
 
 static void cycle_mode(int direction)
 {
-    int next = ((int)s_mode + direction + NP_MODE_COUNT) % NP_MODE_COUNT;
+    /* Acotado a NP_MODE_COUNT intentos -- nunca gira en un bucle
+     * infinito: Volumen/Busqueda/Estrellas nunca se saltan, asi que
+     * siempre hay al menos un modo disponible donde detenerse. */
+    int next = (int)s_mode;
+    int tries;
+
+    for (tries = 0; tries < NP_MODE_COUNT; tries++)
+    {
+        next = (next + direction + NP_MODE_COUNT) % NP_MODE_COUNT;
+        if (mode_available((np_mode_t)next))
+            break;
+    }
+
     s_mode = (np_mode_t)next;
     s_mode_pop_since = current_tick;
     s_scrub_preview_ms = -1;
@@ -742,12 +771,6 @@ static void cycle_mode(int direction)
      * hubiera elegido nada a proposito (Fase 32, D-081). */
     if (s_mode == NP_MODE_PLAYLIST)
         s_playlist_sel = -1;
-}
-
-static int playlist_count(void)
-{
-    char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
-    return aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
 }
 
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
@@ -774,8 +797,16 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
          * comprimido del doc, ver D-078). */
         if (s_mode == NP_MODE_PLAYLIST && id3 && s_playlist_sel >= 0 && playlist_count() > 0)
         {
+            /* "Select con una playlist seleccionada = agrega la cancion
+             * Y regresa al Modo 1" (componentes/now-playing.md) -- una
+             * sola accion atomica, no una confirmacion que se queda en
+             * pantalla dentro del modo Playlist (asi lo hacia el
+             * sistema viejo, D-081; el documento nuevo ya no lo pide). */
             if (aura_music_add_track_to_playlist(s_playlist_sel, id3->path))
-                s_playlist_confirm_until = current_tick + PLAYLIST_CONFIRM_TICKS;
+            {
+                s_mode = NP_MODE_VOLUME;
+                s_mode_pop_since = current_tick;
+            }
         }
         else if (s_mode != NP_MODE_PLAYLIST || s_playlist_sel < 0)
         {

@@ -116,6 +116,53 @@ int aura_widgets_draw_icon_variant_selector(const char *name, int size, int x, i
     return draw_icon_variant(name, size, x, y, "-selector");
 }
 
+/* Icono a opacidad simulada arbitraria (PLAN.md T3.1(b),
+ * componentes/now-playing.md: "su icono sigue apareciendo... pero al
+ * 50% de opacidad" -- modo de Letras sin .lrc). Los iconos son bitmaps
+ * horneados en un color fijo (D-010) -- no hay una variante -50%
+ * pre-generada como las demas (-tertiary/-rail/-selector), asi que en
+ * vez de reinterpretar "50%" con una variante de color existente que
+ * no es lo mismo, se mezcla cada pixel NO transparente hacia
+ * A26_SHELL_BG con a26_shell_blend() antes de blitear -- mismo
+ * mecanismo que el resto del sistema ya usa para opacidad simulada,
+ * aplicado aca a un bitmap en vez de a un color solido o a texto. Fondo
+ * asumido SHELL_BG plano (misma simplificacion que a26_shell_blend() ya
+ * declara en sus otros consumidores -- sobre contenido rico detras
+ * seria una aproximacion, no hay tal caso hoy en la fila de modos). */
+int aura_widgets_draw_icon_dimmed(const char *name, int size, int x, int y, int alpha_256)
+{
+    static unsigned char icon_buf[A26_ICON_SIZE_PREVIEW * A26_ICON_SIZE_PREVIEW
+                                   * 4 + 64];
+    char path[MAX_PATH];
+    struct bitmap bm;
+    int ret, i, n;
+    fb_data *px;
+    unsigned bg = a26_color(A26_SHELL_BG);
+
+    if (!name)
+        return 0;
+
+    snprintf(path, sizeof(path), "%s/aura/%s/%s-%d.bmp",
+              ICON_DIR, theme_dir_name(), name, size);
+
+    bm.data = (char *)icon_buf;
+    ret = read_bmp_file(path, &bm, sizeof(icon_buf), FORMAT_NATIVE, NULL);
+    if (ret <= 0)
+        return 0;
+
+    px = (fb_data *)bm.data;
+    n = bm.width * bm.height;
+    for (i = 0; i < n; i++)
+    {
+        if (px[i] == TRANSPARENT_COLOR)
+            continue;
+        px[i] = a26_shell_blend(bg, px[i], alpha_256);
+    }
+
+    lcd_bitmap_transparent((const fb_data *)bm.data, x, y, bm.width, bm.height);
+    return bm.width;
+}
+
 /* Layout declarado por la pantalla actual (lo fija aura_screens_draw
  * desde su tabla). Por defecto SPLIT: es el layout de la mayoria de los
  * menus del firmware original. */
