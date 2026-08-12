@@ -885,4 +885,20 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-088 — PLAN.md T0.4: sombra de LeftPanel + toggle -- cierre de la Etapa 0 (fundamentos)
+
+**Primitiva `aura_shell_draw_left_panel_shadow(x, y, height)`** (`apple2026_shell.c`): banda de `AURA_DS_METRICS_SHADOW_LEFT_PANEL_SHADOW_WIDTH` (8px, provisional D-086/G-sombra) columnas junto al borde del panel, con caída lineal de opacidad hasta 0% en el borde exterior -- reutiliza `a26_shell_blend()` ya probado (mezcla contra negro en vez de generar un mecanismo nuevo). Aproximación consciente, no compositing real: sin alfa por-pixel en este LCD, la banda se calcula contra `SHELL_BG` (fondo plano conocido), así que sobre contenido rico (carátula, foto) sería una aproximación, no un blend real -- documentado en el propio header, no oculto.
+
+**Persistencia**: `aura_settings.left_panel_shadow` (bool, default `true` -- "máxima fidelidad primero", `00-INDICE.md`). Fila nueva "Sombra de panel" en Ajustes con switch inline (D-075) -- generalicé `settings_row_toggle_value()`/`toggle_settings_row()` de 2 a 3 casos, cumpliendo la promesa que el propio comentario viejo dejó ("si aparece una tercera, se generaliza"): ahora cada rama persiste con su mecanismo real (`settings_save()` de Rockbox para Aleatorio/Clicker, `aura_settings_save()` propio para Sombra de panel) en vez de forzar una tabla genérica que no distinguiría eso.
+
+**Consumidor real elegido con criterio, no por conveniencia**: `docs/aura-design-system/` describe la sombra para `SelectionSummary`/`CoverDrift` (T2.8/T2.9), que todavía no existen -- construir la primitiva sin ningún sitio real donde se vea sería exactamente el tipo de trabajo huérfano que el propio proyecto evita (mismo criterio que ya usó D-073 para no construir el contenedor modal sin consumidor). El panel derecho del sistema VIEJO (`aura_widgets_draw_right_panel_icon()`) comparte el ancho exacto de 160px de `LeftPanel` nuevo y ya es una superficie "split" real con contenido a la derecha -- se conecta ahí temporalmente. Cuando T2.8/T2.9 construyan los componentes reales, llamarán la misma primitiva; este consumidor provisional no se descarta, simplemente deja de ser el único.
+
+**Error propio durante la verificación, documentado sin editar el registro**: al armar las secuencias de botones del arnés para confirmar el toggle, conté mal el número de `SCROLL_FWD` necesarios dos veces seguidas (14 vs 15 elementos en una lista separada por comas, contada a ojo) -- la primera captura pareció mostrar que el toggle no se guardaba (`left_panel_shadow: 1` tras "apagarlo"), lo que por un momento pareció un bug real. Verificado con `tr ',' '\n' | wc -l` antes de suponer que el código fallaba: el conteo estaba mal, no el código -- confirmado aparte que `sel` avanza exactamente +1 por `SCROLL_FWD` (capturas de 0 y 1 scroll en Ajustes, index 0 y 1 correctos). Ninguna línea de código se tocó para "arreglar" este no-bug.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 636/636 tests host-side sin cambios (esta tarea no toca módulos puros). Verificado en el simulador: tema claro, banda de sombra visible junto al panel derecho con el ajuste en `on` (default), ausente con `off` (`docs/screenshots/t0-fundamentos/t04-light-shadow-{on,off}.png`); `left_panel_shadow: 0`/`1` confirmado leyendo `aura.cfg` directo tras cada toggle, no solo la captura.
+
+**Cierra la Etapa 0 del plan** (T0.1-T0.4): tokens, fuentes, acento en runtime y sombra, todos con consumidor real verificado. La Etapa 1 (motor de patrones) arranca a continuación.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

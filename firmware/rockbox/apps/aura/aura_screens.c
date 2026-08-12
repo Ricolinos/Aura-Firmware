@@ -93,6 +93,7 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_MAINMENU,      "menu-list",      AURA_SCREEN_SETTINGS_MAINMENU },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
     { AURA_STR_SETTINGS_ACCENT,     "paintpalette",      AURA_SCREEN_SETTINGS_ACCENT },
+    { AURA_STR_SETTINGS_LEFT_PANEL_SHADOW, "square-on-square", AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW },
     { AURA_STR_SETTINGS_ABOUT,      "info",              AURA_SCREEN_SETTINGS_ABOUT },
     { AURA_STR_SETTINGS_RESET,         "reset",          AURA_SCREEN_SETTINGS_RESET },
 };
@@ -311,33 +312,47 @@ static void apply_choice(aura_screen_id_t screen, int index)
     aura_settings_save();
 }
 
-/* -- Aleatorio y Clicker: booleanos reales de Rockbox (playlist_shuffle,
- * D-021; keyclick != 0, D-06x) -- viven inline en la fila de Ajustes con
- * un switch (D-075), no en pantalla propia: el doc de comportamiento ya
- * los describe como `[OPCION]` simple, "sigue la regla de profundidad
- * por defecto, no tiene mecanica propia". `settings_row_toggle_value()`
+/* -- Aleatorio, Clicker y Sombra de panel: booleanos que viven inline en
+ * la fila de Ajustes con un switch (D-075), no en pantalla propia --
+ * Aleatorio/Clicker son ajustes reales de Rockbox (playlist_shuffle,
+ * D-021; keyclick != 0, D-06x) que el doc de comportamiento ya describe
+ * como `[OPCION]` simple ("sigue la regla de profundidad por defecto,
+ * no tiene mecanica propia"); Sombra de panel es propio de Aura
+ * (aura_settings.left_panel_shadow, T0.4, efectos/01-sombras.md: "el
+ * usuario puede desactivarlo desde Ajustes"). `settings_row_toggle_value()`
  * lee el valor actual para dibujar el switch; `toggle_settings_row()`
- * lo invierte in situ. Ambas viven aca porque son las dos unicas filas
- * de Ajustes con este comportamiento hoy -- si aparece una tercera, se
- * generaliza. */
+ * lo invierte in situ. Generalizado (comentario viejo prometia esto al
+ * aparecer una tercera fila): un `if` por target en vez de una tabla,
+ * porque cada uno persiste distinto (settings_save() de Rockbox vs
+ * aura_settings_save() propio). */
 static int settings_row_toggle_value(aura_screen_id_t target)
 {
     if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
         return global_settings.playlist_shuffle;
     if (target == AURA_SCREEN_SETTINGS_CLICKER)
         return global_settings.keyclick != 0;
+    if (target == AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW)
+        return aura_settings.left_panel_shadow;
     return -1;
 }
 
 static void toggle_settings_row(aura_screen_id_t target)
 {
     if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
+    {
         global_settings.playlist_shuffle = !global_settings.playlist_shuffle;
+        settings_save();
+    }
     else if (target == AURA_SCREEN_SETTINGS_CLICKER)
+    {
         global_settings.keyclick = global_settings.keyclick ? 0 : 2;
-    else
-        return;
-    settings_save();
+        settings_save();
+    }
+    else if (target == AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW)
+    {
+        aura_settings.left_panel_shadow = !aura_settings.left_panel_shadow;
+        aura_settings_save();
+    }
 }
 
 /* -- Dibujo -------------------------------------------------------------- */

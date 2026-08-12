@@ -66,6 +66,10 @@ typedef struct {
      * Ajustes"). 0xRRGGBB de 24 bits, no el formato nativo del LCD --
      * ver aura_color.h/apple2026_shell.h (aura_accent()) para el uso. */
     unsigned accent_rgb24;
+    /* Sombra de LeftPanel sobre SelectionSummary/CoverDrift (PLAN.md
+     * T0.4, efectos/01-sombras.md: "el usuario puede desactivarlo desde
+     * Ajustes... la sombra activada es el comportamiento base"). */
+    bool left_panel_shadow;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

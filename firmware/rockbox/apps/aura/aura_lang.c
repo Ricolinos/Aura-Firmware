@@ -92,6 +92,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ACCENT_GREEN]       = "Verde",
     [AURA_STR_ACCENT_BLUE]        = "Azul",
     [AURA_STR_ACCENT_PURPLE]      = "Morado",
+    [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Sombra de panel",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -185,6 +186,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ACCENT_GREEN]       = "Green",
     [AURA_STR_ACCENT_BLUE]        = "Blue",
     [AURA_STR_ACCENT_PURPLE]      = "Purple",
+    [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Panel shadow",
 };
 
 const char *aura_str(aura_str_id_t id)

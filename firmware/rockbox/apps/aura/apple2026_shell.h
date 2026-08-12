@@ -74,6 +74,21 @@ unsigned aura_accent(void);
 unsigned aura_accent_light(void);
 unsigned aura_accent_dark(void);
 
+/* Sombra de LeftPanel sobre el contenido a su derecha (PLAN.md T0.4,
+ * efectos/01-sombras.md: "SelectionSummary y CoverDrift SIEMPRE
+ * renderizan una sombra que simula que LeftPanel esta por encima").
+ * Sin alfa real en este LCD: se aproxima oscureciendo una banda de
+ * AURA_DS_METRICS_SHADOW_LEFT_PANEL_SHADOW_WIDTH columnas junto al
+ * borde derecho del panel, con caida lineal de opacidad (mezcla contra
+ * negro via a26_shell_blend(), mismo mecanismo que el fundido de la
+ * barra de deslizamiento) -- funciona bien contra un fondo plano
+ * conocido (SHELL_BG); sobre contenido rico (carratula, foto) es una
+ * aproximacion, no compositing real. No-op si el usuario desactivo el
+ * efecto desde Ajustes (aura_settings.left_panel_shadow). `x` es el
+ * borde derecho del panel (la sombra crece HACIA la derecha desde ahi);
+ * `y`/`height` acotan verticalmente la banda. */
+void aura_shell_draw_left_panel_shadow(int x, int y, int height);
+
 /* Font id (para lcd_setfont) del estilo dado. */
 int a26_font(a26_font_style_t style);
 

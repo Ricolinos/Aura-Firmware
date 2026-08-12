@@ -29,6 +29,9 @@ static const aura_settings_t aura_settings_defaults = {
     /* AURA_DS_COLOR_ACCENT_DEFAULT_RGB24 (design-system/tokens.json,
      * generado -- 0xFF2D52, fundamentos/01-color.md). */
     .accent_rgb24 = AURA_DS_COLOR_ACCENT_DEFAULT_RGB24,
+    /* "Maxima fidelidad primero" (00-INDICE.md): la sombra activada ES
+     * el comportamiento base documentado, el toggle solo la apaga. */
+    .left_panel_shadow = true,
 };
 
 /* Ganancia (dB) por banda para cada preset; el resto de cada banda
@@ -131,6 +134,8 @@ void aura_settings_load(void)
                  * un indice de enum. */
                 aura_settings.accent_rgb24 =
                     (unsigned)strtoul(value, NULL, 16) & 0xFFFFFFu;
+            else if (!strcmp(name, "left_panel_shadow"))
+                aura_settings.left_panel_shadow = (v != 0);
         }
         close(fd);
 
@@ -167,6 +172,7 @@ void aura_settings_save(void)
     fdprintf(fd, "show_photos: %d\n", (int)aura_settings.show_photos);
     fdprintf(fd, "show_nowplaying: %d\n", (int)aura_settings.show_nowplaying);
     fdprintf(fd, "accent_rgb24: %06lx\n", (unsigned long)aura_settings.accent_rgb24);
+    fdprintf(fd, "left_panel_shadow: %d\n", (int)aura_settings.left_panel_shadow);
 
     close(fd);
 }

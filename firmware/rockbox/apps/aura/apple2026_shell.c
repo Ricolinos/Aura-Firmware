@@ -93,6 +93,29 @@ unsigned aura_accent_dark(void)
     return aura_accent_toward(0x000000u, AURA_DS_COLOR_ACCENT_DERIVED_DARKEN_PCT);
 }
 
+void aura_shell_draw_left_panel_shadow(int x, int y, int height)
+{
+    int width = AURA_DS_METRICS_SHADOW_LEFT_PANEL_SHADOW_WIDTH;
+    int max_pct = AURA_DS_OPACITY_SHADOW_PCT;
+    unsigned bg = a26_color(A26_SHELL_BG);
+    unsigned black = LCD_RGBPACK(0, 0, 0);
+    int col;
+
+    if (!aura_settings.left_panel_shadow)
+        return;
+
+    for (col = 0; col < width; col++)
+    {
+        /* Caida lineal: mas oscuro junto al panel (col=0), se desvanece
+         * a 0% al llegar a `width`. */
+        int pct = max_pct - (max_pct * col) / width;
+        unsigned shade = a26_shell_blend(bg, black, pct * 256 / 100);
+
+        lcd_set_foreground(shade);
+        lcd_vline(x + col, y, y + height - 1);
+    }
+}
+
 void a26_shell_clear_screen(void)
 {
     lcd_set_background(a26_color(A26_SHELL_BG));

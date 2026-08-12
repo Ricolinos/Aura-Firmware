@@ -186,6 +186,14 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name)
     lcd_set_foreground(a26_color(A26_SHELL_RAIL));
     lcd_vline(A26_LAYOUT_PANEL_LEFT_WIDTH, 0, A26_SCREEN_HEIGHT - 1);
 
+    /* Sombra de panel (PLAN.md T0.4): mismo ancho de panel (160px) que
+     * LeftPanel del sistema nuevo -- primer consumidor real de la
+     * primitiva mientras las pantallas de docs/aura-design-system/
+     * todavia no existen (T2.8/T2.9 la reutilizaran para
+     * SelectionSummary/CoverDrift). Se dibuja ANTES del icono para que
+     * quede detras, nunca tape el contenido. */
+    aura_shell_draw_left_panel_shadow(A26_LAYOUT_PANEL_LEFT_WIDTH + 1, 0, A26_SCREEN_HEIGHT);
+
     if (!icon_name)
         return;
 

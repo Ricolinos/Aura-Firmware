@@ -51,6 +51,10 @@ typedef enum {
      * agregada al final del enum, mismo criterio "solo-anadir-al-final"
      * que D-013 usa para aura_lang.h. */
     AURA_SCREEN_SETTINGS_ACCENT,
+    /* Booleano real (aura_settings.left_panel_shadow, T0.4) -- vive
+     * inline con switch (D-075), igual que SHUFFLE/CLICKER; el
+     * identificador es solo el token estable de la fila. */
+    AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 
