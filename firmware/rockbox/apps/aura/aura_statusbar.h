@@ -1,9 +1,9 @@
-/* Barra de estado propia de Aura (Fase 13, PLAN-UX.md, L5): reemplaza a
- * la barra de estado clasica de Rockbox (que Fase 12/D-051 ya
- * desactivo por completo via STATUSBAR_OFF). Bateria siempre visible a
- * la derecha; icono de reproduccion (o el candado de Hold, que le gana
- * el lugar) a su izquierda; titulo alineado a la izquierda en menus o
- * centrado en pantallas con interfaz propia. */
+/* Helpers compartidos de estado del dispositivo (reloj formateado,
+ * icono de bateria). La barra de estado VIEJA que vivia aqui (Fase 13,
+ * PLAN-UX.md) se retiro en la auditoria 2026-08-12: StatusBar v2
+ * (aura_status_bar_v2.c, componentes/status-bar.md) es la unica barra
+ * del sistema desde entonces -- este modulo conserva solo las piezas
+ * que v2 y ClockIndicator ya consumian de aca. */
 #ifndef AURA_STATUSBAR_H
 #define AURA_STATUSBAR_H
 
@@ -17,24 +17,5 @@ void aura_format_clock(char *buf, size_t bufsz);
 /* Nombre del icono de bateria segun carga/nivel real -- compartida con
  * aura_status_bar_v2.c (T2.7) por el mismo motivo. */
 const char *aura_battery_icon_name(void);
-
-/* Dibuja la franja [x, x+width) x [0, A26_LAYOUT_STATUSBAR_HEIGHT).
- * `title` puede ser NULL (sin texto, solo bateria/reproduccion/hold).
- * `centered` = 0 alinea a la izquierda (menus), 1 centra (pantallas
- * con interfaz propia: Ahora suena, reloj, etc.). No llama a
- * lcd_update(). */
-void aura_statusbar_draw(int x, int width, const char *title, int centered);
-
-/* True mientras el titulo actual siga desbordando (activo el patron
- * Marquee Loop, T2.1), sin importar en que tramo del ciclo este --
- * aura_main.c la consulta con cadencia GRUESA (mismo criterio que
- * aura_widgets_scrollbar_pending()) para no perderse la frontera entre
- * el tramo estatico y el de movimiento. False si el titulo actual cupo
- * sin activar el patron. */
-int aura_statusbar_title_pending(void);
-
-/* True solo durante el tramo de MOVIMIENTO del ciclo -- cadencia FINA
- * (mismo criterio que aura_widgets_scrollbar_animating()). */
-int aura_statusbar_title_animating(void);
 
 #endif /* AURA_STATUSBAR_H */

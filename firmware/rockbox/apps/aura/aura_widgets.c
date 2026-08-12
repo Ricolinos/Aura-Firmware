@@ -13,6 +13,7 @@
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
 #include "aura_statusbar.h"
+#include "aura_status_bar_v2.h"
 #include "aura_lang.h"
 #include "aura_motion.h"
 #include "aura_selection_summary.h"
@@ -54,26 +55,105 @@ static const char *theme_dir_name(void)
     return (aura_settings.theme == AURA_THEME_DARK) ? "dark" : "light";
 }
 
-/* `suffix` elige la variante de color del bitmap: "" es el color de
- * texto normal y "-on" el color de contraste, para el contenido que va
- * sobre la barra de seleccion. Las dos variantes las genera
- * design-system/generate.py; el color viene horneado en el bitmap
- * porque lcd_bitmap_transparent() no sabe recolorear (D-010). */
+/* Buffer de carga compartido, dimensionado para el icono mas grande
+ * que se pide hoy (A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL, 60px) --
+ * un buffer de sobra tambien sirve para los tamanos mas chicos de
+ * listas/barra de estado. */
+#define ICON_BUF_MAX A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL
+static unsigned char icon_buf[ICON_BUF_MAX * ICON_BUF_MAX * 4 + 64];
+
+/* Tinta runtime por variante -- el MISMO mapeo sufijo->token que
+ * design-system/tokens.json (icon.variants) usa para hornear los bmp
+ * pre-compuestos, resuelto aca contra la paleta viva en vez de en
+ * generacion: "-on" respeta el acento configurable del usuario y
+ * "-selector" es el blanco constante del Selector (G5/D-086). */
+static unsigned variant_ink(const char *suffix)
+{
+    if (suffix[0] == '\0')
+        return a26_color(A26_TEXT_PRIMARY);
+    if (!strcmp(suffix, "-on"))
+        return aura_accent();
+    if (!strcmp(suffix, "-tertiary"))
+        return a26_color(A26_TEXT_TERTIARY);
+    if (!strcmp(suffix, "-rail"))
+        return a26_color(A26_SHELL_RAIL);
+    /* "-selector" */
+    return AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
+}
+
+/* Composicion por cobertura contra el framebuffer REAL (corrige el
+ * antialias de los iconos, reporte del dueno del diseno 2026-08-12):
+ * los bmp pre-compuestos de generate.py hornean el borde antialiasado
+ * contra UN fondo elegido en generacion -- correcto solo cuando el
+ * fondo real coincide (fila en reposo sobre SHELL_BG). Sobre el
+ * Selector de acento (configurable en runtime) o el tile con degradado
+ * de SelectionSummary, ese borde pre-compuesto aparece como un halo
+ * claro. La mascara de cobertura (icons/aura/masks/<name>-<size>.bmp,
+ * R=G=B=cobertura del glifo) permite mezclar la tinta del token contra
+ * lo que YA este dibujado debajo, pixel por pixel, con el mismo
+ * a26_shell_blend() del resto del sistema -- antialias correcto sobre
+ * cualquier fondo, incluidos degradados. Asume el viewport default a
+ * pantalla completa (FBADDR absoluto), la misma convencion de
+ * coordenadas de todo el dibujo de Aura.
+ *
+ * `extra_alpha_256` atenua el icono completo ademas de la cobertura
+ * (256 = sin atenuar) -- reemplaza el camino especial que
+ * aura_widgets_draw_icon_dimmed() tenia para el 50% de opacidad. */
+static int draw_icon_mask(const char *name, int size, int x, int y,
+                           unsigned ink, int extra_alpha_256)
+{
+    char path[MAX_PATH];
+    struct bitmap bm;
+    int ret, row, col;
+    const fb_data *mask;
+
+    snprintf(path, sizeof(path), "%s/aura/masks/%s-%d.bmp", ICON_DIR, name, size);
+
+    bm.data = (char *)icon_buf;
+    ret = read_bmp_file(path, &bm, sizeof(icon_buf), FORMAT_NATIVE, NULL);
+    if (ret <= 0)
+        return 0;
+
+    mask = (const fb_data *)bm.data;
+    for (row = 0; row < bm.height; row++)
+    {
+        fb_data *dst = FBADDR(x, y + row);
+        for (col = 0; col < bm.width; col++)
+        {
+            /* Canal verde crudo de RGB565 (6 bits): 0..63 -> 0..256
+             * exacto en los extremos (63*256/63 = 256, tinta pura). */
+            int cov = (mask[row * bm.width + col] >> 5) & 0x3F;
+            int alpha;
+
+            if (cov == 0)
+                continue;
+            alpha = cov * 256 / 63;
+            if (extra_alpha_256 < 256)
+                alpha = alpha * extra_alpha_256 / 256;
+            dst[col] = a26_shell_blend(dst[col], ink, alpha);
+        }
+    }
+    return bm.width;
+}
+
+/* `suffix` elige la variante de color: "" es el color de texto normal,
+ * "-on" el acento, "-selector" el blanco constante sobre el Selector.
+ * Camino primario: mascara de cobertura + tinta runtime (ver
+ * draw_icon_mask). Fallback: el bmp pre-compuesto por tema/variante de
+ * siempre (D-010), por robustez si el disco no trae mascaras. */
 static int draw_icon_variant(const char *name, int size, int x, int y,
                               const char *suffix)
 {
-    /* Dimensionado para el icono mas grande que se pide hoy
-     * (A26_ICON_SIZE_PREVIEW, panel derecho de la pantalla dividida,
-     * Fase 15) -- un buffer de sobra tambien sirve para los tamanos
-     * mas chicos que se usan en listas/barra de estado. */
-    static unsigned char icon_buf[A26_ICON_SIZE_PREVIEW * A26_ICON_SIZE_PREVIEW
-                                   * 4 + 64];
     char path[MAX_PATH];
     struct bitmap bm;
     int ret;
 
     if (!name)
         return 0;
+
+    ret = draw_icon_mask(name, size, x, y, variant_ink(suffix), 256);
+    if (ret > 0)
+        return ret;
 
     snprintf(path, sizeof(path), "%s/aura/%s/%s-%d%s.bmp",
               ICON_DIR, theme_dir_name(), name, size, suffix);
@@ -83,9 +163,6 @@ static int draw_icon_variant(const char *name, int size, int x, int y,
     if (ret <= 0)
         return 0;
 
-    /* Los bitmaps se generan sobre TRANSPARENT_COLOR (D-010 en
-     * DECISIONS.md), asi que se dibujan igual sobre fondo normal o
-     * sobre la barra de seleccion. */
     lcd_bitmap_transparent((const fb_data *)bm.data, x, y, bm.width, bm.height);
     return bm.width;
 }
@@ -117,49 +194,16 @@ int aura_widgets_draw_icon_variant_selector(const char *name, int size, int x, i
 
 /* Icono a opacidad simulada arbitraria (PLAN.md T3.1(b),
  * componentes/now-playing.md: "su icono sigue apareciendo... pero al
- * 50% de opacidad" -- modo de Letras sin .lrc). Los iconos son bitmaps
- * horneados en un color fijo (D-010) -- no hay una variante -50%
- * pre-generada como las demas (-tertiary/-rail/-selector), asi que en
- * vez de reinterpretar "50%" con una variante de color existente que
- * no es lo mismo, se mezcla cada pixel NO transparente hacia
- * A26_SHELL_BG con a26_shell_blend() antes de blitear -- mismo
- * mecanismo que el resto del sistema ya usa para opacidad simulada,
- * aplicado aca a un bitmap en vez de a un color solido o a texto. Fondo
- * asumido SHELL_BG plano (misma simplificacion que a26_shell_blend() ya
- * declara en sus otros consumidores -- sobre contenido rico detras
- * seria una aproximacion, no hay tal caso hoy en la fila de modos). */
+ * 50% de opacidad" -- modo de Letras sin .lrc). Con la composicion por
+ * mascara, la atenuacion es solo un factor extra sobre la cobertura
+ * (extra_alpha_256 de draw_icon_mask) -- ya no hace falta el camino
+ * especial que re-mezclaba un bmp horneado contra SHELL_BG plano, y de
+ * paso ahora tambien es correcto sobre fondos no planos. */
 int aura_widgets_draw_icon_dimmed(const char *name, int size, int x, int y, int alpha_256)
 {
-    static unsigned char icon_buf[A26_ICON_SIZE_PREVIEW * A26_ICON_SIZE_PREVIEW
-                                   * 4 + 64];
-    char path[MAX_PATH];
-    struct bitmap bm;
-    int ret, i, n;
-    fb_data *px;
-    unsigned bg = a26_color(A26_SHELL_BG);
-
     if (!name)
         return 0;
-
-    snprintf(path, sizeof(path), "%s/aura/%s/%s-%d.bmp",
-              ICON_DIR, theme_dir_name(), name, size);
-
-    bm.data = (char *)icon_buf;
-    ret = read_bmp_file(path, &bm, sizeof(icon_buf), FORMAT_NATIVE, NULL);
-    if (ret <= 0)
-        return 0;
-
-    px = (fb_data *)bm.data;
-    n = bm.width * bm.height;
-    for (i = 0; i < n; i++)
-    {
-        if (px[i] == TRANSPARENT_COLOR)
-            continue;
-        px[i] = a26_shell_blend(bg, px[i], alpha_256);
-    }
-
-    lcd_bitmap_transparent((const fb_data *)bm.data, x, y, bm.width, bm.height);
-    return bm.width;
+    return draw_icon_mask(name, size, x, y, a26_color(A26_TEXT_PRIMARY), alpha_256);
 }
 
 /* Layout declarado por la pantalla actual (lo fija aura_screens_draw
@@ -235,15 +279,23 @@ int aura_widgets_panel_pending(void)
 void aura_widgets_draw_right_panel_icon(const char *icon_name)
 {
     /* Panel derecho real: SelectionSummary (componentes/selection-summary.md)
-     * -- icono sobre tile con degradado del acento, en vez del icono
-     * "suelto" que dibujaba esta funcion antes de que el componente
-     * existiera (T2.8). Mismo hueco (160..320) que usa draw_root_v2()
-     * para el menu raiz -- todo consumidor de aura_widgets_draw_list()
-     * en (split) es, por regla, una lista de MENUS
-     * (sistema/02-navegacion-menus-contenido.md), asi que el mismo
-     * tratamiento aplica aca sin excepcion. Sin texto todavia: ningun
-     * item de estas listas tiene una Descripcion definida en el
-     * documento fuente mas alla del caso ya resuelto en el menu raiz. */
+     * -- icono sobre tile con degradado del acento. Desde la migracion
+     * de TODOS los menus a MenuList v2 (auditoria 2026-08-12), los
+     * unicos consumidores que quedan de este camino son listas de
+     * CONTENIDO (canciones/artistas/albumes/videos/fotos), cuyas filas
+     * no tienen icono 1:1 -- con icon_name NULL se dibuja solo el
+     * separador + sombra de LeftPanel (panel limpio), nunca un tile
+     * vacio: SelectionSummary exige icono por contrato y el componente
+     * de contenido rico (CoverDrift y equivalentes) es trabajo aparte
+     * ya diferido por el design system. */
+    if (!icon_name)
+    {
+        lcd_set_foreground(a26_color(A26_SHELL_RAIL));
+        lcd_vline(A26_LAYOUT_PANEL_LEFT_WIDTH - 1, 0, A26_SCREEN_HEIGHT - 1);
+        aura_shell_draw_left_panel_shadow(A26_LAYOUT_PANEL_LEFT_WIDTH, 0, A26_SCREEN_HEIGHT);
+        return;
+    }
+
     aura_selection_summary_draw(A26_LAYOUT_PANEL_LEFT_WIDTH,
                                  A26_SCREEN_WIDTH - A26_LAYOUT_PANEL_LEFT_WIDTH,
                                  icon_name, NULL, NULL);
@@ -468,7 +520,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     }
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, width, title, 0);
+    aura_status_bar_v2_draw_auto(0, width, title);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
 
@@ -563,7 +615,7 @@ void aura_widgets_draw_bool_row(const char *title, const char *label,
     int w, h;
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, title);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
@@ -587,7 +639,7 @@ void aura_widgets_draw_slider(const char *title, int fraction,
     int fill_w;
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, title);
 
     if (fraction < 0)   fraction = 0;
     if (fraction > 256) fraction = 256;
@@ -634,7 +686,7 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
     int i;
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, title);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_TITLE));
 
@@ -729,7 +781,7 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
     const char *no_label = aura_str(AURA_STR_NO);
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, title, 0);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, title);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));

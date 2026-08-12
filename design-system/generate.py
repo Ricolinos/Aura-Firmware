@@ -470,6 +470,31 @@ def generate_icons(tokens):
               f"({len(icon_cfg['names'])} iconos x {len(icon_cfg['sizes'])} tamanos "
               f"x {len(icon_cfg['variants'])} variantes)")
 
+    # Mascaras de cobertura (una por icono x tamano, independientes de
+    # tema y variante): BMP 24-bit donde R=G=B=cobertura del glifo
+    # (0=fondo, 255=tinta plena, intermedios=borde antialiasado). El
+    # firmware las compone en TIEMPO DE DIBUJO contra el framebuffer
+    # real (aura_widgets.c) con la tinta del token vigente -- eso
+    # elimina el limite estructural de los bmp pre-compuestos de arriba:
+    # el fondo real de un icono no siempre es conocible en generacion
+    # (Selector con acento configurable en runtime, tile con degradado
+    # de SelectionSummary), y componer contra el fondo equivocado
+    # produce el halo claro en los bordes que motivo este cambio. Los
+    # bmp pre-compuestos se conservan como fallback (mismo formato de
+    # siempre) para cualquier consumidor que no haya migrado.
+    masks_out = OUT / "icons" / "masks"
+    masks_out.mkdir(parents=True, exist_ok=True)
+    n_masks = 0
+    for icon_key in icon_cfg["names"]:
+        for size_px in icon_cfg["sizes"].values():
+            src = Image.open(shapes_dir / f"{icon_key}-{size_px}.png").convert("RGBA")
+            src = src.resize((size_px, size_px), Image.BOX)
+            coverage = src.getchannel("A")
+            Image.merge("RGB", (coverage, coverage, coverage)).save(
+                masks_out / f"{icon_key}-{size_px}.bmp", format="BMP")
+            n_masks += 1
+    print(f"   {n_masks} mascaras de cobertura (icons/masks/, un set unico para ambos temas)")
+
     # Verificacion mecanica de rampa (AUDITORIA-01 A-01, punto 5): no
     # basta con "compila y corre" -- si el resultado sigue binarizado,
     # el pipeline debe fallar ruidosamente, no dar por buena una tira

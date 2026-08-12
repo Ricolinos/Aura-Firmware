@@ -31,6 +31,15 @@
 void aura_status_bar_v2_draw(int x, int width, const char *title,
                               bool is_playing, bool is_paused, bool is_hold);
 
+/* Variante de conveniencia para la migracion total a StatusBar v2
+ * (auditoria 2026-08-12: el sistema viejo y el nuevo convivian en
+ * pantalla, dos barras visualmente distintas): resuelve
+ * audio_status()/button_hold() internamente -- exactamente lo que cada
+ * uno de los ~13 llamadores del aura_statusbar_draw() viejo tendria
+ * que repetir a mano. `title` acepta NULL (pantallas de espera sin
+ * contexto de navegacion). */
+void aura_status_bar_v2_draw_auto(int x, int width, const char *title);
+
 /* ClockIndicator por atajo (componentes/clock-indicator.md, B-01 en
  * BLOCKED.md ya resuelto: "se revela manteniendo presionado SELECT").
  * Dispara la revelacion temporal -- no hace nada si el reloj ya esta

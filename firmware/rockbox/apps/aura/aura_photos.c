@@ -17,6 +17,7 @@
 #include "aura_lang.h"
 #include "apple2026_tokens.h"
 #include "aura_statusbar.h"
+#include "aura_status_bar_v2.h"
 
 #define PHOTOS_DIR      "/Photos"
 #define MAX_PHOTOS      200
@@ -121,7 +122,7 @@ void aura_photos_draw(aura_nav_t *nav)
          * pantallas" (doc SS5) -- este vacio era la unica pantalla del
          * sistema sin ella. */
         a26_shell_clear_screen();
-        aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_PHOTOS), 0);
+        aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_PHOTOS));
         draw_message(AURA_STR_EMPTY_PHOTOS);
         return;
     }

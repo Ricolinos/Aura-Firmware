@@ -9,9 +9,23 @@
 #ifndef AURA_MENU_LIST_H
 #define AURA_MENU_LIST_H
 
+/* Elementos opcionales del lado derecho (componentes/left-panel.md,
+ * "Elementos opcionales del lado derecho": switch para booleanos,
+ * checkmark para confirmacion/seleccion multiple, flecha del Selector
+ * para destinos de pantalla completa -- componentes/selector.md). Sus
+ * dimensiones individuales estan explicitamente diferidas en el
+ * documento ("se definen mas adelante... no bloqueante"); las de esta
+ * implementacion se derivan del propio sistema (alto max 12px y gap de
+ * 4px del indicador del Selector) -- TODO(pendiente-doc). */
 typedef struct {
     const char *label;
-    const char *icon_name; /* NULL = sin icono */
+    const char *icon_name;  /* NULL = sin icono */
+    int toggle;             /* -1 = sin switch; 0/1 = booleano inline */
+    int checked;            /* 1 = checkmark a la derecha */
+    int full_screen_target; /* 1 = el item lleva a un componente de
+                             * pantalla completa -> flecha del Selector
+                             * (solo si no hay otro elemento derecho,
+                             * regla de selector.md) */
 } aura_menu_item_v2_t;
 
 /* Dibuja hasta AURA_DS_METRICS_MENU_LIST_MAX_VISIBLE_ROWS (10) filas

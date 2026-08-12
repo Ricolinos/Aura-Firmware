@@ -56,6 +56,10 @@ for theme in light dark; do
   mkdir -p "simdisk/.rockbox/icons/aura/$theme"
   cp "$ROOT_DIR"/design-system/out/icons/$theme/*.bmp "simdisk/.rockbox/icons/aura/$theme/"
 done
+# Mascaras de cobertura (composicion runtime en aura_widgets.c) -- un
+# solo set para ambos temas, la tinta se decide al dibujar.
+mkdir -p simdisk/.rockbox/icons/aura/masks
+cp "$ROOT_DIR"/design-system/out/icons/masks/*.bmp simdisk/.rockbox/icons/aura/masks/
 
 echo "==> Listo: $BUILD_DIR/rockboxui"
 

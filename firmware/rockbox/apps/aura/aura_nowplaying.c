@@ -28,6 +28,7 @@
 #include "aura_lrc.h"
 #include "apple2026_tokens.h"
 #include "aura_statusbar.h"
+#include "aura_status_bar_v2.h"
 #include "aura_widgets.h"
 #include "aura_art.h"
 #include "aura_motion.h"
@@ -816,7 +817,7 @@ void aura_nowplaying_draw(void)
     bool lyrics_mode;
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING), 1);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING));
 
     if (!id3)
         return;

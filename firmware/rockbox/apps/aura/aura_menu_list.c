@@ -59,13 +59,57 @@ static void truncate_to_fit(const char *label, char *out, size_t outsz, int max_
 static int s_last_selected = -1;
 static long s_activity_since = 0;
 
+/* Switch inline v2 (left-panel.md, "Switch -- valores booleanos"):
+ * dimensiones derivadas del indicador del Selector (alto max 12px,
+ * selector.md) con proporcion ~1.8:1 -- el documento difiere las
+ * medidas exactas de los elementos derechos, TODO(pendiente-doc).
+ * Sobre el Selector (fondo de acento) los colores se invierten para
+ * conservar contraste: pista blanca constante / perilla de acento
+ * cuando esta encendido. */
+#define SWITCH_W 22
+#define SWITCH_H 12
+#define SWITCH_MARGIN 2
+
+static void draw_switch_v2(int x, int y, int value, int on_selector)
+{
+    int thumb_d = SWITCH_H - 2 * SWITCH_MARGIN;
+    int thumb_x = value ? (x + SWITCH_W - SWITCH_MARGIN - thumb_d)
+                         : (x + SWITCH_MARGIN);
+    unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
+    unsigned bg, track, thumb;
+
+    if (on_selector)
+    {
+        bg = aura_accent();
+        track = value ? white : a26_shell_blend(bg, white, 115);
+        thumb = value ? aura_accent() : white;
+    }
+    else
+    {
+        bg = a26_color(A26_SHELL_BG);
+        track = value ? aura_accent() : a26_color(A26_SHELL_RAIL);
+        thumb = bg;
+    }
+
+    a26_shell_fill_rounded_rect(x, y, SWITCH_W, SWITCH_H, SWITCH_H / 2, track, bg);
+    a26_shell_fill_rounded_rect(thumb_x, y + SWITCH_MARGIN, thumb_d, thumb_d,
+                                 thumb_d / 2, thumb, track);
+}
+
 void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
                           int count, int selected)
 {
     int visible = AURA_DS_METRICS_MENU_LIST_MAX_VISIBLE_ROWS;
     int panel_w = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+    /* Borde derecho del Selector -- los elementos derechos se anclan a
+     * 4px de el, misma regla que el indicador dinamico (selector.md,
+     * AURA_DS_METRICS_SELECTOR_INDICATOR_GAP_FROM_EDGE), esten o no
+     * sobre la fila seleccionada (el layout de un item no seleccionado
+     * es identico, left-panel.md). */
+    int right_edge = x + PADDING + (panel_w - 2 * PADDING)
+                    - AURA_DS_METRICS_SELECTOR_INDICATOR_GAP_FROM_EDGE;
     int first = 0;
-    int i;
+    int i, has_any_icon = 0;
 
     if (count > visible)
     {
@@ -84,23 +128,40 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         s_activity_since = current_tick;
     }
 
+    /* En una lista mixta (algunas filas con icono, otras sin -- p. ej.
+     * Musica mientras la produccion de iconos 1:1 del arbol completo
+     * sigue pendiente, selection-summary.md), el texto de TODAS las
+     * filas se alinea a la columna post-icono: hermanos desalineados se
+     * leen como jerarquia distinta, no como el mismo nivel de menu. */
+    for (i = 0; i < count; i++)
+        if (items[i].icon_name)
+            has_any_icon = 1;
+
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
 
     /* Selector primero (D-081): si algo lo anima en el futuro, dibujarlo
      * antes del texto evita que tape el contenido de otra fila mientras
-     * esta en transito. */
+     * esta en transito. Flecha de seleccion (selector.md): solo si el
+     * destino es de pantalla completa Y el item no tiene ya otro
+     * elemento derecho. */
     if (selected >= first && selected < first + visible)
     {
         int sel_y = y + (selected - first) * ROW_H;
-        aura_selector_draw(x + PADDING, sel_y, panel_w - 2 * PADDING, ROW_H,
-                            AURA_SELECTOR_INDICATOR_NONE);
+        const aura_menu_item_v2_t *sel_item = &items[selected];
+        aura_selector_indicator_t ind =
+            (sel_item->full_screen_target && sel_item->toggle < 0 && !sel_item->checked)
+                ? AURA_SELECTOR_INDICATOR_CHEVRON
+                : AURA_SELECTOR_INDICATOR_NONE;
+
+        aura_selector_draw(x + PADDING, sel_y, panel_w - 2 * PADDING, ROW_H, ind);
     }
 
     for (i = first; i < count && i < first + visible; i++)
     {
         int row_y = y + (i - first) * ROW_H;
         int is_selected = (i == selected);
-        int text_x = x + PADDING;
+        int text_x = has_any_icon ? (x + ICON_X + ICON_SZ + TEXT_GAP) : (x + PADDING);
+        int text_right = x + panel_w - PADDING;
         char truncated[64];
         int max_text_w;
 
@@ -113,11 +174,30 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
                 aura_widgets_draw_icon_variant_selector(items[i].icon_name, ICON_SZ, icon_x, icon_y);
             else
                 aura_widgets_draw_icon(items[i].icon_name, ICON_SZ, icon_x, icon_y);
-
-            text_x = icon_x + ICON_SZ + TEXT_GAP;
         }
 
-        max_text_w = x + panel_w - PADDING - text_x;
+        /* Elementos opcionales del lado derecho (left-panel.md): switch
+         * para booleanos, checkmark para confirmacion -- mutuamente
+         * excluyentes por construccion de los llamadores. */
+        if (items[i].toggle >= 0)
+        {
+            draw_switch_v2(right_edge - SWITCH_W,
+                            row_y + (ROW_H - SWITCH_H) / 2,
+                            items[i].toggle, is_selected);
+            text_right = right_edge - SWITCH_W - TEXT_GAP;
+        }
+        else if (items[i].checked)
+        {
+            int check_y = row_y + (ROW_H - ICON_SZ) / 2;
+            if (is_selected)
+                aura_widgets_draw_icon_variant_selector("check", ICON_SZ,
+                                                         right_edge - ICON_SZ, check_y);
+            else
+                aura_widgets_draw_icon("check", ICON_SZ, right_edge - ICON_SZ, check_y);
+            text_right = right_edge - ICON_SZ - TEXT_GAP;
+        }
+
+        max_text_w = text_right - text_x;
         truncate_to_fit(items[i].label, truncated, sizeof(truncated), max_text_w);
 
         /* Blanco constante (G5) sobre la pastilla de acento, en AMBOS

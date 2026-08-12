@@ -229,22 +229,6 @@ void aura_main(void)
             if (aura_nowplaying_wheel_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
 
-            /* MarqueeText del titulo de la barra (T2.1) -- mismo par
-             * pending()/animating() que ya usa la barra de
-             * deslizamiento (cadencia gruesa durante todo el ciclo
-             * mientras el texto desborde, fina solo cuando los pixeles
-             * se estan moviendo de verdad). Bug real encontrado en la
-             * propia verificacion de esta tarea (no en teoria): una
-             * primera version que solo pedia cuadros durante el tramo
-             * de movimiento dejaba el marquee congelado para siempre
-             * en cuanto el bucle se dormia durante el tramo estatico
-             * -- nunca volvia a despertar para notar que tocaba
-             * empezar a mover el texto. */
-            if (aura_statusbar_title_animating() && timeout_ticks < 0)
-                timeout_ticks = HZ / 20;
-            else if (aura_statusbar_title_pending() && timeout_ticks < 0)
-                timeout_ticks = HZ / 4;
-
             /* ScrollIndicator de MenuList v2 (T2.4) -- mismo par
              * pending()/animating() que el resto de esta puerta. */
             if (aura_menu_list_scroll_indicator_animating() && timeout_ticks < 0)

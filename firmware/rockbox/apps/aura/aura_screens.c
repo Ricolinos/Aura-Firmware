@@ -368,15 +368,52 @@ static void toggle_settings_row(aura_screen_id_t target)
 
 /* -- Dibujo -------------------------------------------------------------- */
 
-/* Menu raiz con MenuList v2 + Selector nuevo (PLAN.md T2.2/T2.3) --
- * consumidor real elegido para verificar la geometria nueva (152x22,
- * radio 5, acento) contra un caso simple (5 items, sin switches/
- * checkmarks/paginado) mientras dura la migracion parcial documentada
- * en DECISIONS.md. El resto de las pantallas (Musica, Ajustes, listas
- * de eleccion) siguen con aura_widgets_draw_list() -- migrarlas es
- * trabajo de seguimiento explicito, no de esta pasada (regla del
- * encargo: verificar en el simulador, no adivinar que 30 pantallas mas
- * se ven bien sin mirarlas). */
+/* Definida mas abajo (tabla completa de layouts) -- los constructores
+ * de items v2 la consultan para decidir la flecha del Selector
+ * (selector.md: "cuando lleva a un componente de pantalla completa"). */
+static int screen_uses_split_layout(aura_screen_id_t screen);
+
+/* Pantalla de menu completa del sistema nuevo (auditoria 2026-08-12,
+ * cierre de la migracion parcial de T2.2/T2.3): StatusBar v2 en
+ * (split) + MenuList v2/Selector en LeftPanel + SelectionSummary en el
+ * panel derecho -- TODA lista de menus pasa por aca, ya no por
+ * aura_widgets_draw_list() (ese queda solo para listas de CONTENIDO,
+ * cuyo componente propio el design system difiere explicitamente:
+ * sistema/02-navegacion-menus-contenido.md, "esas se detallan en su
+ * propio componente cuando lleguemos a ellas").
+ *
+ * El panel derecho cambia INSTANTANEO con la seleccion
+ * (selection-summary.md, "ambos cambian de forma instantanea") -- el
+ * debounce de ~1s del sistema viejo (L3/D-068) era comportamiento del
+ * firmware original, reemplazado a proposito por el documento nuevo. */
+static void draw_menu_screen_v2(const char *title,
+                                 const aura_menu_item_v2_t *items, int count,
+                                 int selected, const char *panel_icon,
+                                 const char *panel_desc)
+{
+    a26_shell_clear_screen();
+    aura_status_bar_v2_draw_auto(0, AURA_DS_METRICS_STATUSBAR_WIDTH_SPLIT, title);
+    aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count, selected);
+    if (panel_icon)
+        aura_selection_summary_draw(AURA_DS_METRICS_LEFT_PANEL_WIDTH,
+                                     A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH,
+                                     panel_icon, NULL, panel_desc);
+}
+
+/* Icono del item de Ajustes que abre `screen` -- el arbol de menus
+ * todavia no tiene un icono 1:1 producido por cada OPCION de las listas
+ * de eleccion (pendiente de produccion de assets, selection-summary.md),
+ * asi que el panel derecho de esas listas muestra el simbolo del menu
+ * padre, que si existe y describe el contexto real. */
+static const char *parent_settings_icon(aura_screen_id_t screen)
+{
+    unsigned i;
+    for (i = 0; i < sizeof(settings_entries) / sizeof(settings_entries[0]); i++)
+        if (settings_entries[i].target == screen)
+            return settings_entries[i].icon_name;
+    return "settings";
+}
+
 /* Descripcion de "sin seleccion rica" por item del menu raiz
  * (componentes/selection-summary.md: "Musica -> sin seleccion rica:
  * solo texto inferior con la Descripcion 'No hay musica'"). Reusa las
@@ -397,58 +434,14 @@ static const char *root_selection_description(aura_screen_id_t target)
     }
 }
 
-static void draw_root_v2(aura_nav_t *nav)
-{
-    const nav_entry_t *entries;
-    int count = get_nav_table(AURA_SCREEN_ROOT, &entries);
-    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
-    int selected = aura_nav_get_selection(nav);
-    int i;
-
-    for (i = 0; i < count; i++)
-    {
-        items[i].label = aura_str(entries[i].label_id);
-        items[i].icon_name = entries[i].icon_name;
-    }
-
-    {
-        int status = audio_status();
-        int is_playing = (status & (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)) != 0;
-        int is_paused = (status & AUDIO_STATUS_PAUSE) != 0;
-        int is_hold = button_hold();
-
-        a26_shell_clear_screen();
-        /* Menu raiz en (split) (sistema/02-navegacion-menus-contenido.md:
-         * es una lista de "puertas", vive en LeftPanel) -- StatusBar v2
-         * a su ancho split (160px, no el full anterior) y
-         * SelectionSummary real en el panel derecho, en vez de dejarlo
-         * en blanco. */
-        aura_status_bar_v2_draw(0, AURA_DS_METRICS_STATUSBAR_WIDTH_SPLIT,
-                                 "Aura", is_playing, is_paused, is_hold);
-    }
-    aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count, selected);
-
-    if (selected >= 0 && selected < count)
-    {
-        aura_selection_summary_draw(AURA_DS_METRICS_LEFT_PANEL_WIDTH,
-                                     A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH,
-                                     entries[selected].icon_name, NULL,
-                                     root_selection_description(entries[selected].target));
-    }
-}
-
 static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
 {
     const nav_entry_t *entries;
     int count = get_nav_table(screen, &entries);
-    aura_list_item_t items[MAX_MENU_ENTRIES];
+    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    int selected = aura_nav_get_selection(nav);
+    const char *panel_icon = NULL;
     int i;
-
-    if (screen == AURA_SCREEN_ROOT)
-    {
-        draw_root_v2(nav);
-        return;
-    }
 
     for (i = 0; i < count; i++)
     {
@@ -456,10 +449,32 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].icon_name = entries[i].icon_name;
         items[i].checked = 0;
         items[i].toggle = settings_row_toggle_value(entries[i].target);
+        /* Flecha del Selector (selector.md) solo para destinos
+         * navegables de pantalla completa -- un toggle inline no navega
+         * a ningun lado, la regla de exclusion del documento ya lo
+         * cubre pero se evita marcarlo siquiera. */
+        items[i].full_screen_target = (items[i].toggle < 0)
+            && !screen_uses_split_layout(entries[i].target);
     }
 
-    aura_widgets_draw_list(aura_str(screen_title_id(screen)),
-                            items, count, aura_nav_get_selection(nav));
+    if (selected >= 0 && selected < count)
+    {
+        if (entries[selected].icon_name)
+            panel_icon = entries[selected].icon_name;
+        else if (screen == AURA_SCREEN_MUSIC)
+            panel_icon = "music"; /* icono del item padre en el raiz --
+                                   * los items de biblioteca no tienen
+                                   * icono 1:1 producido todavia */
+        else
+            panel_icon = parent_settings_icon(screen);
+    }
+
+    draw_menu_screen_v2(screen == AURA_SCREEN_ROOT ? "Aura"
+                                                    : aura_str(screen_title_id(screen)),
+                         items, count, selected, panel_icon,
+                         screen == AURA_SCREEN_ROOT && selected >= 0 && selected < count
+                             ? root_selection_description(entries[selected].target)
+                             : NULL);
 }
 
 static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
@@ -467,7 +482,9 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
     const aura_str_id_t *labels;
     int count = get_choice_table(screen, &labels);
     int current = get_choice_current(screen);
-    aura_list_item_t items[MAX_MENU_ENTRIES];
+    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    int selected = aura_nav_get_selection(nav);
+    const char *panel_icon;
     int i;
 
     for (i = 0; i < count; i++)
@@ -484,10 +501,15 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
             : NULL;
         items[i].checked = (i == current);
         items[i].toggle = -1;
+        items[i].full_screen_target = 0;
     }
 
-    aura_widgets_draw_list(aura_str(screen_title_id(screen)), items, count,
-                            aura_nav_get_selection(nav));
+    panel_icon = (selected >= 0 && selected < count && items[selected].icon_name)
+        ? items[selected].icon_name
+        : parent_settings_icon(screen);
+
+    draw_menu_screen_v2(aura_str(screen_title_id(screen)), items, count,
+                         selected, panel_icon, NULL);
 }
 
 static void draw_brightness(void)
@@ -662,7 +684,7 @@ static void draw_about(void)
     bool has_manifest;
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT), 0);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_SETTINGS_ABOUT));
 
     has_manifest = aura_manifest_load(&manifest);
 
@@ -725,7 +747,7 @@ static const int sleeptimer_values[] = { 0, 15, 30, 60, 90, 120 };
 
 static void draw_backlight(aura_nav_t *nav)
 {
-    aura_list_item_t items[BACKLIGHT_VALUES_N];
+    aura_menu_item_v2_t items[BACKLIGHT_VALUES_N];
     int i;
 
     for (i = 0; i < BACKLIGHT_VALUES_N; i++)
@@ -742,9 +764,11 @@ static void draw_backlight(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == global_settings.backlight_timeout);
         items[i].toggle = -1;
+        items[i].full_screen_target = 0;
     }
-    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
-                            aura_nav_get_selection(nav));
+    draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
+                         aura_nav_get_selection(nav),
+                         parent_settings_icon(AURA_SCREEN_SETTINGS_BACKLIGHT), NULL);
 }
 
 static void handle_backlight(aura_nav_t *nav, long button)
@@ -782,7 +806,7 @@ static void handle_backlight(aura_nav_t *nav, long button)
 
 static void draw_sleeptimer(aura_nav_t *nav)
 {
-    aura_list_item_t items[SLEEPTIMER_VALUES_N];
+    aura_menu_item_v2_t items[SLEEPTIMER_VALUES_N];
     int i;
 
     for (i = 0; i < SLEEPTIMER_VALUES_N; i++)
@@ -797,9 +821,11 @@ static void draw_sleeptimer(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == (int)global_settings.sleeptimer_duration);
         items[i].toggle = -1;
+        items[i].full_screen_target = 0;
     }
-    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
-                            aura_nav_get_selection(nav));
+    draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
+                         aura_nav_get_selection(nav),
+                         parent_settings_icon(AURA_SCREEN_SETTINGS_SLEEPTIMER), NULL);
 }
 
 static void handle_sleeptimer(aura_nav_t *nav, long button)
@@ -880,27 +906,32 @@ static void handle_volume_limit(aura_nav_t *nav, long button)
 
 static void draw_mainmenu(aura_nav_t *nav)
 {
-    aura_list_item_t items[MAINMENU_ROWS];
+    aura_menu_item_v2_t items[MAINMENU_ROWS];
+    int sel = aura_nav_get_selection(nav);
+    int i;
 
     items[0].label = aura_str(AURA_STR_VIDEOS);
     items[0].icon_name = "video";
     items[0].checked = aura_settings.show_videos;
-    items[0].toggle = -1;
     items[1].label = aura_str(AURA_STR_PHOTOS);
     items[1].icon_name = "image";
     items[1].checked = aura_settings.show_photos;
-    items[1].toggle = -1;
     items[2].label = aura_str(AURA_STR_NOWPLAYING);
     items[2].icon_name = "play";
     items[2].checked = aura_settings.show_nowplaying;
-    items[2].toggle = -1;
     items[3].label = aura_str(AURA_STR_MAINMENU_RESTORE);
     items[3].icon_name = "reset";
     items[3].checked = 0;
-    items[3].toggle = -1;
+    for (i = 0; i < MAINMENU_ROWS; i++)
+    {
+        items[i].toggle = -1;
+        items[i].full_screen_target = 0;
+    }
 
-    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
-                            aura_nav_get_selection(nav));
+    draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
+                         sel,
+                         (sel >= 0 && sel < MAINMENU_ROWS) ? items[sel].icon_name
+                                                            : "menu-list", NULL);
 }
 
 static void handle_mainmenu(aura_nav_t *nav, long button)
@@ -995,7 +1026,7 @@ static void draw_message_centered(aura_str_id_t msg_id)
     int content_h = A26_SCREEN_HEIGHT - content_top;
 
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, NULL, 0);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, NULL);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
@@ -1013,7 +1044,7 @@ static void draw_message_centered(aura_str_id_t msg_id)
 static void draw_waiting_state(aura_str_id_t msg_id)
 {
     a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, NULL, 0);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, NULL);
     aura_widgets_draw_wait_capsule(aura_str(msg_id));
 }
 

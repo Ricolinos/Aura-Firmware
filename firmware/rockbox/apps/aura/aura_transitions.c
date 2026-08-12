@@ -17,6 +17,7 @@
 #include "aura_art.h"
 #include "aura_nowplaying.h"
 #include "aura_statusbar.h"
+#include "aura_status_bar_v2.h"
 #include "aura_lang.h"
 #include "apple2026_shell.h"
 
@@ -340,7 +341,7 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
         a26_shell_clear_screen();
         /* Titulo instantaneo, mismo criterio que el push de arriba --
          * la banda de StatusBar no forma parte del vuelo. */
-        aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING), 1);
+        aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING));
 
         aura_flow_begin_projection(&proj, &slide, size);
         while (proj.screen_x < AURA_FLOW_SCREEN_W)

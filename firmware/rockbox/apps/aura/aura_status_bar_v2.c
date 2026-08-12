@@ -1,5 +1,7 @@
 #include "lcd.h"
 #include "tick.h"
+#include "audio.h"
+#include "button.h"
 
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
@@ -217,16 +219,29 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
      * corrige aca a la opacidad real que exige status-bar.md (T2.5 solo
      * la verifico en modo persistente aislado, sin esta regla todavia
      * cableada). */
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_8));
-    ink = a26_shell_blend(bg, a26_color(A26_TEXT_PRIMARY),
-                           AURA_DS_OPACITY_STATUSBAR_TITLE_PCT * 256 / 100);
-    lcd_set_foreground(ink);
-    lcd_getstringsize((const unsigned char *)title, &w, &h);
-    text_y = (AURA_DS_METRICS_STATUSBAR_HEIGHT - h) / 2;
+    if (title && title[0])
+    {
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_8));
+        ink = a26_shell_blend(bg, a26_color(A26_TEXT_PRIMARY),
+                               AURA_DS_OPACITY_STATUSBAR_TITLE_PCT * 256 / 100);
+        lcd_set_foreground(ink);
+        lcd_getstringsize((const unsigned char *)title, &w, &h);
+        text_y = (AURA_DS_METRICS_STATUSBAR_HEIGHT - h) / 2;
 
-    /* DynamicTitle estatico por ahora (transition=NONE): disparar
-     * Fade-Slide/Scroll-Slide reales en cada navegacion es follow-up
-     * anotado en el header de este modulo, no bloqueado. */
-    aura_dynamic_title_draw(title_x, text_y, title_max_w, title, NULL,
-                             AURA_TITLE_TRANSITION_NONE, 256, 1, 0);
+        /* DynamicTitle estatico por ahora (transition=NONE): disparar
+         * Fade-Slide/Scroll-Slide reales en cada navegacion es follow-up
+         * anotado en el header de este modulo, no bloqueado. */
+        aura_dynamic_title_draw(title_x, text_y, title_max_w, title, NULL,
+                                 AURA_TITLE_TRANSITION_NONE, 256, 1, 0);
+    }
+}
+
+void aura_status_bar_v2_draw_auto(int x, int width, const char *title)
+{
+    int status = audio_status();
+
+    aura_status_bar_v2_draw(x, width, title,
+                             (status & (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)) != 0,
+                             (status & AUDIO_STATUS_PAUSE) != 0,
+                             button_hold());
 }
