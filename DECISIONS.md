@@ -901,4 +901,20 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-089 — PLAN.md T1.1: nucleo puro de patrones de transicion (Etapa 1, arranque)
+
+**Solo 4 funciones nuevas para 10 patrones nombrados**, deliberado: `transiciones/00-vocabulario.md` nombra 10 patrones, pero varios comparten exactamente la misma forma matemática subyacente -- construir una función por nombre habría sido diez envoltorios alrededor de la misma interpolación lineal. `aura_pattern_lerp()` + la `aura_motion_linear()` ya existente (progreso `[0,256]`, sin depender de HZ) cubren juntos **Fade-Slide, Scroll-Slide, Drop-and-Lift, Push-and-Pull y Morph Directo** -- los cinco son "un paso lineal" aplicado a una posición/tamaño/opacidad distinta según decida cada componente consumidor (T2.x); la dirección/eje es una decisión de layout de cada uno, no del núcleo matemático. Las tres formas con mecánica propia real (`Marquee Loop`, `Fade-on-Idle`, la mecánica "termina en el centro" de `CoverDrift`) sí tienen función dedicada. `Push-and-Drop` y `Shift-and-Reveal` quedan para T1.2 (dependen del motor de transiciones de pantalla offscreen, no son matemática pura). `Flip-and-Flow` queda para T3.2 (depende del motor de slides de CoverFlow).
+
+**`aura_pattern_fade_on_idle_alpha_256()` generaliza una forma ya probada**, no inventa una nueva: es exactamente la máquina de 3 fases (`fade-in → hold → fade-out`) que `aura_widgets.c` ya usa para el fundido de la barra de deslizamiento del sistema viejo (D-073) — con nombres de parámetro genéricos en vez de las constantes fijas de `ScrollIndicator`, para que cualquier consumidor futuro del patrón `Fade-on-Idle` la use con sus propios tiempos sin duplicar la lógica.
+
+**`aura_pattern_drift_pos()` sin trigonometría de propósito general, a propósito**: `componentes/cover-drift.md` fija 8 direcciones exactas (no ángulos arbitrarios) — una tabla estática de `cos(θ)*256`/`sen(θ)*256` precomputada (verificada con Python antes de hardcodearla, no a mano) para esos 8 valores es más simple y más barata en el ARM926EJ-S sin FPU que una función seno/coseno genérica que este sistema nunca necesitaría usar con otro ángulo. Ángulo fuera de la tabla devuelve `(0,0)` (sin movimiento) en vez de un valor inventado -- mismo criterio defensivo que `aura_wheel_step()` ya aplica a velocidad inválida.
+
+**Interpretación de "movimiento constante" confirmada por el propio PLAN.md** (sección de huecos, no una decisión nueva de esta tarea): lineal, sin easing de aceleración/desaceleración -- `cover-drift.md` dejó la ambigüedad anotada ("avísame si en realidad querías algo de easing"), y el plan ya registró la interpretación antes de escribir código.
+
+**`aura_pattern_marquee_offset()` modela el ciclo completo, no solo el tramo de movimiento**: recibe el tiempo transcurrido desde que el texto empezó a mostrarse (no desde el inicio del tramo actual) y hace el módulo internamente contra `static_ms + scroll_ms` -- así el llamador no tiene que llevar un estado de "en qué fase estoy", solo un timestamp de cuándo empezó a verse el texto, igual que ya hace `aura_motion_spring()`/`aura_motion_linear()` con `elapsed`/`duration`.
+
+**Aceptación**: `test_patterns.c` nuevo, 40 checks (lerp en los extremos y clampado, marquee en ambas fases y across-loop, fade-on-idle en las 3 fases y el caso `fade_in_ms=0`, drift llegando al centro/arrancando en offset/punto medio/los 8 ángulos documentados/ángulo desconocido). 676/676 tests host-side totales (566 + 20 de `test_color` + 40 de `test_patterns` + los que ya sumaba `test_motion`/`test_wheel`/`test_flow` -- ninguna regresión). Sim reconstruido, compila limpio, 0 warnings -- módulo puramente aditivo, sin consumidor todavía (arranca en T1.2/T2.1/T2.9).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
