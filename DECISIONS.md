@@ -995,4 +995,18 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-095 — PLAN.md T2.6: DynamicTitle -- Fade-Slide/Scroll-Slide sin matemática nueva, tercera confirmación de T1.1
+
+**`aura_dynamic_title.c/.h`**: MarqueeText (T2.1) en el caso estático (sin transición en curso); `Fade-Slide` (horizontal, cambio de menú) y `Scroll-Slide` (vertical, cambio de sección) comparten una sola implementación de "dos textos recortados con offset opuesto" -- ambos son, otra vez, el patrón "un paso lineal" que T1.1 ya identificó como reutilizable: `aura_pattern_lerp()` sin ninguna función nueva de `aura_patterns.c`. Tercera vez que esto se confirma (después de `ScrollIndicator` y `ClockIndicator`) -- la apuesta de T1.1 de generalizar antes de construir componentes sigue pagando.
+
+**Direcciones confirmadas del propio documento, no inventadas**: al profundizar en un menú, el texto nuevo entra desde la derecha; al regresar, desde la izquierda (`Fade-Slide`). Scroll hacia abajo entra desde abajo; hacia arriba, desde arriba (`Scroll-Slide`). El parámetro `forward` de la función codifica exactamente esta distinción, sin ambigüedad que resolver.
+
+**Recorte por viewport, mismo mecanismo que MarqueeText**: `draw_clipped()` reutiliza la técnica ya establecida en `aura_marquee.c` (copiar `*lcd_current_viewport` en vez de `viewport_set_defaults()`, para heredar fuente/color/drawmode del llamador) -- ninguna técnica nueva, solo aplicada a dos textos simultáneos en vez de uno.
+
+**Verificación de humo, mismo criterio que T2.5**: sin `StatusBar v2` (T2.7), no hay hogar real todavía -- overlay temporal en el menú raíz mostrando una transición `Fade-Slide` a mitad de camino (progreso 128/256), confirmando que renderiza sin errores en el área esperada, revertido antes de este commit. La integración real (con `ClockIndicator` condicionando el ancho máximo, con `StatusBar` disparando la transición en cada navegación real) es trabajo de T2.7.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (módulo de renderizado, la matemática que usa ya estaba probada en `test_patterns.c`). Verificado con overlay temporal (`docs/screenshots/t2-componentes/t26-title-smoke.png`, revertido antes de este commit).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -318,6 +318,7 @@ aura/aura_selector.c
 aura/aura_menu_list.c
 aura/aura_scroll_indicator.c
 aura/aura_clock_indicator.c
+aura/aura_dynamic_title.c
 aura/aura_flow.c
 aura/aura_coverflow.c
 aura/aura_lang.c
