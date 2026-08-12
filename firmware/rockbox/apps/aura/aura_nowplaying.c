@@ -83,6 +83,16 @@ static long s_seek_show_until = 0;
 static long s_lr_pending_until = 0;
 static int  s_lr_pending_dir = 0;
 static long s_scrub_show_until = 0; /* ventana del indicador del modo scrub */
+/* Busqueda con audio SIMULTANEO (correccion 2026-08-12): aplicar
+ * audio_ff_rewind() en CADA repeat (~10/s) reiniciaba la busqueda del
+ * motor sin darle tiempo a sonar -- el audio solo saltaba al soltar.
+ * El preview visual avanza con cada repeat, y el salto real de audio
+ * se aplica como maximo cada AUDIO_SEEK_APPLY_TICKS: entre saltos se
+ * ESCUCHA la cancion desde la posicion nueva, como el seek del iPod
+ * real. Al expirar la ventana se aplica la posicion final exacta. */
+#define AUDIO_SEEK_APPLY_TICKS (HZ / 4)
+static long s_seek_last_apply = 0;
+static long s_seek_applied_ms = -1;
 
 /* -- Modo 4 (Letras), panel comprimido (PLAN.md T3.1(c),
  * componentes/now-playing.md) --------------------------------------------
@@ -696,25 +706,24 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int 
                    (const unsigned char *)timebuf2);
     }
 
-    if (scrubbing)
+    if (scrubbing || seeking)
     {
-        /* Indicador de avance (15x11) con su CENTRO en el borde
-         * derecho del relleno: sombra paralela sutil primero (mismo
-         * mecanismo de opacidad simulada del resto del sistema),
-         * despues la perilla blanca. */
+        /* Indicador de avance (pildora 15x11, referencia visual del
+         * dueno del diseno) con su CENTRO en el borde derecho del
+         * relleno -- visible en AMBOS ajustes de posicion (rueda y
+         * botones sostenidos). Sombra paralela sutil primero, despues
+         * la perilla blanca; capsulas compuestas contra el framebuffer
+         * porque cruzan relleno, carril y fondo a la vez. */
         int tw = AURA_DS_METRICS_NOW_PLAYING_SCRUB_THUMB_W;
         int th = AURA_DS_METRICS_NOW_PLAYING_SCRUB_THUMB_H;
         int tx = fill_x + fill_w - tw / 2;
         int ty = PROGRESS_Y + PROGRESS_TRACK_H / 2 - th / 2;
-        unsigned shadow = a26_shell_blend(a26_color(A26_SHELL_BG), LCD_RGBPACK(0, 0, 0), 64);
 
         if (tx < x) tx = x;
         if (tx + tw > x + width) tx = x + width - tw;
 
-        a26_shell_fill_rounded_rect(tx + 1, ty + 2, tw, th, th / 2 - 1,
-                                     shadow, a26_color(A26_SHELL_BG));
-        a26_shell_fill_rounded_rect(tx, ty, tw, th, th / 2 - 1,
-                                     white, a26_color(A26_SHELL_BG));
+        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0), 56);
+        a26_shell_fill_capsule_over(tx, ty, tw, th, white, 256);
     }
 }
 
@@ -953,12 +962,18 @@ void aura_nowplaying_draw(void)
     reload_for_track(id3);
 
     /* Barra de vuelta al reposo: cuando las ventanas de busqueda y
-     * scrub expiraron, el preview suelta la barra (el elapsed real ya
-     * absorbio el salto de audio_ff_rewind). */
+     * scrub expiraron, el preview suelta la barra -- aplicando antes
+     * la posicion FINAL exacta si el ultimo salto estrangulado quedo
+     * atras del preview. */
     if (s_scrub_preview_ms >= 0
         && current_tick >= s_seek_show_until
         && current_tick >= s_scrub_show_until)
+    {
+        if (s_seek_applied_ms >= 0 && s_seek_applied_ms != s_scrub_preview_ms)
+            audio_ff_rewind(s_scrub_preview_ms);
+        s_seek_applied_ms = -1;
         s_scrub_preview_ms = -1;
+    }
 
     /* Tap pendiente de LEFT/RIGHT: si su ventana expiro sin repeats,
      * era un tap de verdad -- pista anterior/siguiente ahora. */
@@ -1102,7 +1117,15 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
                 if (next < 0) next = 0;
                 if ((unsigned long)next > id3->length) next = (long)id3->length;
                 s_scrub_preview_ms = next;
-                audio_ff_rewind(next);
+                /* Audio estrangulado: un salto real cada ~250ms para
+                 * que se OIGA avanzar entre saltos; el visual sigue
+                 * cada repeat. */
+                if (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS)
+                {
+                    audio_ff_rewind(next);
+                    s_seek_last_apply = current_tick;
+                    s_seek_applied_ms = next;
+                }
                 s_seek_show_until = current_tick + SEEK_SHOW_TICKS;
             }
             s_lr_pending_dir = 0;

@@ -282,6 +282,57 @@ void a26_shell_fill_capsule(int x, int y, int w, int h, unsigned fill, unsigned 
     }
 }
 
+/* Capsula compuesta SOBRE el framebuffer (para la pildora del
+ * indicador de la barra, que cruza colores distintos debajo: relleno,
+ * carril y fondo): cada pixel se mezcla contra lo ya dibujado con
+ * cobertura*alpha -- sirve igual para la sombra paralela (negro a baja
+ * alpha) que para la perilla blanca opaca. */
+void a26_shell_fill_capsule_over(int x, int y, int w, int h,
+                                  unsigned fill, int alpha_256)
+{
+    int half = (h + 1) / 2;
+    int r32 = h * 16;
+    int c32 = (h - 1) * 16;
+    int px, py;
+
+    if (w <= 0 || h <= 0)
+        return;
+    if (w < h)
+        half = (w + 1) / 2;
+
+    for (py = 0; py < h; py++)
+    {
+        fb_data *row = FBADDR(x, y + py);
+        int dy32 = py * 32 - c32;
+
+        for (px = 0; px < w; px++)
+        {
+            int cov;
+
+            if (px >= half && px < w - half)
+            {
+                /* Tramo recto: cobertura vertical pura. */
+                unsigned d32 = (dy32 < 0) ? (unsigned)-dy32 : (unsigned)dy32;
+                cov = (r32 + 16 - (int)d32) * 8;
+            }
+            else
+            {
+                /* Casquetes: distancia radial al centro del semicirculo
+                 * (el derecho, espejado). */
+                int ex = (px < half) ? px : (w - 1 - px);
+                int dx32 = ex * 32 - c32;
+                unsigned d32 = a26_shell_isqrt256((unsigned)(dx32 * dx32 + dy32 * dy32)) >> 8;
+                cov = (r32 + 16 - (int)d32) * 8;
+            }
+
+            if (cov > 256) cov = 256;
+            if (cov <= 0)
+                continue;
+            row[px] = a26_shell_blend(row[px], fill, cov * alpha_256 / 256);
+        }
+    }
+}
+
 void a26_shell_fill_rounded_rect(int x, int y, int w, int h, int radius,
                                   unsigned fill, unsigned bg)
 {

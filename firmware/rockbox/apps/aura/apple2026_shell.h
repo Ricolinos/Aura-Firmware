@@ -175,4 +175,8 @@ unsigned a26_shell_isqrt256(unsigned v);
  * `bg` = color plano real debajo. */
 void a26_shell_fill_capsule(int x, int y, int w, int h, unsigned fill, unsigned bg);
 
+/* Igual pero mezclando contra el framebuffer (fondo heterogeneo) con
+ * alpha global -- pildora del indicador y su sombra. */
+void a26_shell_fill_capsule_over(int x, int y, int w, int h, unsigned fill, int alpha_256);
+
 #endif /* APPLE2026_SHELL_H */

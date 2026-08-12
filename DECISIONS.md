@@ -1500,4 +1500,14 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-125 — Píldora del indicador sobre la barra y seek con audio simultáneo
+
+**Dos correcciones del dueño del diseño (2026-08-12) sobre D-123/D-124:**
+
+**1) La píldora del indicador** (15×11, referencia visual aportada): ahora se renderiza durante AMBOS ajustes de posición — rueda en modo avance Y botones sostenidos — con su centro en el borde derecho del relleno. Dibujada con `a26_shell_fill_capsule_over()` (nueva variante de la cápsula que se compone contra el framebuffer): la píldora cruza relleno, carril y fondo a la vez, así que un `bg` fijo pintaría píxeles equivocados fuera de su silueta. Sombra paralela sutil (cápsula negra a baja alfa, +1/+2 de offset) debajo de la perilla blanca. Verificado con zoom (`fix15-scrub-pill-shadow.png`).
+
+**2) Seek con audio SIMULTÁNEO**: aplicar `audio_ff_rewind()` en cada repeat (~10/s) reiniciaba la búsqueda del motor sin darle tiempo a sonar — el audio solo saltaba al soltar los botones, exactamente lo reportado. Ahora el preview visual avanza con cada repeat y el salto real de audio se aplica como máximo cada ~250ms (`AUDIO_SEEK_APPLY_TICKS`): entre saltos se ESCUCHA la canción desde la posición nueva, como el seek del iPod real. Al expirar la ventana de búsqueda se aplica la posición final exacta si el último salto estrangulado quedó atrás del preview. (Comportamiento audible: confirmación del dueño en vivo — el arnés no genera holds.)
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
