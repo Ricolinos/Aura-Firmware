@@ -11,6 +11,14 @@
 #include "aura_screens.h"
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
+#include "aura_flow.h"
+#include "aura_patterns.h"
+#include "aura_albumart.h"
+#include "aura_art.h"
+#include "aura_nowplaying.h"
+#include "aura_statusbar.h"
+#include "aura_lang.h"
+#include "apple2026_shell.h"
 
 /* Instrumentacion de frames (Fase 16, PLAN-UX.md): DEBUGF es un no-op
  * fuera de builds DEBUG, asi que queda siempre presente en el codigo
@@ -246,4 +254,122 @@ void aura_transition_reveal(aura_nav_t *nav)
     }
 
     TRANSITION_LOG("reveal", frames, start_tick);
+}
+
+/* -- Flip-and-Flow (PLAN.md T3.2(d), componentes/cover-flow.md) --------
+ *
+ * "El album gira de nuevo, se posiciona en su lugar, y desde ahi
+ * transicion fluida y continua hacia Now Playing -- con todo y
+ * reflejo durante el trayecto." La caratula se decodifica UNA vez a
+ * su tamano FINAL (135px, el de NowPlaying -- misma cache .pfraw que
+ * el carrusel, T3.2(a), solo que con clave de tamano distinta) y se
+ * anima con angulo/posicion CONTINUOS (aura_pattern_lerp, T1.1) desde
+ * la geometria de reposo del carrusel (angulo 0, centrada) hasta la
+ * geometria EXACTA de NowPlaying -- `AURA_NOWPLAYING_TILT_IANGLE`/
+ * `_CX` son publicas en aura_nowplaying.h precisamente porque el
+ * documento acopla ambas geometrias ("si se cambia una, se cambia la
+ * otra"): esta funcion nunca inventa su propio destino, lee el mismo
+ * numero que ya usa aura_nowplaying.c.
+ *
+ * Corte de alcance real, mismo criterio que D-101 (morph de Modo 4 en
+ * NowPlaying): el TAMANO no interpola -- 135px fijo durante todo el
+ * vuelo, un solo salto de tamano en el primer cuadro (la caratula de
+ * 100px del carrusel es un archivo de cache DISTINTO, mismo album,
+ * distinto pre-escalado). Este pipeline no tiene una primitiva de
+ * reescalado de bitmaps en tiempo real -- interpolar el tamano de
+ * verdad la exigiria. Angulo y posicion SI son continuos y reales.
+ *
+ * Sincrono y bloqueante, mismo estilo que aura_transition_slide()/
+ * aura_transition_reveal() de arriba -- una coreografia de un solo
+ * disparo que nunca se interrumpe ni se redirige a mitad de camino,
+ * mas simple de razonar que integrarla al bucle de redibujo por
+ * eventos que usa el resto de las animaciones de esta sesion. */
+#define CF_FLOW_MS 350 /* TODO(pendiente-doc): "Timing de cada fase de Flip-and-Flow" no definido, ver DECISIONS.md D-105 */
+
+void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from_y)
+{
+    int size = AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE;
+    int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
+    unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
+    unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
+                            * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
+                            * sizeof(fb_data)];
+    fb_data col_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
+                     + AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100];
+    aura_albumart_t art;
+    int frames, frame_delay, i;
+    long start_tick = current_tick;
+
+    art.size = size;
+    art.radius = AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS;
+    art.cover_data = cover_buf;
+    art.reflection_data = refl_buf;
+
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE
+        || !aura_albumart_load_for_album(album_seek, &art))
+    {
+        /* Sin animacion (ajuste del usuario) o sin caratula real --
+         * nada que volar, el llamador navega directo. */
+        aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+        return;
+    }
+
+    frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 14 : 6;
+    frame_delay = HZ / 60;
+
+    for (i = 1; i <= frames; i++)
+    {
+        int t = i * 256 / frames;
+        int total_h = size + refl_h;
+        int y = aura_pattern_lerp(from_y, AURA_DS_METRICS_NOW_PLAYING_COVER_Y, t);
+        aura_flow_slide_t slide;
+        aura_flow_projection_t proj;
+
+        slide.angle = -aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_IANGLE, t);
+        slide.distance = 0;
+        slide.cx = aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_CX, t);
+
+        a26_shell_clear_screen();
+        /* Titulo instantaneo, mismo criterio que el push de arriba --
+         * la banda de StatusBar no forma parte del vuelo. */
+        aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING), 1);
+
+        aura_flow_begin_projection(&proj, &slide, size);
+        while (proj.screen_x < AURA_FLOW_SCREEN_W)
+        {
+            int col = aura_flow_source_column(&proj);
+            int dy = aura_flow_vertical_scale(&proj);
+            int p = 0, dest_row, n_rows = 0;
+            const fb_data *cover_col = (const fb_data *)art.cover_data + (size_t)col * size;
+            const fb_data *refl_col = (const fb_data *)art.reflection_data + (size_t)col * refl_h;
+
+            for (dest_row = 0; dest_row < total_h; dest_row++)
+            {
+                int source_row = p >> AURA_FLOW_SHIFT;
+
+                if (source_row >= total_h)
+                    break;
+                col_buf[dest_row] = (source_row < size)
+                    ? cover_col[source_row]
+                    : refl_col[source_row - size];
+                p += dy;
+                n_rows++;
+            }
+            if (n_rows > 0)
+                lcd_bitmap(col_buf, proj.screen_x, y, 1, n_rows);
+
+            if (!aura_flow_advance_column(&proj))
+                break;
+        }
+
+        lcd_update();
+        drain_button_queue_if_full();
+
+        if (i < frames)
+            sleep(frame_delay);
+    }
+
+    TRANSITION_LOG("flip_and_flow", frames, start_tick);
+
+    aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
 }

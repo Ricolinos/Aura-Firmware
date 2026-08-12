@@ -282,15 +282,17 @@ static void aura_format_track_time(unsigned long ms, char *buf, size_t bufsz)
  * mira hacia la derecha" es exactamente esa convencion, solo que a 7
  * grados en vez de a los ~70 grados de una lateral completa.
  *
- * NP_TILT_CX (posicion horizontal en PFreal) es una constante derivada
- * -- no una formula que se resuelve por si sola en runtime, mismo
- * criterio que CF_OFFSETX_R en aura_coverflow.c -- buscada para que el
- * borde IZQUIERDO de la proyeccion caiga en ART_X con ART_SIZE=135 y
- * este angulo exacto (ver DECISIONS.md D-099 para el metodo: busqueda
- * numerica contra la misma formula de aura_flow_begin_projection(),
- * verificada por pixel contra el render real, no solo calculada). */
-#define NP_TILT_IANGLE 20     /* 7 grados * 1024/360, redondeado (AURA_DS_METRICS_NOW_PLAYING_COVER_TILT_DEG) */
-#define NP_TILT_CX     (-96300)
+ * `AURA_NOWPLAYING_TILT_CX` (posicion horizontal en PFreal) es una
+ * constante derivada -- no una formula que se resuelve por si sola en
+ * runtime, mismo criterio que CF_OFFSETX_R en aura_coverflow.c --
+ * buscada para que el borde IZQUIERDO de la proyeccion caiga en ART_X
+ * con ART_SIZE=135 y este angulo exacto (ver DECISIONS.md D-099 para
+ * el metodo: busqueda numerica contra la misma formula de
+ * aura_flow_begin_projection(), verificada por pixel contra el render
+ * real, no solo calculada). Publicas en aura_nowplaying.h (T3.2(d)):
+ * Flip-and-Flow aterriza en esta MISMA geometria exacta. */
+#define NP_TILT_IANGLE AURA_NOWPLAYING_TILT_IANGLE
+#define NP_TILT_CX     AURA_NOWPLAYING_TILT_CX
 
 /* `compact`: Modo 4 (componentes/now-playing.md) -- "el reflejo se
  * desvanece durante la transicion (no existe en el Modo 4)" (se omite

@@ -1188,4 +1188,26 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-105 — PLAN.md T3.2(d): CoverFlow v2 -- Flip-and-Flow real, cierra T3.2 y la Etapa 3
+
+**Cuarto y último commit de T3.2** ("la tarea más pesada, al final a propósito" -- cerrada). `componentes/cover-flow.md`: "desde ahí, transición fluida y continua hacia el reproductor -- con todo y reflejo durante el trayecto... no hay corte entre Cover Flow y el reproductor."
+
+**Geometría de destino compartida por contrato, no duplicada**: `AURA_NOWPLAYING_TILT_IANGLE`/`_CX` (antes privadas de `aura_nowplaying.c`, D-099) se promovieron a `aura_nowplaying.h` -- el propio documento acopla ambas geometrías ("si se cambia una, se cambia la otra"), así que la función de vuelo lee el MISMO número que ya usa `aura_nowplaying.c`, nunca recalcula ni aproxima un destino aparte. Si algún día se ajusta la inclinación de NowPlaying, `Flip-and-Flow` la sigue automáticamente sin tocarse.
+
+**`aura_transition_flip_and_flow()` vive en `aura_transitions.c`, no en `aura_coverflow.c`**: es un patrón de transición con nombre propio (`transiciones/00-vocabulario.md`) -- la regla 2 del encargo pide implementar los patrones nombrados UNA vez como utilidades, y `aura_transitions.c` es exactamente donde ya viven `aura_transition_slide()`/`aura_transition_reveal()`. Mismo estilo síncrono-bloqueante que esas dos (un solo disparo, nunca se interrumpe ni se redirige a mitad de camino) -- más simple de razonar que integrarla al modelo de redibujo-por-eventos que usa el resto de las animaciones de la sesión (CoverDrift, morph de NowPlaying, carrusel de CoverFlow), apropiado porque esta transición es literalmente eso: un evento único que ocurre una vez al elegir una canción.
+
+**Ángulo y posición SÍ interpolan de verdad (`aura_pattern_lerp`, T1.1, cero matemática nueva) -- el TAMAÑO no**: la carátula se decodifica una sola vez a su tamaño FINAL (135px, la misma cache `.pfraw` de T3.2(a) pero con clave de tamaño distinta -- mismo álbum, distinto pre-escalado) y permanece en ese tamaño durante todo el vuelo; solo hay un salto de tamaño en el primer cuadro (100px del carrusel visual → 135px de la carátula que empieza a volar). Mismo corte de alcance real que D-101 (morph de Modo 4): este pipeline no tiene una primitiva de reescalado de bitmaps en tiempo real, y construir una solo para este caso sería una pieza de infraestructura nueva, no una decisión de esta tarea. El reflejo persiste real durante todo el trayecto (mismo mecanismo de proyección por columnas que ya reflejaba las laterales del carrusel).
+
+**Reproducción real arrancada antes de volar, no una animación sin datos detrás**: `aura_music_play_songs()` (mismo mecanismo que la lista de canciones vieja) se llama en `aura_coverflow.c` ANTES de invocar la transición -- la carátula que vuela y la canción que ya está sonando son la misma pista real, confirmado end-to-end (seleccionar "Track 2" aterriza en NowPlaying mostrándola sonando, geometría idéntica a una entrada normal a esa pantalla).
+
+**Timing (350ms) es otro provisional real** -- "Timing de cada fase de Flip-and-Flow" sigue en la lista de pendientes de `cover-flow.md` sin número, tercera vez en `T3.2` (después del timing del carrusel en D-103 y del flip en D-104). `// TODO(pendiente-doc)` en el código.
+
+**Limitación de verificación reconocida, no ocultada**: a diferencia del resto de las animaciones de la sesión (integradas al bucle de redibujo, capturables con el arnés scripted variando `ticks`), esta transición es síncrona y bloqueante -- el simulador no vuelve a procesar el mecanismo de captura hasta que el bucle completo termina, así que **no es posible fotografiar un cuadro intermedio del vuelo con esta herramienta** (misma limitación real que ya tenían `aura_transition_slide()`/`aura_transition_reveal()`, no una regresión nueva). Se verificó en su lugar: el resultado final aterriza exacto en ambos temas, sin cuelgues ni artefactos visuales tras completar, y que la reproducción real corresponde a la pista elegida.
+
+**Cierra T3.2 (4/4 commits) y la Etapa 3 del plan**: T3.1 (NowPlaying v2, D-099/D-100/D-101) + T3.2 (Cover Flow v2, D-102/D-103/D-104/D-105) -- las dos pantallas grandes completas. Sigue la Etapa 4 (T4.1 barrido final, T4.2 matriz de capturas + build ARM, T4.3 RESUMEN.md, cierre de la Fase 3).
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (ninguna función pura nueva, reusa `aura_flow`/`aura_pattern_lerp` ya probados). Verificado en ambos temas: flujo completo desde CoverFlow (SELECT álbum → flip → TrackList → SELECT pista → Flip-and-Flow → NowPlaying reproduciendo) aterriza en la geometría exacta esperada -- `docs/screenshots/t3-pantallas/t32d-flip-and-flow-result-{light,dark}.png`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

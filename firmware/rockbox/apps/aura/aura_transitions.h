@@ -8,6 +8,8 @@
 #ifndef AURA_TRANSITIONS_H
 #define AURA_TRANSITIONS_H
 
+#include <stdint.h>
+
 #include "aura_nav.h"
 
 /* Anima la entrada a la pantalla actual de `nav` desplazandola desde
@@ -33,5 +35,20 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width);
  * distingue visualmente la entrada a Coverflow de una navegacion de
  * lista comun. No hace nada en modo Ultra (Coverflow no existe ahi). */
 void aura_transition_reveal(aura_nav_t *nav);
+
+/* `Flip-and-Flow` (PLAN.md T3.2(d), componentes/cover-flow.md,
+ * transiciones/00-vocabulario.md): al elegir una cancion en Cover
+ * Flow, la caratula del album (ya decodificada a su tamano final de
+ * NowPlaying, AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE) vuela desde su
+ * posicion de reposo en el carrusel (angulo 0, centrada, altura
+ * `from_y`) hasta la geometria EXACTA de NowPlaying
+ * (AURA_NOWPLAYING_TILT_IANGLE/_CX/_Y, aura_nowplaying.h) -- con
+ * reflejo durante todo el trayecto. Arranca la reproduccion real
+ * (aura_music_play_songs ya debe haberse llamado por el invocador
+ * antes de esto -- esta funcion solo anima) y empuja
+ * AURA_SCREEN_NOWPLAYING al terminar. No hace nada (deja que el
+ * llamador navegue directo) si `album_seek` no tiene caratula real --
+ * no hay nada que volar. */
+void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from_y);
 
 #endif /* AURA_TRANSITIONS_H */

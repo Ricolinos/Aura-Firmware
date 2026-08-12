@@ -13,6 +13,7 @@
 #include "aura_widgets.h"
 #include "aura_wheel.h"
 #include "aura_main.h"
+#include "aura_transitions.h"
 #include "aura_flow.h"
 #include "aura_motion.h"
 #include "aura_patterns.h"
@@ -629,17 +630,12 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
                 s_track_sel = (s_track_sel - 1 + s_track_count) % s_track_count;
             break;
         case BUTTON_SELECT:
-            /* Arranca la reproduccion y navega a Ahora suena -- mismo
-             * mecanismo que ya usa la lista de canciones vieja
-             * (aura_music_play_songs + push). La transicion fluida
-             * Flip-and-Flow (aterrizar en la geometria exacta de
-             * NowPlaying, en vez de este salto directo) es T3.2(d),
-             * el ultimo commit -- diferido, no bloqueado: esta
-             * integracion ya deja los datos reales (pista elegida,
-             * reproduccion arrancada) listos para que (d) solo tenga
-             * que reemplazar el nav_push por la transicion real. */
+            /* Arranca la reproduccion real (mismo mecanismo que la
+             * lista de canciones vieja) y vuela la caratula hasta
+             * NowPlaying con Flip-and-Flow (T3.2(d)) -- la funcion de
+             * transicion ya hace el aura_nav_push() al terminar. */
             if (s_track_count > 0 && aura_music_play_songs(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, s_track_sel))
-                aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+                aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek, CF_TOP_Y);
             break;
         case BUTTON_MENU:
             /* "El album gira de nuevo (vuelve a mostrar la caratula)"

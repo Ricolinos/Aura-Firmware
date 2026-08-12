@@ -5,6 +5,15 @@
 
 #include "aura_nav.h"
 
+/* Geometria de la inclinacion real de la caratula (T3.1, DECISIONS.md
+ * D-099) -- publica porque componentes/cover-flow.md acopla la
+ * coreografia `Flip-and-Flow` (T3.2(d)) a esta MISMA geometria
+ * exacta ("si se cambia una, se cambia la otra"): la caratula que
+ * vuela desde Cover Flow tiene que aterrizar en este angulo/posicion
+ * exactos, no una aproximacion recalculada aparte. */
+#define AURA_NOWPLAYING_TILT_IANGLE 20     /* 7 grados * 1024/360, redondeado */
+#define AURA_NOWPLAYING_TILT_CX     (-96300) /* PFreal, derivado para ART_SIZE=135 -- ver D-099 */
+
 /* True si hay algo cargado para reproducir (pausado o sonando). Si es
  * false, aura_screens.c muestra el estado vacio en su lugar. */
 bool aura_nowplaying_active(void);
