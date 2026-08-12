@@ -47,6 +47,17 @@ cat > "$OUT_DIR/aura-test.lrc" <<'EOF'
 [00:02.00]Segundo dos
 EOF
 
+echo "==> Generando fixture SIN caratula (test-media/SinArte)"
+# Carpeta propia sin cover.jpg: find_albumart no encuentra arte ni
+# embebido ni de carpeta -> ejercita la imagen "Default" (nota gris
+# sobre tile gris, D-112) en Cover Flow, el reproductor y Flip-and-Flow.
+mkdir -p "$OUT_DIR/SinArte"
+ffmpeg -y -loglevel error \
+  -f lavfi -i "sine=frequency=330:duration=${DURATION}" \
+  -metadata title="Pista sin arte" -metadata artist="Aura QA" \
+  -metadata album="Album sin portada" \
+  -c:a libmp3lame -b:a 128k "$OUT_DIR/SinArte/aura-test-noart.mp3"
+
 echo "==> Generando $OUT_DIR/cover.jpg"
 # -pix_fmt yuvj420p fuerza submuestreo de croma 4:2:0 estandar con tablas
 # de cuantizacion separadas por componente. Sin este flag, el encoder
@@ -81,6 +92,11 @@ if [[ -d "$SIMDISK" ]]; then
   mkdir -p "$SIMDISK/Music" "$SIMDISK/Photos" "$SIMDISK/Videos"
   cp "$OUT_DIR"/aura-test.* "$SIMDISK/Music/"
   cp "$OUT_DIR"/cover.jpg "$SIMDISK/Music/"
+  # En la RAIZ del disco, no bajo Music/: find_albumart tambien busca
+  # cover.jpg en el directorio padre, y Music/cover.jpg "vestiria" al
+  # album que precisamente debe quedar sin arte.
+  mkdir -p "$SIMDISK/SinArte"
+  cp "$OUT_DIR"/SinArte/*.mp3 "$SIMDISK/SinArte/"
   cp "$OUT_DIR"/Photos/* "$SIMDISK/Photos/"
   cp "$OUT_DIR"/Videos/*.mpg "$SIMDISK/Videos/"
 fi

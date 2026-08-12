@@ -25,6 +25,10 @@
  * false, aura_screens.c muestra el estado vacio en su lugar. */
 bool aura_nowplaying_active(void);
 
+/* Y de la fila de iconos de modos del ultimo render no-compacto --
+ * para el morph de entrada desde Cover Flow (aura_transitions.c). */
+int aura_nowplaying_last_mode_row_y(void);
+
 void aura_nowplaying_draw(void);
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button);
 

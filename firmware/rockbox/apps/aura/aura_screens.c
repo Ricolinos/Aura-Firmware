@@ -1561,6 +1561,15 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
 
         if (depth_after > depth_before && is_coverflow_screen(to))
             aura_transition_coverflow_enter(nav);
+        else if (is_coverflow_screen(screen) && to == AURA_SCREEN_NOWPLAYING)
+        {
+            /* Flip-and-Flow + morph de entrada (now-playing.md) ya
+             * corrieron DENTRO de aura_transition_flip_and_flow() --
+             * aplicar el push generico encima era exactamente el bug
+             * que el dueno del diseno reporto (2026-08-12): la
+             * transicion correcta es el morph, no empujar la pantalla
+             * del reproductor desde la derecha. */
+        }
         else
         {
             /* T1 vs T3 segun los DOS extremos de la navegacion (L4):

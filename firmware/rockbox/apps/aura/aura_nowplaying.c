@@ -114,6 +114,18 @@ static const char *const MODE_ICONS[NP_MODE_COUNT] = {
 
 static np_mode_t s_mode = NP_MODE_VOLUME;
 
+/* Y real de la fila de iconos de modos en el ultimo render no-compacto
+ * -- lo consume aura_transition_flip_and_flow() para animar ese grupo
+ * "desde la derecha" (now-playing.md, tabla de entrada por grupos) con
+ * el layout REAL de la pantalla ya renderizada offscreen, sin duplicar
+ * aca la logica de apilado de textos que decide su posicion. */
+static int s_last_mode_row_y = 120;
+
+int aura_nowplaying_last_mode_row_y(void)
+{
+    return s_last_mode_row_y;
+}
+
 /* Resorte del icono que se activa (doc SS5: "mismo resorte corto con
  * sobrepaso que la pastilla de seleccion") -- un pequeno salto vertical
  * en vez de aparecer de golpe. El que se desactiva no se anima (fundido
@@ -380,6 +392,13 @@ static void draw_cover_tilted(bool compact)
         int p = 0, dest_row, n_rows = 0;
         const fb_data *cover = (const fb_data *)s_art_bm.data;
         const fb_data *refl = (const fb_data *)s_reflection_buf;
+        /* Centrado vertical por columna (mismo criterio que el
+         * carrusel, 2026-08-12): la caratula gira sobre su eje central
+         * y ambos bordes convergen -- con el tilt de 7 grados es sutil
+         * (~2px por lado), pero mantiene la continuidad exacta con la
+         * geometria en la que aterriza Flip-and-Flow. */
+        int cover_disp = (ART_SIZE << AURA_FLOW_SHIFT) / dy;
+        int y_col = ART_Y + ART_SIZE / 2 - cover_disp / 2;
 
         for (dest_row = 0; dest_row < total_h; dest_row++)
         {
@@ -394,7 +413,7 @@ static void draw_cover_tilted(bool compact)
             n_rows++;
         }
         if (n_rows > 0)
-            lcd_bitmap(col_buf, proj.screen_x, ART_Y, 1, n_rows);
+            lcd_bitmap(col_buf, proj.screen_x, y_col, 1, n_rows);
 
         if (!aura_flow_advance_column(&proj))
             break;
@@ -521,6 +540,8 @@ static void draw_text_and_modes(const struct mp3entry *id3, bool compact)
     mode_y = y;
     if (!compact && mode_y + A26_ICON_SIZE_MENU > ART_Y + ART_SIZE + REFL_GAP)
         mode_y = ART_Y + ART_SIZE + REFL_GAP - A26_ICON_SIZE_MENU; /* no invade el reflejo */
+    if (!compact)
+        s_last_mode_row_y = mode_y; /* para el morph de entrada, ver getter */
 
     for (i = 0; i < NP_MODE_COUNT; i++)
     {

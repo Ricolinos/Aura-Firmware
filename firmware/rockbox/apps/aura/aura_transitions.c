@@ -405,7 +405,13 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
     {
         int t = i * 256 / frames;
         int total_h = size + refl_h;
-        int y = aura_pattern_lerp(from_y, AURA_DS_METRICS_NOW_PLAYING_COVER_Y, t);
+        /* `y` interpola el CENTRO vertical de la caratula (no su borde
+         * superior): los renderers de columnas centran cada columna en
+         * su linea media (correccion de geometria 2026-08-12), y el
+         * vuelo tiene que hacer exactamente lo mismo para aterrizar
+         * pixel-perfecto en draw_cover_tilted(). */
+        int y = aura_pattern_lerp(from_y,
+                                   AURA_DS_METRICS_NOW_PLAYING_COVER_Y + size / 2, t);
         aura_flow_slide_t slide;
         aura_flow_projection_t proj;
 
@@ -453,7 +459,10 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
                 n_rows++;
             }
             if (n_rows > 0)
-                lcd_bitmap(col_buf, proj.screen_x, y, 1, n_rows);
+            {
+                int cover_disp = (size << AURA_FLOW_SHIFT) / dy;
+                lcd_bitmap(col_buf, proj.screen_x, y - cover_disp / 2, 1, n_rows);
+            }
 
             if (!aura_flow_advance_column(&proj))
                 break;
@@ -466,7 +475,117 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
             sleep(frame_delay);
     }
 
-    TRANSITION_LOG("flip_and_flow", frames, start_tick);
-
     aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+
+    /* -- Morph de entrada (now-playing.md, "Entrada desde CoverFlow"):
+     * la caratula es el unico elemento que ya esta en su lugar (llego
+     * con el vuelo de arriba); el resto entra por grupos, cada uno con
+     * su coreografia confirmada por el documento:
+     *
+     *   titulos/datos de la cancion  -> fade in
+     *   iconos de modos              -> desde la derecha
+     *   barra de progreso            -> desde abajo
+     *   StatusBar                    -> desde arriba (su Drop estandar)
+     *
+     * El orden exacto del stagger y la duracion por grupo siguen
+     * marcados como pendiente menor en el documento -- provisional:
+     * los tres grupos de contenido entran EN PARALELO (mismos cuadros)
+     * y la barra cae AL FINAL, consistente con Push-and-Drop, donde la
+     * barra siempre entra despues del contenido. TODO(pendiente-doc).
+     *
+     * Mecanica: NowPlaying completo se renderiza UNA vez al offscreen
+     * (la caratula ahi es identica a la ya dibujada -- requisito duro
+     * de continuidad del documento, mismas constantes de geometria);
+     * cada grupo se compone por region desde ese buffer. El fade es
+     * blend(bg -> destino) porque el estado inicial de esas regiones
+     * tras el vuelo es fondo plano. */
+    {
+        struct viewport mvp;
+        struct viewport *msaved;
+        unsigned bg = a26_color(A26_SHELL_BG);
+        const int bar_h = A26_LAYOUT_STATUSBAR_HEIGHT;
+        const int right_x = 160;          /* zona de texto/modos: derecha de la caratula */
+        const int bottom_y = 200;         /* grupo "desde abajo": progreso + transporte */
+        const int mode_h = 22;            /* fila de modos: iconos de 20px + margen */
+        int mode_y, morph_frames, x, yy;
+
+        viewport_set_defaults(&mvp, SCREEN_MAIN);
+        mvp.x = 0;
+        mvp.y = 0;
+        mvp.width = A26_SCREEN_WIDTH;
+        mvp.height = A26_SCREEN_HEIGHT;
+        viewport_set_buffer(&mvp, &s_push_buffer, SCREEN_MAIN);
+        msaved = lcd_set_viewport(&mvp);
+        aura_screens_draw(nav);
+        lcd_set_viewport(msaved);
+
+        mode_y = aura_nowplaying_last_mode_row_y();
+        morph_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 8 : 4;
+
+        for (i = 1; i <= morph_frames; i++)
+        {
+            int prog = eased_offset(256, i, morph_frames); /* 0..256 */
+            int dx = (60 * (256 - prog)) / 256;   /* modos: desplazamiento restante */
+            int dyo = ((A26_SCREEN_HEIGHT - bottom_y) * (256 - prog)) / 256;
+
+            /* Fade in de textos/datos: columna derecha, salvo la fila
+             * de modos (que entra deslizando, abajo). */
+            for (yy = bar_h; yy < bottom_y; yy++)
+            {
+                fb_data *dst;
+                const fb_data *src;
+
+                if (yy >= mode_y && yy < mode_y + mode_h)
+                    continue;
+                dst = FBADDR(right_x, yy);
+                src = &s_push_fb[yy * A26_SCREEN_WIDTH + right_x];
+                for (x = 0; x < A26_SCREEN_WIDTH - right_x; x++)
+                    dst[x] = a26_shell_blend(bg, src[x], prog);
+            }
+
+            /* Iconos de modos desde la derecha. */
+            for (yy = mode_y; yy < mode_y + mode_h && yy < bottom_y; yy++)
+            {
+                fb_data *dst = FBADDR(right_x, yy);
+                const fb_data *src = &s_push_fb[yy * A26_SCREEN_WIDTH + right_x];
+                int span = A26_SCREEN_WIDTH - right_x;
+                for (x = 0; x < span; x++)
+                    dst[x] = (x >= dx) ? src[x - dx] : bg;
+            }
+
+            /* Barra de progreso (y transporte) desde abajo -- lo que
+             * queda por entrar deja ver lo que ya habia (la cola del
+             * reflejo), nunca un borrado. */
+            if (dyo < A26_SCREEN_HEIGHT - bottom_y)
+                lcd_bitmap_part(s_push_fb, 0, bottom_y, A26_SCREEN_WIDTH,
+                                0, bottom_y + dyo, A26_SCREEN_WIDTH,
+                                A26_SCREEN_HEIGHT - bottom_y - dyo);
+
+            lcd_update();
+            drain_button_queue_if_full();
+            if (i < morph_frames)
+                sleep(frame_delay);
+        }
+
+        /* StatusBar (full) cayendo desde arriba, al final -- mismo Drop
+         * que la entrada a Cover Flow. */
+        {
+            int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+
+            for (i = 1; i <= drop_frames; i++)
+            {
+                int dd = eased_offset(bar_h, i, drop_frames);
+
+                if (dd > 0)
+                    lcd_bitmap_part(s_push_fb, 0, bar_h - dd, A26_SCREEN_WIDTH,
+                                    0, 0, A26_SCREEN_WIDTH, dd);
+                lcd_update_rect(0, 0, A26_SCREEN_WIDTH, bar_h);
+                drain_button_queue_if_full();
+                if (i < drop_frames)
+                    sleep(frame_delay);
+            }
+        }
+    }
+
+    TRANSITION_LOG("flip_and_flow+morph", frames, start_tick);
 }

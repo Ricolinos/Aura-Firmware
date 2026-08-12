@@ -1330,4 +1330,18 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-113 — Morph de entrada al reproductor, columnas centradas (bordes convergentes) y fixture sin carátula
+
+**Tercera ronda de correcciones del dueño del diseño (2026-08-12):**
+
+**1) Cover Flow → reproductor es un MORPH, no un push.** `now-playing.md` ("Entrada desde CoverFlow — confirmada") define la entrada por grupos: la carátula ya está en su lugar (llegó con Flip-and-Flow); títulos/datos con **fade in**; íconos de modos **desde la derecha**; barra de progreso **desde abajo**; StatusBar **desde arriba** (su Drop). El bug real: tras el vuelo, el bloque centralizado de transiciones de `aura_screens.c` aplicaba ADEMÁS el push genérico T3 — "empujar la pantalla del reproductor desde la derecha", exactamente lo reportado. Corregido: el morph corre DENTRO de `aura_transition_flip_and_flow()` (NowPlaying renderizado una vez al offscreen — su carátula es idéntica y en el mismo lugar, requisito duro de continuidad del documento — y cada grupo compuesto por región: fade = `blend(bg→destino)`, modos con desplazamiento horizontal decreciente usando el Y REAL de la fila exportado por `aura_nowplaying_last_mode_row_y()`, franja inferior subiendo desde el borde, barra en Drop al final), y el bloque centralizado ahora omite la transición genérica para coverflow→NowPlaying. Orden/duración del stagger siguen "pendiente menor" en el documento — provisional: tres grupos de contenido en paralelo + barra al final (consistente con Push-and-Drop), TODO(pendiente-doc).
+
+**2) Bordes superiores horizontales en las laterales = anclado incorrecto.** Prueba aportada por el dueño: en el original ambos bordes convergen hacia el punto de fuga; el render anclaba TODAS las columnas al mismo borde superior (`CF_TOP_Y`), por eso las tapas laterales salían con el techo perfectamente horizontal. Corregido en los CUATRO renderers de proyección por columnas (carrusel, flip, carátula del reproductor, vuelo): cada columna se centra en la línea media vertical de la carátula (`y = centro − alto_proyectado/2`) — el giro es sobre el eje central, como el Cover Flow real. En el reproductor (tilt 7°) el efecto es sutil (~2px por lado) pero mantiene la continuidad exacta con el aterrizaje del vuelo, cuyo `from_y` ahora es el CENTRO del slide del carrusel (firma documentada en `aura_transitions.h`).
+
+**3) La imagen Default SÍ estaba implementada — pero era invisible con los fixtures.** Los tres álbumes de prueba comparten `Music/cover.jpg` (carátula de carpeta): ningún álbum carecía de arte, así que el camino Default nunca se ejercitaba a la vista. `gen_test_media.sh` ahora genera un cuarto álbum **"Album sin portada"** en `SinArte/` en la RAÍZ del disco — no bajo `Music/`, porque `find_albumart()` también busca `cover.jpg` en el directorio padre y habría "vestido" justo al álbum que debe quedar sin arte (fallo encontrado en el primer intento, movido tras verlo en captura). Verificado: la nota gris sobre tile claro aparece en el carrusel (`docs/screenshots/fix3-coverflow-default-note.png`).
+
+**Aceptación**: 0 warnings, 8/8 suites host-side. Geometría de bordes convergentes verificada por captura (`fix3-coverflow-converging-edges.png`). Los cuadros intermedios del morph no son capturables con el arnés (transición síncrona, limitación D-105/D-112) — el aterrizaje es el render normal de NowPlaying ya verificado; el movimiento queda para confirmación del dueño en vivo.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

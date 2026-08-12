@@ -295,6 +295,16 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
         int p = 0, dest_row, n_rows = 0;
         const fb_data *cover_col = cover + (size_t)col * CF_COVER_SIZE;
         const fb_data *refl_col = refl + (size_t)col * refl_h;
+        /* Centrado VERTICAL por columna (correccion contra la captura
+         * del original de Apple, 2026-08-12): cada columna se ancla de
+         * modo que la CARATULA quede centrada en su linea media -- la
+         * perspectiva encoge ambos bordes (superior e inferior
+         * convergen hacia el punto de fuga), como el Cover Flow real.
+         * Anclar todas las columnas al mismo borde superior (la
+         * version anterior) producia tapas con el borde de arriba
+         * perfectamente horizontal, que es lo que delato el error. */
+        int cover_disp = (CF_COVER_SIZE << AURA_FLOW_SHIFT) / dy;
+        int y_col = CF_TOP_Y + CF_COVER_SIZE / 2 - cover_disp / 2;
 
         for (dest_row = 0; dest_row < total_h; dest_row++)
         {
@@ -311,7 +321,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
             n_rows++;
         }
         if (n_rows > 0)
-            lcd_bitmap(col_buf, proj.screen_x, CF_TOP_Y, 1, n_rows);
+            lcd_bitmap(col_buf, proj.screen_x, y_col, 1, n_rows);
 
         if (!aura_flow_advance_column(&proj))
             break;
@@ -351,6 +361,9 @@ static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
         int p = 0, dest_row, n_rows = 0;
         const fb_data *cover_col = cover + (size_t)col * CF_COVER_SIZE;
 
+        int cover_disp = (CF_COVER_SIZE << AURA_FLOW_SHIFT) / dy;
+        int y_col = CF_TOP_Y + CF_COVER_SIZE / 2 - cover_disp / 2;
+
         for (dest_row = 0; dest_row < CF_COVER_SIZE; dest_row++)
         {
             int source_row = p >> AURA_FLOW_SHIFT;
@@ -361,8 +374,10 @@ static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
             p += dy;
             n_rows++;
         }
+        /* Centrado vertical por columna -- mismo criterio que
+         * draw_slide_perspective(): el giro es sobre el eje central. */
         if (n_rows > 0)
-            lcd_bitmap(col_buf, proj.screen_x, CF_TOP_Y, 1, n_rows);
+            lcd_bitmap(col_buf, proj.screen_x, y_col, 1, n_rows);
 
         if (!aura_flow_advance_column(&proj))
             break;
@@ -651,7 +666,8 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
              * NowPlaying con Flip-and-Flow (T3.2(d)) -- la funcion de
              * transicion ya hace el aura_nav_push() al terminar. */
             if (s_track_count > 0 && aura_music_play_songs(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, s_track_sel))
-                aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek, CF_TOP_Y);
+                aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek,
+                                               CF_TOP_Y + CF_COVER_SIZE / 2);
             break;
         case BUTTON_MENU:
             /* "El album gira de nuevo (vuelve a mostrar la caratula)"
