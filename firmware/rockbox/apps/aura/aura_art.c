@@ -1,14 +1,14 @@
 #include "aura_art.h"
 
-int aura_art_reflection_height(int size)
+int aura_art_reflection_height(int size, int height_pct)
 {
-    return size * AURA_ART_REFLECTION_HEIGHT_PCT / 100;
+    return size * height_pct / 100;
 }
 
 void aura_art_generate_reflection(const fb_data *cover, fb_data *out,
-                                   int size, unsigned bg_color)
+                                   int size, int height_pct, unsigned bg_color)
 {
-    int refl_h = aura_art_reflection_height(size);
+    int refl_h = aura_art_reflection_height(size, height_pct);
     int bg_r = RGB_UNPACK_RED(bg_color);
     int bg_g = RGB_UNPACK_GREEN(bg_color);
     int bg_b = RGB_UNPACK_BLUE(bg_color);

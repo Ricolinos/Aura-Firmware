@@ -32,23 +32,33 @@
 #include "aura_art.h"
 #include "aura_motion.h"
 #include "aura_music.h"
+#include "aura_flow.h"
 
-/* -- Layout (doc "Reproductor - Ahora suena.md" SS2) -------------------- */
-#define ART_SIZE   84
-#define ART_X      A26_SPACING_LG
-#define ART_Y      28
-#define REFL_GAP   2
+/* -- Layout (PLAN.md T3.1, componentes/now-playing.md) -------------------
+ * Geometria de la caratula RESCATADA del original (doc: "se rescata la
+ * geometria, tamano y posicion... del Now Playing original del iPod
+ * Classic"), valores "aproximados leidos de captura, a validar" segun
+ * el propio documento -- se usan tal cual, es la unica fuente que existe
+ * hoy. El angulo (7 grados) SI esta "fijado formalmente", a diferencia
+ * de x/y/tamano que siguen marcados como estimados. */
+#define ART_SIZE     AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
+#define ART_X        AURA_DS_METRICS_NOW_PLAYING_COVER_X
+#define ART_Y        AURA_DS_METRICS_NOW_PLAYING_COVER_Y
+#define ART_RADIUS   AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
+#define ART_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
+#define REFL_GAP     2
 
 #define TEXT_X     (ART_X + ART_SIZE + A26_SPACING_LG)
 #define TEXT_W     (A26_SCREEN_WIDTH - TEXT_X - A26_SPACING_LG)
 
 #define STAR_COUNT 5
 
-#define PROGRESS_Y      (A26_SCREEN_HEIGHT - 34)
-#define PROGRESS_H      A26_SPACING_SM
-#define PROGRESS_X      40
-#define PROGRESS_W      (A26_SCREEN_WIDTH - 2 * PROGRESS_X)
-#define TRANSPORT_Y     (A26_SCREEN_HEIGHT - 14)
+#define PROGRESS_Y       (A26_SCREEN_HEIGHT - 34)
+#define PROGRESS_TRACK_H AURA_DS_METRICS_NOW_PLAYING_PROGRESS_TRACK_HEIGHT
+#define PROGRESS_FILL_H  AURA_DS_METRICS_NOW_PLAYING_PROGRESS_FILL_HEIGHT
+#define PROGRESS_X       40
+#define PROGRESS_W       (A26_SCREEN_WIDTH - 2 * PROGRESS_X)
+#define TRANSPORT_Y      (A26_SCREEN_HEIGHT - 14)
 
 #define LRC_FILE_BUF_SIZE 8192
 
@@ -66,7 +76,7 @@ static long s_playlist_confirm_until = 0;
 static unsigned char s_art_buf[64 * 1024];
 static struct bitmap s_art_bm;
 static bool s_art_valid = false;
-static unsigned char s_reflection_buf[ART_SIZE * (ART_SIZE * AURA_ART_REFLECTION_HEIGHT_PCT / 100) * sizeof(fb_data)];
+static unsigned char s_reflection_buf[ART_SIZE * (ART_SIZE * ART_REFLECTION_PCT / 100) * sizeof(fb_data)];
 
 static aura_lrc_t s_lrc;
 static bool s_lrc_valid = false;
@@ -136,6 +146,40 @@ static void derive_sibling_path(const char *audio_path, const char *new_ext,
     strlcat(out, new_ext, outsz);
 }
 
+/* Recorta las 4 esquinas de un bitmap EN MEMORIA (no en pantalla) al
+ * radio de CoverFlow (componentes/now-playing.md: "esquinas... heredadas
+ * del bitmap .pfraw ya enmascarado"). El cache .pfraw con LUT por
+ * esquina es trabajo de T3.2 (Cover Flow real) -- esta caratula se
+ * proyecta con inclinacion via aura_flow (no un blit rectangular
+ * simple), asi que a26_shell_round_bitmap_corners() (que pinta
+ * directo sobre la pantalla ya dibujada) no aplica: hace falta
+ * enmascarar la FUENTE antes de proyectarla, para que el area ya
+ * transparente/de-fondo se deforme junto con el resto de la imagen.
+ * Misma formula de distancia que stamp_corner() (apple2026_shell.c),
+ * aplicada aca sobre el buffer en vez de sobre el framebuffer. */
+static void mask_corners_buffer(fb_data *buf, int size, int radius, unsigned bg)
+{
+    int r2 = radius * radius;
+    int dx, dy;
+
+    for (dy = 0; dy < radius; dy++)
+    {
+        for (dx = 0; dx < radius; dx++)
+        {
+            int rx = radius - 1 - dx;
+            int ry = radius - 1 - dy;
+
+            if (rx * rx + ry * ry > r2)
+            {
+                buf[dy * size + dx] = bg;
+                buf[dy * size + (size - 1 - dx)] = bg;
+                buf[(size - 1 - dy) * size + dx] = bg;
+                buf[(size - 1 - dy) * size + (size - 1 - dx)] = bg;
+            }
+        }
+    }
+}
+
 static bool load_album_art(const struct mp3entry *id3)
 {
     char path[MAX_PATH];
@@ -163,9 +207,12 @@ static bool load_album_art(const struct mp3entry *id3)
     if (ret <= 0)
         return false;
 
+    mask_corners_buffer((fb_data *)s_art_bm.data, ART_SIZE, ART_RADIUS,
+                         a26_color(A26_SHELL_BG));
     aura_art_generate_reflection((const fb_data *)s_art_bm.data,
                                   (fb_data *)s_reflection_buf,
-                                  ART_SIZE, a26_color(A26_SHELL_BG));
+                                  ART_SIZE, ART_REFLECTION_PCT,
+                                  a26_color(A26_SHELL_BG));
     return true;
 }
 
@@ -216,34 +263,74 @@ static void aura_format_track_time(unsigned long ms, char *buf, size_t bufsz)
     snprintf(buf, bufsz, "%lu:%02lu", total_s / 60, total_s % 60);
 }
 
-/* -- Caratula + reflejo (doc SS3) ---------------------------------------- */
+/* -- Caratula + reflejo, con inclinacion real (PLAN.md T3.1,
+ * componentes/now-playing.md) --------------------------------------------
+ *
+ * "Esa inclinacion sutil ES el angulo de aterrizaje de Flip-and-Flow" --
+ * se reusa DIRECTO el motor de proyeccion por columnas de aura_flow.c
+ * (T1.1 de la Fase 31 anterior, ya extendido y probado por Cover Flow
+ * viejo en aura_coverflow.c::draw_slide_perspective(), regla dura 7: no
+ * reimplementar, extender). Mismo signo de angulo que la lateral
+ * DERECHA de Cover Flow (angle = -iangle): "borde derecho retrocedido,
+ * mira hacia la derecha" es exactamente esa convencion, solo que a 7
+ * grados en vez de a los ~70 grados de una lateral completa.
+ *
+ * NP_TILT_CX (posicion horizontal en PFreal) es una constante derivada
+ * -- no una formula que se resuelve por si sola en runtime, mismo
+ * criterio que CF_OFFSETX_R en aura_coverflow.c -- buscada para que el
+ * borde IZQUIERDO de la proyeccion caiga en ART_X con ART_SIZE=135 y
+ * este angulo exacto (ver DECISIONS.md D-099 para el metodo: busqueda
+ * numerica contra la misma formula de aura_flow_begin_projection(),
+ * verificada por pixel contra el render real, no solo calculada). */
+#define NP_TILT_IANGLE 20     /* 7 grados * 1024/360, redondeado (AURA_DS_METRICS_NOW_PLAYING_COVER_TILT_DEG) */
+#define NP_TILT_CX     (-96300)
 
-/* Radio de esquina de la caratula (doc "Reproductor - Ahora suena.md"
- * SS3: "cuadrado, radio de esquina 8px" -- nivel 2 de la escala
- * concentrica, doc de diseno SS5.4). AUDITORIA-01 A-07: la caratula se
- * dibujaba con lcd_bitmap() directo, esquinas vivas -- vacio real, no
- * decision. Se recorta DESPUES de dibujar (la imagen ya existe en el
- * framebuffer), con la misma primitiva de corte por distancia que el
- * resto del sistema. */
-#define COVER_RADIUS A26_LAYOUT_CORNER_RADIUS_CARD
-
-static void draw_cover(void)
+static void draw_cover_tilted(void)
 {
-    if (s_art_valid)
-    {
-        int refl_h = aura_art_reflection_height(ART_SIZE);
-        unsigned bg = a26_color(A26_SHELL_BG);
+    aura_flow_slide_t slide;
+    aura_flow_projection_t proj;
+    int refl_h = aura_art_reflection_height(ART_SIZE, ART_REFLECTION_PCT);
+    int total_h = ART_SIZE + refl_h;
+    static fb_data col_buf[ART_SIZE + (ART_SIZE * 60 / 100)]; /* margen holgado sobre refl_h real */
 
-        lcd_bitmap((const fb_data *)s_art_bm.data, ART_X, ART_Y, ART_SIZE, ART_SIZE);
-        a26_shell_round_bitmap_corners(ART_X, ART_Y, ART_SIZE, ART_SIZE, COVER_RADIUS, bg);
-
-        lcd_bitmap((const fb_data *)s_reflection_buf, ART_X, ART_Y + ART_SIZE + REFL_GAP,
-                   ART_SIZE, refl_h);
-    }
-    else
+    if (!s_art_valid)
     {
         lcd_set_foreground(a26_color(A26_SHELL_RAIL));
         lcd_drawrect(ART_X, ART_Y, ART_SIZE, ART_SIZE);
+        return;
+    }
+
+    slide.angle = -NP_TILT_IANGLE;
+    slide.distance = 0;
+    slide.cx = NP_TILT_CX;
+
+    aura_flow_begin_projection(&proj, &slide, ART_SIZE);
+
+    while (proj.screen_x < AURA_FLOW_SCREEN_W)
+    {
+        int col = aura_flow_source_column(&proj);
+        int dy = aura_flow_vertical_scale(&proj);
+        int p = 0, dest_row, n_rows = 0;
+        const fb_data *cover = (const fb_data *)s_art_bm.data;
+        const fb_data *refl = (const fb_data *)s_reflection_buf;
+
+        for (dest_row = 0; dest_row < total_h; dest_row++)
+        {
+            int source_row = p >> AURA_FLOW_SHIFT;
+
+            if (source_row >= total_h)
+                break;
+            col_buf[dest_row] = (source_row < ART_SIZE)
+                ? cover[source_row * ART_SIZE + col]
+                : refl[(source_row - ART_SIZE) * ART_SIZE + col];
+            p += dy;
+            n_rows++;
+        }
+        if (n_rows > 0)
+            lcd_bitmap(col_buf, proj.screen_x, ART_Y, 1, n_rows);
+
+        if (!aura_flow_advance_column(&proj))
+            break;
     }
 }
 
@@ -311,16 +398,30 @@ static void draw_text_and_modes(const struct mp3entry *id3)
     int mode_x = A26_SCREEN_WIDTH - A26_SPACING_LG - mode_row_w;
     int mode_y;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_TITLE));
+    /* Tipografia nueva (fundamentos/02-tipografia.md, "Tokens de
+     * NowPlaying"): titulo Bold 12px, artista y album Regular 12px --
+     * ninguno de los tres es TITLE/CAPTION del sistema viejo. Orden
+     * titulo->artista->album: el documento confirma los TRES textos y
+     * su tipografia (tabla "Tipografia") pero no un orden de lectura
+     * explicito (la tabla "Layout actual" solo nombra titulo+artista,
+     * sin mencionar album en absoluto) -- se agrega album despues del
+     * artista por ser la convencion mas comun, provisional, ver
+     * DECISIONS.md D-099. */
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
     snprintf(line, sizeof(line), "%s", id3->title ? id3->title : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
     y += h + A26_SPACING_XS;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     snprintf(line, sizeof(line), "%s", id3->artist ? id3->artist : "");
+    lcd_getstringsize((const unsigned char *)line, &w, &h);
+    lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
+    y += h + A26_SPACING_XS;
+
+    snprintf(line, sizeof(line), "%s", id3->album ? id3->album : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
     y += h + A26_SPACING_MD;
@@ -362,25 +463,38 @@ static void draw_text_and_modes(const struct mp3entry *id3)
 
 /* -- Pastilla de progreso + transporte (doc SS2) -------------------------- */
 
+/* Barra de dos capas (componentes/now-playing.md, "Barra de progreso"):
+ * track persistente 6px negro-60% (opacidad simulada, misma tecnica de
+ * a26_shell_blend() ya usada en StatusBar v2/T2.7) + avance 4px encima,
+ * puntas redondeadas, centrado dentro del track. Blanca en reposo,
+ * --color-accent mientras se manipula (Modo 2/scrub). */
 static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms)
 {
     char timebuf[24], timebuf2[24];
     int w, h;
     int fill_w;
+    int fill_y = PROGRESS_Y + (PROGRESS_TRACK_H - PROGRESS_FILL_H) / 2;
+    unsigned track_color = a26_shell_blend(a26_color(A26_SHELL_BG), LCD_RGBPACK(0, 0, 0),
+                                            AURA_DS_OPACITY_PROGRESS_TRACK_PCT * 256 / 100);
+    unsigned fill_color = (scrub_preview_ms >= 0) ? aura_accent()
+                                                   : AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
     unsigned long elapsed = (scrub_preview_ms >= 0) ? (unsigned long)scrub_preview_ms : id3->elapsed;
+    unsigned long remaining = (id3->length > elapsed) ? (id3->length - elapsed) : 0;
 
-    a26_shell_fill_rounded_rect(PROGRESS_X, PROGRESS_Y, PROGRESS_W, PROGRESS_H,
-                                 PROGRESS_H / 2, a26_color(A26_PROGRESS_TRACK),
-                                 a26_color(A26_SHELL_BG));
+    a26_shell_fill_rounded_rect(PROGRESS_X, PROGRESS_Y, PROGRESS_W, PROGRESS_TRACK_H,
+                                 PROGRESS_TRACK_H / 2, track_color, a26_color(A26_SHELL_BG));
     fill_w = id3->length ? (int)((unsigned long long)PROGRESS_W * elapsed / id3->length) : 0;
     if (fill_w > 0)
-        a26_shell_fill_rounded_rect(PROGRESS_X, PROGRESS_Y, fill_w, PROGRESS_H,
-                                     PROGRESS_H / 2, a26_color(A26_PROGRESS_FILL),
-                                     a26_color(A26_SHELL_BG));
+        a26_shell_fill_rounded_rect(PROGRESS_X, fill_y, fill_w, PROGRESS_FILL_H,
+                                     PROGRESS_FILL_H / 2, fill_color, track_color);
 
+    /* Formato del original (doc confirmado): transcurrido a la
+     * izquierda, restante con signo negativo a la derecha. */
     aura_format_track_time(elapsed, timebuf, sizeof(timebuf));
-    aura_format_track_time(id3->length, timebuf2, sizeof(timebuf2));
-    lcd_setfont(a26_font(A26_FONT_STYLE_MICRO));
+    timebuf2[0] = '-';
+    aura_format_track_time(remaining, timebuf2 + 1, sizeof(timebuf2) - 1);
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     lcd_putsxy(PROGRESS_X, PROGRESS_Y - A26_SPACING_MD, (const unsigned char *)timebuf);
     lcd_getstringsize((const unsigned char *)timebuf2, &w, &h);
@@ -524,7 +638,7 @@ static void draw_lyrics(const struct mp3entry *id3)
 
 static void draw_player(const struct mp3entry *id3, int scrub_preview_ms)
 {
-    draw_cover();
+    draw_cover_tilted();
     draw_text_and_modes(id3);
     draw_progress(id3, scrub_preview_ms);
     draw_transport();

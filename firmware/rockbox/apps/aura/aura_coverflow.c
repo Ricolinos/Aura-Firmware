@@ -173,7 +173,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset, int fade)
     int n = (offset < 0 ? -offset : offset) - 1; /* lateral 0-esimo, 1-esimo... */
     const fb_data *cover = (const fb_data *)slot->art.cover_data;
     const fb_data *refl = (const fb_data *)slot->art.reflection_data;
-    int refl_h = aura_art_reflection_height(CF_COVER_SIZE);
+    int refl_h = aura_art_reflection_height(CF_COVER_SIZE, AURA_ART_REFLECTION_HEIGHT_PCT);
     int total_h = CF_COVER_SIZE + refl_h;
     unsigned bg = a26_color(A26_SHELL_BG);
     int bg_r = RGB_UNPACK_RED(bg);

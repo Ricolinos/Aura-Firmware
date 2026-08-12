@@ -13,19 +13,24 @@
 
 #include "lcd.h"
 
-/* Alto del reflejo como numerador/100 del lado del cuadrado (doc SS5.4:
- * "35% alto"). Expuesto para que el llamador dimensione su buffer:
- * aura_art_reflection_height(size) filas de `size` columnas. */
+/* Alto del reflejo como numerador/100 del lado del cuadrado (doc SS5.4
+ * del sistema viejo: "35% alto") -- valor por defecto de los
+ * consumidores del sistema Apple2026 viejo (Cover Flow viejo,
+ * aura_albumart.c). El sistema nuevo (componentes/now-playing.md,
+ * cover-flow.md) pide una proporcion mas sutil (25%,
+ * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, G16) --
+ * por eso `height_pct` es un parametro, no una constante fija: cada
+ * consumidor pasa la suya en vez de que este modulo elija por todos. */
 #define AURA_ART_REFLECTION_HEIGHT_PCT 35
 
-int aura_art_reflection_height(int size);
+int aura_art_reflection_height(int size, int height_pct);
 
 /* Genera el reflejo de `cover` (size x size, fb_data, formato nativo
- * del LCD) en `out` (size x aura_art_reflection_height(size), reservado
- * por el llamador -- Aura no hace malloc). Espejo vertical de las
- * primeras filas de la caratula, atenuado hacia `bg_color` a medida que
- * se aleja (mascara 35%->0%, doc SS5.4). */
+ * del LCD) en `out` (size x aura_art_reflection_height(size, height_pct),
+ * reservado por el llamador -- Aura no hace malloc). Espejo vertical de
+ * las primeras filas de la caratula, atenuado hacia `bg_color` a medida
+ * que se aleja (mascara height_pct%->0%). */
 void aura_art_generate_reflection(const fb_data *cover, fb_data *out,
-                                   int size, unsigned bg_color);
+                                   int size, int height_pct, unsigned bg_color);
 
 #endif /* AURA_ART_H */

@@ -57,7 +57,8 @@ static void generate_reflection(const aura_albumart_t *art)
      * misma en vez de reimplementarla cada uno. */
     aura_art_generate_reflection((const fb_data *)art->cover_data,
                                   (fb_data *)art->reflection_data,
-                                  art->size, a26_color(A26_SHELL_BG));
+                                  art->size, AURA_ART_REFLECTION_HEIGHT_PCT,
+                                  a26_color(A26_SHELL_BG));
 }
 
 bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
