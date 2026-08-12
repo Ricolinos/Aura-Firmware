@@ -1472,4 +1472,10 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-122 — Orden de capas de los textos durante el morph de regreso
+
+**Error visual reportado por el dueño del diseño (2026-08-12)**: al regresar del reproductor al Cover Flow, el título/artista aparecían primero DETRÁS del reflejo y "saltaban" encima al terminar. Causa: en cada cuadro del morph, `aura_coverflow_draw_return_frame()` dibujaba fondo + laterales + TEXTOS, y la carátula con su reflejo se proyectaba DESPUÉS, tapándolos — mientras que el carrusel en reposo dibuja los textos al final (encima del reflejo). Fix: los textos ahora viven en su propia función (`aura_coverflow_draw_return_texts()`) que la transición llama AL FINAL de cada cuadro, después de la carátula y el reflejo — el mismo orden de capas que el estado final, sin salto. Verificado con un cuadro cazado a medio morph: textos subiendo encima del reflejo (`fix12-return-texts-above-reflection.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

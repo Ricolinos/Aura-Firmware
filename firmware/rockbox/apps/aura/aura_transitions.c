@@ -722,6 +722,10 @@ void aura_transition_flow_return(aura_nav_t *nav)
                 break;
         }
 
+        /* Textos AL FINAL del cuadro: encima del reflejo, como en el
+         * carrusel en reposo -- sin salto de capas al aterrizar. */
+        aura_coverflow_draw_return_texts(t);
+
         lcd_update();
         drain_button_queue_if_full();
         if (i < frames)

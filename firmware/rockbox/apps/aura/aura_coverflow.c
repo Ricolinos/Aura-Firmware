@@ -1092,20 +1092,29 @@ void aura_coverflow_draw_exit_frame(int out_t256)
 
 void aura_coverflow_draw_return_frame(int in_t256)
 {
+    a26_shell_clear_screen();
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW));
+    draw_carousel_sides((256 - in_t256) * CF_EXIT_UNITS / 256);
+}
+
+void aura_coverflow_draw_return_texts(int in_t256)
+{
     int w, h;
     const char *label;
     const char *artist;
     int text_dy = ((256 - in_t256) * 64) / 256;
 
-    a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW));
-    draw_carousel_sides((256 - in_t256) * CF_EXIT_UNITS / 256);
-
     if (s_album_count <= 0)
         return;
 
     /* Titulo/artista entrando desde el borde inferior, mismo recorrido
-     * de 64px que usan al ceder espacio en el flip (D-116). */
+     * de 64px que usan al ceder espacio en el flip (D-116). Funcion
+     * APARTE del fondo a proposito: se dibujan DESPUES de la caratula
+     * y su reflejo en cada cuadro del morph de regreso -- el mismo
+     * orden de capas que el carrusel en reposo (texto ENCIMA del
+     * reflejo); dibujarlos antes los dejaba tapados por el reflejo
+     * durante la transicion y "saltaban" encima al terminar (error
+     * visual reportado por el dueno del diseno, 2026-08-12). */
     label = s_albums[s_target_index].label;
     artist = target_artist();
 

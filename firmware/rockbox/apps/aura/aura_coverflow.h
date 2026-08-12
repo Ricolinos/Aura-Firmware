@@ -39,9 +39,15 @@ int aura_coverflow_animating(void);
 void aura_coverflow_draw_exit_frame(int out_t256);
 
 /* Fondo de un cuadro del vuelo de REGRESO: laterales entrando desde
- * los bordes + titulo/artista subiendo desde el borde inferior --
- * `in_t256` 0..256, 256 = todo asentado. */
+ * los bordes -- `in_t256` 0..256, 256 = todo asentado. Los textos van
+ * en su propia funcion (abajo) porque deben dibujarse DESPUES de la
+ * caratula/reflejo del vuelo: mismo orden de capas que el carrusel en
+ * reposo, texto siempre encima del reflejo. */
 void aura_coverflow_draw_return_frame(int in_t256);
+
+/* Titulo/artista subiendo desde el borde inferior -- llamar al FINAL
+ * de cada cuadro del morph de regreso. */
+void aura_coverflow_draw_return_texts(int in_t256);
 
 /* Album objetivo actual (seek de tagcache) -- la transicion de regreso
  * recarga su caratula con el. */
