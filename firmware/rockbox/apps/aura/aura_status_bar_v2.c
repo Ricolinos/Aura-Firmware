@@ -13,14 +13,6 @@
 
 #include "aura_status_bar_v2.h"
 
-/* Separacion entre las zonas DynamicTitle/ClockIndicator/iconos:
- * componentes/status-bar.md y dynamic-title.md dejan pendiente el
- * espaciado exacto ("el 4px confirmado es solo entre iconos"). Se
- * reusa el mismo padding interno de la barra (4px) como valor
- * provisional razonable -- TODO(pendiente-doc), ver DECISIONS.md
- * D-096. */
-#define AURA_SB2_ZONE_GAP AURA_DS_METRICS_STATUSBAR_PADDING
-
 /* -- ClockIndicator por atajo (B-01 en BLOCKED.md, resuelto) ------------
  *
  * "Se revela manteniendo presionado SELECT" (doc) -- el gesto en si
@@ -102,6 +94,16 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
     int right = x + width - padding;
     int left = x + padding;
     int clock_w = AURA_DS_METRICS_CLOCK_INDICATOR_MAX_WIDTH;
+    /* Centrado vertical real (componentes/clock-indicator.md, (split):
+     * "Centrada en la barra de estado, tanto horizontal COMO
+     * verticalmente" -- el `y` que se le pasaba antes a
+     * aura_clock_indicator_draw() era 0 fijo (pegado arriba, altura
+     * 10px sobre una barra de 20px), ni centrado ni consistente con el
+     * resto del contenido de la barra, que si se centra verticalmente
+     * (`icon_y`/`text_y` de abajo). El documento solo lo pide
+     * explicito para (split), pero (full) comparte la misma barra de
+     * 20px y el mismo criterio de icon_y/text_y -- aplica igual ahi. */
+    int clock_y = (AURA_DS_METRICS_STATUSBAR_HEIGHT - AURA_DS_METRICS_CLOCK_INDICATOR_HEIGHT) / 2;
     int title_max_w, title_x;
     int w, h, text_y;
     unsigned bg = a26_color(A26_SHELL_BG);
@@ -163,8 +165,20 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
      * aura_pattern_lerp -- T1.1, cero matematica nueva). */
     if (is_full)
     {
-        title_x = aura_pattern_lerp(left, left + clock_w + AURA_SB2_ZONE_GAP, clock_progress);
+        /* Destino CENTRADO en la barra, no "a la derecha del reloj"
+         * (componentes/clock-indicator.md, (full): "Si ClockIndicator
+         * es persistente -> DynamicTitle queda siempre centrado en la
+         * barra" -- no marcado como pendiente, es una regla ya
+         * confirmada). El mismo destino sirve para el caso persistente
+         * (clock_progress=256 sostenido, sin animar) y para el
+         * revelado por atajo ("empujando a DynamicTitle hacia el
+         * centro" mientras entra) -- ambos casos son "interpolar hacia
+         * el centro segun clock_progress", solo cambia si hay
+         * animacion de por medio. title_max_w es fijo (120px, no
+         * varia con/sin reloj como en (split)) asi que el centro no
+         * se mueve durante la animacion. */
         title_max_w = AURA_DS_METRICS_DYNAMIC_TITLE_MAX_WIDTH_FULL;
+        title_x = aura_pattern_lerp(left, x + (width - title_max_w) / 2, clock_progress);
         if (clock_progress > 0)
         {
             /* Horizontal, no vertical: enter_progress_256 se le pasa
@@ -173,7 +187,7 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
              * de este archivo, no el Drop-and-Lift vertical que ese
              * parametro controla. */
             int clock_x = aura_pattern_lerp(left - clock_w, left, clock_progress);
-            aura_clock_indicator_draw(clock_x, clock_w, 0, 256);
+            aura_clock_indicator_draw(clock_x, clock_w, clock_y, 256);
         }
     }
     else
@@ -182,10 +196,16 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
         title_max_w = aura_pattern_lerp(AURA_DS_METRICS_DYNAMIC_TITLE_MAX_WIDTH_SPLIT_NO_CLOCK,
                                          AURA_DS_METRICS_DYNAMIC_TITLE_MAX_WIDTH_SPLIT_WITH_CLOCK,
                                          clock_progress);
-        /* (split): Drop-and-Lift VERTICAL real -- este si es el eje
-         * que enter_progress_256 ya sabe animar (T2.5), sin logica
-         * nueva aca. Se autoprotege si progreso<=0 (no dibuja). */
-        aura_clock_indicator_draw(left + title_max_w + AURA_SB2_ZONE_GAP, clock_w, 0, clock_progress);
+        /* (split): centrado en TODA la barra (x..x+width), no pegado
+         * despues del titulo -- doc: "Centrada en la barra de estado,
+         * tanto horizontal como verticalmente". DynamicTitle sigue
+         * alineado a la izquierda y reserva su propio ancho maximo
+         * (60px con hora visible) para no invadir la zona centrada del
+         * reloj, pero la posicion del reloj en si no depende de donde
+         * termina el titulo. Drop-and-Lift VERTICAL real en `enter_progress_256`
+         * -- este si es el eje que ese parametro ya sabe animar (T2.5),
+         * sin logica nueva aca. Se autoprotege si progreso<=0 (no dibuja). */
+        aura_clock_indicator_draw(x + (width - clock_w) / 2, clock_w, clock_y, clock_progress);
     }
 
     /* Tipografia con opacidad simulada (fundamentos/02-tipografia.md,

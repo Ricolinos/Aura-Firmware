@@ -1278,4 +1278,18 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-110 — StatusBar del menú raíz no correspondía con `componentes/clock-indicator.md`
+
+**Segundo reporte en vivo del dueño del diseño**, esta vez apuntado específicamente al `StatusBar` del menú principal. `aura_status_bar_v2.c` (T2.7) tenía dos desviaciones reales contra `clock-indicator.md`, ninguna de las dos tocada por D-109:
+
+**1) `ClockIndicator` en `(split)` no estaba centrado, ni horizontal ni verticalmente.** El documento es explícito: *"(split): Centrada en la barra de estado, tanto horizontal como verticalmente."* El código lo posicionaba pegado inmediatamente después de `DynamicTitle` (`left + title_max_w + gap`) y con `y=0` fijo (pegado arriba de una barra de 20px, en vez de centrado con la altura real de 10px del reloj) — ninguna de las dos cosas es "centrado en la barra". Corregido: `x = x_barra + (width_barra - clock_w) / 2` (centrado en el ancho TOTAL de la barra, no en el espacio sobrante después del título — `DynamicTitle` sigue reservando su propio ancho máximo, 60px con hora visible, para no invadir esa zona) y `y = (STATUSBAR_HEIGHT - CLOCK_INDICATOR_HEIGHT) / 2`, aplicado también en `(full)` por consistencia con el resto del contenido de la barra (íconos/título ya se centraban verticalmente ahí, el reloj era el único elemento pegado arriba).
+
+**2) `DynamicTitle` en `(full)` no se centraba cuando el reloj es persistente.** `clock-indicator.md`, `(full)`: *"Si ClockIndicator es persistente → DynamicTitle queda siempre centrado en la barra"* — regla confirmada, no marcada pendiente. El código empujaba el título solo hasta `left + clock_w + gap` (≈48px desde el borde, no el centro real de una barra de 320px). Corregido a `x_barra + (width_barra - title_max_w) / 2` (título fijo en 120px en `(full)`, el centro no se mueve durante la animación) — mismo destino sirve para el caso persistente (sin animar) y el revelado por atajo ("empujando el título hacia el centro" mientras entra), sin lógica duplicada. **Sin verificación visual posible todavía**: `(full)` no tiene ningún consumidor real hoy (único caller de `aura_status_bar_v2_draw()` es el menú raíz, siempre en `(split)`) — implementado por completitud/consistencia con el documento, mismo criterio ya usado para otras piezas de este archivo sin consumidor real (Drop-and-Lift de `(split)`, comentario original de T2.7).
+
+**`clock_visible` restaurado a su default real (`true`, persistente)**: quedó en `0` en la config del simulador desde las pruebas del gesto de hold de la sesión anterior (B-01/B-02) y nunca se revirtió — el usuario estaba viendo el `StatusBar` sin reloj en absoluto en el simulador interactivo, no solo mal alineado. `aura_settings.c` confirma que `.clock_visible = true` es el default real de fábrica.
+
+**Aceptación**: sim reconstruido, compila limpio (una macro `AURA_SB2_ZONE_GAP` retirada, sin consumidores tras el cambio), 0 warnings; 694/694 tests host-side sin cambios. Verificado por captura: reloj centrado en la barra de 160px del menú raíz, alineado verticalmente con el título — `docs/screenshots/fix-statusbar-clock-centered.png`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
