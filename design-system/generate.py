@@ -122,11 +122,61 @@ def generate_header(tokens):
     lines.append("/* El enum de temas vive en aura_settings.h (es logica de app, no un")
     lines.append(" * token de diseno); este header solo expone los colores de cada uno. */")
     lines.append("")
+
+    lines.extend(generate_aura_ds_defines(tokens))
+
     lines.append("#endif /* APPLE2026_TOKENS_H */")
     lines.append("")
 
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "apple2026_tokens.h").write_text("\n".join(lines))
+
+
+def generate_aura_ds_defines(tokens):
+    """Aplana tokens['aura_ds'] (PLAN.md T0.1) a defines AURA_DS_*.
+
+    Recorre el arbol recursivamente: dict -> prefijo compuesto, numero ->
+    #define directo, string "#RRGGBB" -> LCD_RGBPACK (con sufijo _HEX
+    quitado del nombre del define, ya no es un string), lista -> par
+    _COUNT/_VALUES (para arrays como cover_flow angulos). Claves que
+    empiezan con "comment" se saltan (son notas para humanos, no tokens).
+    Strings que no son color tambien se saltan -- 'type_scale_roles' vive
+    solo como mapa rol->estilo de fuente, consumido directo desde Python
+    mas abajo (font_filename ya genera A26_FONT_DS_* para cada estilo),
+    no hace falta duplicarlo como define C.
+    """
+    ds = tokens.get("aura_ds")
+    if not ds:
+        return []
+
+    lines = ["/* Tokens del sistema de diseno nuevo (docs/aura-design-system/,",
+             " * PLAN.md T0.1) -- en paralelo a A26_* mientras dura la migracion. */"]
+
+    def walk(prefix, node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key.startswith("comment"):
+                    continue
+                walk(f"{prefix}_{key.upper()}", value)
+        elif isinstance(node, bool):
+            return
+        elif isinstance(node, (int, float)):
+            lines.append(f"#define {prefix} {node}")
+        elif isinstance(node, str):
+            if node.startswith("#") and len(node) == 7:
+                r, g, b = hex_to_rgb(node)
+                name = prefix.removesuffix("_HEX")
+                lines.append(f"#define {name} LCD_RGBPACK({r}, {g}, {b})")
+            # otros strings (nombres de estilo de fuente, etc.) no generan
+            # define C -- se resuelven en Python o se hardcodean en C.
+        elif isinstance(node, list):
+            lines.append(f"#define {prefix}_COUNT {len(node)}")
+            values = ", ".join(str(v) for v in node)
+            lines.append(f"#define {prefix}_VALUES {{ {values} }}")
+
+    walk("AURA_DS", ds)
+    lines.append("")
+    return lines
 
 
 STUDIO_GENERATED = (

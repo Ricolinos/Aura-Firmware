@@ -845,4 +845,28 @@ Cuarto lote de la Fase B, ejecutado de forma autónoma. Once de los trece hallaz
 
 ---
 
+## D-086 — PLAN.md T0.1/T0.2: tokens y fuentes del sistema `docs/aura-design-system/`, en paralelo al sistema Apple2026
+
+Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, sin supervisión humana — permiso explícito del dueño del proyecto, incluida la instrucción de tomar decisiones de acuerdo al plan sin detenerse a preguntar).
+
+**Convivencia de dos sistemas de tokens, deliberada**: `tokens.json` gana un bloque `aura_ds` nuevo (color/opacidad/métricas del sistema de `docs/aura-design-system/`) que emite defines `AURA_DS_*` a `apple2026_tokens.h`, en paralelo a los `A26_*` del sistema Apple2026 ya existente — no se fusionan ni se reemplazan todavía. Razón: migrar componente por componente (el propio orden del plan) exige que ambos convivan mientras dura; fusionar los namespaces ahora sería adivinar equivalencias antes de que cada componente real las necesite.
+
+**Generador genérico, no hardcodeado**: `generate_aura_ds_defines()` (nuevo en `generate.py`) recorre `aura_ds` recursivamente y produce un define por cada hoja numérica o color hex — evita escribir a mano ~65 líneas de defines y que se desincronicen del JSON. Los strings que no son color (p. ej. `type_scale_roles`, que mapea rol de componente → estilo de fuente) se saltan a propósito: ese mapeo se resuelve directo en C contra los `A26_FONT_DS_*` que el generador de fuentes ya produce por su cuenta, no hace falta duplicarlo como define.
+
+**Fuentes: 7 archivos nuevos, presupuesto exacto**: `fundamentos/02-tipografia.md` pide SF Pro Regular/Bold en 8/10/12/14px según 9 roles distintos, pero varios roles comparten (tamaño,peso) — se agrupan en 7 estilos únicos (`ds_reg_8`, `ds_bold_8`, `ds_reg_10`, `ds_bold_10`, `ds_reg_12`, `ds_bold_12`, `ds_bold_14`), evitando de entrada la duplicación de assets que AUDITORIA-01 A-26 ya había señalado como problema en el sistema viejo (`caption`/`body` idénticos). 5 fuentes viejas + 7 nuevas = 12 = `MAXUSERFONTS` exacto (`firmware/export/font.h`) — sin margen; T4.1 debe retirar fuentes viejas sin consumidor real al cerrar la migración o un componente nuevo futuro no tendrá slot.
+
+**Valores provisionales fijados en tokens.json, cada uno con su hueco de doc citado** (registro exigido por la regla 3 del encargo — nunca "adivinar en silencio"):
+- G5 (`selector.md` no dice el color de texto/ícono sobre el Selector de acento) → blanco puro, máximo contraste sobre acento saturado.
+- G8 (`scroll-indicator.md` confirma tamaño fijo sin dar el número, y el gris "neutro" sin hex) → alto 24px; gris = reutiliza el `SHELL_RAIL` YA definido en el sistema viejo (no un valor nuevo inventado — es literalmente gris neutro real del proyecto).
+- G9 (`selection-summary.md` no da el % de aclarado/oscurecido del degradado) → 25% hacia blanco/negro, ambos lados simétricos.
+- G11 (`marquee-text.md` no define el espacio entre vueltas del loop) → 24px, mismo orden de magnitud que otros espaciados del sistema.
+- G16 (`cover-flow.md` duda entre radio 5 o 6px, y "reflejo más sutil" sin proporción) → radio 5 (empata con el radio ya fijo del Selector, consistencia entre componentes por encima de un valor suelto); reflejo al 25% del alto del slide (el original de PictureFlow usa ~33%, se reduce respecto a eso, que es literalmente lo que pide la doc: "más sutil/corto que el original").
+- Sombra de LeftPanel (`efectos/01-sombras.md` no da ningún valor: ni ancho ni opacidad) → 8px de ancho, 20% de opacidad simulada — el más especulativo de los provisionales, sin ningún ancla en la doc; el más candidato a que el dueño del diseño lo corrija de un vistazo cuando revise.
+
+**Sin alfa real, otra vez**: `opacity.*` (60%/80% de la tipografía de StatusBar, 60% del track de progreso, 20% de la sombra) se simulan con blend precalculado contra el fondo conocido en el punto de dibujo — mismo mecanismo que `a26_shell_blend()` del sistema viejo, ya probado en este LCD sin compositor alfa real. No se implementa nada nuevo para esto, se reutiliza cuando cada componente lo necesite (T0.3+).
+
+**Aceptación**: `generate.py` corre limpio, produce 12 `.fnt` (verificado por nombre uno por uno en la salida) y el header con ~65 defines `AURA_DS_*` (verificado con grep). Sim reconstruido, compila limpio, 0 warnings — cambio puramente aditivo, sin consumidor todavía (ningún componente lee `AURA_DS_*` aún). 566/566 tests host-side sin cambios (no se tocó lógica C, solo el pipeline de generación).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
