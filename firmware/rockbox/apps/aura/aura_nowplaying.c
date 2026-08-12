@@ -638,8 +638,8 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int 
     unsigned fill_color = (vol_active || seeking || scrubbing) ? aura_accent() : white;
     unsigned long elapsed = (scrub_preview_ms >= 0) ? (unsigned long)scrub_preview_ms : id3->elapsed;
 
-    a26_shell_fill_rounded_rect(x, PROGRESS_Y, width, PROGRESS_TRACK_H,
-                                 PROGRESS_TRACK_H / 2, track_color, a26_color(A26_SHELL_BG));
+    a26_shell_fill_capsule(x, PROGRESS_Y, width, PROGRESS_TRACK_H,
+                            track_color, a26_color(A26_SHELL_BG));
 
     if (vol_active)
     {
@@ -658,8 +658,8 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int 
     if (fill_w < 0)        fill_w = 0;
     if (fill_w > fill_max) fill_w = fill_max;
     if (fill_w > 0)
-        a26_shell_fill_rounded_rect(fill_x, fill_y, fill_w, PROGRESS_FILL_H,
-                                     PROGRESS_FILL_H / 2, fill_color, track_color);
+        a26_shell_fill_capsule(fill_x, fill_y, fill_w, PROGRESS_FILL_H,
+                                fill_color, track_color);
 
     if (vol_active)
     {

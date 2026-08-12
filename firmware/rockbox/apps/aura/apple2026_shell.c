@@ -232,6 +232,56 @@ void a26_shell_stamp_corners(void)
     stamp_corner(w - 1, h - 1,-1, -1,  radius, bg); /* inferior derecha   */
 }
 
+/* Capsula horizontal VERDADERA (encargo 2026-08-12, barra del
+ * reproductor): extremos semicirculares de radio h/2 exacto -- con
+ * radio entero h/2 en alturas impares (p.ej. 7px -> radio 3), la
+ * esquina quedaba a 2/3 de cobertura y se leia cuadrada. Aca el
+ * circulo vive en subunidades de 1/32 de pixel (centro a (h-1)/2,
+ * radio h/2, ambos fraccionarios) y cada pixel del casquete se mezcla
+ * por cobertura real entre `fill` y `bg` -- puntas completamente
+ * redondeadas con antialias, sobre fondo plano conocido. */
+void a26_shell_fill_capsule(int x, int y, int w, int h, unsigned fill, unsigned bg)
+{
+    int half = (h + 1) / 2;
+    int r32 = h * 16;            /* h/2 en 1/32 px */
+    int c32 = (h - 1) * 16;      /* centro del circulo, en 1/32 px */
+    int px, py;
+
+    if (w <= 0 || h <= 0)
+        return;
+    if (w < h)
+        half = (w + 1) / 2;
+
+    lcd_set_foreground(fill);
+    if (w > 2 * half)
+        lcd_fillrect(x + half, y, w - 2 * half, h);
+
+    for (py = 0; py < h; py++)
+    {
+        fb_data *rowl = FBADDR(x, y + py);
+        fb_data *rowr = FBADDR(x + w - half, y + py);
+        int dy32 = py * 32 - c32;
+
+        for (px = 0; px < half; px++)
+        {
+            int dx32 = px * 32 - c32;
+            unsigned d32 = a26_shell_isqrt256((unsigned)(dx32 * dx32 + dy32 * dy32)) >> 8;
+            int cov = (r32 + 16 - (int)d32) * 8; /* banda de 1px -> 0..256 */
+            unsigned col;
+
+            if (cov <= 0)
+                col = bg;
+            else if (cov >= 256)
+                col = fill;
+            else
+                col = a26_shell_blend(bg, fill, cov);
+
+            rowl[px] = col;
+            rowr[half - 1 - px] = col;
+        }
+    }
+}
+
 void a26_shell_fill_rounded_rect(int x, int y, int w, int h, int radius,
                                   unsigned fill, unsigned bg)
 {

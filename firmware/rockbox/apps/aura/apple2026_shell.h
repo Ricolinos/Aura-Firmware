@@ -169,4 +169,10 @@ unsigned a26_shell_blend(unsigned from, unsigned to, int alpha_256);
  * de este modulo, mask_corners_* de caratulas). */
 unsigned a26_shell_isqrt256(unsigned v);
 
+/* Capsula horizontal con extremos semicirculares EXACTOS (radio h/2
+ * fraccionario, cobertura subpixel) -- para las piezas donde "puntas
+ * completamente redondeadas" es requisito (barra del reproductor).
+ * `bg` = color plano real debajo. */
+void a26_shell_fill_capsule(int x, int y, int w, int h, unsigned fill, unsigned bg);
+
 #endif /* APPLE2026_SHELL_H */

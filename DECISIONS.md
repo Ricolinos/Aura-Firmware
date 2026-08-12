@@ -1494,4 +1494,10 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-124 — Cápsula verdadera para la barra del reproductor
+
+**Corrección del dueño del diseño (2026-08-12)**: las puntas de la barra nueva se veían rectas. Causa: `a26_shell_fill_rounded_rect()` usa radio ENTERO — con altura impar (7px) el radio queda en 3 y el pixel de esquina conserva ~2/3 de cobertura: se lee cuadrado. Una cápsula real necesita el semicírculo de radio h/2 EXACTO (3.5) con centro a medio pixel. Nueva primitiva `a26_shell_fill_capsule()`: el círculo vive en subunidades de 1/32 de pixel (centro y radio fraccionarios) y cada pixel del casquete se mezcla por cobertura real — puntas completamente redondeadas con antialias, verificado con zoom sobre ambos extremos del carril y del relleno (`fix14-capsule-bar-ends.png`). La barra del reproductor (carril y relleno) usa la primitiva nueva; el resto de las pastillas del sistema (alturas pares o radio < h/2) siguen con la primitiva de siempre.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
