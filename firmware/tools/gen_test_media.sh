@@ -89,16 +89,25 @@ ffmpeg -y -loglevel error -f lavfi -i "testsrc=size=320x240:rate=15:duration=2" 
 SIMDISK="$ROOT_DIR/firmware/build-sim/simdisk"
 if [[ -d "$SIMDISK" ]]; then
   echo "==> Instalando fixtures en $SIMDISK"
-  mkdir -p "$SIMDISK/Music" "$SIMDISK/Photos" "$SIMDISK/Videos"
-  cp "$OUT_DIR"/aura-test.* "$SIMDISK/Music/"
-  cp "$OUT_DIR"/cover.jpg "$SIMDISK/Music/"
-  # En la RAIZ del disco, no bajo Music/: find_albumart tambien busca
-  # cover.jpg en el directorio padre, y Music/cover.jpg "vestiria" al
-  # album que precisamente debe quedar sin arte.
-  mkdir -p "$SIMDISK/SinArte"
-  cp "$OUT_DIR"/SinArte/*.mp3 "$SIMDISK/SinArte/"
+  mkdir -p "$SIMDISK/Photos" "$SIMDISK/Videos"
   cp "$OUT_DIR"/Photos/* "$SIMDISK/Photos/"
   cp "$OUT_DIR"/Videos/*.mpg "$SIMDISK/Videos/"
+  # Fixtures de MUSICA: solo bajo peticion explicita
+  # (AURA_INSTALL_MUSIC_FIXTURES=1). Desde 2026-08-12 el simulador
+  # trabaja contra la biblioteca REAL del dueno del diseno (symlink
+  # simdisk/Musica -> "/Volumes/Ricolinos/Música/Exports CD") para ver
+  # caratulas reales en Cover Flow -- instalar los tonos sinteticos por
+  # defecto contaminaria esa biblioteca con albumes de prueba.
+  if [[ "${AURA_INSTALL_MUSIC_FIXTURES:-0}" == "1" ]]; then
+    mkdir -p "$SIMDISK/Music"
+    cp "$OUT_DIR"/aura-test.* "$SIMDISK/Music/"
+    cp "$OUT_DIR"/cover.jpg "$SIMDISK/Music/"
+    # En la RAIZ del disco, no bajo Music/: find_albumart tambien busca
+    # cover.jpg en el directorio padre, y Music/cover.jpg "vestiria" al
+    # album que precisamente debe quedar sin arte.
+    mkdir -p "$SIMDISK/SinArte"
+    cp "$OUT_DIR"/SinArte/*.mp3 "$SIMDISK/SinArte/"
+  fi
 fi
 
 echo "==> Listo: $OUT_DIR"

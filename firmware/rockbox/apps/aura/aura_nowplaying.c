@@ -223,9 +223,6 @@ static bool load_album_art(const struct mp3entry *id3)
     int len;
     int ret;
 
-    if (!find_albumart(id3, path, sizeof(path), &d))
-        return false;
-
     s_art_bm.width = ART_SIZE;
     s_art_bm.height = ART_SIZE;
     s_art_bm.data = (char *)s_art_buf;
@@ -233,11 +230,27 @@ static bool load_album_art(const struct mp3entry *id3)
     s_art_bm.maskdata = NULL;
 #endif
 
-    len = (int)strlen(path);
-    if (len > 4 && !strcasecmp(path + len - 4, ".bmp"))
-        ret = read_bmp_file(path, &s_art_bm, sizeof(s_art_buf), format, NULL);
+    if (find_albumart(id3, path, sizeof(path), &d))
+    {
+        len = (int)strlen(path);
+        if (len > 4 && !strcasecmp(path + len - 4, ".bmp"))
+            ret = read_bmp_file(path, &s_art_bm, sizeof(s_art_buf), format, NULL);
+        else
+            ret = read_jpeg_file(path, &s_art_bm, sizeof(s_art_buf), format, NULL);
+    }
+    else if (id3->has_embedded_albumart
+             && (id3->albumart.type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_JPG)
+    {
+        /* Caratula embebida en el track (mismo criterio que
+         * playback.c y aura_albumart.c) -- el id3 del track actual ya
+         * trae pos/size llenos por el motor de reproduccion, sin
+         * get_metadata() extra. */
+        ret = clip_jpeg_file(id3->path, id3->albumart.pos,
+                              id3->albumart.size, &s_art_bm,
+                              sizeof(s_art_buf), format, NULL);
+    }
     else
-        ret = read_jpeg_file(path, &s_art_bm, sizeof(s_art_buf), format, NULL);
+        return false;
 
     if (ret <= 0)
         return false;

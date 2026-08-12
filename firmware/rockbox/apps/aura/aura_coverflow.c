@@ -159,15 +159,32 @@ static void ensure_albums(aura_screen_id_t screen)
     int gen = aura_music_filter_generation();
     int i;
 
+    int same_list;
+
     if (s_cache_screen == screen && s_cache_generation == gen)
         return;
+
+    /* El browse de Cover Flow (tag_album, sin filtros) NO depende de la
+     * generacion de filtros: la generacion sube, entre otras cosas,
+     * cuando ESTE MISMO componente llama a aura_music_select_album() al
+     * abrir la lista de canciones de una tapa. Resetear la posicion en
+     * ese caso era el bug reportado por el dueno del diseno
+     * (2026-08-12): "el estado del resto de caratulas se debe mantener,
+     * no regresar al inicio del coverflow". La posicion/animacion solo
+     * se reinicia al entrar desde OTRA pantalla cacheada distinta (o si
+     * la lista encogio por debajo del indice actual). */
+    same_list = (s_cache_screen == screen);
 
     s_cache_screen = screen;
     s_cache_generation = gen;
     s_album_count = aura_music_browse(screen, s_albums, AURA_MUSIC_MAX_ITEMS);
-    s_target_index = 0;
-    s_anim_from_x256 = 0;
-    s_anim_since = current_tick;
+
+    if (!same_list || s_target_index >= s_album_count)
+    {
+        s_target_index = 0;
+        s_anim_from_x256 = 0;
+        s_anim_since = current_tick;
+    }
 
     for (i = 0; i < CF_CACHE_SLOTS; i++)
         s_slots[i].album_index = -1;

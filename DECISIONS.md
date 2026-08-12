@@ -1344,4 +1344,22 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-114 — Cover Flow contra biblioteca real: arte embebido, estado del carrusel preservado, fixtures sintéticos retirados
+
+**Encargo del dueño del diseño (2026-08-12)**: trabajar Cover Flow contra su biblioteca real (`/Volumes/Ricolinos/Música/Exports CD`, ~740MB, symlink `simdisk/Musica` — sin duplicar los archivos), retirar los tonos sintéticos de prueba, y corregir que al seleccionar un álbum "el estado del resto de carátulas se debe mantener, no regresar al inicio del coverflow".
+
+**1) Bug del estado del carrusel — causa raíz encontrada**: al abrir la lista de canciones de una tapa, el propio Cover Flow llama `aura_music_select_album()`, que sube la generación de filtros global; `ensure_albums()` usaba esa generación como criterio de invalidación TOTAL (re-fetch + `s_target_index = 0` + reset de animación) — así que el simple acto de seleccionar un álbum reseteaba la posición de todo el carrusel. El browse de Cover Flow (tag_album, sin filtros) no depende de esa generación en absoluto. Corregido: la posición/animación solo se reinicia al entrar desde otra pantalla cacheada distinta (o si la lista encogió por debajo del índice actual); el re-fetch por generación se mantiene pero preserva la posición. Verificado por captura: tras cerrar la lista con MENU, el carrusel permanece en el álbum que estaba (`fix4-carousel-state-kept-back.png` — con el bug, habría regresado al primero).
+
+**2) Carátulas embebidas (covr/APIC) soportadas en todo el pipeline**: `find_albumart()` solo busca ARCHIVOS de imagen; los exports de CD de Música.app suelen llevar el arte dentro del m4a/mp3. `decode_album_art()` (aura_albumart.c) ahora cae a `get_metadata()` + `clip_jpeg_file()` (mismo criterio JPG-only de `playback.c` — no hay decoder PNG en el core; un covr PNG cae a la Default) y `load_album_art()` (aura_nowplaying.c) usa directamente el `id3->albumart` que el motor de reproducción ya trae lleno. Nota real de esta biblioteca: NINGÚN archivo trae arte embebido (verificado con ffprobe álbum por álbum) — solo Fatboy Slim tiene `cover.jpg` de carpeta; el resto muestra la Default a propósito, que es justo el escenario que el dueño quería visualizar. El soporte embebido queda para bibliotecas que sí lo traigan.
+
+**3) Tinta de la nota Default con contraste real**: `SHELL_RAIL` solo quedaba casi invisible sobre el tile claro; ahora es el punto medio `blend(SHELL_RAIL, TEXT_SECONDARY, 50%)` — gris medio como la imagen de referencia, mezcla de tokens del tema, ningún color suelto.
+
+**4) Fixtures de música sintéticos retirados del simulador** (los archivos del disco simulado; `gen_test_media.sh` los sigue generando pero solo los INSTALA con `AURA_INSTALL_MUSIC_FIXTURES=1` — por defecto ya no contamina la biblioteca real). Los fixtures de Fotos/Videos no cambian.
+
+**Hallazgo operativo documentado**: los `.tcd` de tagcache no pueden borrarse con un simulador interactivo vivo — su ramcache reescribe la base vieja al cerrar y la reconstrucción nunca ocurre (pasó en la primera verificación de esta ronda; el flujo correcto es matar el proceso, borrar `database*.tcd` + `cfcache`, y arrancar).
+
+**Aceptación**: 0 warnings, 8/8 suites host-side. Capturas contra la biblioteca real: carátula real de Fatboy Slim en perspectiva + Defaults con nota para los álbumes sin arte + tracklist con pistas reales (`fix4-coverflow-real-library.png`), estado del carrusel preservado en flip y al volver (`fix4-carousel-state-kept-{flip,back}.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

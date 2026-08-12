@@ -169,7 +169,13 @@ static void mask_corners_transposed(fb_data *buf, int size, int radius, unsigned
 void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
 {
     unsigned tile = a26_color(A26_SELECTION_FILL);
-    unsigned ink = a26_color(A26_SHELL_RAIL);
+    /* Tinta de la nota: punto medio entre SHELL_RAIL y TEXT_SECONDARY
+     * -- RAIL solo (primera version) quedaba casi invisible sobre el
+     * tile claro; la referencia del dueno del diseno usa un gris medio
+     * con contraste claramente visible. Mezcla de dos tokens del tema,
+     * ningun color suelto nuevo. */
+    unsigned ink = a26_shell_blend(a26_color(A26_SHELL_RAIL),
+                                    a26_color(A26_TEXT_SECONDARY), 128);
     char path[MAX_PATH];
     struct bitmap bm;
     int i, row, col, ret, ox, oy;
@@ -268,9 +274,6 @@ static bool decode_album_art(int32_t album_seek, int size)
     fake_id3.artist = artist;
     fake_id3.album = album;
 
-    if (!find_albumart(&fake_id3, art_path, sizeof(art_path), &dim))
-        return false;
-
     bm.width = size;
     bm.height = size;
     bm.data = (char *)s_decode_scratch;
@@ -278,13 +281,42 @@ static bool decode_album_art(int32_t album_seek, int size)
     bm.maskdata = NULL;
 #endif
 
-    len = (int)strlen(art_path);
-    if (len > 4 && !strcasecmp(art_path + len - 4, ".bmp"))
-        ret = read_bmp_file(art_path, &bm, sizeof(s_decode_scratch), format, NULL);
-    else
-        ret = read_jpeg_file(art_path, &bm, sizeof(s_decode_scratch), format, NULL);
+    if (find_albumart(&fake_id3, art_path, sizeof(art_path), &dim))
+    {
+        len = (int)strlen(art_path);
+        if (len > 4 && !strcasecmp(art_path + len - 4, ".bmp"))
+            ret = read_bmp_file(art_path, &bm, sizeof(s_decode_scratch), format, NULL);
+        else
+            ret = read_jpeg_file(art_path, &bm, sizeof(s_decode_scratch), format, NULL);
+        return ret > 0;
+    }
 
-    return ret > 0;
+    /* Sin archivo de imagen junto al album: caratula EMBEBIDA en el
+     * track (biblioteca real del dueno del diseno, 2026-08-12 -- los
+     * exports de CD de Musica.app llevan el arte dentro del m4a/mp3,
+     * no como cover.jpg de carpeta). Mismo criterio que playback.c:
+     * solo JPG embebido (AA_CLEAR_FLAGS_MASK) -- no hay decoder PNG en
+     * el core de Rockbox, un "covr" PNG cae a la caratula Default. */
+    {
+        static struct mp3entry s_probe_id3; /* ~1KB, fuera del stack */
+        int fd = open(path, O_RDONLY);
+
+        if (fd < 0)
+            return false;
+        if (!get_metadata(&s_probe_id3, fd, path)
+            || !s_probe_id3.has_embedded_albumart
+            || (s_probe_id3.albumart.type & AA_CLEAR_FLAGS_MASK) != AA_TYPE_JPG)
+        {
+            close(fd);
+            return false;
+        }
+        close(fd);
+
+        ret = clip_jpeg_file(path, s_probe_id3.albumart.pos,
+                              s_probe_id3.albumart.size, &bm,
+                              sizeof(s_decode_scratch), format, NULL);
+        return ret > 0;
+    }
 }
 
 bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
