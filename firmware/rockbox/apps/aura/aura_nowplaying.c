@@ -219,7 +219,7 @@ static bool load_album_art(const struct mp3entry *id3)
     aura_art_generate_reflection((const fb_data *)s_art_bm.data,
                                   (fb_data *)s_reflection_buf,
                                   ART_SIZE, ART_REFLECTION_PCT,
-                                  a26_color(A26_SHELL_BG));
+                                  a26_color(A26_SHELL_BG), false);
     return true;
 }
 

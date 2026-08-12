@@ -11,6 +11,8 @@
 #ifndef AURA_ART_H
 #define AURA_ART_H
 
+#include <stdbool.h>
+
 #include "lcd.h"
 
 /* Alto del reflejo como numerador/100 del lado del cuadrado (doc SS5.4
@@ -29,8 +31,17 @@ int aura_art_reflection_height(int size, int height_pct);
  * del LCD) en `out` (size x aura_art_reflection_height(size, height_pct),
  * reservado por el llamador -- Aura no hace malloc). Espejo vertical de
  * las primeras filas de la caratula, atenuado hacia `bg_color` a medida
- * que se aleja (mascara height_pct%->0%). */
+ * que se aleja (mascara height_pct%->0%).
+ *
+ * `transposed`=false: layout normal, fila contigua (cover[y*size+x],
+ * out[y*size+x]) -- consumidores existentes (aura_albumart.c "flat",
+ * aura_nowplaying.c). `transposed`=true: layout columna contigua
+ * (cover[x*size+y], out[x*refl_h+y]) -- cache .pfraw de Cover Flow
+ * (T3.2, componentes/cover-flow.md), para que el render por columnas
+ * de aura_flow.c lea memoria contigua sin necesidad de transponer un
+ * bitmap ya generado en el layout equivocado. */
 void aura_art_generate_reflection(const fb_data *cover, fb_data *out,
-                                   int size, int height_pct, unsigned bg_color);
+                                   int size, int height_pct, unsigned bg_color,
+                                   bool transposed);
 
 #endif /* AURA_ART_H */

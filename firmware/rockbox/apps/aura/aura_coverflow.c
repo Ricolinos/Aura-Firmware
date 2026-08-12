@@ -31,17 +31,24 @@
  * de "dos eventos en menos de HZ/6 = paso 2".
  */
 
-#define CF_COVER_SIZE     56
-#define CF_SPACING        70
+/* PLAN.md T3.2(b), componentes/cover-flow.md + G16: portada central
+ * ~100px, radio de esquina 5px (empata Selector), reflejo al 25% del
+ * alto del slide (mas sutil que el original de PictureFlow, ~33%), 3
+ * por lado visibles -- los 4 provisionales de G16, ya resueltos en
+ * T0.1/tokens.json, no inventados aqui. */
+#define CF_COVER_SIZE     AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE
+#define CF_CORNER_RADIUS  AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
+#define CF_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
 #define CF_TOP_Y          28
-#define CF_VISIBLE_RADIUS 2
-#define CF_CACHE_SLOTS    8
+#define CF_FALLBACK_SPACING (CF_COVER_SIZE + 20) /* solo para el caso sin caratula, ver el unico uso */
+#define CF_VISIBLE_RADIUS AURA_DS_METRICS_COVER_FLOW_SIDE_SLIDES_PER_SIDE
+#define CF_CACHE_SLOTS    (2 * CF_VISIBLE_RADIUS + 3) /* visibles + margen para scroll suave */
 #define CF_SIDE_FADE      130 /* de 255 */
-/* Alto del reflejo en tiempo de compilacion (Fase 29, doc SS5.4: 35%) --
- * mismo calculo que aura_art_reflection_height(), pero constante en
- * tiempo de compilacion (hace falta para dimensionar el buffer estatico
- * de cada slot). */
-#define CF_REFLECTION_H   (CF_COVER_SIZE * AURA_ART_REFLECTION_HEIGHT_PCT / 100)
+/* Alto del reflejo en tiempo de compilacion -- mismo calculo que
+ * aura_art_reflection_height(), pero constante en tiempo de
+ * compilacion (hace falta para dimensionar el buffer estatico de cada
+ * slot). */
+#define CF_REFLECTION_H   (CF_COVER_SIZE * CF_REFLECTION_PCT / 100)
 
 typedef struct {
     int album_index; /* -1 = slot libre/no cargado */
@@ -102,6 +109,7 @@ static cf_slot_t *get_slot_for(int album_index)
 
     s_slots[target].album_index = album_index;
     s_slots[target].art.size = CF_COVER_SIZE;
+    s_slots[target].art.radius = CF_CORNER_RADIUS;
     s_slots[target].art.cover_data = s_slots[target].cover_buf;
     s_slots[target].art.reflection_data = s_slots[target].reflection_buf;
     aura_albumart_load_for_album(s_albums[album_index].seek, &s_slots[target].art);
@@ -127,35 +135,21 @@ static fb_data fade_pixel(unsigned px, int fade, int bg_r, int bg_g, int bg_b)
     return LCD_RGBPACK(r, g, b);
 }
 
-/* Dibuja src (w x h, formato nativo del LCD) en (x,y), atenuando hacia
- * el color de fondo del tema segun `fade` (255 = sin atenuar). */
-static void blit_dimmed(const fb_data *src, int w, int h, int x, int y, int fade)
-{
-    static fb_data scratch[CF_COVER_SIZE * CF_COVER_SIZE];
-    unsigned bg = a26_color(A26_SHELL_BG);
-    int bg_r = RGB_UNPACK_RED(bg);
-    int bg_g = RGB_UNPACK_GREEN(bg);
-    int bg_b = RGB_UNPACK_BLUE(bg);
-    int i, n = w * h;
-
-    for (i = 0; i < n; i++)
-        scratch[i] = fade_pixel(src[i], fade, bg_r, bg_g, bg_b);
-    lcd_bitmap(scratch, x, y, w, h);
-}
-
-/* -- Perspectiva real (Fase 31.1/31.2, D-079/D-080) ----------------------
+/* -- Perspectiva real (Fase 31.1/31.2, D-079/D-080; T3.2(a) extiende a
+ * datos transpuestos) --------------------------------------------------
  *
  * Geometria de "reposo" de un coverflow clasico (pictureflow.c
  * reset_slides(), resuelta a numeros concretos para 320x240 -- ver
- * test_realistic_side_slide_layout() en test_flow.c, que documenta y
- * verifica la misma derivacion). Solo se usa para las tapas LATERALES
- * (offset != 0); la central sigue con blit_dimmed() de siempre -- angulo
- * 0 en la formula de perspectiva da un mapeo 1:1 sin distorsion, asi que
- * no hay diferencia visual, y la tapa mas importante en pantalla no
- * depende de la parte nueva y menos probada de este modulo. */
-#define CF_ITILT           199    /* ~70 grados: 70*1024/360 */
-#define CF_OFFSETX_R       144060 /* separacion centro-a-lateral, zoom=100 */
-#define CF_SLIDE_SPACING_R (AURA_FLOW_ONE * (AURA_FLOW_DISPLAY_W / 4))
+ * test_realistic_side_slide_layout() en test_flow.c). Se usa para TODAS
+ * las tapas, central incluida (offset=0, angle=0, cx=0 -- angulo 0 en
+ * la formula de perspectiva da un mapeo 1:1 sin distorsion): ya no hay
+ * un camino separado con blit_dimmed() para la central, que asumia
+ * datos fila-contigua y quedo incompatible cuando el cache .pfraw
+ * (T3.2(a)) empezo a guardar las caratulas TRANSPUESTAS -- unificar en
+ * una sola funcion evita mantener dos formatos de lectura de pixel. */
+#define CF_ITILT           199    /* ~70 grados: 70*1024/360, mismo valor fijo de pictureflow.c (no depende del tamano del slide) */
+#define CF_OFFSETX_R       90000  /* separacion centro-a-lateral, re-derivada para CF_COVER_SIZE=100 (antes 56px), ver DECISIONS.md D-102 */
+#define CF_SLIDE_SPACING_R 40000  /* separacion entre laterales consecutivos, misma re-derivacion */
 
 /* Primer intento de implementacion, deliberadamente simple (un
  * lcd_bitmap() de una columna por columna de pantalla, sin componer un
@@ -163,17 +157,17 @@ static void blit_dimmed(const fb_data *src, int w, int h, int x, int y, int fade
  * proyeccion en el simulador, que es todo lo que se pidio esta pasada
  * ("sin tocar hardware"). El costo real en el ARM926EJ-S del dispositivo
  * NO esta medido: si hace falta, la version para hardware compone en un
- * buffer y blitea una vez, como ya hace blit_dimmed() -- optimizacion
- * pendiente de la sesion guiada (D-079/D-080), no de esta pasada. */
+ * buffer y blitea una vez -- optimizacion pendiente de la sesion guiada
+ * (D-079/D-080), no de esta pasada. */
 static void draw_slide_perspective(const cf_slot_t *slot, int offset, int fade)
 {
     aura_flow_slide_t slide;
     aura_flow_projection_t proj;
-    int sign = (offset < 0) ? -1 : 1;
-    int n = (offset < 0 ? -offset : offset) - 1; /* lateral 0-esimo, 1-esimo... */
-    const fb_data *cover = (const fb_data *)slot->art.cover_data;
-    const fb_data *refl = (const fb_data *)slot->art.reflection_data;
-    int refl_h = aura_art_reflection_height(CF_COVER_SIZE, AURA_ART_REFLECTION_HEIGHT_PCT);
+    int sign = (offset < 0) ? -1 : (offset > 0 ? 1 : 0);
+    int n = (offset < 0 ? -offset : offset) - 1; /* lateral 0-esimo, 1-esimo... (sin sentido si offset==0, no se usa) */
+    const fb_data *cover = (const fb_data *)slot->art.cover_data;   /* transpuesto: cover[col*size+row] */
+    const fb_data *refl = (const fb_data *)slot->art.reflection_data; /* transpuesto: refl[col*refl_h+row] */
+    int refl_h = aura_art_reflection_height(CF_COVER_SIZE, CF_REFLECTION_PCT);
     int total_h = CF_COVER_SIZE + refl_h;
     unsigned bg = a26_color(A26_SHELL_BG);
     int bg_r = RGB_UNPACK_RED(bg);
@@ -183,7 +177,8 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset, int fade)
 
     /* Mismo signo que pictureflow.c reset_slides(): la lateral izquierda
      * (offset<0) angulo positivo y cx negativo, la derecha al reves --
-     * la carga muestra su borde hacia el centro de la pantalla. */
+     * la carga muestra su borde hacia el centro de la pantalla. Central
+     * (offset==0, sign==0): angulo y cx en cero, sin distorsion. */
     slide.angle = -sign * CF_ITILT;
     slide.distance = 0;
     slide.cx = sign * (CF_OFFSETX_R + n * CF_SLIDE_SPACING_R);
@@ -195,6 +190,8 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset, int fade)
         int col = aura_flow_source_column(&proj);
         int dy = aura_flow_vertical_scale(&proj);
         int p = 0, dest_row, n_rows = 0;
+        const fb_data *cover_col = cover + (size_t)col * CF_COVER_SIZE;
+        const fb_data *refl_col = refl + (size_t)col * refl_h;
 
         for (dest_row = 0; dest_row < total_h; dest_row++)
         {
@@ -204,8 +201,8 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset, int fade)
             if (source_row >= total_h)
                 break;
             px = (source_row < CF_COVER_SIZE)
-                ? cover[source_row * CF_COVER_SIZE + col]
-                : refl[(source_row - CF_COVER_SIZE) * CF_COVER_SIZE + col];
+                ? cover_col[source_row]
+                : refl_col[source_row - CF_COVER_SIZE];
             col_buf[dest_row] = fade_pixel(px, fade, bg_r, bg_g, bg_b);
             p += dy;
             n_rows++;
@@ -286,30 +283,24 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 
         if (!slot->art.valid)
         {
-            x = A26_SCREEN_WIDTH / 2 + offset * CF_SPACING - CF_COVER_SIZE / 2;
+            /* Grilla simple (no proyectada) solo para el caso sin
+             * caratula -- CF_FALLBACK_SPACING es un valor de layout
+             * aproximado para este caso limite, no la geometria real
+             * del carrusel (esa es CF_OFFSETX_R/CF_SLIDE_SPACING_R). */
+            x = A26_SCREEN_WIDTH / 2 + offset * CF_FALLBACK_SPACING - CF_COVER_SIZE / 2;
             lcd_set_foreground(a26_color(offset == 0 ? A26_TEXT_PRIMARY : A26_SHELL_RAIL));
             lcd_drawrect(x, y, CF_COVER_SIZE, CF_COVER_SIZE);
             continue;
         }
 
-        if (offset == 0)
-        {
-            /* Sin marco de acento (AUDITORIA-01 A-11, Principio 1 "nada
-             * de marcos/biseles" + Principio 2 "el acento nunca es
-             * decoracion de superficie") -- la central ya se distingue
-             * por brillo (255 vs CF_SIDE_FADE), tamano y perspectiva,
-             * igual que en cualquier coverflow real; el marco era
-             * decoracion, no significado. */
-            x = A26_SCREEN_WIDTH / 2 - CF_COVER_SIZE / 2;
-            blit_dimmed((const fb_data *)slot->art.cover_data,
-                        CF_COVER_SIZE, CF_COVER_SIZE, x, y, fade);
-            blit_dimmed((const fb_data *)slot->art.reflection_data,
-                        CF_COVER_SIZE, CF_REFLECTION_H, x, y + CF_COVER_SIZE, fade);
-        }
-        else
-        {
-            draw_slide_perspective(slot, offset, fade);
-        }
+        /* Sin marco de acento (AUDITORIA-01 A-11, Principio 1 "nada de
+         * marcos/biseles" + Principio 2 "el acento nunca es decoracion
+         * de superficie") -- la central ya se distingue por brillo (255
+         * vs CF_SIDE_FADE), tamano y perspectiva, igual que en
+         * cualquier coverflow real; el marco era decoracion, no
+         * significado. Un solo camino de render para central y
+         * laterales (ver comentario de draw_slide_perspective). */
+        draw_slide_perspective(slot, offset, fade);
     }
 
     {
