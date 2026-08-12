@@ -1108,4 +1108,24 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-101 — PLAN.md T3.1(c): NowPlaying v2 -- Modo 4 real con LyricsPanel sincronizado, morph fluido diferido
+
+**Tercer y último commit de T3.1.** Cierra la Etapa 3 parcial: Modo 4 (Letras) ya no es "player O letra" (D-078, la pantalla completa se dedicaba a una sola cosa) -- ahora es panel izquierdo comprimido (130px) + `LyricsPanel` (190px) conviviendo, tal como pide `componentes/now-playing.md`. `draw_player()`, `draw_text_and_modes()`, `draw_progress()`, `draw_transport()` y `draw_cover_tilted()` ganan un parámetro `compact`/`x,width` explícito -- un solo camino de código para ambos estados, no una función duplicada por modo.
+
+**`LyricsPanel` real, no la aproximación anterior**: `draw_lyrics_panel()` reemplaza a `draw_lyrics()` -- línea activa 14px Bold (`ds_bold_14`), hasta 2 líneas de contexto arriba/abajo en 12px Regular (`ds_reg_12`), recortadas al ancho del panel con el mismo mecanismo de viewport que `aura_marquee.c`/`aura_dynamic_title.c` (reutilizado, no reinventado). Verificado con una pista real con `.lrc`: al segundo 1 de reproducción, "Segundo uno" aparece en bold como línea activa con "Instrumental" arriba y "Segundo dos" abajo, exactamente el timing que el propio `.lrc` de prueba define.
+
+**Corte de alcance real, documentado, no una implementación a medias**: la transición `Morph Directo` (`transiciones/00-vocabulario.md`: "un solo paso, interpola directo de A a B") en sí -- la animación fluida entre el estado normal y el Modo 4 -- **no se conecta esta pasada**. Los DOS estados finales están completos y verificados; el corte entre ambos es directo (instantáneo), no interpolado. Razón real, no falta de tiempo: el documento pide que "la carátula... se reacomode/comprima en los 130px" pero **nunca da el tamaño exacto de la carátula comprimida** (135px no cabe en 130px tal cual), y este pipeline **no tiene una primitiva de reescalado de bitmaps ya decodificados en tiempo real** (los `.bmp`/`.jpg` se cargan una vez por pista a un tamaño fijo vía `FORMAT_RESIZE` en la decodificación, no hay un "resize" posterior). Construir el morph fluido sin ese número y esa primitiva sería, de nuevo, "adivinar un pendiente marcado" -- la misma regla que ya cortó el render real de `Push-and-Drop` en T1.2/T2.7. `aura_pattern_lerp()` (T1.1) ya está listo para aplicarse el día que el dueño del diseño confirme el tamaño de la carátula comprimida.
+
+**Solución real para el recorte de la carátula, no un placeholder**: en vez de simplemente dejar que la carátula de 135px se desborde 5px sobre el `LyricsPanel`, `draw_cover_tilted(compact)` **recorta las columnas de pantalla más allá de `MORPH_PANEL_W`** (deja de blitear ahí) -- la carátula se ve cortada en su borde derecho en vez de invadir visualmente el panel de letras. No es una carátula "comprimida" de verdad (eso exige la primitiva de reescalado que no existe), pero mantiene los dos paneles sin superponerse, que es la propiedad visual que sí importa hoy.
+
+**Reflejo, texto y controles: las tres reglas confirmadas del documento, sin ambigüedad, sí completas**: "el reflejo se desvanece... no existe en el Modo 4" → `compact` corta `total_h` a `ART_SIZE` sin las filas de reflejo. "Todos los textos se desvanecen" → se interpreta que incluye el bloque de estrellas (no es literalmente "texto", pero pierde su ancla visual sin el título/artista/álbum encima) -- todo el bloque se omite. "Solo se visualiza el ícono de Play/Pausa" → `draw_transport(compact)` corta temprano antes de dibujar repeat/backward/forward/shuffle.
+
+**Pendiente del documento resuelto, no ignorado**: "🔴 Scroll en Modo 4: ¿desplaza letras manualmente o queda sin función?" -- se resuelve como **sin función**, que además coincide con el comportamiento que el código YA tenía desde D-078 (`case NP_MODE_LYRICS: /* el icono no reacciona a la rueda */ break;`) -- no fue necesario cambiar nada, solo confirmar explícitamente que esa era la respuesta correcta al pendiente, no una laguna.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (renderizado puro, `test_lrc.c` ya cubre `aura_lrc_find_active_line()` sin cambios de esta tarea). Verificado con una pista real con `.lrc` real (no un mock): Modo 4 completo en ambos temas, panel comprimido con ícono activo en acento + carátula recortada sin invadir el panel de letras + barra de progreso a 122px + solo play/pausa -- `docs/screenshots/t3-pantallas/t31c-mode4-lyrics-{light,dark}.png`. Regresión de los modos normales (1/2/3/5) confirmada sin cambios visuales -- `t31c-regression-normal-mode.png`.
+
+**Cierra T3.1 (3/3 commits)**: geometría+tipografía+progreso (D-099), reglas de modos (D-100), Modo 4/LyricsPanel (D-101, este). Sigue T3.2 (Cover Flow real), la tarea más pesada del plan, dejada al final a propósito.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

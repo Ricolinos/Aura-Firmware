@@ -60,6 +60,19 @@
 #define PROGRESS_W       (A26_SCREEN_WIDTH - 2 * PROGRESS_X)
 #define TRANSPORT_Y      (A26_SCREEN_HEIGHT - 14)
 
+/* -- Modo 4 (Letras), panel comprimido (PLAN.md T3.1(c),
+ * componentes/now-playing.md) --------------------------------------------
+ * "Panel izquierdo delgado de 130px" (el token se llama
+ * lyrics_panel_width en tokens.json, pero mide el panel del REPRODUCTOR
+ * comprimido, no el LyricsPanel -- 130-122=8=2*4px de padding interno,
+ * el mismo patron que el resto del sistema). LyricsPanel ocupa el resto
+ * de la pantalla (190px) a la derecha. */
+#define MORPH_PANEL_W    AURA_DS_METRICS_NOW_PLAYING_LYRICS_PANEL_WIDTH
+#define MORPH_PROGRESS_W AURA_DS_METRICS_NOW_PLAYING_LYRICS_PROGRESS_WIDTH
+#define MORPH_PROGRESS_X ((MORPH_PANEL_W - MORPH_PROGRESS_W) / 2)
+#define LYRICS_PANEL_X   MORPH_PANEL_W
+#define LYRICS_PANEL_W   (A26_SCREEN_WIDTH - MORPH_PANEL_W)
+
 #define LRC_FILE_BUF_SIZE 8192
 
 /* Overlay de volumen (Fase 17, PLAN-UX.md, wheel=volumen): visible
@@ -279,12 +292,22 @@ static void aura_format_track_time(unsigned long ms, char *buf, size_t bufsz)
 #define NP_TILT_IANGLE 20     /* 7 grados * 1024/360, redondeado (AURA_DS_METRICS_NOW_PLAYING_COVER_TILT_DEG) */
 #define NP_TILT_CX     (-96300)
 
-static void draw_cover_tilted(void)
+/* `compact`: Modo 4 (componentes/now-playing.md) -- "el reflejo se
+ * desvanece durante la transicion (no existe en el Modo 4)" (se omite
+ * directo, ver header del archivo para el corte de alcance sobre la
+ * animacion de fundido real) y la caratula se recorta al ancho del
+ * panel comprimido de 130px en vez de reescalarse -- no existe una
+ * primitiva de resize en tiempo real para bitmaps ya decodificados en
+ * este pipeline (limite real, no una eleccion de estilo), asi que
+ * "comprimir" se logra recortando columnas de pantalla mas alla de
+ * MORPH_PANEL_W en vez de encoger la imagen fuente. */
+static void draw_cover_tilted(bool compact)
 {
     aura_flow_slide_t slide;
     aura_flow_projection_t proj;
     int refl_h = aura_art_reflection_height(ART_SIZE, ART_REFLECTION_PCT);
-    int total_h = ART_SIZE + refl_h;
+    int total_h = compact ? ART_SIZE : (ART_SIZE + refl_h);
+    int max_screen_x = compact ? MORPH_PANEL_W : AURA_FLOW_SCREEN_W;
     static fb_data col_buf[ART_SIZE + (ART_SIZE * 60 / 100)]; /* margen holgado sobre refl_h real */
 
     if (!s_art_valid)
@@ -300,7 +323,7 @@ static void draw_cover_tilted(void)
 
     aura_flow_begin_projection(&proj, &slide, ART_SIZE);
 
-    while (proj.screen_x < AURA_FLOW_SCREEN_W)
+    while (proj.screen_x < max_screen_x)
     {
         int col = aura_flow_source_column(&proj);
         int dy = aura_flow_vertical_scale(&proj);
@@ -381,7 +404,15 @@ static void draw_stars(int x, int y, int stars, bool editing)
 
 /* -- Bloque de texto + fila de modos (doc SS2/SS5) ------------------------ */
 
-static void draw_text_and_modes(const struct mp3entry *id3)
+/* `compact`: Modo 4 -- "todos los textos se desvanecen" (titulo,
+ * artista, album, contador -- se interpreta que incluye el bloque de
+ * estrellas, sin nada mas de donde colgarlo una vez que el texto que
+ * lo introduce desaparece) y "los iconos de modos transicionan de
+ * forma que todos los elementos del panel queden centrados en los
+ * 130px" -- se omite el bloque de texto entero y se recentra la fila
+ * de modos dentro de MORPH_PANEL_W en vez de alinearla a la derecha de
+ * toda la pantalla. */
+static void draw_text_and_modes(const struct mp3entry *id3, bool compact)
 {
     char line[160];
     int w, h;
@@ -389,48 +420,56 @@ static void draw_text_and_modes(const struct mp3entry *id3)
     int i;
     int mode_row_w = NP_MODE_COUNT * A26_ICON_SIZE_MENU
                     + (NP_MODE_COUNT - 1) * A26_SPACING_SM;
-    int mode_x = A26_SCREEN_WIDTH - A26_SPACING_LG - mode_row_w;
+    int mode_x = compact ? (MORPH_PANEL_W - mode_row_w) / 2
+                          : A26_SCREEN_WIDTH - A26_SPACING_LG - mode_row_w;
     int mode_y;
 
-    /* Tipografia nueva (fundamentos/02-tipografia.md, "Tokens de
-     * NowPlaying"): titulo Bold 12px, artista y album Regular 12px --
-     * ninguno de los tres es TITLE/CAPTION del sistema viejo. Orden
-     * titulo->artista->album: el documento confirma los TRES textos y
-     * su tipografia (tabla "Tipografia") pero no un orden de lectura
-     * explicito (la tabla "Layout actual" solo nombra titulo+artista,
-     * sin mencionar album en absoluto) -- se agrega album despues del
-     * artista por ser la convencion mas comun, provisional, ver
-     * DECISIONS.md D-099. */
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
-    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
-    snprintf(line, sizeof(line), "%s", id3->title ? id3->title : "");
-    lcd_getstringsize((const unsigned char *)line, &w, &h);
-    lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
-    y += h + A26_SPACING_XS;
+    if (!compact)
+    {
+        /* Tipografia nueva (fundamentos/02-tipografia.md, "Tokens de
+         * NowPlaying"): titulo Bold 12px, artista y album Regular 12px --
+         * ninguno de los tres es TITLE/CAPTION del sistema viejo. Orden
+         * titulo->artista->album: el documento confirma los TRES textos y
+         * su tipografia (tabla "Tipografia") pero no un orden de lectura
+         * explicito (la tabla "Layout actual" solo nombra titulo+artista,
+         * sin mencionar album en absoluto) -- se agrega album despues del
+         * artista por ser la convencion mas comun, provisional, ver
+         * DECISIONS.md D-099. */
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+        snprintf(line, sizeof(line), "%s", id3->title ? id3->title : "");
+        lcd_getstringsize((const unsigned char *)line, &w, &h);
+        lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
+        y += h + A26_SPACING_XS;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-    snprintf(line, sizeof(line), "%s", id3->artist ? id3->artist : "");
-    lcd_getstringsize((const unsigned char *)line, &w, &h);
-    lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
-    y += h + A26_SPACING_XS;
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        snprintf(line, sizeof(line), "%s", id3->artist ? id3->artist : "");
+        lcd_getstringsize((const unsigned char *)line, &w, &h);
+        lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
+        y += h + A26_SPACING_XS;
 
-    snprintf(line, sizeof(line), "%s", id3->album ? id3->album : "");
-    lcd_getstringsize((const unsigned char *)line, &w, &h);
-    lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
-    y += h + A26_SPACING_MD;
+        snprintf(line, sizeof(line), "%s", id3->album ? id3->album : "");
+        lcd_getstringsize((const unsigned char *)line, &w, &h);
+        lcd_putsxy(TEXT_X, y, (const unsigned char *)line);
+        y += h + A26_SPACING_MD;
 
-    draw_stars(TEXT_X, y, stars_from_rating(id3->rating), s_mode == NP_MODE_STARS);
-    y += A26_ICON_SIZE_STATUS + A26_SPACING_MD;
+        draw_stars(TEXT_X, y, stars_from_rating(id3->rating), s_mode == NP_MODE_STARS);
+        y += A26_ICON_SIZE_STATUS + A26_SPACING_MD;
+    }
+    else
+    {
+        y = ART_Y + ART_SIZE + A26_SPACING_MD;
+    }
 
     /* Fila de modos: debajo del bloque de texto, alineada a la derecha
-     * de la pantalla (doc SS2). El icono activo va en ACCENT con un
-     * pequeno salto de resorte al activarse (SS5); los otros 4 en
-     * TEXT_TERTIARY -- variante real desde el Lote 5 de AUDITORIA-01
-     * (A-16), ya no la aproximacion con TEXT_PRIMARY que D-078 dejo
-     * documentada como limite de D-010. */
+     * de la pantalla (doc SS2) -- o centrada en MORPH_PANEL_W en Modo 4.
+     * El icono activo va en ACCENT con un pequeno salto de resorte al
+     * activarse (SS5); los otros 4 en TEXT_TERTIARY -- variante real
+     * desde el Lote 5 de AUDITORIA-01 (A-16), ya no la aproximacion con
+     * TEXT_PRIMARY que D-078 dejo documentada como limite de D-010. */
     mode_y = y;
-    if (mode_y + A26_ICON_SIZE_MENU > ART_Y + ART_SIZE + REFL_GAP)
+    if (!compact && mode_y + A26_ICON_SIZE_MENU > ART_Y + ART_SIZE + REFL_GAP)
         mode_y = ART_Y + ART_SIZE + REFL_GAP - A26_ICON_SIZE_MENU; /* no invade el reflejo */
 
     for (i = 0; i < NP_MODE_COUNT; i++)
@@ -471,7 +510,10 @@ static void draw_text_and_modes(const struct mp3entry *id3)
  * a26_shell_blend() ya usada en StatusBar v2/T2.7) + avance 4px encima,
  * puntas redondeadas, centrado dentro del track. Blanca en reposo,
  * --color-accent mientras se manipula (Modo 2/scrub). */
-static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms)
+/* `x`/`width`: normal (PROGRESS_X/PROGRESS_W) o comprimida a
+ * MORPH_PROGRESS_X/MORPH_PROGRESS_W dentro del panel de 130px en Modo 4
+ * ("la barra de progreso pasa a medir 122px de ancho"). */
+static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int x, int width)
 {
     char timebuf[24], timebuf2[24];
     int w, h;
@@ -484,11 +526,11 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms)
     unsigned long elapsed = (scrub_preview_ms >= 0) ? (unsigned long)scrub_preview_ms : id3->elapsed;
     unsigned long remaining = (id3->length > elapsed) ? (id3->length - elapsed) : 0;
 
-    a26_shell_fill_rounded_rect(PROGRESS_X, PROGRESS_Y, PROGRESS_W, PROGRESS_TRACK_H,
+    a26_shell_fill_rounded_rect(x, PROGRESS_Y, width, PROGRESS_TRACK_H,
                                  PROGRESS_TRACK_H / 2, track_color, a26_color(A26_SHELL_BG));
-    fill_w = id3->length ? (int)((unsigned long long)PROGRESS_W * elapsed / id3->length) : 0;
+    fill_w = id3->length ? (int)((unsigned long long)width * elapsed / id3->length) : 0;
     if (fill_w > 0)
-        a26_shell_fill_rounded_rect(PROGRESS_X, fill_y, fill_w, PROGRESS_FILL_H,
+        a26_shell_fill_rounded_rect(x, fill_y, fill_w, PROGRESS_FILL_H,
                                      PROGRESS_FILL_H / 2, fill_color, track_color);
 
     /* Formato del original (doc confirmado): transcurrido a la
@@ -499,16 +541,26 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms)
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-    lcd_putsxy(PROGRESS_X, PROGRESS_Y - A26_SPACING_MD, (const unsigned char *)timebuf);
+    lcd_putsxy(x, PROGRESS_Y - A26_SPACING_MD, (const unsigned char *)timebuf);
     lcd_getstringsize((const unsigned char *)timebuf2, &w, &h);
-    lcd_putsxy(PROGRESS_X + PROGRESS_W - w, PROGRESS_Y - A26_SPACING_MD,
+    lcd_putsxy(x + width - w, PROGRESS_Y - A26_SPACING_MD,
                (const unsigned char *)timebuf2);
 }
 
-static void draw_transport(void)
+/* `compact`: Modo 4 -- "de los controles solo se visualiza el icono de
+ * Play/Pausa", centrado en el panel de 130px. */
+static void draw_transport(bool compact)
 {
     int status = audio_status();
     bool paused = (status & AUDIO_STATUS_PAUSE) != 0;
+
+    if (compact)
+    {
+        int cx = MORPH_PANEL_W / 2;
+        aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_STATUS,
+                                cx - A26_ICON_SIZE_STATUS / 2, TRANSPORT_Y);
+        return;
+    }
     int cx = A26_SCREEN_WIDTH / 2;
     int y = TRANSPORT_Y;
 
@@ -603,43 +655,91 @@ static void draw_playlist_panel(void)
     lcd_putsxy(box_x + (box_w - w) / 2, box_y + (box_h - h) / 2, (const unsigned char *)label);
 }
 
-/* -- Letra (doc SS6, version simplificada -- ver D-078) ------------------- */
+/* -- LyricsPanel, Modo 4 (PLAN.md T3.1(c), componentes/now-playing.md) ---
+ *
+ * "Letras a 12px Regular; la linea activa a 14px Bold" -- reusa
+ * aura_lrc_find_active_line() (ya probado en test_lrc.c, sin cambios).
+ * Version real, no la simplificacion anterior (D-078: aquella dibujaba
+ * SOLO la linea activa + la siguiente, centradas en TODA la pantalla,
+ * porque el panel izquierdo comprimido no existia todavia) -- ahora
+ * muestra hasta 2 lineas de contexto arriba y abajo de la activa,
+ * recortadas al ancho del panel (mismo mecanismo de viewport que
+ * aura_marquee.c/aura_dynamic_title.c).
+ *
+ * Sin scroll horizontal por linea ni animacion de desplazamiento
+ * vertical continuo entre lineas -- "avanzan sincronizadas" se
+ * interpreta como CUAL linea esta resaltada, no una animacion de
+ * scroll (el documento no pide una explicitamente). */
+static void draw_lyrics_line_clipped(int x, int y, int w, const char *text)
+{
+    struct viewport vp = *lcd_current_viewport;
+    struct viewport *saved;
 
-static void draw_lyrics(const struct mp3entry *id3)
+    vp.x = x;
+    vp.y = y;
+    vp.width = w;
+    saved = lcd_set_viewport(&vp);
+    lcd_putsxy(0, 0, (const unsigned char *)text);
+    lcd_set_viewport(saved);
+}
+
+static void draw_lyrics_panel(const struct mp3entry *id3)
 {
     int active = aura_lrc_find_active_line(&s_lrc, (long)id3->elapsed);
+    int panel_x = LYRICS_PANEL_X + A26_SPACING_LG;
+    int panel_w = LYRICS_PANEL_W - 2 * A26_SPACING_LG;
     int cy = A26_SCREEN_HEIGHT / 2;
+    int active_w, active_h;
+    int y, i, w, h;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    if (active < 0)
+        return;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_14));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_getstringsize((const unsigned char *)s_lrc.lines[active].text, &active_w, &active_h);
+    draw_lyrics_line_clipped(panel_x, cy - active_h / 2, panel_w, s_lrc.lines[active].text);
 
-    if (active >= 0)
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+
+    y = cy - active_h / 2 - A26_SPACING_XS;
+    for (i = active - 1; i >= 0 && i >= active - 2; i--)
     {
-        int w, h;
-        const char *text = s_lrc.lines[active].text;
-        lcd_getstringsize((const unsigned char *)text, &w, &h);
-        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, cy - h, (const unsigned char *)text);
+        lcd_getstringsize((const unsigned char *)s_lrc.lines[i].text, &w, &h);
+        y -= h + A26_SPACING_XS;
+        draw_lyrics_line_clipped(panel_x, y, panel_w, s_lrc.lines[i].text);
+    }
 
-        if (active + 1 < s_lrc.count)
-        {
-            lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
-            lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-            text = s_lrc.lines[active + 1].text;
-            lcd_getstringsize((const unsigned char *)text, &w, &h);
-            lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, cy + A26_SPACING_MD,
-                       (const unsigned char *)text);
-        }
+    y = cy + active_h / 2 + A26_SPACING_XS;
+    for (i = active + 1; i < s_lrc.count && i <= active + 2; i++)
+    {
+        lcd_getstringsize((const unsigned char *)s_lrc.lines[i].text, &w, &h);
+        draw_lyrics_line_clipped(panel_x, y, panel_w, s_lrc.lines[i].text);
+        y += h + A26_SPACING_XS;
     }
 }
 
 /* -- Reproductor completo -------------------------------------------------- */
 
-static void draw_player(const struct mp3entry *id3, int scrub_preview_ms)
+/* `compact`: Modo 4 -- panel izquierdo comprimido a MORPH_PANEL_W (130px),
+ * LyricsPanel ocupa el resto (dibujado por el llamador). Ver
+ * DECISIONS.md D-101 para el alcance real de esta pasada: los DOS
+ * estados (normal y Modo 4) estan completos, el corte entre ambos es
+ * directo -- "Morph Directo" (la transicion fluida en si, con
+ * aura_pattern_lerp ya listo desde T1.1) queda diferida porque el
+ * tamano exacto de la caratula comprimida no esta definido en el
+ * documento y este pipeline no tiene una primitiva de reescalado de
+ * bitmaps en tiempo real. */
+static void draw_player(const struct mp3entry *id3, int scrub_preview_ms, bool compact)
 {
-    draw_cover_tilted();
-    draw_text_and_modes(id3);
-    draw_progress(id3, scrub_preview_ms);
-    draw_transport();
+    draw_cover_tilted(compact);
+    draw_text_and_modes(id3, compact);
+    if (compact)
+        draw_progress(id3, scrub_preview_ms, MORPH_PROGRESS_X, MORPH_PROGRESS_W);
+    else
+        draw_progress(id3, scrub_preview_ms, PROGRESS_X, PROGRESS_W);
+    draw_transport(compact);
 
     if (s_mode == NP_MODE_PLAYLIST)
         draw_playlist_panel();
@@ -701,6 +801,7 @@ static void draw_volume_overlay(void)
 void aura_nowplaying_draw(void)
 {
     struct mp3entry *id3 = audio_current_track();
+    bool lyrics_mode;
 
     a26_shell_clear_screen();
     aura_statusbar_draw(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING), 1);
@@ -710,10 +811,14 @@ void aura_nowplaying_draw(void)
 
     reload_for_track(id3);
 
-    if (s_mode == NP_MODE_LYRICS && s_lrc_valid)
-        draw_lyrics(id3);
-    else
-        draw_player(id3, (int)s_scrub_preview_ms);
+    /* Modo 4 (componentes/now-playing.md): el panel izquierdo
+     * comprimido y el LyricsPanel conviven -- ya no es "o uno o el
+     * otro" como en la simplificacion anterior (D-078), que trataba
+     * Letra como una vista de pantalla completa separada. */
+    lyrics_mode = (s_mode == NP_MODE_LYRICS && s_lrc_valid);
+    draw_player(id3, (int)s_scrub_preview_ms, lyrics_mode);
+    if (lyrics_mode)
+        draw_lyrics_panel(id3);
 
     if (current_tick < s_volume_overlay_until)
         draw_volume_overlay();
