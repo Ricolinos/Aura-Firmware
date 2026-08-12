@@ -121,6 +121,11 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
     if (use_genre && s_genre_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_genre, s_genre_seek);
 
+    /* Numero de pista real por fila -- solo interesa para las listas
+     * de canciones DE UN ALBUM (ordenarlas como el disco, D-118/nota);
+     * en el resto de las busquedas se ignora. */
+    static long s_tracknums[AURA_MUSIC_MAX_ITEMS];
+
     while (n < max && tagcache_get_next(&tcs, buf, sizeof(buf)))
     {
         /* "<Untagged>" (tagcache.h) es jerga tecnica -- regla dura del
@@ -132,10 +137,39 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
         else
             strlcpy(out[n].label, buf, AURA_MUSIC_ITEM_LEN);
         out[n].seek = (tag == tag_title) ? tcs.idx_id : tcs.result_seek;
+        s_tracknums[n] = tagcache_get_numeric(&tcs, tag_tracknumber);
         n++;
     }
 
     tagcache_search_finish(&tcs);
+
+    /* Canciones de un album: orden del DISCO, no del indice de tagcache
+     * (encargo del dueno del diseno 2026-08-12, cierra la nota de
+     * D-118). Insercion estable: pistas sin numero (<=0) van al final
+     * conservando su orden relativo. Mismo criterio en el playlist de
+     * reproduccion (build_playlist_from_songs) -- el indice visible y
+     * la pista que suena SIEMPRE coinciden. */
+    if (tag == tag_title && use_album)
+    {
+        int a, b;
+        for (a = 1; a < n; a++)
+        {
+            aura_music_item_t key = out[a];
+            long key_num = s_tracknums[a] > 0 ? s_tracknums[a] : 0x7FFFFFFF;
+            b = a - 1;
+            while (b >= 0)
+            {
+                long b_num = s_tracknums[b] > 0 ? s_tracknums[b] : 0x7FFFFFFF;
+                if (b_num <= key_num)
+                    break;
+                out[b + 1] = out[b];
+                s_tracknums[b + 1] = s_tracknums[b];
+                b--;
+            }
+            out[b + 1] = key;
+            s_tracknums[b + 1] = key_num == 0x7FFFFFFF ? 0 : key_num;
+        }
+    }
     return n;
 }
 
@@ -209,6 +243,54 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
         tagcache_search_add_filter(&tcs, tag_genre, s_genre_seek);
 
     playlist_create(NULL, NULL);
+
+    if (use_album)
+    {
+        /* Mismo orden del DISCO que muestra la lista (ver run_search):
+         * primero se recolectan (idx_id, tracknumber), se ordenan, y
+         * recien entonces se insertan -- el indice elegido en pantalla
+         * y la cancion que arranca siempre son la misma. */
+        static int32_t s_ids[AURA_MUSIC_MAX_ITEMS];
+        static long s_nums[AURA_MUSIC_MAX_ITEMS];
+        int n = 0, a, b;
+
+        while (n < AURA_MUSIC_MAX_ITEMS && tagcache_get_next(&tcs, path, sizeof(path)))
+        {
+            s_ids[n] = tcs.idx_id;
+            s_nums[n] = tagcache_get_numeric(&tcs, tag_tracknumber);
+            if (s_nums[n] <= 0)
+                s_nums[n] = 0x7FFFFFFF; /* sin numero: al final, orden estable */
+            n++;
+        }
+        /* OJO: la busqueda sigue ABIERTA -- tagcache_retrieve() abajo
+         * la necesita activa; el finish va al final del bloque. */
+
+        for (a = 1; a < n; a++)
+        {
+            int32_t key_id = s_ids[a];
+            long key_num = s_nums[a];
+            b = a - 1;
+            while (b >= 0 && s_nums[b] > key_num)
+            {
+                s_ids[b + 1] = s_ids[b];
+                s_nums[b + 1] = s_nums[b];
+                b--;
+            }
+            s_ids[b + 1] = key_id;
+            s_nums[b + 1] = key_num;
+        }
+
+        for (a = 0; a < n; a++)
+        {
+            if (tagcache_retrieve(&tcs, s_ids[a], tag_filename, path, sizeof(path)))
+            {
+                playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true);
+                inserted++;
+            }
+        }
+        tagcache_search_finish(&tcs);
+        return inserted > 0;
+    }
 
     while (tagcache_get_next(&tcs, path, sizeof(path)))
     {

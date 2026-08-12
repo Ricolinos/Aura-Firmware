@@ -16,6 +16,7 @@
 #include "aura_albumart.h"
 #include "aura_art.h"
 #include "aura_nowplaying.h"
+#include "aura_coverflow.h"
 #include "aura_statusbar.h"
 #include "aura_status_bar_v2.h"
 #include "aura_lang.h"
@@ -335,37 +336,35 @@ void aura_transition_coverflow_enter(aura_nav_t *nav)
     TRANSITION_LOG("coverflow-enter", frames, start_tick);
 }
 
-/* -- Flip-and-Flow (PLAN.md T3.2(d), componentes/cover-flow.md) --------
+/* -- Vuelo Cover Flow -> reproductor (rehecho 2026-08-12 por encargo
+ * del dueno del diseno, reemplaza al Flip-and-Flow de T3.2(d)/D-113):
  *
- * "El album gira de nuevo, se posiciona en su lugar, y desde ahi
- * transicion fluida y continua hacia Now Playing -- con todo y
- * reflejo durante el trayecto." La caratula se decodifica UNA vez a
- * su tamano FINAL (135px, el de NowPlaying -- misma cache .pfraw que
- * el carrusel, T3.2(a), solo que con clave de tamano distinta) y se
- * anima con angulo/posicion CONTINUOS (aura_pattern_lerp, T1.1) desde
- * la geometria de reposo del carrusel (angulo 0, centrada) hasta la
- * geometria EXACTA de NowPlaying -- `AURA_NOWPLAYING_TILT_IANGLE`/
- * `_CX` son publicas en aura_nowplaying.h precisamente porque el
- * documento acopla ambas geometrias ("si se cambia una, se cambia la
- * otra"): esta funcion nunca inventa su propio destino, lee el mismo
- * numero que ya usa aura_nowplaying.c.
+ * Arranca desde el REVERSO CRECIDO (200px, la lista de canciones
+ * visible) y hace MEDIA VUELTA continua en un solo sentido (decision
+ * del dueno: media vuelta directa, ~500ms) mientras encoge a los
+ * 135px del reproductor y viaja a su posicion exacta:
  *
- * Corte de alcance real, mismo criterio que D-101 (morph de Modo 4 en
- * NowPlaying): el TAMANO no interpola -- 135px fijo durante todo el
- * vuelo, un solo salto de tamano en el primer cuadro (la caratula de
- * 100px del carrusel es un archivo de cache DISTINTO, mismo album,
- * distinto pre-escalado). Este pipeline no tiene una primitiva de
- * reescalado de bitmaps en tiempo real -- interpolar el tamano de
- * verdad la exigiria. Angulo y posicion SI son continuos y reales.
+ *   Fase A (primera mitad): el PANEL REAL de la lista -- capturado
+ *   del framebuffer, con todo y sus canciones -- gira de frente a
+ *   perfil.
+ *   Fase B (segunda mitad): la CARATULA entra desde el perfil opuesto
+ *   (misma direccion de giro, rotacion continua) y aterriza en el
+ *   tilt/posicion del reproductor con su reflejo apareciendo en
+ *   proporcion.
  *
- * Sincrono y bloqueante, mismo estilo que aura_transition_slide()/
- * aura_transition_reveal() de arriba -- una coreografia de un solo
- * disparo que nunca se interrumpe ni se redirige a mitad de camino,
- * mas simple de razonar que integrarla al bucle de redibujo por
- * eventos que usa el resto de las animaciones de esta sesion. */
-#define CF_FLOW_MS 350 /* TODO(pendiente-doc): "Timing de cada fase de Flip-and-Flow" no definido, ver DECISIONS.md D-105 */
+ * Mientras tanto (primera mitad), las tapas laterales salen
+ *   deslizandose hacia SU borde (aura_coverflow_draw_exit_frame).
+ *
+ * El tamano interpola de forma continua via la camara del proyector
+ * (distance = CAM * fuente/visual - CAM), igual que el zoom del flip
+ * (D-118). Al aterrizar corre el morph de entrada del reproductor
+ * (now-playing.md, D-113) y el push de navegacion. Sincrono y
+ * bloqueante como el resto de las transiciones. */
+#define FLOW_MS 500 /* decision del dueno del diseno (antes 350 provisional) */
 
-void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from_y)
+static fb_data s_back_tex[AURA_COVERFLOW_BACK_SIZE * AURA_COVERFLOW_BACK_SIZE];
+
+void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
 {
     int size = AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE;
     int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
@@ -373,95 +372,121 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
     unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
                             * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
                             * sizeof(fb_data)];
-    fb_data col_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
-                     + AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100];
+    static fb_data col_buf[AURA_COVERFLOW_BACK_SIZE + 8];
+    static fb_data rcol_buf[AURA_COVERFLOW_BACK_SIZE / 2];
     aura_albumart_t art;
-    int frames, frame_delay, i;
+    int frames, frame_delay, i, row, col;
     long start_tick = current_tick;
+    int back = AURA_COVERFLOW_BACK_SIZE;
+    /* Centros de despegue (reverso) y aterrizaje (reproductor). */
+    int y0 = AURA_COVERFLOW_BACK_Y + back / 2;
+    int y1 = AURA_DS_METRICS_NOW_PLAYING_COVER_Y + size / 2;
+    unsigned bg = a26_color(A26_SHELL_BG);
+
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE)
+    {
+        aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+        return;
+    }
+
+    /* Textura del reverso: lo que este AHORA en pantalla (el panel con
+     * su lista real), transpuesto para el walker de columnas. */
+    for (row = 0; row < back; row++)
+    {
+        const fb_data *src = FBADDR(AURA_COVERFLOW_BACK_X, AURA_COVERFLOW_BACK_Y + row);
+        for (col = 0; col < back; col++)
+            s_back_tex[(size_t)col * back + row] = src[col];
+    }
 
     art.size = size;
     art.radius = AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS;
     art.cover_data = cover_buf;
     art.reflection_data = refl_buf;
-
-    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE)
-    {
-        /* Sin animacion (ajuste del usuario) -- navegar directo. */
-        aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
-        return;
-    }
-
-    /* Sin caratula real, vuela la Default (misma imagen que el carrusel
-     * y el reproductor ya muestran para ese album) -- antes este caso
-     * saltaba la animacion por completo, un corte seco que ya no tiene
-     * razon de ser. */
     if (!aura_albumart_load_for_album(album_seek, &art))
         aura_albumart_load_default(&art);
 
-    frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 14 : 6;
-    frame_delay = HZ / 60;
+    if (aura_settings.animation_mode == AURA_ANIM_ALL)
+    {
+        frames = FLOW_MS * 60 / 1000;
+        frame_delay = HZ / 60;
+    }
+    else /* AURA_ANIM_MINIMAL */
+    {
+        frames = FLOW_MS * 30 / 1000;
+        frame_delay = HZ / 30;
+    }
 
     for (i = 1; i <= frames; i++)
     {
-        int t = i * 256 / frames;
-        int total_h = size + refl_h;
-        /* `y` interpola el CENTRO vertical de la caratula (no su borde
-         * superior): los renderers de columnas centran cada columna en
-         * su linea media (correccion de geometria 2026-08-12), y el
-         * vuelo tiene que hacer exactamente lo mismo para aterrizar
-         * pixel-perfecto en draw_cover_tilted(). */
-        int y = aura_pattern_lerp(from_y,
-                                   AURA_DS_METRICS_NOW_PLAYING_COVER_Y + size / 2, t);
+        int t = eased_offset(256, i, frames);       /* 0..256, ease-out */
+        int size_vis = back - ((back - size) * t) / 256; /* 200 -> 135 */
+        int cy = aura_pattern_lerp(y0, y1, t);
+        int cx = aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_CX, t);
         aura_flow_slide_t slide;
         aura_flow_projection_t proj;
+        int phase_b = (t >= 128);
+        int tp = phase_b ? (t - 128) * 2 : t * 2;   /* progreso de la fase, 0..256 */
+        int src_size = phase_b ? size : back;
+        const fb_data *tex = phase_b ? (const fb_data *)art.cover_data : s_back_tex;
+        int refl_vis = phase_b ? tp : 0;
 
-        /* Giro CONTINUO en un solo sentido (correccion del dueno del
-         * diseno 2026-08-12: "el album tiene que girar siempre en la
-         * misma direccion, y transicionar a la geometria y posicion
-         * exacta ya establecida en el reproductor"): el vuelo arranca
-         * desde el PERFIL (90 grados = 256 IANGLE, el estado visual en
-         * que quedo la tapa al abrir su lista de canciones -- la
-         * version anterior saltaba en seco a 0 grados y giraba de
-         * vuelta hacia el tilt, dos discontinuidades) y desciende
-         * monotono hasta AURA_NOWPLAYING_TILT_IANGLE (+20, el mismo
-         * signo/valor exacto que draw_cover_tilted() en
-         * aura_nowplaying.c): un solo sentido de giro de principio a
-         * fin, aterrizando en la geometria del reproductor sin salto
-         * en el ultimo cuadro. */
-        slide.angle = aura_pattern_lerp(256, AURA_NOWPLAYING_TILT_IANGLE, t);
-        slide.distance = 0;
-        slide.cx = aura_pattern_lerp(0, AURA_NOWPLAYING_TILT_CX, t);
+        /* Media vuelta continua: fase A gira el panel 0->90 (perfil);
+         * fase B trae la caratula del perfil opuesto -90->tilt final.
+         * Mismo sentido de giro que la apertura del flip: toda la vida
+         * del album gira hacia el mismo lado. */
+        slide.angle = phase_b
+            ? aura_pattern_lerp(-256, AURA_NOWPLAYING_TILT_IANGLE, tp)
+            : aura_pattern_lerp(0, 256, tp);
+        slide.distance = AURA_FLOW_CAM_DIST * src_size / size_vis - AURA_FLOW_CAM_DIST;
+        slide.cx = cx;
 
-        a26_shell_clear_screen();
-        /* Titulo instantaneo, mismo criterio que el push de arriba --
-         * la banda de StatusBar no forma parte del vuelo. */
-        aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_NOWPLAYING));
+        /* Fondo: laterales saliendo hacia sus bordes (primera mitad) y
+         * la barra full del destino -- el morph de entrada de abajo se
+         * encarga del resto del chrome del reproductor. */
+        aura_coverflow_draw_exit_frame(phase_b ? 256 : tp);
 
-        aura_flow_begin_projection(&proj, &slide, size);
+        aura_flow_begin_projection(&proj, &slide, src_size);
         while (proj.screen_x < AURA_FLOW_SCREEN_W)
         {
-            int col = aura_flow_source_column(&proj);
+            int scol = aura_flow_source_column(&proj);
             int dy = aura_flow_vertical_scale(&proj);
             int p = 0, dest_row, n_rows = 0;
-            const fb_data *cover_col = (const fb_data *)art.cover_data + (size_t)col * size;
-            const fb_data *refl_col = (const fb_data *)art.reflection_data + (size_t)col * refl_h;
+            const fb_data *tex_col = tex + (size_t)scol * src_size;
+            int cover_disp = (src_size << AURA_FLOW_SHIFT) / dy;
+            int y_col = cy - cover_disp / 2;
 
-            for (dest_row = 0; dest_row < total_h; dest_row++)
+            for (dest_row = 0; dest_row < (int)(sizeof(col_buf) / sizeof(col_buf[0])); dest_row++)
             {
                 int source_row = p >> AURA_FLOW_SHIFT;
 
-                if (source_row >= total_h)
+                if (source_row >= src_size)
                     break;
-                col_buf[dest_row] = (source_row < size)
-                    ? cover_col[source_row]
-                    : refl_col[source_row - size];
+                col_buf[dest_row] = tex_col[source_row];
                 p += dy;
                 n_rows++;
             }
             if (n_rows > 0)
+                lcd_bitmap(col_buf, proj.screen_x, y_col, 1, n_rows);
+
+            if (refl_vis > 0)
             {
-                int cover_disp = (size << AURA_FLOW_SHIFT) / dy;
-                lcd_bitmap(col_buf, proj.screen_x, y - cover_disp / 2, 1, n_rows);
+                const fb_data *refl_col = (const fb_data *)art.reflection_data
+                                         + (size_t)scol * refl_h;
+                int r_rows = 0;
+
+                p = 0;
+                for (dest_row = 0; dest_row < (int)(sizeof(rcol_buf) / sizeof(rcol_buf[0])); dest_row++)
+                {
+                    int source_row = p >> AURA_FLOW_SHIFT;
+
+                    if (source_row >= refl_h)
+                        break;
+                    rcol_buf[dest_row] = a26_shell_blend(bg, refl_col[source_row], refl_vis);
+                    p += dy;
+                    r_rows++;
+                }
+                if (r_rows > 0)
+                    lcd_bitmap(rcol_buf, proj.screen_x, y_col + n_rows, 1, r_rows);
             }
 
             if (!aura_flow_advance_column(&proj))
@@ -470,7 +495,6 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
 
         lcd_update();
         drain_button_queue_if_full();
-
         if (i < frames)
             sleep(frame_delay);
     }
@@ -587,5 +611,122 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from
         }
     }
 
-    TRANSITION_LOG("flip_and_flow+morph", frames, start_tick);
+    TRANSITION_LOG("flow-to-player", frames, start_tick);
+}
+
+/* -- Regreso reproductor -> Cover Flow (encargo 2026-08-12): la
+ * caratula YA esta de frente en el reproductor, asi que no hay giro ni
+ * paso por el reverso -- es un MORPH fluido de posicion y geometria
+ * (135px/tilt 7 -> 130px/frontal en el centro del carrusel), con el
+ * reflejo visible todo el trayecto. Las tapas laterales entran desde
+ * los bordes de la pantalla y el titulo/artista suben desde el borde
+ * inferior (aura_coverflow_draw_return_frame). Al aterrizar, el
+ * carrusel queda en reposo (settle_idle) mostrando la caratula. */
+void aura_transition_flow_return(aura_nav_t *nav)
+{
+    int size = AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE;
+    int carousel = AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE;
+    int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
+    unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
+    unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
+                            * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
+                            * sizeof(fb_data)];
+    static fb_data col_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE + 8];
+    static fb_data rcol_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE / 2];
+    aura_albumart_t art;
+    int frames, frame_delay, i;
+    long start_tick = current_tick;
+    int32_t seek = aura_coverflow_current_album_seek();
+    int y0 = AURA_DS_METRICS_NOW_PLAYING_COVER_Y + size / 2;
+    int y1 = 30 + carousel / 2; /* CF_TOP_Y + centro -- misma linea media del carrusel */
+
+    (void)nav; /* el pop ya ocurrio; nav queda en la firma por simetria
+                * con el resto de las transiciones */
+    aura_coverflow_settle_idle();
+
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE || seek < 0)
+        return;
+
+    art.size = size;
+    art.radius = AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS;
+    art.cover_data = cover_buf;
+    art.reflection_data = refl_buf;
+    if (!aura_albumart_load_for_album(seek, &art))
+        aura_albumart_load_default(&art);
+
+    if (aura_settings.animation_mode == AURA_ANIM_ALL)
+    {
+        frames = FLOW_MS * 60 / 1000;
+        frame_delay = HZ / 60;
+    }
+    else
+    {
+        frames = FLOW_MS * 30 / 1000;
+        frame_delay = HZ / 30;
+    }
+
+    for (i = 1; i <= frames; i++)
+    {
+        int t = eased_offset(256, i, frames);
+        int size_vis = size - ((size - carousel) * t) / 256; /* 135 -> 130 */
+        int cy = aura_pattern_lerp(y0, y1, t);
+        aura_flow_slide_t slide;
+        aura_flow_projection_t proj;
+
+        slide.angle = aura_pattern_lerp(AURA_NOWPLAYING_TILT_IANGLE, 0, t);
+        slide.distance = AURA_FLOW_CAM_DIST * size / size_vis - AURA_FLOW_CAM_DIST;
+        slide.cx = aura_pattern_lerp(AURA_NOWPLAYING_TILT_CX, 0, t);
+
+        aura_coverflow_draw_return_frame(t);
+
+        aura_flow_begin_projection(&proj, &slide, size);
+        while (proj.screen_x < AURA_FLOW_SCREEN_W)
+        {
+            int scol = aura_flow_source_column(&proj);
+            int dy = aura_flow_vertical_scale(&proj);
+            int p = 0, dest_row, n_rows = 0;
+            const fb_data *tex_col = (const fb_data *)art.cover_data + (size_t)scol * size;
+            const fb_data *refl_col = (const fb_data *)art.reflection_data + (size_t)scol * refl_h;
+            int cover_disp = (size << AURA_FLOW_SHIFT) / dy;
+            int y_col = cy - cover_disp / 2;
+            int r_rows = 0;
+
+            for (dest_row = 0; dest_row < (int)(sizeof(col_buf) / sizeof(col_buf[0])); dest_row++)
+            {
+                int source_row = p >> AURA_FLOW_SHIFT;
+
+                if (source_row >= size)
+                    break;
+                col_buf[dest_row] = tex_col[source_row];
+                p += dy;
+                n_rows++;
+            }
+            if (n_rows > 0)
+                lcd_bitmap(col_buf, proj.screen_x, y_col, 1, n_rows);
+
+            p = 0;
+            for (dest_row = 0; dest_row < (int)(sizeof(rcol_buf) / sizeof(rcol_buf[0])); dest_row++)
+            {
+                int source_row = p >> AURA_FLOW_SHIFT;
+
+                if (source_row >= refl_h)
+                    break;
+                rcol_buf[dest_row] = refl_col[source_row];
+                p += dy;
+                r_rows++;
+            }
+            if (r_rows > 0)
+                lcd_bitmap(rcol_buf, proj.screen_x, y_col + n_rows, 1, r_rows);
+
+            if (!aura_flow_advance_column(&proj))
+                break;
+        }
+
+        lcd_update();
+        drain_button_queue_if_full();
+        if (i < frames)
+            sleep(frame_delay);
+    }
+
+    TRANSITION_LOG("flow-return", frames, start_tick);
 }

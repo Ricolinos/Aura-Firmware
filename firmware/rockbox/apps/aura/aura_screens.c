@@ -1566,6 +1566,14 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
 
         if (depth_after > depth_before && is_coverflow_screen(to))
             aura_transition_coverflow_enter(nav);
+        else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
+                 && is_coverflow_screen(to))
+        {
+            /* Regreso reproductor -> Cover Flow (encargo 2026-08-12):
+             * morph de la caratula de frente + laterales/titulo
+             * entrando desde los bordes -- nunca el slide generico. */
+            aura_transition_flow_return(nav);
+        }
         else if (is_coverflow_screen(screen) && to == AURA_SCREEN_NOWPLAYING)
         {
             /* Flip-and-Flow + morph de entrada (now-playing.md) ya

@@ -49,12 +49,17 @@ void aura_transition_coverflow_enter(aura_nav_t *nav);
  * AURA_SCREEN_NOWPLAYING al terminar. No hace nada (deja que el
  * llamador navegue directo) si `album_seek` no tiene caratula real --
  * no hay nada que volar. */
-/* `from_y` es el CENTRO vertical de la caratula en el carrusel (los
- * renderers de columnas centran en la linea media desde la correccion
- * de geometria 2026-08-12). Tras el vuelo corre el morph de entrada de
- * now-playing.md (fade de textos, modos desde la derecha, progreso
- * desde abajo, barra en Drop) y hace el aura_nav_push() -- el llamador
- * NO debe aplicar ninguna transicion generica encima. */
-void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek, int from_y);
+/* Vuelo Cover Flow -> reproductor (rehecho 2026-08-12): arranca del
+ * reverso crecido (geometria publica en aura_coverflow.h), media
+ * vuelta continua con las laterales saliendo hacia sus bordes, y al
+ * aterrizar corre el morph de entrada de now-playing.md y hace el
+ * aura_nav_push() -- el llamador NO aplica transicion generica encima. */
+void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek);
+
+/* Regreso reproductor -> Cover Flow: morph de posicion/geometria de la
+ * caratula de frente (sin giro), laterales y titulo entrando desde los
+ * bordes. Llamar DESPUES del pop (nav ya apunta al Cover Flow); deja
+ * el carrusel en reposo. */
+void aura_transition_flow_return(aura_nav_t *nav);
 
 #endif /* AURA_TRANSITIONS_H */

@@ -1428,4 +1428,20 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-119 — Orden de disco real, vuelo rehecho (media vuelta, 500ms) y regreso con morph de frente
+
+**Encargos del dueño del diseño (2026-08-12), con dos decisiones suyas sobre opciones: media vuelta directa (~180°) y ~500ms de duración.**
+
+**1) Pistas en el orden real del álbum** (cierra la nota de D-118): `run_search()` recupera `tag_tracknumber` por fila y ordena las listas de canciones DE UN ÁLBUM con inserción estable (pistas sin número al final, orden relativo conservado); `build_playlist_from_songs()` hace exactamente lo mismo al armar el playlist — recolecta (idx_id, tracknumber) con la búsqueda ABIERTA (tagcache_retrieve la necesita activa — bug corregido antes de que compilara siquiera), ordena, y recién inserta. El índice elegido en pantalla y la canción que suena siempre coinciden. Verificado: "1. Beatle Greetings (Speech)" encabeza el disco 1 del BBC (antes salía la pista 29) y el vuelo aterriza reproduciendo exactamente esa.
+
+**2) Vuelo Cover Flow → reproductor rehecho** (reemplaza el Flip-and-Flow de D-113, que ya no cuadraba con el reverso crecido): arranca desde el REVERSO de 200px y hace MEDIA VUELTA continua en un solo sentido durante ~500ms (`FLOW_MS`), encogiendo con la cámara del proyector hasta los 135px del reproductor. Fase A: el PANEL REAL de la lista — capturado del framebuffer con todo y sus canciones, transpuesto como textura — gira de frente a perfil. Fase B: la carátula entra desde el perfil opuesto (rotación continua, mismo sentido) y aterriza en el tilt/posición exactos, con su reflejo apareciendo en proporción. Mientras (primera mitad), las tapas laterales salen deslizándose HACIA SU BORDE (`aura_coverflow_draw_exit_frame()`, offset extra de ~7 posiciones). Al aterrizar corre el morph de entrada de now-playing.md (D-113, intacto). Nota: el sentido del giro continúa el de la apertura del flip (un solo sentido en toda la vida del álbum); si el dueño percibe el sentido como horario en vez de antihorario, invertirlo es negar dos signos de ángulo.
+
+**3) Regreso reproductor → Cover Flow** (nuevo `aura_transition_flow_return()`): la carátula ya está de frente — sin giro ni paso por el reverso — hace un MORPH fluido de posición y geometría (135px/tilt 7° → 130px/frontal en el centro del carrusel) con el reflejo visible todo el trayecto; las tapas laterales entran desde los bordes y el título/artista suben desde el borde inferior (`aura_coverflow_draw_return_frame()`). Al aterrizar, el carrusel queda EN REPOSO (`aura_coverflow_settle_idle()`) mostrando la carátula — no la lista abierta. Disparado desde el bloque central de transiciones (pop NOWPLAYING → coverflow), nunca el slide genérico.
+
+**Geometría del reverso ahora pública** (`AURA_COVERFLOW_BACK_*` en aura_coverflow.h) — el vuelo despega exactamente de ahí; la firma de `aura_transition_flip_and_flow()` perdió el `from_y` (la coreografía conoce sus dos extremos).
+
+**Aceptación**: 0 warnings (`make -q` limpio), 8/8 suites host-side. Verificado end-to-end por capturas: lista en orden de disco (`fix9-tracklist-disc-order.png`), aterrizaje reproduciendo la pista correcta (`fix9-flight-landed-correct-track.png`), regreso asentado en reposo con la música sonando (`fix9-return-settled-idle.png`). Los cuadros intermedios de ambos vuelos son síncronos (limitación conocida del arnés) — el movimiento queda para el ojo del dueño en el simulador.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

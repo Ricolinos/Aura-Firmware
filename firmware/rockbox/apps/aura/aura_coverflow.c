@@ -984,8 +984,7 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
              * NowPlaying con Flip-and-Flow (T3.2(d)) -- la funcion de
              * transicion ya hace el aura_nav_push() al terminar. */
             if (s_track_count > 0 && aura_music_play_songs(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, s_track_sel))
-                aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek,
-                                               CF_BACK_Y + CF_BACK_SIZE / 2);
+                aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek);
             break;
         case BUTTON_PLAY:
             /* Mismo comportamiento que en el carrusel: el album
@@ -1044,4 +1043,98 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
     default:
         break;
     }
+}
+
+/* -- Coreografia de vuelo (ver aura_coverflow.h) ------------------------ */
+
+/* Laterales con desplazamiento extra hacia su borde: reusa
+ * draw_slide_perspective() aumentando |offset| -- mas offset = mas
+ * lejos del centro Y mas inclinada, que es exactamente "salir hacia su
+ * lado". 7 posiciones extra (~200px) las saca de pantalla. */
+#define CF_EXIT_UNITS (7 * 256)
+
+static void draw_carousel_sides(int extra_out_x256)
+{
+    int lo = s_target_index - CF_VISIBLE_RADIUS;
+    int hi = s_target_index + CF_VISIBLE_RADIUS;
+    int idx;
+
+    /* Lejanas primero (orden pintor) -- recorrido de fuera hacia el
+     * centro, alternando extremos. */
+    for (idx = lo; idx <= hi; idx++)
+    {
+        int mirror = hi - (idx - lo);
+        int pick = ((idx - lo) % 2 == 0) ? idx : mirror;
+        /* pares desde lo, impares desde hi: aproxima lejos->cerca sin
+         * ordenar de verdad; con 3 por lado la superposicion relevante
+         * (vecinas inmediatas al final) queda correcta. */
+        int use = pick;
+        int offset;
+        cf_slot_t *slot;
+
+        if (use == s_target_index || use < 0 || use >= s_album_count)
+            continue;
+
+        offset = (use - s_target_index) * 256;
+        offset += (offset > 0 ? extra_out_x256 : -extra_out_x256);
+
+        slot = get_slot_for(use);
+        draw_slide_perspective(slot, offset);
+    }
+}
+
+void aura_coverflow_draw_exit_frame(int out_t256)
+{
+    a26_shell_clear_screen();
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW));
+    draw_carousel_sides(out_t256 * CF_EXIT_UNITS / 256);
+}
+
+void aura_coverflow_draw_return_frame(int in_t256)
+{
+    int w, h;
+    const char *label;
+    const char *artist;
+    int text_dy = ((256 - in_t256) * 64) / 256;
+
+    a26_shell_clear_screen();
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW));
+    draw_carousel_sides((256 - in_t256) * CF_EXIT_UNITS / 256);
+
+    if (s_album_count <= 0)
+        return;
+
+    /* Titulo/artista entrando desde el borde inferior, mismo recorrido
+     * de 64px que usan al ceder espacio en el flip (D-116). */
+    label = s_albums[s_target_index].label;
+    artist = target_artist();
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_getstringsize((const unsigned char *)label, &w, &h);
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_TITLE_Y + text_dy,
+               (const unsigned char *)label);
+
+    if (artist[0])
+    {
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_getstringsize((const unsigned char *)artist, &w, &h);
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_ARTIST_Y + text_dy,
+                   (const unsigned char *)artist);
+    }
+}
+
+int32_t aura_coverflow_current_album_seek(void)
+{
+    if (s_album_count <= 0)
+        return -1;
+    return s_albums[s_target_index].seek;
+}
+
+void aura_coverflow_settle_idle(void)
+{
+    s_state = CF_STATE_IDLE;
+    s_anim_from_x256 = s_target_index * 256;
+    s_anim_since = current_tick;
 }
