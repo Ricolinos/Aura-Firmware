@@ -14,6 +14,7 @@
 #include "aura_music.h"
 #include "aura_widgets.h"
 #include "aura_statusbar.h"
+#include "aura_menu_list.h"
 
 /* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
  * calculada y suavizada por el driver real del clickwheel
@@ -184,6 +185,13 @@ void aura_main(void)
             if (aura_statusbar_title_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
             else if (aura_statusbar_title_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
+
+            /* ScrollIndicator de MenuList v2 (T2.4) -- mismo par
+             * pending()/animating() que el resto de esta puerta. */
+            if (aura_menu_list_scroll_indicator_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+            else if (aura_menu_list_scroll_indicator_pending() && timeout_ticks < 0)
                 timeout_ticks = HZ / 4;
         }
 

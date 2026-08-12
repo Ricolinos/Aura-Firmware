@@ -961,4 +961,22 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-093 — PLAN.md T2.4: ScrollIndicator v2 -- windowing real de MenuList + fundido reutilizando T1.1
+
+**`aura_menu_list_draw()` gana windowing real**, cerrando el TODO que T2.3 había dejado explícito: con más de 10 ítems, la ventana visible se centra en la selección (mismo criterio que `aura_widgets_draw_list()` del sistema viejo ya usa) en vez de simplemente cortar la lista a los primeros 10.
+
+**`aura_scroll_indicator.c/.h`**: capsula de 4px de grosor en el carril del padding derecho, tamaño FIJO de altura (`AURA_DS_METRICS_SCROLL_INDICATOR_HEIGHT`, 24px -- provisional G8, D-086), posición proporcional a `first/(count-visible)`. Gris neutro reutilizando `SHELL_RAIL` del tema (no un segundo gris inventado, resuelve G8). El fundido de aparición/persistencia/desvanecido **reutiliza directo** `aura_pattern_fade_on_idle_alpha_256()` (T1.1) -- exactamente la forma que ese módulo generalizó desde el scrollbar viejo, ahora con un segundo consumidor real que confirma que la generalización valía la pena.
+
+**Simplificación documentada, no silenciosa**: sin el "seguimiento suave/animado en tiempo real" que pide `scroll-indicator.md` -- el indicador salta directo a su posición objetivo. Lograrlo exige que el llamador lleve un estado de posición ANTERIOR entre cuadros para interpolar (mismo tipo de estado que la pastilla animada del sistema viejo necesitaba antes de que el propio documento decidiera retirarla) -- diferido, documentado en el header, no descartado en silencio.
+
+**Bug de energía evitado por aprendizaje directo de D-091, no repetido**: esta vez el par `pending()`/`animating()` se escribió CORRECTO desde el primer intento -- `pending()` cubre la ventana completa desde que la actividad se reinicia (no solo el tramo de movimiento), evitando exactamente el error que MarqueeText tuvo que corregir en la tarea anterior. Verificado igual que si se hubiera repetido: capturas a t≈0.15s (apareciendo/visible) y t≈4.5s (bien pasada la ventana de 2.5s, desvanecido por completo) confirman el ciclo completo, no solo el instante inicial.
+
+**Verificación con hallazgo real de contraste, no solo confirmación**: en tema oscuro, el indicador SÍ se dibuja (confirmado por pixel: `(58,57,58)` en el carril, contra fondo `(25,28,25)`) pero es visualmente casi imperceptible a ojo en una captura chica -- `SHELL_RAIL` oscuro (`#3A3A3C`) contra `SHELL_BG` oscuro (`#1C1C1E`) es un contraste genuinamente bajo, **mismo token que ya usa el resto del sistema para separadores** (no es un valor nuevo de este componente, así que no se improvisa un gris más claro solo para ScrollIndicator sin que el documento lo pida). Se documenta como observación, no se resuelve inventando un valor -- si el dueño del diseño lo nota al revisar, es una decisión de token compartido, no de este componente aislado. En tema claro el contraste es correcto y claramente visible.
+
+**Consumidor real**: mismo menú raíz de T2.2/T2.3 -- verificado forzando temporalmente el conteo de ítems a 16 (duplicando los 5 reales) para activar el umbral de >10, exactamente el mismo tipo de verificación temporal-y-revertida ya usada en D-091 para MarqueeText. El hack de prueba se removió antes de este commit; el menú raíz real sigue mostrando sus 5 ítems sin indicador (por debajo del umbral).
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios. Verificado: aparece y sigue la posición con >10 ítems (`docs/screenshots/t2-componentes/t24-scroll-light.png`), se desvanece por completo tras el período de inactividad (`t24-scroll-light-faded.png`), y el menú raíz real (5 ítems) no muestra ningún cambio visible tras revertir el hack de prueba (`t24-regression-root.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

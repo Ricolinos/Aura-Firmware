@@ -2,11 +2,13 @@
 
 #include "lcd.h"
 #include "string-extra.h"
+#include "tick.h"
 
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
 #include "aura_widgets.h"
 #include "aura_selector.h"
+#include "aura_scroll_indicator.h"
 #include "aura_menu_list.h"
 
 #define PADDING  AURA_DS_METRICS_LEFT_PANEL_PADDING
@@ -47,31 +49,56 @@ static void truncate_to_fit(const char *label, char *out, size_t outsz, int max_
     strlcpy(out, "...", outsz);
 }
 
+/* Estado de actividad para el fundido de ScrollIndicator (Fade-on-Idle,
+ * T1.1) -- se reinicia cuando la VENTANA visible (`first`) cambia, no
+ * cuando cambia `selected` a secas: moverse dentro de la ventana ya
+ * visible tambien cuenta como actividad segun el documento ("aparece
+ * con CUALQUIER movimiento de seleccion... aunque ese movimiento no
+ * cause un desplazamiento visual"), asi que en realidad se reinicia
+ * con cualquier cambio de `selected`. */
+static int s_last_selected = -1;
+static long s_activity_since = 0;
+
 void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
                           int count, int selected)
 {
     int visible = AURA_DS_METRICS_MENU_LIST_MAX_VISIBLE_ROWS;
     int panel_w = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+    int first = 0;
     int i;
 
     if (count > visible)
-        count = visible; /* TODO(pendiente-doc): scroll >10 items, ver header */
+    {
+        /* Ventana centrada en la seleccion -- mismo criterio de
+         * windowing que aura_widgets_draw_list() del sistema viejo. */
+        first = selected - visible / 2;
+        if (first < 0)
+            first = 0;
+        if (first > count - visible)
+            first = count - visible;
+    }
+
+    if (selected != s_last_selected)
+    {
+        s_last_selected = selected;
+        s_activity_since = current_tick;
+    }
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
 
-    /* Selector primero, como el sistema viejo ya establecio (D-081):
-     * si en el futuro esto anima de nuevo, dibujarlo antes del texto
-     * evita que un resorte en transito tape el contenido de otra fila. */
-    if (selected >= 0 && selected < count)
+    /* Selector primero (D-081): si algo lo anima en el futuro, dibujarlo
+     * antes del texto evita que tape el contenido de otra fila mientras
+     * esta en transito. */
+    if (selected >= first && selected < first + visible)
     {
-        int sel_y = y + selected * ROW_H;
+        int sel_y = y + (selected - first) * ROW_H;
         aura_selector_draw(x + PADDING, sel_y, panel_w - 2 * PADDING, ROW_H,
                             AURA_SELECTOR_INDICATOR_NONE);
     }
 
-    for (i = 0; i < count; i++)
+    for (i = first; i < count && i < first + visible; i++)
     {
-        int row_y = y + i * ROW_H;
+        int row_y = y + (i - first) * ROW_H;
         int is_selected = (i == selected);
         int text_x = x + PADDING;
         char truncated[64];
@@ -102,4 +129,40 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
                                         : a26_color(A26_TEXT_PRIMARY));
         lcd_putsxy(text_x, row_y + (ROW_H - 10) / 2, (const unsigned char *)truncated);
     }
+
+    {
+        long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
+        aura_scroll_indicator_draw(x + panel_w, y, visible * ROW_H,
+                                    first, count, visible, idle_elapsed_ms);
+    }
+}
+
+/* Par pending()/animating() -- mismo criterio que
+ * aura_widgets_scrollbar_*()/aura_statusbar_title_*() (D-074/D-091):
+ * pending() cubre la ventana ENTERA (cadencia gruesa, asegura cruzar
+ * las fronteras de fase a tiempo); animating() solo los dos tramos de
+ * fundido real (cadencia fina, evita gastar CPU redibujando a 20fps
+ * durante la persistencia de alpha=256 fijo). */
+int aura_menu_list_scroll_indicator_pending(void)
+{
+    long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
+    long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS
+                    + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS
+                    + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS;
+    return s_last_selected >= 0 && idle_elapsed_ms < window_ms;
+}
+
+int aura_menu_list_scroll_indicator_animating(void)
+{
+    long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
+
+    if (s_last_selected < 0)
+        return 0;
+    if (idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS)
+        return 1; /* apareciendo */
+
+    idle_elapsed_ms -= AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS
+                      + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS;
+    return idle_elapsed_ms >= 0
+        && idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS; /* desvaneciendo */
 }
