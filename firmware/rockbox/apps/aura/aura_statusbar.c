@@ -15,7 +15,7 @@
 #include "apple2026_tokens.h"
 #include "aura_marquee.h"
 
-static const char *battery_icon_name(void)
+const char *aura_battery_icon_name(void)
 {
 #if CONFIG_CHARGING
     if (charging_state())
@@ -122,7 +122,7 @@ void aura_statusbar_draw(int x, int width, const char *title, int centered)
     /* Bateria: siempre visible, siempre en el extremo derecho (L5,
      * PLAN-UX.md). */
     right -= A26_ICON_SIZE_STATUS;
-    aura_widgets_draw_icon(battery_icon_name(), A26_ICON_SIZE_STATUS, right, icon_y);
+    aura_widgets_draw_icon(aura_battery_icon_name(), A26_ICON_SIZE_STATUS, right, icon_y);
 
     /* Candado de Hold y play/pausa: el candado ocupa el lugar del
      * play/pausa si no suena nada; si suena, se coloca a la izquierda

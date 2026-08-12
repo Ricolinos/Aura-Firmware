@@ -18,8 +18,13 @@ void aura_clock_indicator_draw(int x, int width, int y, int enter_progress_256)
 
     aura_format_clock(buf, sizeof(buf));
 
+    /* Opacidad simulada 80% (status-bar.md, tabla de tipografia:
+     * "--font-statusbar-time" -- ClockIndicator solo vive dentro de
+     * StatusBar, doc header de este archivo) via a26_shell_blend()
+     * hacia el fondo del shell, mismo mecanismo que sombras/scrollbars. */
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_8));
-    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_set_foreground(a26_shell_blend(a26_color(A26_SHELL_BG), a26_color(A26_TEXT_PRIMARY),
+                                        AURA_DS_OPACITY_STATUSBAR_TIME_PCT * 256 / 100));
     lcd_getstringsize((const unsigned char *)buf, &w, &h);
     if (w > AURA_DS_METRICS_CLOCK_INDICATOR_MAX_WIDTH)
         w = AURA_DS_METRICS_CLOCK_INDICATOR_MAX_WIDTH; /* HH:MM/HH:MM AM nunca deberia excederlo */

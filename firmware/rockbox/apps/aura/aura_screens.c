@@ -29,6 +29,7 @@
 #include "aura_main.h"
 #include "aura_wheel.h"
 #include "aura_menu_list.h"
+#include "aura_status_bar_v2.h"
 
 #define MAX_MENU_ENTRIES 16
 
@@ -380,8 +381,21 @@ static void draw_root_v2(aura_nav_t *nav)
         items[i].icon_name = entries[i].icon_name;
     }
 
-    a26_shell_clear_screen();
-    aura_statusbar_draw(0, A26_SCREEN_WIDTH, "Aura", 0);
+    {
+        int status = audio_status();
+        int is_playing = (status & (AUDIO_STATUS_PLAY | AUDIO_STATUS_PAUSE)) != 0;
+        int is_paused = (status & AUDIO_STATUS_PAUSE) != 0;
+        int is_hold = button_hold();
+
+        a26_shell_clear_screen();
+        /* Primera integracion REAL de StatusBar v2 (T2.7) -- ya no un
+         * overlay temporal revertido (T2.5/T2.6), reemplaza al
+         * aura_statusbar_draw() viejo en la unica pantalla ya migrada a
+         * la lista nueva (mismo criterio que el Selector/MenuList v2 en
+         * T2.2/T2.3). */
+        aura_status_bar_v2_draw(0, A26_SCREEN_WIDTH, "Aura",
+                                 is_playing, is_paused, is_hold);
+    }
     aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count,
                          aura_nav_get_selection(nav));
 }

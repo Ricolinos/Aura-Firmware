@@ -14,6 +14,10 @@
  * la logica de 12/24h en dos lugares. */
 void aura_format_clock(char *buf, size_t bufsz);
 
+/* Nombre del icono de bateria segun carga/nivel real -- compartida con
+ * aura_status_bar_v2.c (T2.7) por el mismo motivo. */
+const char *aura_battery_icon_name(void);
+
 /* Dibuja la franja [x, x+width) x [0, A26_LAYOUT_STATUSBAR_HEIGHT).
  * `title` puede ser NULL (sin texto, solo bateria/reproduccion/hold).
  * `centered` = 0 alinea a la izquierda (menus), 1 centra (pantallas
