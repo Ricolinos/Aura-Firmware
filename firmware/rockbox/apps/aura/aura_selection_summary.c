@@ -6,6 +6,7 @@
 #include "apple2026_tokens.h"
 #include "aura_widgets.h"
 #include "aura_marquee.h"
+#include "aura_flow.h"
 
 #include "aura_selection_summary.h"
 
@@ -128,10 +129,14 @@ static void draw_text_slot(int x, int y, int max_width, const char *text,
     }
 }
 
-void aura_selection_summary_draw(int x, int width,
-                                  const char *icon_name,
-                                  const char *top_text,
-                                  const char *bottom_text)
+/* Layout completo (tile, degradado, sombra, texto) compartido por la
+ * version estatica y la dinamica (B-04 en BLOCKED.md: "debe ser una
+ * variante") -- lo UNICO que cambia entre las dos es como se pinta el
+ * simbolo sobre el tile, aca aislado a las dos lineas finales del
+ * bloque "Simbolo". `icon_name` NULL => usa `renderer` en su lugar. */
+static void draw_summary(int x, int width, const char *icon_name,
+                          aura_selection_summary_icon_renderer_t renderer,
+                          const char *top_text, const char *bottom_text)
 {
     int tile_x = x + (width - TILE_SIZE) / 2;
     int text_max_w = width - 2 * TEXT_PAD;
@@ -176,12 +181,14 @@ void aura_selection_summary_draw(int x, int width,
     a26_shell_round_bitmap_corners(tile_x, tile_y, TILE_SIZE, TILE_SIZE, TILE_RADIUS,
                                     a26_color(A26_SHELL_BG));
 
-    /* Simbolo blanco constante sobre el tile -- misma variante "-selector"
-     * (G5, T2.2) que ya usa el contenido sobre la pastilla de acento del
-     * Selector; el tile de SelectionSummary es, en los hechos, la misma
-     * situacion (contenido claro sobre relleno de acento). */
-    aura_widgets_draw_icon_variant_selector(icon_name, SYMBOL_SIZE,
-        tile_x + (TILE_SIZE - SYMBOL_SIZE) / 2, tile_y + (TILE_SIZE - SYMBOL_SIZE) / 2);
+    /* Simbolo: estatico (icono horneado, variante "-selector" blanco
+     * constante, G5/T2.2) o dinamico (renderer real, B-04) -- mismo
+     * hueco centrado sobre el tile para los dos casos. */
+    if (icon_name)
+        aura_widgets_draw_icon_variant_selector(icon_name, SYMBOL_SIZE,
+            tile_x + (TILE_SIZE - SYMBOL_SIZE) / 2, tile_y + (TILE_SIZE - SYMBOL_SIZE) / 2);
+    else if (renderer)
+        renderer(tile_x + TILE_SIZE / 2, tile_y + TILE_SIZE / 2, SYMBOL_SIZE);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
@@ -197,4 +204,75 @@ void aura_selection_summary_draw(int x, int width,
                         &s_bottom_shown, &s_bottom_since, &s_bottom_overflowing);
     else
         s_bottom_overflowing = 0;
+}
+
+void aura_selection_summary_draw(int x, int width,
+                                  const char *icon_name,
+                                  const char *top_text,
+                                  const char *bottom_text)
+{
+    draw_summary(x, width, icon_name, NULL, top_text, bottom_text);
+}
+
+void aura_selection_summary_draw_dynamic(int x, int width,
+                                          aura_selection_summary_icon_renderer_t renderer,
+                                          const char *top_text,
+                                          const char *bottom_text)
+{
+    draw_summary(x, width, NULL, renderer, top_text, bottom_text);
+}
+
+/* Reloj analogico (componentes/selection-summary.md, "Variante
+ * dinamica": "hoja de calendario... reloj analogico" -- este es el
+ * segundo caso citado por el documento, el primer renderer real de
+ * aura_selection_summary_draw_dynamic()). Circulo + manecillas de hora
+ * y minuto en el mismo blanco constante que el resto del contenido
+ * sobre el tile de acento (variante "-selector", G5). Trigonometria
+ * entera reusada de aura_flow_fsin()/fcos() (T1.1/Fase 31, regla dura
+ * 7 -- ninguna tabla de seno nueva): angulo 0 = manecilla apuntando
+ * arriba (12 en punto), unidades IANGLE (1024 = vuelta completa),
+ * creciendo en sentido horario. */
+static void clock_hand(int cx, int cy, int iangle, int length, unsigned color)
+{
+    int dx = aura_flow_fsin(iangle) * length / AURA_FLOW_ONE;
+    int dy = -aura_flow_fcos(iangle) * length / AURA_FLOW_ONE;
+
+    lcd_set_foreground(color);
+    lcd_drawline(cx, cy, cx + dx, cy + dy);
+}
+
+void aura_selection_summary_render_analog_clock(int x, int y, int size)
+{
+    struct tm *now = get_time();
+    int hour12 = now->tm_hour % 12;
+    int hour_iangle = hour12 * (AURA_FLOW_IANGLE_MAX / 12)
+                     + now->tm_min * (AURA_FLOW_IANGLE_MAX / 12) / 60;
+    int min_iangle = now->tm_min * (AURA_FLOW_IANGLE_MAX / 60);
+    unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
+    int r = size / 2;
+    /* Marco circular como poligono de 16 lados -- no hay primitiva de
+     * circulo en este LCD (ver lcd.h) y "recortar esquinas" contra un
+     * fondo desconocido (aca el degradado del tile, no un color plano)
+     * pintaria un cuadrado solido en cada esquina en vez de curvar de
+     * verdad. Un poligono de segmentos SI funciona sobre cualquier
+     * fondo: nunca toca los pixeles que no forman parte del trazo. */
+    #define CLOCK_FACE_SIDES 16
+    int prev_dx = 0, prev_dy = -r;
+    int i;
+
+    lcd_set_foreground(white);
+    for (i = 1; i <= CLOCK_FACE_SIDES; i++)
+    {
+        int iangle = i * (AURA_FLOW_IANGLE_MAX / CLOCK_FACE_SIDES);
+        int dx = aura_flow_fsin(iangle) * r / AURA_FLOW_ONE;
+        int dy = -aura_flow_fcos(iangle) * r / AURA_FLOW_ONE;
+
+        lcd_drawline(x + prev_dx, y + prev_dy, x + dx, y + dy);
+        prev_dx = dx;
+        prev_dy = dy;
+    }
+    #undef CLOCK_FACE_SIDES
+
+    clock_hand(x, y, hour_iangle, r * 55 / 100, white);
+    clock_hand(x, y, min_iangle, r * 85 / 100, white);
 }

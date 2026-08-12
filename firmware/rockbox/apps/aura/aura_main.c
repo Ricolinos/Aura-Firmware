@@ -18,6 +18,7 @@
 #include "aura_selection_summary.h"
 #include "aura_coverdrift.h"
 #include "aura_coverflow.h"
+#include "aura_status_bar_v2.h"
 
 /* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
  * calculada y suavizada por el driver real del clickwheel
@@ -34,22 +35,76 @@ long aura_main_wheel_velocity(void)
     return s_wheel_velocity;
 }
 
-/* Boton crudo normalizado: se ignoran eventos de soltar (BUTTON_REL) y
- * se trata un repeat igual que una pulsacion nueva (mismo idioma que
- * usa el resto de Rockbox, ver apps/action.c). timeout_ticks < 0 =
- * bloquear indefinidamente; si no, BUTTON_NONE en caso de timeout (para
- * refrescar la pantalla sin que el usuario haya tocado nada, ver
- * D-022). */
+/* Botones que soportan el gesto de "mantener presionado"
+ * (AURA_BUTTON_HOLD, aura_main.h -- B-02 en BLOCKED.md, pieza de
+ * infraestructura general). Hoy solo SELECT (ClockIndicator, B-01):
+ * agregar otro boton es sumarlo aca, next_button() no cambia. */
+static bool is_hold_button(long raw)
+{
+    return raw == BUTTON_SELECT;
+}
+
+/* Boton crudo normalizado. timeout_ticks < 0 = bloquear
+ * indefinidamente; si no, BUTTON_NONE en caso de timeout (para
+ * refrescar la pantalla sin que el usuario haya tocado nada, D-022).
+ *
+ * Una pulsacion NUEVA siempre dispara de inmediato, sin esperar a ver
+ * si se vuelve un hold -- esperar agregaria latencia perceptible a
+ * TODOS los clicks de TODAS las pantallas, la inmensa mayoria de las
+ * cuales no tiene ningun gesto de hold que distinguir (justo la
+ * regresion que B-02 queria evitar: "siempre y cuando no interfiera
+ * con otra funcion"). BUTTON_REL se sigue ignorando (el dispatch ya
+ * ocurrio en la pulsacion, igual que siempre).
+ *
+ * BUTTON_REPEAT es donde cambia el comportamiento: para los botones
+ * de is_hold_button(), el PRIMER repeat de una pulsacion (el driver
+ * los espacia por REPEAT_START~300ms, firmware/drivers/button.c --
+ * mismo umbral de "hold" que usa el resto de Rockbox via los mapas de
+ * botones en apps/keymaps, nunca un temporizador propio de Aura) dispara
+ * AURA_BUTTON_HOLD una sola vez; los repeats siguientes de la MISMA
+ * pulsacion se ignoran (no hay evento de "soltar" un hold). Para
+ * cualquier otro boton, un repeat se sigue tratando igual que una
+ * pulsacion nueva, sin cambios -- el giro sostenido del scroll y
+ * saltar pistas rapido manteniendo LEFT/RIGHT en Ahora suena dependen
+ * de este comportamiento exacto. */
 static long next_button(int timeout_ticks)
 {
+    static long s_hold_tracking = BUTTON_NONE;
+
     for (;;)
     {
         long b = (timeout_ticks < 0) ? button_get(true)
                                       : button_get_w_tmo(timeout_ticks);
-        if (b & BUTTON_REL)
-            continue;
 
-        b &= ~BUTTON_REPEAT;
+        if (b & BUTTON_REL)
+        {
+            if ((b & ~BUTTON_REL) == s_hold_tracking)
+                s_hold_tracking = BUTTON_NONE;
+            continue;
+        }
+
+        if (b & BUTTON_REPEAT)
+        {
+            long raw = b & ~BUTTON_REPEAT;
+
+            if (is_hold_button(raw))
+            {
+                if (raw == s_hold_tracking)
+                    continue; /* ya disparado para esta pulsacion */
+                s_hold_tracking = raw;
+                s_wheel_velocity = 0;
+                return raw | AURA_BUTTON_HOLD;
+            }
+
+            b = raw;
+        }
+        else if (b != BUTTON_NONE)
+        {
+            /* Pulsacion fresca de verdad (no timeout, no repeat):
+             * cualquier hold que se estuviera rastreando ya termino. */
+            s_hold_tracking = BUTTON_NONE;
+        }
+
         s_wheel_velocity = (b == BUTTON_SCROLL_FWD || b == BUTTON_SCROLL_BACK)
             ? (button_get_data() & 0xFFFFFF)
             : 0;
@@ -216,6 +271,15 @@ void aura_main(void)
              * movimiento continuo que CoverDrift. */
             if (aura_coverflow_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
+
+            /* ClockIndicator por atajo (B-01 en BLOCKED.md) --
+             * animating() durante el Drop-and-Lift/Push-and-Pull real,
+             * pending() (cadencia gruesa) mientras sigue visible
+             * esperando los 10s de autoocultado. */
+            if (aura_status_bar_v2_clock_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+            else if (aura_status_bar_v2_clock_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
         }
 
         button = next_button(timeout_ticks);
@@ -231,6 +295,22 @@ void aura_main(void)
          * propio evento si lo manejo, o 0 para un boton normal. */
         if (default_event_handler(button) != 0)
             continue;
+
+        /* Gesto de "mantener SELECT" (AURA_BUTTON_HOLD, aura_main.h,
+         * B-02 en BLOCKED.md) -- interceptado aca de forma
+         * centralizada, igual que la puerta de energia: StatusBar es
+         * la unica duena de este gesto hoy (revela ClockIndicator, B-01),
+         * ninguna pantalla necesita reconocerlo. Se consume aca mismo
+         * (no llega a aura_screens_handle_button()) -- si en el futuro
+         * una pantalla especifica necesita su PROPIO significado para
+         * mantener SELECT, este es el lugar donde se decidiria cual de
+         * las dos funciones gana, no algo que resolver hoy con un solo
+         * consumidor real. */
+        if (button == (BUTTON_SELECT | AURA_BUTTON_HOLD))
+        {
+            aura_status_bar_v2_reveal_clock();
+            continue;
+        }
 
         /* Clicker (Fase 18, PLAN-UX.md): Aura no usa apps/action.c (D-022),
          * asi que keyclick_click() -- su unico llamador real -- nunca

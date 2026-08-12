@@ -3,17 +3,21 @@
  * del acento + hasta dos lineas de texto, cuando no hay contenido mas
  * rico (caratulas, fotos) para mostrar ahi.
  *
- * Alcance real de esta pasada (ver DECISIONS.md D-097):
+ * Alcance real (ver DECISIONS.md D-097/D-108):
  * - Icono ESTATICO sobre el tile de degradado, dos slots de texto con
  *   MarqueeText en overflow, cambio instantaneo de valor (sin
  *   Fade-Slide/Scroll-Slide, tal como pide el documento), sombra de
  *   LeftPanel -- completos y verificados.
- * - Variante DINAMICA del icono (reloj analogico, hoja de calendario
- *   para Ajustes > Fecha y Hora) NO implementada -- el propio documento
- *   deja sin resolver si es una variante de este componente o uno
- *   distinto ("todavia sin resolver"). Registrado en BLOCKED.md B-04,
- *   no es una simplificacion de alcance sino una pregunta de
- *   arquitectura que el documento mismo no contesta.
+ * - Variante DINAMICA del icono (B-04 en BLOCKED.md, ya resuelto: "debe
+ *   ser una variante" de este componente, no un componente distinto) --
+ *   aura_selection_summary_draw_dynamic() comparte todo el layout
+ *   (tile, degradado, sombra, texto) con la version estatica, solo
+ *   cambia COMO se dibuja el simbolo. Primer renderer real:
+ *   aura_selection_summary_render_analog_clock(). La hoja de
+ *   calendario y la pantalla real Ajustes > Fecha y Hora
+ *   (componentes/date-editor.md, "casi todo pendiente") siguen sin
+ *   construir -- eso es contenido/produccion, no la pregunta de
+ *   arquitectura que B-04 resolvia.
  * - Cross-fade con CoverDrift (T2.9) NO conectado -- CoverDrift no
  *   existe todavia. Diferido, no bloqueado: se conecta cuando T2.9
  *   exista, el mecanismo (a26_shell_blend hacia el color ya visible)
@@ -38,6 +42,28 @@ void aura_selection_summary_draw(int x, int width,
                                   const char *icon_name,
                                   const char *top_text,
                                   const char *bottom_text);
+
+/* Variante dinamica (B-04 en BLOCKED.md): mismo contrato que
+ * aura_selection_summary_draw(), pero en vez de un `icon_name` fijo
+ * recibe un renderer que dibuja el simbolo el mismo (reloj analogico,
+ * hoja de calendario futura, etc.) dentro de un cuadro de `size`x`size`
+ * centrado en (x,y) -- el renderer decide su propio contenido, este
+ * componente solo le da el hueco ya centrado sobre el tile. */
+typedef void (*aura_selection_summary_icon_renderer_t)(int x, int y, int size);
+
+void aura_selection_summary_draw_dynamic(int x, int width,
+                                          aura_selection_summary_icon_renderer_t renderer,
+                                          const char *top_text,
+                                          const char *bottom_text);
+
+/* Primer renderer dinamico real (no un stub): reloj analogico con las
+ * manecillas apuntando a la hora actual (get_time(), mismo dato real
+ * que aura_format_clock() ya usa) -- circulo + manecillas en el mismo
+ * blanco constante que el resto del contenido sobre el tile de acento
+ * (variante "-selector", G5/T2.2). Trigonometria entera reusada de
+ * aura_flow_fsin()/fcos() (T1.1/Fase 31) -- regla dura 7, ninguna
+ * tabla de seno nueva. */
+void aura_selection_summary_render_analog_clock(int x, int y, int size);
 
 /* Mismo par pending()/animating() que aura_statusbar_title_*() y
  * aura_menu_list_scroll_indicator_*() -- cubre AMBOS slots de texto (o

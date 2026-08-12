@@ -13,4 +13,23 @@ void aura_main(void) NORETURN_ATTR;
  * dato real (doc SS7, aura_wheel.h la consume). */
 long aura_main_wheel_velocity(void);
 
+/* Gesto de "mantener presionado" (vocabulario de botones de Aura,
+ * B-02 en BLOCKED.md -- pieza de infraestructura general, no atada a
+ * un boton en particular). Bit 0x40000000 -- fuera del rango real de
+ * BUTTON_* (button.h llega hasta BUTTON_REDRAW=0x20000000) y del par
+ * BUTTON_REL/BUTTON_REPEAT que next_button() ya consume internamente,
+ * asi que puede combinarse con cualquier codigo de boton real sin
+ * colisionar. aura_screens_handle_button() (y cualquier pantalla) lo
+ * recibe como `boton | AURA_BUTTON_HOLD` -- una vez, en el instante
+ * exacto en que la pulsacion cruza el umbral real de "hold" del
+ * driver (BUTTON_REPEAT, ~300ms, mismo convenio que
+ * apps/action.c/apps/keymaps -- no un temporizador propio de Aura).
+ * No hay un evento de "soltar" un hold: el patron de uso es "hacer
+ * algo una vez al cruzar el umbral", igual que MENU-mantenido/
+ * SELECT-mantenido en el resto de Rockbox. Solo BUTTON_SELECT
+ * dispara esto hoy (el unico caso real, ClockIndicator) -- extender a
+ * otro boton es agregarlo a la lista de `is_hold_button()` en
+ * aura_main.c, no rediseñar nada. */
+#define AURA_BUTTON_HOLD 0x40000000L
+
 #endif /* AURA_MAIN_H */
