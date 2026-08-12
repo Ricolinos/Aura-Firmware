@@ -1226,4 +1226,14 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-107 — PLAN.md T4.2: build ARM real + regresión de pantallas no migradas
+
+**Segundo paso de la Etapa 4.** `rockbox.ipod` real reconstruido en `firmware/build-ipod6g` con TODOS los cambios de la sesión (T2.7 a T4.1) -- compila limpio salvo dos warnings **preexistentes, confirmados anteriores a esta sesión** (`git show c3ed942:...` los muestra ya presentes en el commit de cierre de Fase 1, antes de que empezara la ejecución autónoma): `aura_lang.c`/`apple2026_shell.c`, `-Wtype-limits` en un chequeo defensivo `id < 0` sobre un parámetro de tipo enum -- GCC para ARM empaqueta el enum en el tipo más chico posible (todos los valores no-negativos y bajo 256) y advierte que la comparación con 0 es tautológica. Inofensivo (el chequeo sigue protegiendo contra `id >= COUNT`) y no introducido por ningún commit de esta sesión -- no se toca, señal para un barrido de portabilidad aparte, no de esta tarea.
+
+**Matriz de capturas: cobertura completa de lo nuevo (ya generada tarea por tarea, no repetida aquí) + regresión dirigida de lo NO tocado que comparte infraestructura con lo que sí se tocó** -- en vez de repetir mecánicamente una captura por cada una de las ~40 pantallas de la app (la mayoría sin ningún cambio de código en esta sesión, cero valor marginal de volver a fotografiarlas), se verificaron específicamente las pantallas del sistema VIEJO que consumen los módulos compartidos que sí cambiaron esta sesión: `aura_widgets_draw_list()` (Canciones -- iconos, fila seleccionada, panel derecho), Ajustes (mismo `draw_list`, ícono de Brillo con `-selector`/preview), Videos/Fotos vacíos (`aura_statusbar_draw()`, tocado indirectamente por ningún cambio de firma pero comparten `aura_art.c`/`aura_lang.c` que sí se modificaron esta sesión). Los cuatro renderizan sin cambios visibles -- confirma que generalizar `aura_art_generate_reflection()` (parámetro `transposed`), extender `aura_widgets.h` (`_dimmed`) y editar las tablas de `aura_lang.c` no rompió ningún consumidor viejo.
+
+**Aceptación**: `rockbox.ipod` real generado (1.18MB), sin warnings nuevos. Capturas de regresión -- `docs/screenshots/t4-cierre/regression-{songs-list,settings-list,videos-empty,photos-empty}.png`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
