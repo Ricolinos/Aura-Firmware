@@ -1210,4 +1210,20 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-106 — PLAN.md T4.1: barrido final -- presupuesto de fuentes exacto, un color hardcodeado real corregido
+
+**Primer paso de la Etapa 4 (cierre).** Verificación sistemática de las tres reglas que `PLAN.md` pide para el barrido: números mágicos/hex fuera del header de tokens, código del sistema viejo sin consumidor, y recuento de fuentes.
+
+**Presupuesto de fuentes: exacto, sin desvíos acumulados en toda la sesión** -- `A26_FONT_STYLE_COUNT` = 12 (5 del sistema viejo + 7 `ds_*` de T0.2), igual que al cerrar la Etapa 0. Ninguna de las ~15 tareas de las Etapas 2-3 agregó un estilo nuevo -- todas reusaron los 7 ya cargados (`ds_reg_10` para `SelectionSummary`/`TrackList`, etc.), confirmando que el mapeo rol→estilo de T0.2 alcanzaba de verdad.
+
+**Un color RGB hardcodeado real, encontrado y corregido**: `grep` de literales `0x[hex de 6 digitos]` fuera de los headers generados encontró `accent_choice_rgb24[]` en `aura_screens.c` (T0.3) -- 5 de los 6 presets de acento (Rojo/Naranja/Verde/Azul/Morado, los colores de sistema de iOS) vivían como literales sueltos en C, violando la regla dura del proyecto ("ningún color RGB hardcodeado en C -- todo sale de `a26_palette`"). Se movieron a `tokens.json` (`aura_ds.color.accent_presets_hex`) y se extendió `generate.py` para soportar arreglos de colores hex (antes solo soportaba un color suelto o un arreglo de números -- un arreglo de 6 strings hex habría generado C inválido sin este cambio): cada elemento se empaqueta igual que un color individual (`LCD_RGBPACK` + su par `_RGB24`), con `_COUNT`/`_VALUES`/`_RGB24_VALUES` para el arreglo completo. `aura_screens.c` ahora inicializa el arreglo directo desde el define generado, cero literales.
+
+**Código del sistema viejo: nada que retirar todavía, verificado explícitamente en vez de asumido** -- se revisó `aura_statusbar_draw()` (el candidato más obvio, con `aura_status_bar_v2.c` ya reemplazándolo en la única pantalla migrada) y sigue siendo el statusbar real de ~10 sitios de llamada activos (`aura_widgets.c`, `aura_photos.c`, `aura_video.c`, `aura_coverflow.c`, `aura_transitions.c`, y las pantallas de Ajustes/Acerca de todavía sin migrar) -- la migración parcial deliberada (D-092 y siguientes) sigue siendo exactamente eso, parcial, no código huérfano. Mismo resultado para `aura_widgets_draw_list()` y el resto del sistema Apple2026 viejo: siguen siendo la implementación real de las ~30 pantallas no migradas, retirarlas ahora rompería el build.
+
+**Un string de idioma real sin consumidor, retirado**: `AURA_STR_PLAYLIST_ADDED` (español/inglés) quedó sin ningún sitio de llamada desde D-100 (T3.1(b) retiró el mecanismo de confirmación flotante que lo usaba, y explícitamente dejó su limpieza para este barrido en vez de mezclar dos tipos de cambio en un commit). Retirado del enum y de ambas tablas de idioma -- enum interno de C, sin persistencia externa que dependa del valor numérico, renumerar el resto es seguro.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (refactor de origen de datos, ningún comportamiento nuevo -- los valores de los presets de acento son bit-idénticos a los que reemplazan, verificado por inspección del header generado antes de usarlo).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

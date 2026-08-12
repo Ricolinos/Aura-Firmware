@@ -81,7 +81,6 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_YES]                = "Sí",
     [AURA_STR_NO]                 = "No",
 
-    [AURA_STR_PLAYLIST_ADDED]     = "Agregada a la lista",
     [AURA_STR_ABOUT_STORAGE]      = "Almacenamiento",
     [AURA_STR_PLAYLIST_PICK]      = "Gira la rueda para elegir",
 
@@ -175,7 +174,6 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_YES]                = "Yes",
     [AURA_STR_NO]                 = "No",
 
-    [AURA_STR_PLAYLIST_ADDED]     = "Added to playlist",
     [AURA_STR_ABOUT_STORAGE]      = "Storage",
     [AURA_STR_PLAYLIST_PICK]      = "Turn the wheel to choose",
 

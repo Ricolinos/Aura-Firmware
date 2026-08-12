@@ -195,14 +195,10 @@ static const aura_str_id_t accent_choice_labels[] = {
     AURA_STR_ACCENT_PINK, AURA_STR_ACCENT_RED, AURA_STR_ACCENT_ORANGE,
     AURA_STR_ACCENT_GREEN, AURA_STR_ACCENT_BLUE, AURA_STR_ACCENT_PURPLE,
 };
-static const unsigned accent_choice_rgb24[] = {
-    AURA_DS_COLOR_ACCENT_DEFAULT_RGB24, /* Rosa, default */
-    0xFF3B30, /* Rojo */
-    0xFF9500, /* Naranja */
-    0x34C759, /* Verde */
-    0x007AFF, /* Azul */
-    0xAF52DE, /* Morado */
-};
+/* T4.1: movido a tokens.json (aura_ds.color.accent_presets_hex) --
+ * ningun color RGB hardcodeado en C (regla del proyecto). Mismo orden
+ * que accent_choice_labels arriba. */
+static const unsigned accent_choice_rgb24[] = AURA_DS_COLOR_ACCENT_PRESETS_HEX_RGB24_VALUES;
 
 static int is_choice_screen(aura_screen_id_t screen)
 {

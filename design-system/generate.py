@@ -178,8 +178,22 @@ def generate_aura_ds_defines(tokens):
             # define C -- se resuelven en Python o se hardcodean en C.
         elif isinstance(node, list):
             lines.append(f"#define {prefix}_COUNT {len(node)}")
-            values = ", ".join(str(v) for v in node)
-            lines.append(f"#define {prefix}_VALUES {{ {values} }}")
+            is_hex_array = bool(node) and all(
+                isinstance(v, str) and v.startswith("#") and len(v) == 7 for v in node
+            )
+            if is_hex_array:
+                # Arreglo de colores (p. ej. presets de acento, T4.1) --
+                # mismo tratamiento que un color hex suelto (arriba),
+                # elemento por elemento: empaquetado nativo del LCD para
+                # dibujar + el 0xRRGGBB de 24 bits para persistir/comparar.
+                rgbs = [hex_to_rgb(v) for v in node]
+                packed = ", ".join(f"LCD_RGBPACK({r}, {g}, {b})" for r, g, b in rgbs)
+                lines.append(f"#define {prefix}_VALUES {{ {packed} }}")
+                rgb24s = ", ".join(f"0x{((r << 16) | (g << 8) | b):06X}" for r, g, b in rgbs)
+                lines.append(f"#define {prefix}_RGB24_VALUES {{ {rgb24s} }}")
+            else:
+                values = ", ".join(str(v) for v in node)
+                lines.append(f"#define {prefix}_VALUES {{ {values} }}")
 
     walk("AURA_DS", ds)
     lines.append("")
