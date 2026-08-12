@@ -61,13 +61,19 @@
  * tabla de opciones (180/200/220). Definidos aca arriba (no junto al
  * render del panel) porque aura_coverflow_pending() -- que vive
  * temprano en el archivo -- consulta la ventana del Fade-on-Idle. */
-#define CF_TRACK_ROW_H_EARLY 16 /* == CF_TRACK_ROW_H, ver abajo */
+#define CF_TRACK_ROW_H_EARLY 20 /* == CF_TRACK_ROW_H, ver abajo */
 #define CF_BACK_SIZE   200
 #define CF_BACK_X      ((A26_SCREEN_WIDTH - CF_BACK_SIZE) / 2)
 #define CF_BACK_Y      (A26_LAYOUT_STATUSBAR_HEIGHT \
                         + (A26_SCREEN_HEIGHT - A26_LAYOUT_STATUSBAR_HEIGHT - CF_BACK_SIZE) / 2)
 #define CF_BACK_HEADER_H 20
 #define CF_BACK_PADDING  4  /* padding interno del reverso (encargo 2026-08-12) */
+/* Zoom del giro: la tapa (y su reflejo, en proporcion) crece de
+ * CF_COVER_SIZE a CF_BACK_SIZE DURANTE la rotacion -- acercando la
+ * camara del proyector (distance negativo): escala = CAM_DIST /
+ * (CAM_DIST + d)  =>  d = CAM_DIST * COVER/BACK - CAM_DIST. */
+#define CF_GROW_DISTANCE (AURA_FLOW_CAM_DIST * CF_COVER_SIZE / CF_BACK_SIZE \
+                          - AURA_FLOW_CAM_DIST)
 #define CF_BACK_VISIBLE_ROWS ((CF_BACK_SIZE - CF_BACK_HEADER_H) / CF_TRACK_ROW_H_EARLY)
 
 /* Reloj de actividad del ScrollIndicator del reverso (Fade-on-Idle) --
@@ -443,22 +449,30 @@ static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
     aura_flow_projection_t proj;
     const fb_data *cover = (const fb_data *)slot->art.cover_data;
     const fb_data *refl = (const fb_data *)slot->art.reflection_data;
-    static fb_data col_buf[CF_COVER_SIZE];
-    static fb_data refl_buf[CF_REFLECTION_H];
+    static fb_data col_buf[CF_BACK_SIZE + 8];
+    static fb_data refl_buf[CF_REFLECTION_H * CF_BACK_SIZE / CF_COVER_SIZE + 8];
     /* Transicion del reflejo (encargo del dueno del diseno,
      * 2026-08-12: "que no aparezca y desaparezca repentinamente...
-     * que gire a la vez que se desvanece y desaparece hacia abajo"):
+     * que gire a la vez que se desvanece y desaparece hacia abajo...
+     * ademas de salir y voltearse, deberia agrandarse en proporcion"):
      * el reflejo se proyecta CON el giro (misma columna/escala que la
-     * tapa), y su visibilidad va atada al angulo -- a 0 grados esta
-     * completo, hacia 90 se funde al fondo y se desliza hacia abajo.
-     * COVER_OUT pasa el angulo invertido, asi que la inversa sale
-     * gratis del mismo calculo. */
+     * tapa, asi el zoom de abajo lo agranda en proporcion exacta), y
+     * su visibilidad va atada al angulo -- a 0 grados esta completo,
+     * hacia 90 se funde al fondo y se desliza hacia abajo. COVER_OUT
+     * pasa el angulo invertido, asi que la inversa sale gratis. */
     int refl_vis = 256 - iangle_0_to_256;
     int refl_drop = ((256 - refl_vis) * 64) / 256;
+    /* Centro vertical: viaja del centro del carrusel al centro del
+     * reverso crecido, atado al mismo angulo que el zoom. */
+    int center_y = aura_pattern_lerp(CF_TOP_Y + CF_COVER_SIZE / 2,
+                                      CF_BACK_Y + CF_BACK_SIZE / 2,
+                                      iangle_0_to_256);
     unsigned bg = a26_color(A26_SHELL_BG);
 
     slide.angle = iangle_0_to_256;
-    slide.distance = 0;
+    /* Zoom continuo 130 -> 200 durante la rotacion (y de vuelta en
+     * COVER_OUT, que pasa el angulo invertido). */
+    slide.distance = (CF_GROW_DISTANCE * iangle_0_to_256) / 256;
     slide.cx = 0;
 
     aura_flow_begin_projection(&proj, &slide, CF_COVER_SIZE);
@@ -472,9 +486,9 @@ static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
         const fb_data *refl_col = refl + (size_t)col * CF_REFLECTION_H;
 
         int cover_disp = (CF_COVER_SIZE << AURA_FLOW_SHIFT) / dy;
-        int y_col = CF_TOP_Y + CF_COVER_SIZE / 2 - cover_disp / 2;
+        int y_col = center_y - cover_disp / 2;
 
-        for (dest_row = 0; dest_row < CF_COVER_SIZE; dest_row++)
+        for (dest_row = 0; dest_row < (int)(sizeof(col_buf) / sizeof(col_buf[0])); dest_row++)
         {
             int source_row = p >> AURA_FLOW_SHIFT;
 
@@ -494,7 +508,7 @@ static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
             int r_rows = 0;
 
             p = 0;
-            for (dest_row = 0; dest_row < CF_REFLECTION_H; dest_row++)
+            for (dest_row = 0; dest_row < (int)(sizeof(refl_buf) / sizeof(refl_buf[0])); dest_row++)
             {
                 int source_row = p >> AURA_FLOW_SHIFT;
 
@@ -535,7 +549,12 @@ static void draw_clipped_text(int x, int y, int w, const char *text)
  * de MenuList v2 completo). Ocupa el mismo hueco que la caratula, no
  * la pantalla completa -- "detras esta la lista de pistas" es
  * literal: mismo lugar, no una pantalla nueva. */
-#define CF_TRACK_ROW_H 16
+#define CF_TRACK_ROW_H 20 /* filas mas espaciadas -> pastilla mas gruesa (encargo 2026-08-12) */
+/* El texto de la lista vive 10px MAS adentro que el padding (encargo
+ * 2026-08-12: "a 10px mas alejado de los bordes, para que el selector
+ * pueda respetar el padding interno") -- la pastilla usa los 4px de
+ * padding, el texto usa padding+10. */
+#define CF_TRACK_TEXT_INSET (CF_BACK_PADDING + 10)
 
 /* Artista del album objetivo, cacheado por seleccion (lookup de
  * tagcache solo al cambiar de album, nunca por cuadro) -- compartido
@@ -563,16 +582,19 @@ static void draw_tracklist_panel(void)
     int visible = CF_BACK_VISIBLE_ROWS;
     int first, i, w, h;
     unsigned bg = a26_color(A26_SHELL_BG);
+    /* "Un poco menos blanco" que el fondo, para que el reverso se note
+     * (encargo 2026-08-12, #F4F4F4): derivado como mezcla de tokens --
+     * blend(SHELL_BG, TEXT_PRIMARY, 11/256) da EXACTO 0xF4F4F4 en el
+     * tema claro, y en el oscuro produce el mismo "apenas distinto del
+     * fondo" sin inventar un segundo valor. Ningun RGB suelto en C
+     * (regla dura del proyecto). */
+    unsigned panel_bg = a26_shell_blend(bg, a26_color(A26_TEXT_PRIMARY), 11);
     char header[160];
     const char *artist = target_artist();
     long header_elapsed_ms;
 
-    /* Fondo BLANCO del reverso (estilos del menu, encargo del dueno
-     * del diseno 2026-08-12) -- el mismo fondo del shell en ambos
-     * temas, con las esquinas del radio compartido de albumes. Sin
-     * marco: las tapas laterales y la sombra ya dan el contexto. */
     a26_shell_fill_rounded_rect(panel_x, panel_y, CF_BACK_SIZE, CF_BACK_SIZE,
-                                 CF_CORNER_RADIUS, bg, bg);
+                                 CF_CORNER_RADIUS, panel_bg, bg);
 
     /* Cabecera "Album - Artista" con Marquee Loop cuando no cabe
      * (marquee-text.md: 2s estatico + 5s de loop continuo) -- mismo
@@ -638,7 +660,7 @@ static void draw_tracklist_panel(void)
         a26_shell_fill_rounded_rect(panel_x + pad, sel_y,
                                      CF_BACK_SIZE - 2 * pad, CF_TRACK_ROW_H,
                                      AURA_DS_METRICS_SELECTOR_CORNER_RADIUS,
-                                     a26_color(A26_SELECTION_FILL), bg);
+                                     a26_color(A26_SELECTION_FILL), panel_bg);
     }
 
     lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
@@ -646,12 +668,16 @@ static void draw_tracklist_panel(void)
     {
         int idx = first + i;
         int row_y = list_y + i * CF_TRACK_ROW_H + (CF_TRACK_ROW_H - A26_TYPE_CAPTION) / 2;
+        char row[AURA_MUSIC_ITEM_LEN + 8];
+
+        /* "N. Nombre de la cancion" (encargo 2026-08-12) -- numero de
+         * posicion en la lista del album. */
+        snprintf(row, sizeof(row), "%d. %s", idx + 1, s_tracks[idx].label);
 
         lcd_set_foreground(idx == s_track_sel ? aura_accent()
                                                : a26_color(A26_TEXT_PRIMARY));
-        draw_clipped_text(panel_x + 2 * pad, row_y,
-                           CF_BACK_SIZE - 4 * pad - A26_SPACING_SM,
-                           s_tracks[idx].label);
+        draw_clipped_text(panel_x + CF_TRACK_TEXT_INSET, row_y,
+                           CF_BACK_SIZE - 2 * CF_TRACK_TEXT_INSET, row);
     }
 
     /* ScrollIndicator (T2.4, Fade-on-Idle) dentro del padding derecho
@@ -662,7 +688,7 @@ static void draw_tracklist_panel(void)
         aura_scroll_indicator_draw(panel_x + CF_BACK_SIZE - pad,
                                     list_y, visible * CF_TRACK_ROW_H,
                                     first, s_track_count, visible, idle_ms,
-                                    bg, a26_color(A26_SHELL_RAIL));
+                                    panel_bg, a26_color(A26_SHELL_RAIL));
     }
 }
 

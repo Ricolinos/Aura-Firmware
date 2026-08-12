@@ -1412,4 +1412,20 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-118 — Giro con zoom proporcional (tapa + reflejo), reverso #F4F4F4 con pistas numeradas y filas más espaciadas
+
+**Refinamientos del dueño del diseño (2026-08-12) sobre D-116/D-117:**
+
+**1) El giro CRECE en proporción — tapa y reflejo juntos**: en vez del salto de tamaño en el punto invisible de 90°, `draw_slide_flip()` acerca la cámara del proyector durante la rotación (`slide.distance` interpolado a `CF_GROW_DISTANCE`, derivado de la fórmula de proyección: `CAM_DIST·COVER/BACK − CAM_DIST`) — la tapa pasa de 130 a 200px DURANTE el giro, y como el reflejo se proyecta con la misma columna/escala, "se agranda en proporción" exacta sin código propio. El centro vertical viaja del centro del carrusel al del reverso atado al mismo ángulo. `COVER_OUT` invierte el ángulo → encoge de vuelta, gratis. Buffers de columna redimensionados al tamaño final (el zoom produce más filas de destino que la fuente).
+
+**2) Fondo del reverso "un poco menos blanco" (#F4F4F4)**: derivado como `blend(SHELL_BG, TEXT_PRIMARY, 11/256)` — da EXACTO `0xF4F4F4` en el tema claro y el mismo "apenas distinto del fondo" en el oscuro, sin ningún RGB suelto en C (regla dura). Esquinas de la pastilla y fondo del ScrollIndicator actualizados al fondo real del panel.
+
+**3) Lista numerada y más espaciada**: filas de 16→20px (pastilla de selección más gruesa, pedida explícitamente), formato **"N. Nombre de la canción"** (posición en la lista del álbum), y el texto a `padding+10` de los bordes (`CF_TRACK_TEXT_INSET` = 14px) — la pastilla conserva sus 4px de padding y queda claramente más ancha que el texto, como en el menú. 8 filas visibles (antes 11 más apretadas).
+
+**Nota de datos, señalada para decisión futura**: el número mostrado es la POSICIÓN en la lista, y la lista viene en el orden del índice de tagcache — que no es necesariamente el orden real de pistas del álbum (los fixtures de los Beatles lo muestran: "Johnny B. Goode" es la pista 29 del disco pero aparece primera). Ordenar por `tag_tracknumber` (lista + playlist de reproducción, ambas coherentes) es trabajo señalado, no hecho — toca `aura_music` y el armado del playlist.
+
+**Aceptación**: 0 warnings (`make -q` limpio), 8/8 suites host-side. Capturas: reverso final (`fix8-back-f4-numbers-spacing.png`), giro a medio zoom con reflejo en tránsito (`fix8-flip-grow-mid.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
