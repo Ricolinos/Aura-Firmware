@@ -1052,4 +1052,22 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-098 — PLAN.md T2.9: CoverDrift -- motor de rotacion completo, cross-fade real solo para el caso placeholder
+
+**`aura_coverdrift.c/.h`**: motor de rotacion entre `count` imágenes (>=10 para montar, `AURA_DS_METRICS_COVER_DRIFT_MIN_IMAGES_TO_ACTIVATE`), una visible a la vez (G10). Cada imagen hace su propio movimiento de 7000ms hacia el centro reusando **directo** `aura_pattern_drift_pos()` (T1.1) -- **la verificación de trayectoria/duración que pide `PLAN.md` para esta tarea ya existía desde T1.1** (`test_drift_reaches_center`, `test_drift_midpoint_is_half_distance`), tercera confirmación de que generalizar el motor de patrones antes de construir componentes seguía pagando. Ángulo elegido al azar entre los 8 documentados **sin repetir el anterior** (G10), distancia de arranque variable dentro de un rango provisional derivado de la geometría real disponible (nunca un número suelto).
+
+**Bug real encontrado verificando por posición, no solo a ojo**: dos capturas separadas por tiempo distinto (ticks 60 y 240) se veían visualmente casi idénticas en una captura chica -- se midió con `aura_spec_check.py` (borde izquierdo del tile en `y=120`: x=209 en la primera, x=206 en la segunda) para confirmar que el motor SÍ mueve la imagen, el rango de distancia elegido (12-30px con el ancho de panel de la prueba) simplemente produce un desplazamiento sutil en una captura reducida. No es un bug del motor -- es una observación sobre el rango de distancia provisional, documentada, no corregida a un número inventado sin base.
+
+**Cross-fade real solo para el caso sin bitmap cargado (placeholder)**: G10 confirma "cross-fade <0.5s entre imagen e imagen" -- se agregó `cover_drift.crossfade_ms: 400` a `tokens.json` (provisional, dentro del rango confirmado) y se implementó con `a26_shell_blend()` sobre el color solido del placeholder. **Para bitmaps reales (`bmp` no NULL) es un corte directo, sin fundido** -- mezclar dos bitmaps arbitrarios pixel a pixel necesita un compositor offscreen que este sistema no construye en esta pasada (mismo tipo de brecha de arquitectura que T1.2 dejó documentada para Push-and-Drop). Explícitamente diferido en el header, no bloqueado: hoy ningún consumidor real pasa bitmaps aquí, así que el corte directo nunca se ejercita todavía.
+
+**Dos números sin ninguna guía del documento, ambos registrados aquí (no en el propio `cover-drift.md`, que ni los lista como pendientes)**: (1) tamaño de la imagen -- el documento nunca lo menciona, ni en su tabla ni en "Pendiente de definir"; se reusa `selection_summary.tile_size` (90px) porque `CoverDrift` cross-fade-ea directo con `SelectionSummary` en el mismo hueco visual del panel derecho, un tamaño distinto volvería ese cross-fade incoherente. (2) rango de distancia de arranque -- el documento confirma que varía pero no da un rango; se deriva geométricamente del área real disponible (40%-100% del margen entre el tile y el borde del panel) en vez de un pixel fijo inventado.
+
+**Reutilización real del motor puro, cero matemática nueva en `aura_patterns.c`** -- cuarta vez en la sesión (después de `ScrollIndicator`, `ClockIndicator`, `DynamicTitle`) que un componente nuevo se construye completo sobre T1.1 sin tocar el núcleo de patrones.
+
+**Sin consumidor real todavía**: Música/Fotos no invocan esto en esta pasada -- esa integración (decodificar carátulas/fotos reales, `read_jpeg_file` ya existe en `aura_photos.c`) es trabajo de Etapa 3 (T3.1/T3.2), que construyen su propia carga real de contenido rico. Verificado con overlay temporal en el menú raíz (12 imágenes placeholder), revertido antes de este commit.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (ninguna función pura nueva, se reusa T1.1 completa). Verificado con overlay temporal revertido, capturas en ambos temas (`docs/screenshots/t2-componentes/t29-coverdrift-smoke-{light,dark}.png`) y medición por píxel confirmando movimiento real entre dos instantes distintos.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
