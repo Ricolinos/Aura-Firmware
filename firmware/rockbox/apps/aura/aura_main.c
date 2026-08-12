@@ -252,9 +252,14 @@ void aura_main(void)
                 timeout_ticks = HZ / 20;
 
             /* CoverFlow (T3.2(b)) -- idle/scrolling, mismo criterio de
-             * movimiento continuo que CoverDrift. */
+             * movimiento continuo que CoverDrift. pending() cubre las
+             * ventanas de cadencia gruesa del reverso (tramo estatico
+             * del marquee de cabecera, persistencia del
+             * ScrollIndicator) igual que el resto de esta puerta. */
             if (aura_coverflow_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
+            else if (aura_coverflow_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
 
             /* ClockIndicator por atajo (B-01 en BLOCKED.md) --
              * animating() durante el Drop-and-Lift/Push-and-Pull real,

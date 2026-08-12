@@ -1398,4 +1398,18 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-117 — Reverso con estilos del menú y transición del reflejo atada al giro
+
+**Encargo del dueño del diseño (2026-08-12):**
+
+**1) El reverso adopta los estilos del menú**: fondo BLANCO (el del shell, ambos temas), padding interno de 4px, pastilla de selección GRIS con esquinas redondeadas (`SELECTION_FILL` + radio del Selector, dibujada antes del texto, D-081), ítem seleccionado en ACENTO y el resto en el color primario — el mismo lenguaje de selección de toda la app. Separador cabecera/lista: barra de 1px al ancho del contenido (respeta el padding, misma regla que el divisor de sección de MenuList). La cabecera "Álbum - Artista" usa **Marquee Loop** cuando no cabe (mismo componente `aura_marquee` del resto del sistema, 2s estático + 5s de loop) — nunca un corte seco. El ScrollIndicator vuelve a fondo blanco + tinta de riel, como en el menú.
+
+**2) Transición del reflejo** ("que no aparezca y desaparezca repentinamente... que gire a la vez que se desvanece y desaparece hacia abajo"): `draw_slide_flip()` ahora proyecta también el reflejo con el MISMO giro que la tapa (misma columna/escala), con visibilidad atada al ángulo — a 0° completo, hacia 90° se funde al fondo y se desliza hacia abajo (64px de recorrido). `COVER_OUT` pasa el ángulo invertido, así que la transición inversa al regresar sale gratis del mismo cálculo, sin código aparte. Capturado a medio giro en el simulador (`fix7-flip-mid-reflection-text-slide.png` — también se ven los textos del carrusel a medio deslizamiento).
+
+**Energía**: el marquee de la cabecera y el Fade-on-Idle del reverso quedaron conectados a la puerta central con el par completo — `aura_coverflow_animating()` (cadencia fina, solo pixeles moviéndose de verdad: carrusel/flip/tramo de movimiento del marquee) y `aura_coverflow_pending()` (cadencia gruesa: tramo estático del marquee, persistencia del indicador) — `aura_main.c` gana la rama de HZ/4 que a este módulo le faltaba (mismo patrón D-074/D-091).
+
+**Aceptación**: 0 warnings (`make -q` limpio), 8/8 suites host-side. Capturas: reverso reestilizado completo (`fix7-back-menu-styles.png`), flip a medio giro con reflejo y textos en tránsito (`fix7-flip-mid-reflection-text-slide.png`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
