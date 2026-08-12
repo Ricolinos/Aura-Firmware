@@ -104,9 +104,43 @@ static int anim_pos_x256(void)
     return aura_pattern_lerp(s_anim_from_x256, s_target_index * 256, t);
 }
 
+/* -- Flip + TrackList (PLAN.md T3.2(c), componentes/cover-flow.md:
+ * "seleccion de album: flip clasico fiel al iPod original -- la
+ * portada gira/voltea como carta y detras esta la lista de pistas")
+ * --------------------------------------------------------------------
+ *
+ * Estados heredados de pictureflow.c (investigados con un agente
+ * dedicado antes de tocar codigo, regla dura 7): cover_in (la tapa
+ * gira saliendo) -> show_tracks (lista visible) -> cover_out (la tapa
+ * gira regresando) -> idle. pictureflow.c NO renderiza la lista A
+ * TRAVES del giro continuo -- solo anima la tapa en cover_in/cover_out
+ * y cambia a un camino de render aparte (2D plano) en show_tracks; se
+ * sigue el mismo criterio aca, ver draw_slide_flip(). */
+typedef enum {
+    CF_STATE_IDLE = 0,
+    CF_STATE_COVER_IN,
+    CF_STATE_SHOW_TRACKS,
+    CF_STATE_COVER_OUT,
+} cf_state_t;
+
+#define CF_FLIP_MS 260 /* TODO(pendiente-doc): "Timing de cada fase de Flip-and-Flow" no definido, ver DECISIONS.md D-104 */
+
+static cf_state_t s_state = CF_STATE_IDLE;
+static long s_state_since = 0;
+static aura_music_item_t s_tracks[AURA_MUSIC_MAX_ITEMS];
+static int s_track_count = 0;
+static int s_track_sel = 0;
+
+static int flip_progress_256(void)
+{
+    long elapsed_ms = (current_tick - s_state_since) * 1000L / HZ;
+    return aura_motion_linear(elapsed_ms, CF_FLIP_MS);
+}
+
 int aura_coverflow_pending(void)
 {
-    return anim_pos_x256() != s_target_index * 256;
+    return anim_pos_x256() != s_target_index * 256
+        || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
 }
 
 int aura_coverflow_animating(void)
@@ -277,6 +311,112 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
     }
 }
 
+/* Flip real (giro sobre el eje Y): reusa DIRECTO el mismo motor de
+ * proyeccion por columnas que draw_slide_perspective() (regla dura 7),
+ * con un angulo continuo 0->256 (0->90 grados en unidades IANGLE,
+ * 1024=360) en vez de la formula de lateral con tope en CF_ITILT. A 90
+ * grados la tapa se ve de perfil (practicamente invisible) -- mas alla
+ * (90-180) mostraria el reverso de la MISMA imagen reflejado, que no
+ * es contenido real (una caratula no tiene "parte de atras"), asi que
+ * el giro se corta ahi y el estado cambia a SHOW_TRACKS, que dibuja la
+ * lista con un camino de render 2D aparte en vez de seguir
+ * proyectando -- mismo criterio que el propio pictureflow.c (ver
+ * comentario de la maquina de estados arriba). Sin reflejo ni
+ * atenuacion durante el giro: es una animacion corta y unica, no vale
+ * la pena la complejidad de desvanecerlas de paso. */
+static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
+{
+    aura_flow_slide_t slide;
+    aura_flow_projection_t proj;
+    const fb_data *cover = (const fb_data *)slot->art.cover_data;
+    static fb_data col_buf[CF_COVER_SIZE];
+
+    slide.angle = iangle_0_to_256;
+    slide.distance = 0;
+    slide.cx = 0;
+
+    aura_flow_begin_projection(&proj, &slide, CF_COVER_SIZE);
+
+    while (proj.screen_x < AURA_FLOW_SCREEN_W)
+    {
+        int col = aura_flow_source_column(&proj);
+        int dy = aura_flow_vertical_scale(&proj);
+        int p = 0, dest_row, n_rows = 0;
+        const fb_data *cover_col = cover + (size_t)col * CF_COVER_SIZE;
+
+        for (dest_row = 0; dest_row < CF_COVER_SIZE; dest_row++)
+        {
+            int source_row = p >> AURA_FLOW_SHIFT;
+
+            if (source_row >= CF_COVER_SIZE)
+                break;
+            col_buf[dest_row] = cover_col[source_row];
+            p += dy;
+            n_rows++;
+        }
+        if (n_rows > 0)
+            lcd_bitmap(col_buf, proj.screen_x, CF_TOP_Y, 1, n_rows);
+
+        if (!aura_flow_advance_column(&proj))
+            break;
+    }
+}
+
+/* Recorta `text` al ancho `w` -- mismo mecanismo de viewport que
+ * aura_marquee.c/aura_dynamic_title.c/LyricsPanel (T3.1c), reutilizado
+ * aca por cuarta vez en la sesion. */
+static void draw_clipped_text(int x, int y, int w, const char *text)
+{
+    struct viewport vp = *lcd_current_viewport;
+    struct viewport *saved;
+
+    vp.x = x;
+    vp.y = y;
+    vp.width = w;
+    saved = lcd_set_viewport(&vp);
+    lcd_putsxy(0, 0, (const unsigned char *)text);
+    lcd_set_viewport(saved);
+}
+
+/* TrackList (componentes/cover-flow.md, G16: "lista simple centrada en
+ * la cara trasera", ya resuelto en PLAN.md -- no una re-implementacion
+ * de MenuList v2 completo). Ocupa el mismo hueco que la caratula, no
+ * la pantalla completa -- "detras esta la lista de pistas" es
+ * literal: mismo lugar, no una pantalla nueva. */
+#define CF_TRACK_ROW_H 16
+
+static void draw_tracklist_panel(void)
+{
+    int panel_x = A26_SCREEN_WIDTH / 2 - CF_COVER_SIZE / 2;
+    int panel_y = CF_TOP_Y;
+    int visible = CF_COVER_SIZE / CF_TRACK_ROW_H;
+    int first, i;
+    unsigned bg = a26_color(A26_SHELL_BG);
+
+    a26_shell_fill_rounded_rect(panel_x, panel_y, CF_COVER_SIZE, CF_COVER_SIZE,
+                                 CF_CORNER_RADIUS, a26_color(A26_SHELL_RAIL), bg);
+
+    if (s_track_count == 0)
+        return;
+
+    first = s_track_sel - visible / 2;
+    if (first < 0)
+        first = 0;
+    if (first > s_track_count - visible)
+        first = s_track_count > visible ? s_track_count - visible : 0;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    for (i = 0; i < visible && first + i < s_track_count; i++)
+    {
+        int idx = first + i;
+        int row_y = panel_y + i * CF_TRACK_ROW_H + (CF_TRACK_ROW_H - A26_TYPE_CAPTION) / 2;
+
+        lcd_set_foreground(a26_color(idx == s_track_sel ? A26_ACCENT : A26_TEXT_PRIMARY));
+        draw_clipped_text(panel_x + A26_SPACING_SM, row_y,
+                           CF_COVER_SIZE - 2 * A26_SPACING_SM, s_tracks[idx].label);
+    }
+}
+
 static void draw_message(aura_str_id_t msg_id)
 {
     int w, h;
@@ -316,6 +456,14 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         draw_message(AURA_STR_EMPTY_LIST);
         return;
     }
+
+    /* Transicion de fase de flip -- se resuelve UNA vez por cuadro,
+     * antes del render, para que el resto de la funcion vea un estado
+     * ya consistente (nunca a medio cambiar mientras dibuja). */
+    if (s_state == CF_STATE_COVER_IN && flip_progress_256() >= 256)
+        s_state = CF_STATE_SHOW_TRACKS;
+    else if (s_state == CF_STATE_COVER_OUT && flip_progress_256() >= 256)
+        s_state = CF_STATE_IDLE;
 
     /* Ventana de indices alrededor de la posicion ANIMADA (no del
      * objetivo comprometido) -- mientras "scrolling" (T3.2(b)), la
@@ -368,6 +516,27 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         int offset_x256 = entries[i].offset_x256;
         int x, y;
         cf_slot_t *slot;
+
+        /* Flip/TrackList (T3.2(c)): mientras no este IDLE, la tapa
+         * objetivo (la unica que puede estar flipeando/mostrando su
+         * lista -- scroll_step() no se llama en estos estados, ver
+         * aura_coverflow_handle_button) se reemplaza por su propio
+         * render en vez del carrusel normal; las laterales siguen
+         * dibujandose igual que siempre. */
+        if (s_state != CF_STATE_IDLE && idx == s_target_index)
+        {
+            slot = get_slot_for(idx);
+            if (slot->art.valid)
+            {
+                if (s_state == CF_STATE_COVER_IN)
+                    draw_slide_flip(slot, flip_progress_256());
+                else if (s_state == CF_STATE_COVER_OUT)
+                    draw_slide_flip(slot, 256 - flip_progress_256());
+                else /* CF_STATE_SHOW_TRACKS */
+                    draw_tracklist_panel();
+            }
+            continue;
+        }
 
         slot = get_slot_for(idx);
         y = CF_TOP_Y;
@@ -440,6 +609,52 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
 {
     (void)screen;
 
+    /* Mientras el flip esta EN VUELO (cover_in/cover_out), el input se
+     * ignora -- mismo criterio real que pictureflow.c usa para sus
+     * transiciones (el usuario no puede interrumpir un flip a medio
+     * camino). Solo IDLE y SHOW_TRACKS reaccionan a botones. */
+    if (s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT)
+        return;
+
+    if (s_state == CF_STATE_SHOW_TRACKS)
+    {
+        switch (button)
+        {
+        case BUTTON_SCROLL_FWD:
+            if (s_track_count > 0)
+                s_track_sel = (s_track_sel + 1) % s_track_count;
+            break;
+        case BUTTON_SCROLL_BACK:
+            if (s_track_count > 0)
+                s_track_sel = (s_track_sel - 1 + s_track_count) % s_track_count;
+            break;
+        case BUTTON_SELECT:
+            /* Arranca la reproduccion y navega a Ahora suena -- mismo
+             * mecanismo que ya usa la lista de canciones vieja
+             * (aura_music_play_songs + push). La transicion fluida
+             * Flip-and-Flow (aterrizar en la geometria exacta de
+             * NowPlaying, en vez de este salto directo) es T3.2(d),
+             * el ultimo commit -- diferido, no bloqueado: esta
+             * integracion ya deja los datos reales (pista elegida,
+             * reproduccion arrancada) listos para que (d) solo tenga
+             * que reemplazar el nav_push por la transicion real. */
+            if (s_track_count > 0 && aura_music_play_songs(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, s_track_sel))
+                aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+            break;
+        case BUTTON_MENU:
+            /* "El album gira de nuevo (vuelve a mostrar la caratula)"
+             * (doc, coreografia de salida) -- cover_out, no un pop de
+             * navegacion (nunca se empujo una pantalla nueva). */
+            s_state = CF_STATE_COVER_OUT;
+            s_state_since = current_tick;
+            break;
+        default:
+            break;
+        }
+        return;
+    }
+
+    /* CF_STATE_IDLE */
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
@@ -449,10 +664,17 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
         scroll_step(-1);
         break;
     case BUTTON_SELECT:
-        if (s_album_count > 0)
+        /* Select solo cicla el carrusel a reposo exacto -- flipear a
+         * mitad de un deslizamiento (target != posicion animada) se
+         * veria mal, la tapa objetivo todavia no esta en su lugar. */
+        if (s_album_count > 0 && !aura_coverflow_pending())
         {
             aura_music_select_album(s_albums[s_target_index].seek);
-            aura_nav_push(nav, AURA_SCREEN_MUSIC_SONGS_BY_ALBUM);
+            s_track_count = aura_music_browse(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM,
+                                               s_tracks, AURA_MUSIC_MAX_ITEMS);
+            s_track_sel = 0;
+            s_state = CF_STATE_COVER_IN;
+            s_state_since = current_tick;
         }
         break;
     case BUTTON_MENU:

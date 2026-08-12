@@ -1166,4 +1166,26 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-104 — PLAN.md T3.2(c): CoverFlow v2 -- flip real + TrackList, "fidelidad al original" cumplida
+
+**Tercer commit de T3.2.** `componentes/cover-flow.md` pide "flip clásico fiel al iPod original... fidelidad al original es requisito explícito, no aproximación" -- se construyó un giro real sobre el eje Y (no un cross-fade ni un corte disfrazado de flip), reusando **directo** el mismo motor de proyección por columnas que ya usan las laterales del carrusel (regla dura 7).
+
+**Máquina de estados heredada literal de pictureflow.c, no adaptada a medias**: `idle -> cover_in -> show_tracks -> cover_out -> idle`, confirmada con el mismo agente de investigación que ya había leído la máquina de estados real del plugin (líneas exactas citadas en D-102). El hallazgo clave que evitó sobre-construir: pictureflow.c **tampoco** renderiza la lista de pistas A TRAVÉS de un giro continuo de 180° -- solo anima la tapa en `cover_in`/`cover_out` (un giro corto) y cambia a un camino de render 2D aparte en `show_tracks`. Se siguió el mismo criterio: el giro real corre de 0° a 90° (`slide.angle` 0→256 en unidades IANGLE, mismo motor que las laterales) -- a 90° la tapa se ve de canto, prácticamente invisible; girar más allá mostraría el reverso de la MISMA imagen reflejado, que no es contenido real (una carátula no tiene "parte de atrás"). Al llegar a 90° el estado cambia a `show_tracks`, que dibuja la lista con `lcd_putsxy` normal en el mismo hueco que ocupaba la carátula -- no una aproximación del documento, la misma arquitectura de su propia fuente.
+
+**`TrackList` deliberadamente mínima, ya resuelto por G16, no una decisión nueva**: "lista simple centrada en la cara trasera" (G16) -- sin iconos, sin reutilizar `MenuList v2` completo, solo texto con la fila activa en `--color-accent` y el resto en `TEXT_PRIMARY`, recortado al ancho del panel con la misma técnica de viewport ya establecida (cuarta reutilización en la sesión, después de `MarqueeText`/`DynamicTitle`/`LyricsPanel`). Ocupa el mismo hueco que la carátula (footprint del carrusel), no la pantalla completa -- "detrás está la lista de pistas" es literal: mismo lugar, no una pantalla nueva empujada.
+
+**Datos reales de pista, no un placeholder**: `aura_music_select_album()` + `aura_music_browse(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, ...)` -- exactamente lo que ya resolvía la pantalla de lista vieja, reutilizado sin duplicar la consulta a tagcache. SELECT sobre una pista llama a `aura_music_play_songs()` (mismo mecanismo real que la lista vieja) y navega a Ahora Suena -- **confirmado end-to-end**: seleccionar "Track 2" arranca la reproducción real y NowPlaying la muestra sonando.
+
+**Input bloqueado durante el flip, no una omisión**: mismo criterio real de pictureflow.c -- mientras `cover_in`/`cover_out` están en vuelo, los botones se ignoran (`aura_coverflow_handle_button()` retorna temprano). Seleccionar solo se permite con el carrusel ya asentado (`!aura_coverflow_pending()`) -- flipear una tapa que todavía se está deslizando hacia su posición se vería mal, la portada objetivo todavía no está en su lugar final.
+
+**Explícitamente diferido, no bloqueado**: la transición fluida real `Flip-and-Flow` (aterrizar exactamente en la geometría de NowPlaying, 135px/7°/x≈10,y≈43 -- ya resuelta en T3.1/D-099) es T3.2(d), el último commit. Esta pasada ya deja arrancada la reproducción real y la navegación funcionando -- (d) solo tiene que reemplazar el `nav_push` directo por la coreografía visual, sin tocar la lógica de datos.
+
+**Timing del flip (260ms) es otro valor provisional sin base en el documento** -- "Timing de cada fase de Flip-and-Flow" está en la lista de pendientes de `cover-flow.md` sin número. `// TODO(pendiente-doc)` en el código.
+
+**Mismo hallazgo de metodología que D-103, aplicado desde el principio esta vez**: en vez de perder tiempo re-diagnosticando la granularidad del arnés de captura, se calculó de entrada un `ticks` de espera generosamente mayor a la duración real de la animación (260ms) para las capturas de verificación -- sin necesidad de una prueba de duración exagerada por separado.
+
+**Aceptación**: sim reconstruido, compila limpio, 0 warnings; 694/694 tests host-side sin cambios (ninguna función pura nueva, reusa `aura_flow`/`aura_pattern_lerp`/`aura_motion_linear` ya probados). Verificado en ambos temas: `TrackList` con la pista real resaltada en acento -- `docs/screenshots/t3-pantallas/t32c-tracklist-{light,dark}.png`; flujo completo SELECT→flip→lista→SELECT pista→Ahora Suena reproduciendo de verdad -- `t32c-flip-to-nowplaying.png`; MENU desde la lista regresa al carrusel normal (flip de vuelta completo, carátula con reflejo otra vez) -- `t32c-flip-back-to-cover.png`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
