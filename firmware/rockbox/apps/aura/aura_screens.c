@@ -1564,6 +1564,12 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     {
         aura_screen_id_t to = aura_nav_current(nav);
 
+        /* Una pulsacion = una navegacion, aunque el boton se sostenga
+         * durante la transicion (los repeats acumulados/venideros de
+         * ESTE boton se ignoran hasta su REL -- ver
+         * aura_main_swallow_repeats). */
+        aura_main_swallow_repeats(button);
+
         if (depth_after > depth_before && is_coverflow_screen(to))
             aura_transition_coverflow_enter(nav);
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before

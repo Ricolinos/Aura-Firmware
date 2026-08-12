@@ -13,6 +13,16 @@ void aura_main(void) NORETURN_ATTR;
  * dato real (doc SS7, aura_wheel.h la consume). */
 long aura_main_wheel_velocity(void);
 
+/* Traga los BUTTON_REPEAT de `raw` hasta que llegue su BUTTON_REL --
+ * lo llama aura_screens.c despues de una navegacion con transicion:
+ * las transiciones sincronas bloquean cientos de ms sin leer botones,
+ * y los repeats del boton sostenido se acumulan en la cola; como
+ * "repeat = pulsacion nueva" (D-022), cada uno disparaba OTRA
+ * navegacion al terminar (bug real: salir del reproductor encadenaba
+ * pops hasta el menu principal, 2026-08-12). Una pulsacion (aunque se
+ * sostenga) = una navegacion. */
+void aura_main_swallow_repeats(long raw);
+
 /* Gesto de "mantener presionado" (vocabulario de botones de Aura,
  * B-02 en BLOCKED.md -- pieza de infraestructura general, no atada a
  * un boton en particular). Bit 0x40000000 -- fuera del rango real de

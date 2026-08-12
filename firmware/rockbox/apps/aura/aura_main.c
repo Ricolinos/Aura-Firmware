@@ -67,6 +67,13 @@ static bool is_hold_button(long raw)
  * pulsacion nueva, sin cambios -- el giro sostenido del scroll y
  * saltar pistas rapido manteniendo LEFT/RIGHT en Ahora suena dependen
  * de este comportamiento exacto. */
+static long s_swallow_btn = BUTTON_NONE;
+
+void aura_main_swallow_repeats(long raw)
+{
+    s_swallow_btn = raw & ~(BUTTON_REPEAT | BUTTON_REL);
+}
+
 static long next_button(int timeout_ticks)
 {
     static long s_hold_tracking = BUTTON_NONE;
@@ -80,12 +87,19 @@ static long next_button(int timeout_ticks)
         {
             if ((b & ~BUTTON_REL) == s_hold_tracking)
                 s_hold_tracking = BUTTON_NONE;
+            if ((b & ~BUTTON_REL) == s_swallow_btn)
+                s_swallow_btn = BUTTON_NONE; /* soltado: fin del trago */
             continue;
         }
 
         if (b & BUTTON_REPEAT)
         {
             long raw = b & ~BUTTON_REPEAT;
+
+            if (raw == s_swallow_btn)
+                continue; /* repeat del boton que disparo la ultima
+                           * navegacion con transicion -- se ignora
+                           * hasta su REL (aura_main_swallow_repeats) */
 
             if (is_hold_button(raw))
             {
@@ -101,8 +115,10 @@ static long next_button(int timeout_ticks)
         else if (b != BUTTON_NONE)
         {
             /* Pulsacion fresca de verdad (no timeout, no repeat):
-             * cualquier hold que se estuviera rastreando ya termino. */
+             * cualquier hold o trago que se estuviera rastreando ya
+             * termino. */
             s_hold_tracking = BUTTON_NONE;
+            s_swallow_btn = BUTTON_NONE;
         }
 
         s_wheel_velocity = (b == BUTTON_SCROLL_FWD || b == BUTTON_SCROLL_BACK)

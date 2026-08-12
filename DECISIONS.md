@@ -1444,4 +1444,14 @@ Arranque de la Fase 2 (ejecución autónoma del PLAN.md producido en la Fase 1, 
 
 ---
 
+## D-120 — Repeats acumulados durante transiciones largas encadenaban navegaciones fantasma
+
+**Bug reportado por el dueño del diseño (2026-08-12)**: al salir del reproductor hacia Cover Flow, la transición de regreso terminaba e inmediatamente seguía saliendo hasta el menú principal. Causa raíz: las transiciones síncronas bloquean ~500ms sin leer botones; si el botón se mantiene presionado aunque sea un poco de más (natural mientras se mira una animación), el driver acumula `BUTTON_REPEAT`s en la cola — y como "repeat = pulsación nueva" (D-022), cada repeat acumulado disparaba OTRO pop al terminar el vuelo. Con el slide viejo de ~130ms el margen era demasiado corto para notarlo; los vuelos de 500ms (D-119) lo hicieron florecer.
+
+**Fix**: `aura_main_swallow_repeats(botón)` — tras CUALQUIER navegación que cambió la profundidad de la pila (el bloque central de transiciones de `aura_screens.c`), los repeats de ESE botón se ignoran hasta su `BUTTON_REL`. Una pulsación = una navegación, aunque se sostenga. El comportamiento de repeat-como-pulsación se conserva intacto para todo lo que no navega (rueda, seek de LEFT/RIGHT en el reproductor).
+
+**Aceptación**: 0 warnings, 8/8 suites host-side. Regresión verificada: el flujo vuelo→reproductor→MENU aterriza en Cover Flow en reposo y SE QUEDA ahí (`fix10-return-stays-in-coverflow.png`). El caso con repeats reales (botón sostenido) solo es reproducible en vivo — queda para confirmación del dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
