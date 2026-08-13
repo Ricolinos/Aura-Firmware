@@ -1942,4 +1942,16 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-182 — Montado ≠ aparecido: el cuelgue en "Copiando archivos" y el formateo innecesario
+
+**Reporte del dueño en vivo (2026-08-13), dos síntomas del mismo par de bugs**: (1) "¿por qué formatea el disco en modo bootloader? ya solo debería meter la carpeta .rockbox" y (2) el asistente colgado para siempre en "Disco listo. Copiando archivos...".
+
+**Causa 1 — el monitor solo escuchaba apariciones**: `DiskArbitrationMonitor` registraba únicamente `DiskAppeared`/`DiskDisappeared`. Pero "aparecer" (existe el dispositivo BSD) y "montarse" (hay punto de montaje) son eventos distintos: la aparición llega ANTES del montaje, `diskModeInfo()` la rechaza (regla dura D-070, sin montaje no se trabaja), y el montaje real llega como `DiskDescriptionChanged`... que nadie escuchaba. Un volumen recién formateado montaba y la app no se enteraba jamás — de ahí el cuelgue. Arreglo: callback de cambio de descripción (observando `VolumePath`) enrutado al mismo manejador; además detecta el caso inverso (el volumen seguido se DESMONTÓ sin desaparecer) y lo reporta como perdido. Y en `runFormatDisk`, cinturón y tirantes contra la carrera: si el montaje ocurrió mientras el paso seguía en "preparando disco" (el evento llegó y nadie lo esperaba), la copia arranca directo del estado actual del monitor.
+
+**Causa 2 — "sin sistema de archivos" confundía desmontado con ilegible**: el intento fallido anterior (D-181, el EPERM de newfs) dejó el disco DESMONTADO pero con FAT32 válido escrito por `diskutil eraseDisk`. El sondeo lo clasificó `diskModeNoFilesystem` (que en realidad solo sabía "no hay volumen montado") y el flujo lo mandó a formatear — destruyendo un sistema de archivos sano. El dueño tenía razón: en modo bootloader con disco legible, lo único que corresponde es copiar la carpeta. Arreglo: antes de declarar `diskModeNoFilesystem`, un intento único de `diskutil mountDisk` (sin privilegios, desprendido) — si monta, DiskArbitration lo notifica por el callback nuevo y el estado pasa a `.diskMode` solo, sin formatear; solo si tras el intento sigue sin montar nada se declara sin sistema de archivos. El registro de intentos se limpia al desconectar, para que un replug reintente.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests. Verificación en hardware del dueño: reintentar la instalación desde el estado actual (disco formateado y montado por el intento anterior) debe ir directo a copiar, sin formatear de nuevo y sin colgarse.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
