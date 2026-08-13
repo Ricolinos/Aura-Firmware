@@ -1646,4 +1646,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-146 — Regreso al carrusel: orden pintor real en las laterales
+
+**Reporte del dueño del diseño (2026-08-12)**: al salir del reproductor hacia el coverflow, "las carátulas del fondo se ven brevemente encima de las que están delante". Causa: `draw_carousel_sides()` (usada por los cuadros de salida Y de regreso del carrusel) aproximaba el orden pintor "alternando extremos" — con radio 3, la secuencia real era t−3, t+2, t−1, t+1, t−2, t+3: la lateral derecha MÁS LEJANA se dibujaba al final (encima de t+2 y t+1) y t−2 pintaba sobre t−1. Reemplazada por el orden pintor real: distancia decreciente al centro, ambos lados por nivel (t±3, t±2, t±1) — las cercanas siempre pintan después de las lejanas. Verificado con dumps a mitad del morph de regreso: apilado correcto en ambos lados. El comentario original admitía la aproximación ("sin ordenar de verdad"); la superposición que decía irrelevante dejó de serlo cuando el morph separó las laterales en pleno traslape.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -1067,31 +1067,31 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
 
 static void draw_carousel_sides(int extra_out_x256)
 {
-    int lo = s_target_index - CF_VISIBLE_RADIUS;
-    int hi = s_target_index + CF_VISIBLE_RADIUS;
-    int idx;
+    int d, side;
 
-    /* Lejanas primero (orden pintor) -- recorrido de fuera hacia el
-     * centro, alternando extremos. */
-    for (idx = lo; idx <= hi; idx++)
+    /* Orden pintor REAL: distancia decreciente al centro, ambos lados
+     * por nivel (correccion 2026-08-12: la aproximacion anterior de
+     * "alternar extremos" dibujaba t+3 al FINAL -- encima de t+2 y
+     * t+1 -- y t-2 sobre t-1: las caratulas del fondo se veian
+     * brevemente encima de las de adelante durante el morph de
+     * regreso). */
+    for (d = CF_VISIBLE_RADIUS; d >= 1; d--)
     {
-        int mirror = hi - (idx - lo);
-        int pick = ((idx - lo) % 2 == 0) ? idx : mirror;
-        /* pares desde lo, impares desde hi: aproxima lejos->cerca sin
-         * ordenar de verdad; con 3 por lado la superposicion relevante
-         * (vecinas inmediatas al final) queda correcta. */
-        int use = pick;
-        int offset;
-        cf_slot_t *slot;
+        for (side = -1; side <= 1; side += 2)
+        {
+            int use = s_target_index + side * d;
+            int offset;
+            cf_slot_t *slot;
 
-        if (use == s_target_index || use < 0 || use >= s_album_count)
-            continue;
+            if (use < 0 || use >= s_album_count)
+                continue;
 
-        offset = (use - s_target_index) * 256;
-        offset += (offset > 0 ? extra_out_x256 : -extra_out_x256);
+            offset = (use - s_target_index) * 256;
+            offset += (offset > 0 ? extra_out_x256 : -extra_out_x256);
 
-        slot = get_slot_for(use);
-        draw_slide_perspective(slot, offset);
+            slot = get_slot_for(use);
+            draw_slide_perspective(slot, offset);
+        }
     }
 }
 
