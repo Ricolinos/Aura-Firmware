@@ -286,6 +286,22 @@ seleccionar (el loop de modos lo salta, igual que el Modo 3 sin playlists).
 **14px Bold**; cabecera con los mismos estilos del bloque de texto del
 reproductor (título Bold 12, artista/álbum Regular 12).
 
+**Líneas largas (confirmado 2026-08-12):** aquí NO hay Marquee Loop —
+las líneas **no activas se recortan** al ancho del panel; la línea
+**activa se divide en los renglones necesarios** (hasta 3) para leerse
+completa, cortando por palabras.
+
+**Silencios (confirmado 2026-08-12):** cuando el hueco entre líneas es
+largo (provisional: ≥8s, con ~3s de "lectura" de la línea saliente), el
+centro muestra **3 puntos indicadores** que se **iluminan uno a uno**
+conforme avanza el silencio — los tres encendidos = la letra está por
+volver. La última línea cantada queda arriba y las próximas debajo.
+
+**La StatusBar se desliza hacia arriba** durante el morph de entrada (y
+regresa deslizándose al salir) — no desaparece de golpe. La sombra del
+panel izquierdo aparece con su **propio fade** después del acople de la
+hoja (~165ms).
+
 🔴 Pendiente menor: comportamiento del scroll en este modo (¿desplaza las
 letras manualmente, o el scroll queda sin función aquí?).
 

@@ -104,6 +104,17 @@
 #define M4_GLASS_ALPHA    216 /* ~85% tinte, ~15% deja ver lo de abajo */
 #define M4_PANEL_SHADOW_W 8
 
+/* Letras (correccion 2026-08-12): sin loop continuo -- las lineas no
+ * activas se recortan; la ACTIVA se divide en los renglones necesarios
+ * para verse completa. Silencios largos entre lineas: 3 puntos que se
+ * iluminan conforme avanza el silencio (valores provisionales,
+ * propuestos como decision de diseno en DECISIONS.md). */
+#define LYR_WRAP_MAX_ROWS  3
+#define LYR_SILENCE_MIN_MS 8000 /* hueco minimo entre lineas = silencio */
+#define LYR_LINE_READ_MS   3000 /* la linea activa "se lee" antes del silencio */
+#define LYR_DOT_SIZE       6
+#define LYR_DOT_GAP        10
+
 /* Ventanas de estado de la barra (ver draw_progress): el avance con
  * la rueda (modo 2) muestra tiempos + acento + indicador; el ajuste de
  * volumen la convierte en barra de nivel con bocinas; ambos vuelven
@@ -601,6 +612,11 @@ static int m4_panel_dx(int t256)
     return (256 - t256) * M4_RPANEL_W / 256;
 }
 
+/* Alfa de la sombra del panel izquierdo sobre la hoja: el morph la
+ * hace aparecer con su PROPIO fade despues del acople (correccion
+ * 2026-08-12: "aparecia solo al final, de golpe"). 256 en reposo. */
+static int s_m4_shadow_a = 256;
+
 /* La hoja de vidrio: tinte traslucido del degradado diagonal sobre lo
  * que YA este dibujado debajo (durante el morph se adivinan los restos
  * del layout viejo a traves del vidrio), mas la sombra paralela que la
@@ -633,7 +649,7 @@ static void draw_m4_right_panel(int t256)
                 continue;
             row[sx] = a26_shell_blend(row[sx], LCD_RGBPACK(0, 0, 0),
                                        88 * (M4_PANEL_SHADOW_W - (sx - MORPH_PANEL_W))
-                                          * t256 / (M4_PANEL_SHADOW_W * 256));
+                                          * s_m4_shadow_a / (M4_PANEL_SHADOW_W * 256));
         }
     }
 }
@@ -1208,6 +1224,57 @@ static void draw_lyrics_line_clipped(int x, int y, int w, const char *text)
     lcd_set_viewport(saved);
 }
 
+/* Divide una linea en hasta LYR_WRAP_MAX_ROWS renglones que caben en
+ * `max_w`, cortando por palabras con la fuente ACTUAL (el llamador ya
+ * la selecciono). Devuelve cuantos renglones lleno. */
+static int wrap_lyric_line(const char *text, int max_w,
+                            char rows[LYR_WRAP_MAX_ROWS][AURA_LRC_LINE_MAX_LEN])
+{
+    int n = 0;
+    const char *p = text;
+
+    while (*p == ' ')
+        p++;
+    while (*p && n < LYR_WRAP_MAX_ROWS)
+    {
+        int fit = 0, cand = 0;
+        int w, h;
+        char probe[AURA_LRC_LINE_MAX_LEN];
+
+        for (;;)
+        {
+            int c = cand;
+
+            while (p[c] == ' ')
+                c++;
+            while (p[c] && p[c] != ' ')
+                c++;
+            if (c == cand)
+                break; /* sin mas palabras */
+            if (c >= (int)sizeof(probe))
+                c = (int)sizeof(probe) - 1;
+            memcpy(probe, p, c);
+            probe[c] = '\0';
+            lcd_getstringsize((const unsigned char *)probe, &w, &h);
+            if (w > max_w && fit > 0)
+                break; /* la palabra nueva ya no cabe en este renglon */
+            fit = c;
+            cand = c;
+            if (w > max_w)
+                break; /* palabra sola mas ancha que el panel: se recorta */
+        }
+        if (fit <= 0)
+            break;
+        memcpy(rows[n], p, fit);
+        rows[n][fit] = '\0';
+        n++;
+        p += fit;
+        while (*p == ' ')
+            p++;
+    }
+    return n;
+}
+
 /* Panel derecho del Modo 4: los textos del reproductor RENACEN aqui
  * arriba (titulo/artista/album, encargo 2026-08-12: "viviran en la
  * parte superior de la pantalla", llegan ya renderizados en su lugar
@@ -1220,7 +1287,6 @@ static void draw_lyrics_panel(const struct mp3entry *id3, int t256)
     int panel_x = LYRICS_PANEL_X + dx + A26_SPACING_LG;
     int panel_w = LYRICS_PANEL_W - 2 * A26_SPACING_LG;
     int cy;
-    int active_w, active_h;
     int y, i, w, h;
     char line[160];
 
@@ -1251,31 +1317,95 @@ static void draw_lyrics_panel(const struct mp3entry *id3, int t256)
     /* La letra se centra en el espacio que queda bajo la cabecera. */
     cy = (y + A26_SCREEN_HEIGHT) / 2;
 
-    if (active < 0)
-        return;
-
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_14));
-    lcd_set_foreground(m4_text_ink(cy, 256));
-    lcd_getstringsize((const unsigned char *)s_lrc.lines[active].text, &active_w, &active_h);
-    draw_lyrics_line_clipped(panel_x, cy - active_h / 2, panel_w, s_lrc.lines[active].text);
-
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    lcd_set_foreground(m4_text_ink(cy, 150));
-
-    y = cy - active_h / 2 - A26_SPACING_XS;
-    for (i = active - 1; i >= 0 && i >= active - 2; i--)
     {
-        lcd_getstringsize((const unsigned char *)s_lrc.lines[i].text, &w, &h);
-        y -= h + A26_SPACING_XS;
-        draw_lyrics_line_clipped(panel_x, y, panel_w, s_lrc.lines[i].text);
-    }
+        long elapsed_ms = (long)id3->elapsed;
+        int next_i = active + 1; /* active puede ser -1: next_i = 0 */
+        long next_t = (next_i < s_lrc.count)
+            ? s_lrc.lines[next_i].timestamp_ms : -1;
+        bool in_silence = false;
+        long sil_start = 0, sil_end = 0;
+        int top = cy, block_h = 0, lh = 0;
+        int n_rows = 0;
+        static char rows[LYR_WRAP_MAX_ROWS][AURA_LRC_LINE_MAX_LEN];
 
-    y = cy + active_h / 2 + A26_SPACING_XS;
-    for (i = active + 1; i < s_lrc.count && i <= active + 2; i++)
-    {
-        lcd_getstringsize((const unsigned char *)s_lrc.lines[i].text, &w, &h);
-        draw_lyrics_line_clipped(panel_x, y, panel_w, s_lrc.lines[i].text);
-        y += h + A26_SPACING_XS;
+        if (next_t >= 0)
+        {
+            long base = (active >= 0) ? s_lrc.lines[active].timestamp_ms : 0;
+            long from = (active >= 0) ? base + LYR_LINE_READ_MS : 0;
+
+            if (next_t - base >= LYR_SILENCE_MIN_MS && elapsed_ms >= from)
+            {
+                in_silence = true;
+                sil_start = from;
+                sil_end = next_t;
+            }
+        }
+
+        if (active < 0 && !in_silence)
+            return;
+
+        if (in_silence)
+        {
+            /* Indicador de silencio (encargo 2026-08-12): 3 puntos que
+             * se iluminan uno a uno conforme avanza el silencio --
+             * todos encendidos = el silencio esta por terminar. */
+            long dur = sil_end - sil_start;
+            int lit = (dur > 0)
+                ? (int)((elapsed_ms - sil_start) * 3 / dur) + 1 : 3;
+            int k;
+
+            if (lit > 3)
+                lit = 3;
+            block_h = LYR_DOT_SIZE;
+            top = cy - block_h / 2;
+            ensure_panel_colors();
+            for (k = 0; k < 3; k++)
+                a26_shell_fill_capsule_over(
+                    panel_x + k * (LYR_DOT_SIZE + LYR_DOT_GAP), top,
+                    LYR_DOT_SIZE, LYR_DOT_SIZE, s_panel_ink,
+                    (k < lit) ? 256 : 76);
+        }
+        else
+        {
+            /* Linea activa: mas grande Y completa -- dividida en los
+             * renglones necesarios (aqui no hay loop continuo; las no
+             * activas simplemente se recortan). */
+            lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_14));
+            lcd_set_foreground(m4_text_ink(cy, 256));
+            n_rows = wrap_lyric_line(s_lrc.lines[active].text, panel_w, rows);
+            lcd_getstringsize((const unsigned char *)"Ay", &w, &lh);
+            block_h = (n_rows > 0)
+                ? n_rows * lh + (n_rows - 1) * A26_SPACING_XS : lh;
+            top = cy - block_h / 2;
+            for (i = 0; i < n_rows; i++)
+                draw_lyrics_line_clipped(panel_x,
+                                          top + i * (lh + A26_SPACING_XS),
+                                          panel_w, rows[i]);
+        }
+
+        /* Contexto: vecinas recortadas. En silencio, la "anterior" es
+         * la ultima cantada y las "siguientes" empiezan en la proxima. */
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+        lcd_set_foreground(m4_text_ink(cy, 150));
+
+        y = top - A26_SPACING_XS;
+        for (i = in_silence ? active : active - 1;
+             i >= 0 && i >= (in_silence ? active - 1 : active - 2); i--)
+        {
+            lcd_getstringsize((const unsigned char *)s_lrc.lines[i].text, &w, &h);
+            y -= h + A26_SPACING_XS;
+            draw_lyrics_line_clipped(panel_x, y, panel_w, s_lrc.lines[i].text);
+        }
+
+        y = top + block_h + A26_SPACING_XS;
+        for (i = in_silence ? next_i : active + 1;
+             i < s_lrc.count && i <= (in_silence ? next_i + 1 : active + 2);
+             i++)
+        {
+            lcd_getstringsize((const unsigned char *)s_lrc.lines[i].text, &w, &h);
+            draw_lyrics_line_clipped(panel_x, y, panel_w, s_lrc.lines[i].text);
+            y += h + A26_SPACING_XS;
+        }
     }
 }
 
@@ -1335,10 +1465,37 @@ static void mode4_morph(int dir)
     for (i = 1; i <= frames; i++)
     {
         int t = 256 * i / frames; /* fundido lineal de contenido */
+        int dy;
 
         if (dir < 0)
             t = 256 - t;
+        /* La sombra del panel izquierdo aparece con su propio fade
+         * DESPUES del acople (fase extra abajo); al salir se va con
+         * el morph. */
+        s_m4_shadow_a = (dir > 0) ? 0 : t;
         a26_shell_clear_screen();
+
+        /* La barra de estado se DESLIZA hacia arriba con el morph
+         * (correccion 2026-08-12: antes desaparecia de golpe). */
+        dy = A26_LAYOUT_STATUSBAR_HEIGHT * t / 256;
+        if (dy < A26_LAYOUT_STATUSBAR_HEIGHT)
+        {
+            aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH,
+                                          aura_str(AURA_STR_NOWPLAYING));
+            if (dy > 0)
+            {
+                int yy;
+
+                for (yy = 0; yy < A26_LAYOUT_STATUSBAR_HEIGHT - dy; yy++)
+                    memcpy(FBADDR(0, yy), FBADDR(0, yy + dy),
+                           A26_SCREEN_WIDTH * sizeof(fb_data));
+                lcd_set_foreground(a26_color(A26_SHELL_BG));
+                for (yy = A26_LAYOUT_STATUSBAR_HEIGHT - dy;
+                     yy < A26_LAYOUT_STATUSBAR_HEIGHT; yy++)
+                    lcd_hline(0, A26_SCREEN_WIDTH - 1, yy);
+            }
+        }
+
         draw_player(id3, (int)s_scrub_preview_ms, t);
         lcd_update();
         if (button_queue_full())
@@ -1346,6 +1503,24 @@ static void mode4_morph(int dir)
         if (i < frames)
             sleep(frame_delay);
     }
+
+    if (dir > 0)
+    {
+        /* Fase extra: fade de la sombra del panel izquierdo sobre la
+         * hoja ya acoplada (~la mitad de la duracion del morph). */
+        int sframes = frames / 2;
+
+        for (i = 1; i <= sframes; i++)
+        {
+            s_m4_shadow_a = 256 * i / sframes;
+            a26_shell_clear_screen();
+            draw_player(id3, (int)s_scrub_preview_ms, 256);
+            lcd_update();
+            if (i < sframes)
+                sleep(frame_delay);
+        }
+    }
+    s_m4_shadow_a = 256;
 }
 
 void aura_nowplaying_draw(void)

@@ -1616,4 +1616,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-141 — Modo 4: sombra con fade propio, StatusBar deslizante, renglones completos y puntos de silencio
+
+**Encargos del dueño del diseño (2026-08-12) sobre D-140.** (1) La sombra del panel izquierdo ya no aparece de golpe al final: el morph de entrada gana una fase extra (~165ms) donde la sombra hace su propio fade sobre la hoja ya acoplada; al salir se desvanece con el morph. (2) La StatusBar se desliza hacia arriba durante el morph de entrada (filas copiadas hacia arriba + relleno del hueco) y regresa deslizándose al salir — antes desaparecía de golpe. (3) Letras: sin Marquee Loop — las líneas no activas se recortan; la ACTIVA se divide por palabras en hasta 3 renglones Bold 14 para leerse completa (`wrap_lyric_line`). (4) Silencios: hueco ≥8s entre líneas (con 3s de "lectura" de la saliente — valores provisionales propuestos, sin fuente en los docs) muestra 3 puntos de 6px que se iluminan uno a uno con el progreso del silencio (cápsulas compuestas con la tinta por luminancia; apagados al 30%); funciona también como intro antes de la primera línea. Verificado con capturas: línea larga en 3 renglones y silencio con 2/3 puntos encendidos.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
