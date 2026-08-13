@@ -1880,4 +1880,18 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-178 — Cierre de D-045: el árbol `.rockbox` completo viaja dentro de Aura Studio
+
+**Encargo del dueño (2026-08-13), tras la primera instalación exitosa en hardware**: el firmware arrancó pero sin las tipografías SF — exactamente el gap documentado en D-045: Aura Studio solo copiaba `rockbox.ipod` suelto, y las fuentes (`.rockbox/fonts/a26-*.fnt`), los iconos/máscaras (`.rockbox/icons/aura/{dark,light,masks}`, que `aura_widgets.c` lee del disco en runtime vía `read_bmp_file`), los códecs de audio y los plugins (solitaire) viven todos en el árbol `.rockbox/` del disco.
+
+**Pipeline del artefacto**: `make zip` en `build-ipod6g` produce el árbol ARM real (423 archivos — códecs y plugins compilados para el iPod; los del simulador son binarios de Mac y NUNCA sirven para esto) + encima las fuentes e iconos del design system (`design-system/out/`, que el zip de fábrica no conoce porque se generan aparte) → `firmware/dist/rockbox.zip` (14.5MB, 7831 archivos), registrado en `checksums.txt` y embebido en la app como el resto de los artefactos. `copyFirmwareFiles()` ahora verifica integridad (también en el camino de recuperación sin DFU, que antes se saltaba `verifyAll()` — era el único punto de escritura sin verificación), copia `rockbox.ipod` a la raíz y extrae el árbol con `/usr/bin/ditto -xk` en subproceso (`nonisolated`, no congela la UI). La extracción es un **merge**: reinstalar encima no pierde `aura.cfg` ni el caché de carátulas. Centinela post-extracción: `a26-title-20.fnt` presente o error explícito.
+
+**Confirmación de fin de instalación** (encargo del mismo reporte): el usuario no sabía en qué momento era seguro desconectar. El paso de copia ahora narra lo que está pasando ("Instalando Aura en el iPod (tipografías, iconos, códecs)... No desconectes el iPod") y la pantalla de Listo dice explícitamente "ya puedes desconectar el cable con seguridad", con la instrucción de reinicio manual (SELECT+MENU) si el iPod no reinicia solo — cierto en ambos caminos (con DFU el aparato reinicia solo tras el flasheo; en recuperación el volumen se expulsa antes de llegar a Listo).
+
+**Ícono actualizado**: el dueño rediseñó el `.icon` en Icon Composer (rueda a mayor escala, capas nuevas) — recopiado a `Resources/AppIcon.icon` y verificado compilando con `xcodebuild` real.
+
+**Aceptación**: build limpio (sim y Xcode real), 101/101 tests (esta corrida los de red también pasaron), `rockbox.zip` presente y verificado dentro del bundle compilado. Confirmación en hardware del dueño, en curso.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
