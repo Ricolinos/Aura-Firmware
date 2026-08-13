@@ -133,6 +133,8 @@ typedef enum {
     AURA_STR_EXTRAS_STOPWATCH,
     AURA_STR_EMPTY_GENERIC,
 
+    AURA_STR_SETTINGS_SHOW_ICONS,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

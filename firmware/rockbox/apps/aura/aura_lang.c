@@ -91,7 +91,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ACCENT_GREEN]       = "Verde",
     [AURA_STR_ACCENT_BLUE]        = "Azul",
     [AURA_STR_ACCENT_PURPLE]      = "Morado",
-    [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Sombra de panel",
+    [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Mostrar sombras",
     [AURA_STR_MUSIC_COVERFLOW]    = "Cover Flow",
     [AURA_STR_UNKNOWN_ALBUM]      = "Álbum desconocido",
     [AURA_STR_UNKNOWN_ARTIST]     = "Artista desconocido",
@@ -113,6 +113,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_EXTRAS_SCREENLOCK]  = "Bloqueo pantalla",
     [AURA_STR_EXTRAS_STOPWATCH]   = "Cronómetro",
     [AURA_STR_EMPTY_GENERIC]      = "No hay nada aquí todavía",
+    [AURA_STR_SETTINGS_SHOW_ICONS] = "Mostrar iconos",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -205,7 +206,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ACCENT_GREEN]       = "Green",
     [AURA_STR_ACCENT_BLUE]        = "Blue",
     [AURA_STR_ACCENT_PURPLE]      = "Purple",
-    [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Panel shadow",
+    [AURA_STR_SETTINGS_LEFT_PANEL_SHADOW] = "Show shadows",
     [AURA_STR_MUSIC_COVERFLOW]    = "Cover Flow",
     [AURA_STR_UNKNOWN_ALBUM]      = "Unknown album",
     [AURA_STR_UNKNOWN_ARTIST]     = "Unknown artist",
@@ -227,6 +228,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_EXTRAS_SCREENLOCK]  = "Screen Lock",
     [AURA_STR_EXTRAS_STOPWATCH]   = "Stopwatch",
     [AURA_STR_EMPTY_GENERIC]      = "Nothing here yet",
+    [AURA_STR_SETTINGS_SHOW_ICONS] = "Show icons",
 };
 
 const char *aura_str(aura_str_id_t id)

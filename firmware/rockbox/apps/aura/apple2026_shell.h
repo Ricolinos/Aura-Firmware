@@ -126,6 +126,12 @@ void a26_shell_clear_screen(void);
 void a26_shell_stamp_corners(void);
 void a26_shell_stamp_corners_left_only(void);
 
+/* Interruptor global de sombras paralelas (encargo 2026-08-13, ajuste
+ * "Mostrar sombras"): TODA sombra del sistema -- la del LeftPanel, la
+ * difusa del album y la de la hoja del Modo 4, la del indicador de la
+ * barra -- consulta esto antes de dibujarse. */
+bool aura_shadows_enabled(void);
+
 /* Rellena un rectangulo con esquinas redondeadas: fillrect completo +
  * mascara de las 4 esquinas con `bg` (mismo corte por distancia que
  * a26_shell_stamp_corners, generalizado). `bg` es el color que rodea al

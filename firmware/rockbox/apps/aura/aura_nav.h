@@ -79,6 +79,7 @@ typedef enum {
      * inline con switch (D-075), igual que SHUFFLE/CLICKER; el
      * identificador es solo el token estable de la fila. */
     AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW,
+    AURA_SCREEN_SETTINGS_SHOW_ICONS,
     /* Cover Flow como puerta propia del submenu Musica (D-025 la tenia
      * como una variante automatica de AURA_SCREEN_MUSIC_ALBUMS segun
      * aura_settings.graphics_mode -- eso hacia que entrar a Albumes, o a

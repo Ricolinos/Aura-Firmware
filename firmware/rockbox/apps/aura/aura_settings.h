@@ -77,6 +77,10 @@ typedef struct {
      * persistente/oculto; el tercer valor se agrega cuando el
      * disparador exista de verdad. */
     bool clock_visible;
+    /* Iconos de las filas de menu (encargo 2026-08-13): el usuario
+     * puede apagarlos para una lectura mas limpia. Activado por
+     * defecto -- es el aspecto base del sistema. */
+    bool show_icons;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

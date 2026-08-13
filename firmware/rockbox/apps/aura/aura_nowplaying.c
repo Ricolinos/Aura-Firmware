@@ -658,7 +658,9 @@ static void draw_m4_right_panel(int t256)
          * Solo cae SOBRE la hoja (sx >= x0) -- pintarla desde el
          * primer cuadro dejaba una banda vertical flotando sobre el
          * contenido viejo antes de que la hoja llegara debajo. */
-        for (sx = MORPH_PANEL_W; sx < MORPH_PANEL_W + M4_PANEL_SHADOW_W; sx++)
+        for (sx = MORPH_PANEL_W;
+             aura_shadows_enabled() && sx < MORPH_PANEL_W + M4_PANEL_SHADOW_W;
+             sx++)
         {
             if (sx < x0)
                 continue;
@@ -686,7 +688,7 @@ static void draw_art_soft_shadow(int x, int y, int size, int alpha_max)
     int in_y0 = y + rad, in_y1 = y + size - 1 - rad;
     int r8 = M4_ART_SHADOW_R << 8;
 
-    if (alpha_max <= 0)
+    if (alpha_max <= 0 || !aura_shadows_enabled())
         return;
     for (yy = y - M4_ART_SHADOW_R; yy < y + size + M4_ART_SHADOW_R; yy++)
     {
@@ -1068,8 +1070,9 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
         if (tx < x) tx = x;
         if (tx + tw > x + width) tx = x + width - tw;
 
-        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0),
-                                     56 * vis_alpha / 256);
+        if (aura_shadows_enabled())
+            a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0),
+                                         56 * vis_alpha / 256);
         a26_shell_fill_capsule_over(tx, ty, tw, th, white, vis_alpha);
 
         /* speaker-minus / speaker-plus en los extremos, con el fade
@@ -1126,8 +1129,9 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
         if (tx < x) tx = x;
         if (tx + tw > x + width) tx = x + width - tw;
 
-        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0),
-                                     56 * vis_alpha / 256);
+        if (aura_shadows_enabled())
+            a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0),
+                                         56 * vis_alpha / 256);
         a26_shell_fill_capsule_over(tx, ty, tw, th, white, vis_alpha);
     }
 }

@@ -32,7 +32,14 @@
 #include "aura_status_bar_v2.h"
 #include "aura_selection_summary.h"
 
-#define MAX_MENU_ENTRIES 16
+/* Cota de los buffers locales de items de menu. El arbol del original
+ * (2026-08-13) llevo Ajustes a 18 filas: con la cota vieja de 16, los
+ * dos `aura_menu_item_v2_t items[MAX_MENU_ENTRIES]` de draw_nav_list()
+ * y draw_choice_list() se desbordaban en la pila (crash real al abrir
+ * Ajustes). Ademas de subirla, get_nav_table() y get_choice_table()
+ * acotan lo que devuelven, para que agregar filas nunca vuelva a poder
+ * pisar la pila. */
+#define MAX_MENU_ENTRIES 32
 
 typedef struct {
     aura_str_id_t label_id;
@@ -111,23 +118,34 @@ static const nav_entry_t music_entries[] = {
  * (D-075) -- ninguno se repite dentro de la lista (doc SS4, "hermanos se
  * distinguen"). */
 static const nav_entry_t settings_entries[] = {
-    { AURA_STR_SETTINGS_THEME,      "theme",             AURA_SCREEN_SETTINGS_THEME },
-    { AURA_STR_SETTINGS_ANIMATIONS, "motion",            AURA_SCREEN_SETTINGS_ANIMATIONS },
-    { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
-    { AURA_STR_SETTINGS_EQ,         "sliders-horizontal", AURA_SCREEN_SETTINGS_EQ },
-    { AURA_STR_SETTINGS_BRIGHTNESS, "sun",               AURA_SCREEN_SETTINGS_BRIGHTNESS },
+    /* Orden del firmware original con los ajustes propios de Aura
+     * intercalados por SECCION (encargo 2026-08-13): informacion,
+     * reproduccion, apariencia (los de Aura, juntos), pantalla,
+     * sonido, sistema. Sin separadores visibles -- el orden ES la
+     * agrupacion, como en el original. */
+    { AURA_STR_SETTINGS_ABOUT,      "info",              AURA_SCREEN_SETTINGS_ABOUT },
+    /* -- reproduccion -- */
     { AURA_STR_SETTINGS_SHUFFLE,    "shuffle",           AURA_SCREEN_SETTINGS_SHUFFLE },
     { AURA_STR_SETTINGS_REPEAT,     "repeat",            AURA_SCREEN_SETTINGS_REPEAT },
-    { AURA_STR_SETTINGS_BACKLIGHT,     "backlight",      AURA_SCREEN_SETTINGS_BACKLIGHT },
-    { AURA_STR_SETTINGS_SLEEPTIMER,    "sleep",          AURA_SCREEN_SETTINGS_SLEEPTIMER },
-    { AURA_STR_SETTINGS_VOLUME_LIMIT,  "volume-limit",   AURA_SCREEN_SETTINGS_VOLUME_LIMIT },
-    { AURA_STR_SETTINGS_CLICKER,       "tap",            AURA_SCREEN_SETTINGS_CLICKER },
-    { AURA_STR_SETTINGS_MAINMENU,      "menu-list",      AURA_SCREEN_SETTINGS_MAINMENU },
-    { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
+    { AURA_STR_SETTINGS_MAINMENU,   "menu-list",         AURA_SCREEN_SETTINGS_MAINMENU },
+    /* -- apariencia (propios de Aura) -- */
+    { AURA_STR_SETTINGS_THEME,      "theme",             AURA_SCREEN_SETTINGS_THEME },
     { AURA_STR_SETTINGS_ACCENT,     "paintpalette",      AURA_SCREEN_SETTINGS_ACCENT },
+    { AURA_STR_SETTINGS_ANIMATIONS, "motion",            AURA_SCREEN_SETTINGS_ANIMATIONS },
+    { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
     { AURA_STR_SETTINGS_LEFT_PANEL_SHADOW, "square-on-square", AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW },
-    { AURA_STR_SETTINGS_ABOUT,      "info",              AURA_SCREEN_SETTINGS_ABOUT },
-    { AURA_STR_SETTINGS_RESET,         "reset",          AURA_SCREEN_SETTINGS_RESET },
+    { AURA_STR_SETTINGS_SHOW_ICONS, "sliders-horizontal", AURA_SCREEN_SETTINGS_SHOW_ICONS },
+    /* -- pantalla -- */
+    { AURA_STR_SETTINGS_BRIGHTNESS, "sun",               AURA_SCREEN_SETTINGS_BRIGHTNESS },
+    { AURA_STR_SETTINGS_BACKLIGHT,  "backlight",         AURA_SCREEN_SETTINGS_BACKLIGHT },
+    /* -- sonido -- */
+    { AURA_STR_SETTINGS_EQ,         "equalizer",         AURA_SCREEN_SETTINGS_EQ },
+    { AURA_STR_SETTINGS_VOLUME_LIMIT, "volume-limit",    AURA_SCREEN_SETTINGS_VOLUME_LIMIT },
+    { AURA_STR_SETTINGS_CLICKER,    "tap",               AURA_SCREEN_SETTINGS_CLICKER },
+    /* -- sistema -- */
+    { AURA_STR_SETTINGS_SLEEPTIMER, "sleep",             AURA_SCREEN_SETTINGS_SLEEPTIMER },
+    { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
+    { AURA_STR_SETTINGS_RESET,      "reset",             AURA_SCREEN_SETTINGS_RESET },
 };
 
 /* Extras del firmware original (2026-08-13), en su orden. */
@@ -142,23 +160,28 @@ static const nav_entry_t extras_entries[] = {
     { AURA_STR_EXTRAS_STOPWATCH,  "stopwatch",  AURA_SCREEN_EXTRAS_STOPWATCH },
 };
 
+static int clamp_menu_count(int n)
+{
+    return (n > MAX_MENU_ENTRIES) ? MAX_MENU_ENTRIES : n;
+}
+
 static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
 {
     switch (screen)
     {
     case AURA_SCREEN_EXTRAS:
         *out = extras_entries;
-        return (int)(sizeof(extras_entries) / sizeof(extras_entries[0]));
+        return clamp_menu_count((int)(sizeof(extras_entries) / sizeof(extras_entries[0])));
     case AURA_SCREEN_ROOT:
         rebuild_root_entries();
         *out = root_entries;
-        return root_entries_count;
+        return clamp_menu_count(root_entries_count);
     case AURA_SCREEN_MUSIC:
         *out = music_entries;
-        return sizeof(music_entries) / sizeof(music_entries[0]);
+        return clamp_menu_count(sizeof(music_entries) / sizeof(music_entries[0]));
     case AURA_SCREEN_SETTINGS:
         *out = settings_entries;
-        return sizeof(settings_entries) / sizeof(settings_entries[0]);
+        return clamp_menu_count(sizeof(settings_entries) / sizeof(settings_entries[0]));
     default:
         *out = NULL;
         return 0;
@@ -394,6 +417,8 @@ static int settings_row_toggle_value(aura_screen_id_t target)
         return global_settings.keyclick != 0;
     if (target == AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW)
         return aura_settings.left_panel_shadow;
+    if (target == AURA_SCREEN_SETTINGS_SHOW_ICONS)
+        return aura_settings.show_icons;
     return -1;
 }
 
@@ -412,6 +437,11 @@ static void toggle_settings_row(aura_screen_id_t target)
     else if (target == AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW)
     {
         aura_settings.left_panel_shadow = !aura_settings.left_panel_shadow;
+        aura_settings_save();
+    }
+    else if (target == AURA_SCREEN_SETTINGS_SHOW_ICONS)
+    {
+        aura_settings.show_icons = !aura_settings.show_icons;
         aura_settings_save();
     }
 }

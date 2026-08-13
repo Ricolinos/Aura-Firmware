@@ -1704,4 +1704,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-154 — "Mostrar sombras" gobierna todas las sombras; Ajustes reorganizado por secciones; "Mostrar iconos"
+
+**Encargos del dueño del diseño (2026-08-13, P7a/P8a/P25a).** (1) El ajuste de sombra de panel pasa a llamarse **"Mostrar sombras"** y gobierna **todas** las sombras paralelas del sistema: LeftPanel, la difusa del álbum del Modo 4, la del panel izquierdo sobre la hoja y la del indicador de la barra. Se centraliza en `aura_shadows_enabled()` (shell), que cada punto de dibujo consulta — incluidos los del reproductor, única intervención autorizada ahí. (2) **Ajustes reorganizado por secciones** sin separadores visibles (el orden ES la agrupación, como el original): información · reproducción · apariencia (los propios de Aura, juntos) · pantalla · sonido · sistema. (3) Ajuste nuevo **"Mostrar iconos"** (activado por defecto): apagarlo no solo deja de dibujarlos, también recupera su columna para que el texto no quede con una sangría vacía. **Bug real encontrado y corregido en el camino**: con Ajustes a 18 filas, los buffers locales `items[MAX_MENU_ENTRIES]` de 16 se desbordaban en la pila y el firmware crasheaba al abrir Ajustes (`Illegal instruction`, reproducido en el harness). La cota sube a 32 y además `get_nav_table()` acota lo que devuelve (`clamp_menu_count`), para que agregar filas nunca vuelva a poder pisar la pila.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

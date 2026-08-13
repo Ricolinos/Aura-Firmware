@@ -109,6 +109,11 @@ unsigned aura_accent_dark(void)
     return aura_accent_toward(0x000000u, AURA_DS_COLOR_ACCENT_DERIVED_DARKEN_PCT);
 }
 
+bool aura_shadows_enabled(void)
+{
+    return aura_settings.left_panel_shadow;
+}
+
 void aura_shell_draw_left_panel_shadow(int x, int y, int height)
 {
     int width = AURA_DS_METRICS_SHADOW_LEFT_PANEL_SHADOW_WIDTH;

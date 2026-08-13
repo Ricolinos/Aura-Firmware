@@ -7,6 +7,7 @@
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
 #include "aura_widgets.h"
+#include "aura_settings.h"
 #include "aura_selector.h"
 #include "aura_scroll_indicator.h"
 #include "aura_menu_list.h"
@@ -122,8 +123,11 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
      * sigue pendiente, selection-summary.md), el texto de TODAS las
      * filas se alinea a la columna post-icono: hermanos desalineados se
      * leen como jerarquia distinta, no como el mismo nivel de menu. */
+    /* Ajuste "Mostrar iconos" (encargo 2026-08-13): apagarlo no solo
+     * deja de dibujarlos -- tambien recupera su columna, para que el
+     * texto no quede flotando con una sangria vacia. */
     for (i = 0; i < count; i++)
-        if (items[i].icon_name)
+        if (items[i].icon_name && aura_settings.show_icons)
             has_any_icon = 1;
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
@@ -154,7 +158,7 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         char truncated[64];
         int max_text_w;
 
-        if (items[i].icon_name)
+        if (items[i].icon_name && aura_settings.show_icons)
         {
             int icon_x = x + ICON_X;
             int icon_y = row_y + (ROW_H - ICON_SZ) / 2;
