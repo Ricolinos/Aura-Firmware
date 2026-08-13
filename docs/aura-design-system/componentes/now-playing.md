@@ -232,8 +232,8 @@ confirmada 2026-08-12. Es **pantalla completa**: sin StatusBar.
   **centrada verticalmente en el espacio sobre la fila de modos** (no
   invade los controles de abajo), con una **sombra difusa alrededor de
   toda la imagen** (corrección 2026-08-12: no una rebanada inferior —
-  un resplandor de ~7px con decaimiento cuadrático, opacidad pico ~38%
-  en el borde) que **se desvanece con el morph** (aparece al entrar,
+  un resplandor de ~8px con decaimiento cuadrático, opacidad pico ~19%
+  en el borde, siguiendo la **silueta redondeada** del álbum) que **se desvanece con el morph** (aparece al entrar,
   se va al salir).
 - **Panel derecho** (`LyricsPanel`) — una **HOJA que se desliza desde
   la derecha** (no un fade; corrección 2026-08-12) de **vidrio

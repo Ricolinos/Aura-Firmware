@@ -91,8 +91,8 @@
 /* Centro vertical del area util del panel (del borde superior al tope
  * de la fila de modos): la fila de controles de abajo no se invade. */
 #define M4_ART_Y      (((PROGRESS_Y - 10 - A26_ICON_SIZE_MENU) - M4_ART_SIZE) / 2)
-#define M4_ART_SHADOW_R     7  /* radio del difuminado alrededor del album */
-#define M4_ART_SHADOW_ALPHA 96 /* opacidad pico en el borde de la imagen */
+#define M4_ART_SHADOW_R     8  /* radio del difuminado alrededor del album */
+#define M4_ART_SHADOW_ALPHA 48 /* opacidad pico en el borde (sutil: sombra, no relieve) */
 #define M4_MORPH_MS   330 /* fundido lineal de contenido del sistema */
 /* Panel derecho del Modo 4 (correccion 2026-08-12): una HOJA que se
  * desliza desde la derecha (no un fade), de vidrio traslucido tenido
@@ -657,14 +657,20 @@ static void draw_m4_right_panel(int t256)
 
 /* Sombra DIFUSA alrededor del album (correccion 2026-08-12: "no unos
  * cuantos pixeles abajo -- una sombra con ligero difuminado detras,
- * que se note alrededor de la imagen"): banda de M4_ART_SHADOW_R px
- * rodeando el rect, con la opacidad decayendo cuadraticamente con la
- * distancia euclidiana al borde -- un blur barato sin kernel real. El
- * interior no se pinta (el album lo tapa). `alpha_max` ya trae el
+ * que se note alrededor de la imagen"; segundo pase: debe seguir la
+ * silueta REDONDEADA -- con esquinas vivas se leia como relieve).
+ * Campo de distancia de rect redondeado: distancia euclidiana al rect
+ * ENCOGIDO por el radio de esquina, menos el radio (la SDF clasica);
+ * la opacidad decae cuadraticamente en la banda de M4_ART_SHADOW_R px.
+ * El interior no se pinta (el album lo tapa). `alpha_max` ya trae el
  * desvanecimiento del morph aplicado. */
 static void draw_art_soft_shadow(int x, int y, int size, int alpha_max)
 {
     int xx, yy;
+    int rad = ART_RADIUS;
+    int in_x0 = x + rad, in_x1 = x + size - 1 - rad;
+    int in_y0 = y + rad, in_y1 = y + size - 1 - rad;
+    int r8 = M4_ART_SHADOW_R << 8;
 
     if (alpha_max <= 0)
         return;
@@ -677,22 +683,25 @@ static void draw_art_soft_shadow(int x, int y, int size, int alpha_max)
         row = FBADDR(0, yy);
         for (xx = x - M4_ART_SHADOW_R; xx < x + size + M4_ART_SHADOW_R; xx++)
         {
-            int dx = 0, dy = 0, d2;
+            int dx = 0, dy = 0, d8, t8;
 
             if (xx < 0 || xx >= A26_SCREEN_WIDTH)
                 continue;
-            if (xx < x)              dx = x - xx;
-            else if (xx >= x + size) dx = xx - (x + size - 1);
-            if (yy < y)              dy = y - yy;
-            else if (yy >= y + size) dy = yy - (y + size - 1);
+            if (xx < in_x0)      dx = in_x0 - xx;
+            else if (xx > in_x1) dx = xx - in_x1;
+            if (yy < in_y0)      dy = in_y0 - yy;
+            else if (yy > in_y1) dy = yy - in_y1;
             if (dx == 0 && dy == 0)
-                continue; /* debajo del album: lo tapa la imagen */
-            d2 = dx * dx + dy * dy;
-            if (d2 >= M4_ART_SHADOW_R * M4_ART_SHADOW_R)
+                continue; /* nucleo del album */
+            d8 = (int)a26_shell_isqrt256((unsigned)(dx * dx + dy * dy))
+                 - (rad << 8);
+            if (d8 <= 0)
+                continue; /* dentro de la silueta redondeada */
+            if (d8 >= r8)
                 continue;
+            t8 = r8 - d8;
             row[xx] = a26_shell_blend(row[xx], LCD_RGBPACK(0, 0, 0),
-                alpha_max * (M4_ART_SHADOW_R * M4_ART_SHADOW_R - d2)
-                          / (M4_ART_SHADOW_R * M4_ART_SHADOW_R));
+                (int)((long)alpha_max * t8 / r8 * t8 / r8));
         }
     }
 }

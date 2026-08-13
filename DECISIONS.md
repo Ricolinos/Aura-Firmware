@@ -1628,4 +1628,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-143 — Modo 4: la sombra del álbum sigue la silueta redondeada y baja a la mitad de opacidad
+
+**Corrección del dueño del diseño (2026-08-12) sobre D-142** ("no respeta los bordes redondeados; parece relieve"): (1) el campo de distancia ahora es la SDF clásica de rect redondeado — distancia euclidiana al rect encogido por el radio de esquina, menos el radio (con `a26_shell_isqrt256`) — así el halo abraza las esquinas de 8px del álbum en vez de pegarse a un rect vivo; (2) opacidad pico de 96 a **48/256 (~19%)** y radio de 7 a 8px: más difusa y más tenue, sombra en vez de relieve.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
