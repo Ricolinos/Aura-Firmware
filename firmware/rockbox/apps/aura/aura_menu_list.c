@@ -68,41 +68,37 @@ static long s_activity_since = 0;
  * GRIS, no de acento): pista de acento encendida / riel apagada,
  * perilla del fondo del shell -- solo cambia el color de las esquinas
  * redondeadas segun el fondo real debajo. */
-/* Switch DELGADO con la perilla desbordada (referencia visual del dueno
- * del diseno, 2026-08-13): la pista es baja y el circulo la rebasa por
- * arriba y por abajo -- al reves del switch de iOS, donde la perilla
- * vive dentro de la pista. Encendido: pista de acento y perilla en un
- * tono muy claro del propio acento (no blanco puro: sobre el acento se
- * lee como la misma pieza). Apagado: pista del riel y perilla clara. */
-#define SWITCH_W       26
-#define SWITCH_H       10
-#define SWITCH_THUMB_D 14
-#define SWITCH_MARGIN  1
+/* Switch (referencia visual del dueno del diseno, 2026-08-13): pista en
+ * capsula y perilla tambien en CAPSULA -- mas ancha que alta, no un
+ * circulo -- que vive DENTRO de la pista con un margen minimo, no
+ * desbordandola. Encendido: pista de acento y perilla en un tono muy
+ * claro del propio acento. Apagado: pista gris y perilla casi blanca. */
+#define SWITCH_W        28
+#define SWITCH_H        14
+#define SWITCH_MARGIN   2
+#define SWITCH_THUMB_W  15
 
 static void draw_switch_v2(int x, int y, int value, int on_selector)
 {
-    int thumb_d = SWITCH_THUMB_D;
-    int thumb_x = value ? (x + SWITCH_W - SWITCH_MARGIN - thumb_d)
+    int thumb_h = SWITCH_H - 2 * SWITCH_MARGIN;
+    int thumb_x = value ? (x + SWITCH_W - SWITCH_MARGIN - SWITCH_THUMB_W)
                          : (x + SWITCH_MARGIN);
-    int thumb_y = y - (thumb_d - SWITCH_H) / 2;
     unsigned bg = on_selector ? a26_color(A26_SELECTION_FILL) : a26_color(A26_SHELL_BG);
-    /* Pista apagada: el riel puro es casi invisible en tema claro (el
-     * dueno lo reporto como "elementos que no se muestran"), asi que se
-     * oscurece hacia la tinta primaria hasta un gris con contraste real
-     * -- el mismo gris medio de la referencia. */
+    /* Pista apagada: el riel puro es casi invisible en tema claro, se
+     * oscurece hacia la tinta primaria hasta un gris con contraste. */
     unsigned off_track = a26_shell_blend(a26_color(A26_SHELL_RAIL),
                                           a26_color(A26_TEXT_PRIMARY), 90);
     unsigned track = value ? aura_accent() : off_track;
     unsigned white = (unsigned)AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
-    unsigned thumb = value ? a26_shell_blend(track, white, 210)
+    unsigned thumb = value ? a26_shell_blend(track, white, 205)
                             : a26_shell_blend(off_track, white, 245);
 
+    /* Capsulas via fill_rounded_rect con radio = alto/2 (la primitiva
+     * las acota ahi): misma forma, y es el camino con antialias ya
+     * probado en todo el sistema. */
     a26_shell_fill_rounded_rect(x, y, SWITCH_W, SWITCH_H, SWITCH_H / 2, track, bg);
-    /* La perilla desborda: se compone contra el fondo REAL de la fila,
-     * no contra la pista -- si no, el halo de sus esquinas quedaria del
-     * color de la pista en la parte que sobresale. */
-    a26_shell_fill_rounded_rect(thumb_x, thumb_y, thumb_d, thumb_d,
-                                 thumb_d / 2, thumb, bg);
+    a26_shell_fill_rounded_rect(thumb_x, y + SWITCH_MARGIN, SWITCH_THUMB_W, thumb_h,
+                                 thumb_h / 2, thumb, track);
 }
 
 void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,

@@ -46,15 +46,12 @@
  * `[OPCION]`: "sigue la regla de profundidad por defecto, no tiene
  * mecanica propia"). Proporcion ~1.8:1 igual que el switch de iOS,
  * escalada a la fila de 21px del sistema. */
-/* Switch delgado (referencia visual del dueno del diseno, 2026-08-13):
- * la PISTA es baja y la perilla la desborda por arriba y por abajo --
- * lo contrario del switch de iOS, donde la perilla vive dentro. La
- * perilla es un circulo de TOGGLE_THUMB_D que sobresale
- * (TOGGLE_THUMB_D - TOGGLE_H) / 2 px por cada lado. */
-#define TOGGLE_W        30
-#define TOGGLE_H        12
-#define TOGGLE_THUMB_D  16
-#define TOGGLE_MARGIN   1
+/* Mismas medidas y forma que el switch de MenuList (ver alli la nota
+ * completa): pista en capsula y perilla en capsula dentro de ella. */
+#define TOGGLE_W        28
+#define TOGGLE_H        14
+#define TOGGLE_MARGIN   2
+#define TOGGLE_THUMB_W  15
 
 static const char *theme_dir_name(void)
 {
@@ -736,28 +733,22 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 
 void aura_widgets_draw_toggle(int x, int y, int value, unsigned bg)
 {
-    int thumb_d = TOGGLE_THUMB_D;
-    int thumb_x = value ? (x + TOGGLE_W - TOGGLE_MARGIN - thumb_d)
+    int thumb_h = TOGGLE_H - 2 * TOGGLE_MARGIN;
+    int thumb_x = value ? (x + TOGGLE_W - TOGGLE_MARGIN - TOGGLE_THUMB_W)
                          : (x + TOGGLE_MARGIN);
-    /* La perilla desborda la pista: su caja arranca ANTES del borde
-     * superior de la pista y termina despues del inferior. */
-    int thumb_y = y - (thumb_d - TOGGLE_H) / 2;
-    /* Pista apagada oscurecida: el riel puro es casi invisible en tema
-     * claro (ver la nota equivalente en aura_menu_list.c). */
     unsigned off_track = a26_shell_blend(a26_color(A26_SHELL_RAIL),
                                           a26_color(A26_TEXT_PRIMARY), 90);
     unsigned track = value ? aura_accent() : off_track;
     unsigned white = (unsigned)AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
-    unsigned thumb = value ? a26_shell_blend(track, white, 210)
+    unsigned thumb = value ? a26_shell_blend(track, white, 205)
                             : a26_shell_blend(off_track, white, 245);
 
-    a26_shell_fill_rounded_rect(x, y, TOGGLE_W, TOGGLE_H, TOGGLE_H / 2,
-                                 track, bg);
-    /* La perilla se compone contra el FONDO DE LA FILA en la parte que
-     * desborda y contra la pista en la que la cubre: se dibuja con el
-     * fondo de fila como base y despues se re-estampa su interior. */
-    a26_shell_fill_rounded_rect(thumb_x, thumb_y, thumb_d, thumb_d,
-                                 thumb_d / 2, thumb, bg);
+    /* Capsulas via fill_rounded_rect con radio = alto/2 (la primitiva
+     * las acota ahi): misma forma, y es el camino con antialias ya
+     * probado en todo el sistema. */
+    a26_shell_fill_rounded_rect(x, y, TOGGLE_W, TOGGLE_H, TOGGLE_H / 2, track, bg);
+    a26_shell_fill_rounded_rect(thumb_x, y + TOGGLE_MARGIN, TOGGLE_THUMB_W, thumb_h,
+                                 thumb_h / 2, thumb, track);
 }
 
 /* -- Fila booleana (L11) --------------------------------------------- */

@@ -1772,6 +1772,10 @@ Con esto quedan construidas las 8 entradas de Extras: Reloj internacional, Calen
 
 ---
 
+## D-167 — Switch: corrección contra la referencia real
+
+**Corrección del dueño del diseño (2026-08-13): "no se parecen en absolutamente nada".** Releí la referencia y había interpretado mal dos cosas de D-165: (1) la perilla **no es un círculo, es una CÁPSULA más ancha que alta**; (2) **vive DENTRO de la pista** con un margen mínimo, no desbordándola. Medidas: pista 28×14 en cápsula, perilla 15×10 también en cápsula, margen 2. Encendido: pista de acento y perilla en un tono muy claro del propio acento. Apagado: pista gris con contraste (no el riel puro, invisible en tema claro) y perilla casi blanca. Ambas se dibujan con `fill_rounded_rect` de radio alto/2 — la primitiva las acota ahí, así que da la misma forma por el camino con antialias ya probado en todo el sistema; usar `fill_capsule` directamente cortaba el dibujo de la lista a media pantalla.
+
 ## D-165 — Switch delgado con la perilla desbordada
 
 **Encargo del dueño del diseño (2026-08-13, con referencia visual).** El switch pasa a ser **delgado con la perilla desbordando la pista** por arriba y por abajo — al revés del switch de iOS, donde la perilla vive dentro. Menús: pista 26×10 con perilla de 14; listas de contenido: 30×12 con perilla de 16. Encendido: pista de **acento** y perilla en un tono muy claro **del propio acento** (no blanco puro: sobre el acento se lee como la misma pieza). Apagado: perilla clara sobre pista gris. La perilla se compone contra el **fondo real de la fila**, no contra la pista, porque en la parte que sobresale el halo de sus esquinas quedaría del color equivocado. **De paso**: la pista apagada usaba `SHELL_RAIL` puro, que en tema claro es casi invisible — parte de lo que el dueño reportó como "elementos que no se muestran" en Ajustes; ahora se oscurece hacia la tinta primaria hasta un gris con contraste real. ⚠️ Pendiente de un pase visual: el estado apagado sobre fondo claro todavía se lee débil en la captura.
