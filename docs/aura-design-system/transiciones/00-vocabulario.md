@@ -52,9 +52,32 @@ vería como un stretch feo, no como una transición intencional. Separar la
 salida de la entrada, con una pausa entre medio, es lo que lo hace sentir
 diseñado y no un bug de layout.
 
-**Estado abierto:** el sentido inverso `(full) → (split)` **no está
-definido todavía**. No asumas que es el mismo patrón en reversa — puede serlo,
-o puede que amerite su propia coreografía. Definir esto es un pendiente.
+**Sentido inverso:** resuelto 2026-08-13 — ver `Lift-and-Push` abajo.
+
+---
+
+## `Lift-and-Push`
+
+**Tipo:** Coreografiado, 3 fases, secuenciales. Es la **inversa temporal
+exacta** de `Push-and-Drop`, confirmada 2026-08-13 (antes marcada como
+"no definida", lo que hacía que `(full) → (split)` cayera en el cambio
+instantáneo y se viera como un salto).
+
+1. **Fase 1 — Lift (levantada):** la `StatusBar (full)` sube y sale por
+   el borde superior. Es el Drop al revés: la barra se va sola, antes de
+   que el contenido se mueva.
+2. **Fase 2 — Hueco intencional:** no hay barra en pantalla mientras el
+   contenido se desplaza.
+3. **Fase 3 — Push (empuje):** el contenido de pantalla completa sale
+   hacia su borde y el nuevo layout `(split)` entra desde el opuesto,
+   con su `StatusBar (split)` **entrando empujada junto a su panel** —
+   exactamente como se va empujada en la ida.
+
+**Por qué la simetría importa:** en `Push-and-Drop` la barra de destino
+es la que "aterriza" sola porque no comparte silueta con la de origen; en
+el regreso el que no comparte silueta es el origen, así que es el origen
+el que se va solo. Interpolar barras de distinta silueta sigue estando
+prohibido en ambos sentidos.
 
 ---
 
@@ -215,3 +238,31 @@ ambas direcciones simétricamente, sin que haya un cambio de estado de
 pantalla de por medio.
 
 **Usado por:** `ClockIndicator` empujando a `DynamicTitle` en `(full)`.
+
+---
+
+## `Flip-and-Flow`
+
+**Tipo:** Coreografiado, 3 fases secuenciales, conecta dos pantallas sin
+corte.
+
+Observado/definido para la salida de CoverFlow hacia el reproductor
+(`componentes/cover-flow.md`). Al confirmar una selección dentro de un
+elemento "volteado" (flip):
+
+1. **Unflip:** el elemento gira de regreso a su cara frontal (la carátula
+   vuelve a verse).
+2. **Asentamiento:** el elemento se posiciona en su lugar dentro de su
+   layout de origen (el carrusel).
+3. **Flujo:** desde esa posición, transición fluida y continua hacia la
+   pantalla destino (Now Playing), llevándose consigo sus atributos
+   visuales (incluido el reflejo) durante el trayecto.
+
+**Parentesco con `Shift-and-Reveal`:** ambos usan un elemento persistente
+que nunca desaparece mientras el layout cambia a su alrededor. La
+diferencia: `Shift-and-Reveal` reacomoda dentro de la misma pantalla;
+`Flip-and-Flow` cruza de una pantalla a otra usando el elemento como
+puente visual.
+
+**Requisito de fidelidad:** el flip en sí debe verse como el del iPod
+original — es una réplica intencional, no una aproximación.

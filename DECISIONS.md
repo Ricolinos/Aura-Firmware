@@ -1686,4 +1686,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-151 — Transiciones con cambio de modo de barra: Push-and-Drop real y Lift-and-Push (inversa)
+
+**Reporte del dueño del diseño (2026-08-13): "transiciones que se ven raras, como al salir del reproductor hacia los menús".** Causa encontrada leyendo el push genérico: su paso 2 bliteaba la barra del destino **entera y al instante** antes del primer cuadro, en TODOS los casos. Eso es correcto solo cuando el modo de barra no cambia (comportamiento del original verificado en D-068), pero con cambio de modo producía dos defectos: saliendo del reproductor (full→split) aparecía de golpe la barra split y, a su lado, la cabecera del panel derecho, antes de que el cuerpo deslizara; y entrando a pantalla completa (split→full) la barra full aparecía asentada mientras su propio contenido todavía venía entrando — justo lo que `Push-and-Drop` prohíbe. Ahora el push detecta el cambio de modo (comparando `split_active()` antes y después del render offscreen, sin infraestructura nueva) y elige: sin cambio → instantáneo como hoy; (split)→(full) → **Push-and-Drop real** (la barra vieja se va empujada, hueco intencional durante todo el empuje, Drop de la nueva al final); (full)→(split) → **`Lift-and-Push`**, la inversa temporal exacta, que el documento marcaba como "no definida" y por eso caía en el caso instantáneo. Resuelve el pendiente abierto en `transiciones/00-vocabulario.md` y en `componentes/status-bar.md`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

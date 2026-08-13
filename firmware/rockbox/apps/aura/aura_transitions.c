@@ -9,6 +9,7 @@
 
 #include "aura_transitions.h"
 #include "aura_screens.h"
+#include "aura_widgets.h"
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
 #include "aura_flow.h"
@@ -103,6 +104,13 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
     struct viewport vp;
     struct viewport *saved;
     long start_tick = current_tick;
+    unsigned shell_bg = a26_color(A26_SHELL_BG);
+    /* Modo de barra ANTES de renderizar la pantalla nueva: split_active()
+     * refleja el layout de la ultima pantalla dibujada, asi que aca
+     * todavia es el de la pantalla que se va (ver mas abajo el de la
+     * que llega, ya con el offscreen renderizado). */
+    int old_split = aura_widgets_split_active();
+    int new_split, bar_changes, body_top;
 
     /* AUDITORIA-01 A-08: "toda animacion se detiene con la pantalla
      * dormida" (doc SS6/CLAUDE.md) -- la puerta central de aura_main.c
@@ -143,11 +151,63 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
     aura_screens_draw(nav);
     lcd_set_viewport(saved);
 
-    /* 2. Titulo instantaneo: la banda de la barra de estado no
-     * desliza -- se blitea entera antes del primer cuadro. */
-    lcd_bitmap_part(s_push_fb, 0, 0, A26_SCREEN_WIDTH, 0, 0, width, bar_h);
+    new_split = aura_widgets_split_active();
+    bar_changes = (old_split != new_split);
 
-    /* 3. Push por cuadros sobre la banda del cuerpo (y >= bar_h). */
+    /* 2. La barra de estado (correccion 2026-08-13, "transiciones que
+     * se ven raras al salir del reproductor"):
+     *
+     *   - Mismo modo de barra (split->split, full->full): el titulo
+     *     cambia AL INSTANTE y la banda no desliza -- comportamiento
+     *     del firmware original ya verificado cuadro a cuadro (D-068).
+     *   - (split)->(full): `Push-and-Drop` REAL (status-bar.md): la
+     *     barra vieja se va EMPUJADA con el panel, durante el empuje no
+     *     hay ninguna barra (hueco intencional) y la barra nueva CAE
+     *     desde arriba al final. Antes se blitteaba la barra nueva
+     *     entera antes del primer cuadro: aparecia asentada mientras su
+     *     propio contenido todavia venia entrando.
+     *   - (full)->(split): `Lift-and-Push`, la inversa temporal exacta
+     *     -- el documento la marcaba "no definida" (vocabulario y
+     *     status-bar.md) y por eso caia en el caso instantaneo, que
+     *     ademas revelaba de golpe la cabecera del panel derecho. Fase
+     *     1: la barra full se LEVANTA y sale por arriba. Fase 2: hueco.
+     *     Fase 3: el push, con la barra (split) del destino entrando
+     *     EMPUJADA junto a su panel, igual que se va en la ida.
+     *
+     * En los dos casos con cambio de modo la banda superior participa
+     * del empuje (body_top = 0). */
+    if (!bar_changes)
+    {
+        lcd_bitmap_part(s_push_fb, 0, 0, A26_SCREEN_WIDTH, 0, 0, width, bar_h);
+        body_top = bar_h;
+    }
+    else
+    {
+        body_top = 0;
+        if (!old_split)
+        {
+            /* Fase 1 de Lift-and-Push: la barra (full) sube y se va. */
+            int lift_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+
+            for (i = 1; i <= lift_frames; i++)
+            {
+                int dd = eased_offset(bar_h, i, lift_frames);
+
+                for (y = 0; y + dd < bar_h; y++)
+                    memcpy(FBADDR(0, y), FBADDR(0, y + dd),
+                           A26_SCREEN_WIDTH * sizeof(fb_data));
+                lcd_set_foreground(shell_bg);
+                for (y = bar_h - dd; y < bar_h; y++)
+                    lcd_hline(0, A26_SCREEN_WIDTH - 1, y);
+                lcd_update_rect(0, 0, A26_SCREEN_WIDTH, bar_h);
+                drain_button_queue_if_full();
+                if (i < lift_frames)
+                    sleep(frame_delay);
+            }
+        }
+    }
+
+    /* 3. Push por cuadros. */
     for (i = 1; i <= frames; i++)
     {
         int d = eased_offset(width, i, frames);
@@ -155,7 +215,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
 
         if (delta > 0)
         {
-            for (y = bar_h; y < A26_SCREEN_HEIGHT; y++)
+            for (y = body_top; y < A26_SCREEN_HEIGHT; y++)
             {
                 fb_data *row = FBADDR(0, y);
 
@@ -176,15 +236,26 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
             if (direction > 0)
                 /* La nueva entra desde el borde derecho: sus columnas
                  * [0, d) aparecen en x = [width-d, width). */
-                lcd_bitmap_part(s_push_fb, 0, bar_h, A26_SCREEN_WIDTH,
-                                width - d, bar_h, d,
-                                A26_SCREEN_HEIGHT - bar_h);
+                lcd_bitmap_part(s_push_fb, 0, body_top, A26_SCREEN_WIDTH,
+                                width - d, body_top, d,
+                                A26_SCREEN_HEIGHT - body_top);
             else
                 /* La nueva entra desde el borde izquierdo: sus columnas
                  * [width-d, width) aparecen en x = [0, d). */
-                lcd_bitmap_part(s_push_fb, width - d, bar_h,
-                                A26_SCREEN_WIDTH, 0, bar_h, d,
-                                A26_SCREEN_HEIGHT - bar_h);
+                lcd_bitmap_part(s_push_fb, width - d, body_top,
+                                A26_SCREEN_WIDTH, 0, body_top, d,
+                                A26_SCREEN_HEIGHT - body_top);
+
+            /* Hueco intencional del Push-and-Drop: hacia (full), la
+             * banda de la barra queda VACIA durante todo el empuje --
+             * la barra nueva no existe todavia, cae al final. */
+            if (bar_changes && old_split)
+            {
+                lcd_set_foreground(shell_bg);
+                for (y = 0; y < bar_h; y++)
+                    lcd_hline(direction > 0 ? width - d : 0,
+                              direction > 0 ? width - 1 : d - 1, y);
+            }
         }
 
         lcd_update_rect(0, 0, width, A26_SCREEN_HEIGHT);
@@ -193,6 +264,26 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
         d_prev = d;
         if (i < frames)
             sleep(frame_delay);
+    }
+
+    /* Fase 3 del Push-and-Drop hacia (full): la barra nueva CAE desde
+     * arriba una vez que el empuje termino por completo. */
+    if (bar_changes && old_split)
+    {
+        int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+
+        for (i = 1; i <= drop_frames; i++)
+        {
+            int dd = eased_offset(bar_h, i, drop_frames);
+
+            if (dd > 0)
+                lcd_bitmap_part(s_push_fb, 0, bar_h - dd, A26_SCREEN_WIDTH,
+                                0, 0, A26_SCREEN_WIDTH, dd);
+            lcd_update_rect(0, 0, A26_SCREEN_WIDTH, bar_h);
+            drain_button_queue_if_full();
+            if (i < drop_frames)
+                sleep(frame_delay);
+        }
     }
 
     TRANSITION_LOG("push", frames, start_tick);

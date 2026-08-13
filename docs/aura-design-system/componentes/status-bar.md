@@ -130,7 +130,11 @@ de cualquier transición a pantalla completa.
 
 ## Transición `(full) → (split)`
 
-**No definida.** Ver estado abierto en `transiciones/00-vocabulario.md`.
+Usa el patrón `Lift-and-Push` (confirmado 2026-08-13, spec completo en
+`transiciones/00-vocabulario.md`): la `StatusBar (full)` se levanta y
+sale por arriba, hay un hueco mientras el contenido se desplaza, y la
+`StatusBar (split)` entra **empujada junto a su panel**, no animada por
+su cuenta.
 
 ## Pendiente de definir
 
@@ -144,7 +148,6 @@ de cualquier transición a pantalla completa.
       resulta viable en la implementación real)
 - [ ] Decisión final: ¿SF Display real, o bitmap propio a 12px inspirado en
       ella? (ver nota de licencia y rendering en `fundamentos/02-tipografia.md`)
-- [ ] Transición inversa `(full) → (split)`
 - [ ] Timing exacto de las 3 fases del `Push-and-Drop` para este componente
 - [ ] ¿`StatusBar` reacciona a la sombra descrita en `efectos/01-sombras.md`,
       o al estar en `--layer-chrome` queda siempre por encima/exenta de ese
