@@ -133,6 +133,46 @@ static bool title_from_filename(struct tagcache_search *tcs, char *out, size_t o
 /* Ejecuta una busqueda tagcache sobre `tag`, aplicando los filtros que
  * correspondan segun la pantalla, y vuelca hasta `max` resultados en
  * `out`. Devuelve la cantidad de items. */
+/* Comparacion de etiquetas para el orden alfabetico de las listas:
+ * sin distinguir mayusculas, y los digitos antes que las letras (mismo
+ * criterio visible del riel A-Z, que agrupa numeros bajo '#'). */
+static int label_cmp(const char *a, const char *b)
+{
+    while (*a && *b)
+    {
+        unsigned char ca = (unsigned char)*a, cb = (unsigned char)*b;
+        if (ca >= 'a' && ca <= 'z') ca -= 32;
+        if (cb >= 'a' && cb <= 'z') cb -= 32;
+        if (ca != cb)
+            return (int)ca - (int)cb;
+        a++; b++;
+    }
+    return (int)(unsigned char)*a - (int)(unsigned char)*b;
+}
+
+static void sort_items_by_label(aura_music_item_t *items, long *nums, int n)
+{
+    int a, b;
+
+    for (a = 1; a < n; a++)
+    {
+        aura_music_item_t key = items[a];
+        long key_num = nums ? nums[a] : 0;
+
+        b = a - 1;
+        while (b >= 0 && label_cmp(items[b].label, key.label) > 0)
+        {
+            items[b + 1] = items[b];
+            if (nums)
+                nums[b + 1] = nums[b];
+            b--;
+        }
+        items[b + 1] = key;
+        if (nums)
+            nums[b + 1] = key_num;
+    }
+}
+
 static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
                        bool use_composer, aura_music_item_t *out, int max)
 {
@@ -196,6 +236,17 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
     }
 
     tagcache_search_finish(&tcs);
+
+    /* Orden ALFABETICO por etiqueta en toda lista que no sea las
+     * canciones de un album (encargo 2026-08-13: "organizadas
+     * alfabeticamente", como el original). Insercion estable, sin
+     * distinguir mayusculas; los seek y numeros de pista viajan con su
+     * etiqueta. La lista de un album se ordena por numero de pista mas
+     * abajo, y build_playlist_from_songs() aplica EL MISMO criterio
+     * para que el indice elegido en pantalla y la cancion que arranca
+     * sean siempre la misma. */
+    if (!(tag == tag_title && use_album))
+        sort_items_by_label(out, s_tracknums, n);
 
     /* Canciones de un album: orden del DISCO, no del indice de tagcache
      * (encargo del dueno del diseno 2026-08-12, cierra la nota de
@@ -353,6 +404,52 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
             }
             s_ids[b + 1] = key_id;
             s_nums[b + 1] = key_num;
+        }
+
+        for (a = 0; a < n; a++)
+        {
+            if (tagcache_retrieve(&tcs, s_ids[a], tag_filename, path, sizeof(path)))
+            {
+                playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true);
+                inserted++;
+            }
+        }
+        tagcache_search_finish(&tcs);
+        return inserted > 0;
+    }
+
+    /* Resto de listas: orden ALFABETICO por titulo, el mismo que
+     * muestra run_search() -- si el playlist quedara en orden de
+     * tagcache, elegir la fila N reproduciria otra cancion. Se
+     * recolecta (idx_id, titulo), se ordena y se inserta despues; la
+     * busqueda sigue ABIERTA porque tagcache_retrieve() la necesita. */
+    {
+        static int32_t s_ids[AURA_MUSIC_MAX_ITEMS];
+        static char s_titles[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+        int n = 0, a, b;
+
+        while (n < AURA_MUSIC_MAX_ITEMS && tagcache_get_next(&tcs, path, sizeof(path)))
+        {
+            s_ids[n] = tcs.idx_id;
+            strlcpy(s_titles[n], path, AURA_MUSIC_ITEM_LEN);
+            n++;
+        }
+
+        for (a = 1; a < n; a++)
+        {
+            int32_t key_id = s_ids[a];
+            char key_title[AURA_MUSIC_ITEM_LEN];
+
+            strlcpy(key_title, s_titles[a], AURA_MUSIC_ITEM_LEN);
+            b = a - 1;
+            while (b >= 0 && label_cmp(s_titles[b], key_title) > 0)
+            {
+                s_ids[b + 1] = s_ids[b];
+                strlcpy(s_titles[b + 1], s_titles[b], AURA_MUSIC_ITEM_LEN);
+                b--;
+            }
+            s_ids[b + 1] = key_id;
+            strlcpy(s_titles[b + 1], key_title, AURA_MUSIC_ITEM_LEN);
         }
 
         for (a = 0; a < n; a++)

@@ -59,3 +59,19 @@ por su cuenta.
 
 **Corolario de transición:** menú → lista de elementos es siempre un
 **T3** (push de ancho completo), nunca un T1 de panel.
+
+
+### Template de lista de ELEMENTOS a pantalla completa (2026-08-13)
+
+- Filas a ancho completo con el `Selector` estándar; el texto se recorta
+  antes de invadir la columna del riel.
+- **Riel A-Z indexado** pegado al borde derecho (columna de 10px): las
+  **iniciales presentes** en la lista (los números y símbolos se agrupan
+  bajo `#`), la del elemento seleccionado en **acento** y el resto en
+  tinta terciaria. Se dibuja solo desde **12 elementos** — en una lista
+  corta sería decoración — y nunca si hay una sola inicial.
+- `ScrollIndicator` (Fade-on-Idle) como en cualquier lista larga.
+- **Orden alfabético** siempre (sin distinguir mayúsculas, números
+  primero), salvo las canciones de un álbum, que van en el orden del
+  disco. El playlist de reproducción usa **el mismo criterio** que la
+  lista visible: elegir la fila N reproduce siempre la fila N.

@@ -527,6 +527,75 @@ int aura_widgets_pill_animating(void)
         && elapsed >= 0 && elapsed < PILL_SPRING_TICKS;
 }
 
+/* Riel A-Z indexado de las listas de ELEMENTOS a pantalla completa
+ * (encargo 2026-08-13, ya especificado en la Fase 27). Columna estrecha
+ * pegada al borde derecho con las iniciales presentes en la lista; la
+ * del elemento seleccionado va en acento, el resto en tinta terciaria.
+ * Solo se dibuja si la lista es lo bastante larga para que saltar
+ * signifique algo -- en una lista de 5 filas seria decoracion. */
+#define RAIL_W          10
+#define RAIL_MIN_ITEMS  12
+
+static char rail_initial(const char *label)
+{
+    unsigned char c;
+
+    while (*label == ' ')
+        label++;
+    c = (unsigned char)*label;
+    if (c >= 'a' && c <= 'z')
+        c -= 32;
+    if (c >= 'A' && c <= 'Z')
+        return (char)c;
+    if (c >= '0' && c <= '9')
+        return '#';
+    return (c >= 0x80) ? '#' : '#'; /* acentuadas y simbolos: al grupo '#' */
+}
+
+static void draw_index_rail(const aura_list_item_t *items, int count, int selected)
+{
+    char letters[27];
+    int n = 0, i, y, step, h, w;
+    char sel_letter;
+
+    if (count < RAIL_MIN_ITEMS)
+        return;
+
+    /* Iniciales presentes, en el orden en que aparecen: la lista ya
+     * viene ordenada, asi que basta con no repetir la anterior. */
+    for (i = 0; i < count && n < (int)sizeof(letters); i++)
+    {
+        char c = rail_initial(items[i].label);
+        if (n == 0 || letters[n - 1] != c)
+            letters[n++] = c;
+    }
+    if (n < 2)
+        return; /* una sola inicial: no hay nada que indexar */
+
+    sel_letter = (selected >= 0 && selected < count)
+        ? rail_initial(items[selected].label) : '\0';
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_8));
+    lcd_getstringsize((const unsigned char *)"A", &w, &h);
+    step = (A26_SCREEN_HEIGHT - LIST_TOP) / n;
+    if (step < h)
+        step = h; /* si no caben todas, se recortan por abajo antes que encimarse */
+
+    for (i = 0; i < n; i++)
+    {
+        char buf[2] = { letters[i], '\0' };
+
+        y = LIST_TOP + i * step;
+        if (y + h > A26_SCREEN_HEIGHT)
+            break;
+        lcd_getstringsize((const unsigned char *)buf, &w, &h);
+        lcd_set_foreground(letters[i] == sel_letter ? a26_color(A26_ACCENT)
+                                                     : a26_color(A26_TEXT_TERTIARY));
+        lcd_putsxy(A26_SCREEN_WIDTH - RAIL_W + (RAIL_W - w) / 2, y,
+                   (const unsigned char *)buf);
+    }
+}
+
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected)
 {
@@ -599,8 +668,20 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 
         lcd_set_foreground(is_selected ? a26_color(A26_ACCENT)
                                         : a26_color(A26_TEXT_PRIMARY));
-        lcd_putsxy(text_x, row_y + A26_SPACING_SM,
-                   (const unsigned char *)items[i].label);
+        /* En pantalla completa el riel A-Z ocupa la columna derecha:
+         * el texto se recorta antes de invadirla. */
+        {
+            struct viewport vp = *lcd_current_viewport;
+            struct viewport *saved;
+            int text_w = width - text_x - (split ? ROW_PAD_X : RAIL_W + A26_SPACING_XS);
+
+            vp.x = text_x;
+            vp.y = row_y + A26_SPACING_SM;
+            vp.width = (text_w > 0) ? text_w : 1;
+            saved = lcd_set_viewport(&vp);
+            lcd_putsxy(0, 0, (const unsigned char *)items[i].label);
+            lcd_set_viewport(saved);
+        }
 
         if (items[i].toggle >= 0)
         {
@@ -623,6 +704,8 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
 
     if (split)
         draw_right_panel_debounced(count > 0 ? items[selected].icon_name : NULL);
+    else
+        draw_index_rail(items, count, selected);
 
     draw_scrollbar(width, visible, count, first);
 }

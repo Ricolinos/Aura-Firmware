@@ -1710,4 +1710,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-155 — Listas de elementos: riel A-Z indexado y orden alfabético real
+
+**Encargo del dueño del diseño (2026-08-13, P10a + "organizadas alfabéticamente").** (1) **Riel A-Z** en las listas de elementos a pantalla completa: columna de 10px al borde derecho con las iniciales presentes (números y símbolos agrupados bajo `#`), la del elemento seleccionado en acento; se dibuja desde 12 elementos y nunca con una sola inicial. El texto de las filas se recorta con viewport para no invadir esa columna. (2) **Orden alfabético** en toda lista que no sean las canciones de un álbum (esas van por número de pista, D-118). Lo importante: `build_playlist_from_songs()` aplica **el mismo criterio de orden** que la lista visible — antes el playlist iba en orden de tagcache y, con la lista ya ordenada, elegir la fila N habría reproducido otra canción. El riel destapó el problema: mostraba el alfabeto entero desordenado porque la lista no lo estaba.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
