@@ -1999,4 +1999,18 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-186 — La identidad del iPod se evalúa sobre el disco completo, y el salto de DFU exige evidencia real
+
+**Reporte del dueño (2026-08-13): "volvió a detectar el iPod en modo bootloader siendo que no es verdad"** — y tenía razón por segunda vez. Medido en vivo con el aparato conectado: el volumen FAT32 estaba MONTADO y sano en `/Volumes/IPOD`, el disco completo reportaba `MediaName: "iPod"` / `IORegistryEntryName: "Apple iPod Media"` (el **modo disco de Apple**, que vive en la NOR de Apple — no el bootloader de Rockbox)... y la app seguía en el falso "modo bootloader".
+
+**Causa raíz**: `diskModeInfo()` evaluaba `matchesIPodCriteria` sobre la descripción de la PARTICIÓN montada — que llega **sin `MediaName` y sin `DeviceVendor`** (medido: ambos ausentes en `disk9s1`, presentes en `disk9`). Con las dos señales de identidad vacías, el volumen se rechazaba siempre, el estado nunca llegaba a `.diskMode`, y el sondeo caía a `diskModeNoFilesystem` con el volumen perfectamente montado. Arreglo: la **identidad se evalúa sobre el disco completo** (`DADiskCopyWholeDisk`) y la operatividad (montaje, nombre, formato) sobre el volumen. Las protecciones de D-070 no cambian: el disco de arranque del Mac sigue siendo interno/no-removible también a nivel de disco completo.
+
+**Segunda corrección, más grave, que este incidente destapó**: el salto de DFU (D-177/D-179) se decidía por archivos en el disco (`isRockboxFamily`), pero el disco de este iPod tenía un `.rockbox` parcial (de la extracción interrumpida de D-185) con la NOR 100% de Apple — con el arreglo de detección, el instalador habría visto "Aura en el disco", saltado el DFU, y producido una instalación que jamás arranca. Ahora el salto exige **evidencia** de bootloader grabado: `aura.cfg` presente (el firmware BOOTÓ en este aparato — solo pudo hacerlo con el bootloader en la NOR) o un árbol de Rockbox común (encargo explícito D-179). Un árbol de Aura que nunca arrancó NO es evidencia. Y en el camino sin volumen legible ya no se asume nada: tras formatear y copiar, el flujo pasa por DFU — si el bootloader ya estaba, reflashear los mismos bytes es inofensivo; el supuesto contrario dejaba aparatos sin arrancar.
+
+**Textos**: ninguna pantalla afirma ya "modo bootloader"/"modo de arranque de Aura" como hecho — el estado real observable es "disco sin sistema de archivos legible", y así se dice, con las dos causas posibles.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests. Con el aparato del dueño conectado en modo disco de Apple, la app ahora debe mostrarlo como disco montado (FAT32, árbol parcial → "Aura instalado -- todavía sin arrancar") y la instalación debe pasar por DFU.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
