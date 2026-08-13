@@ -1520,4 +1520,15 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-127 — Asentamiento del ajuste: la barra conserva la posición hasta que el audio la alcanza
+
+**Corrección del dueño del diseño (2026-08-12) sobre D-126**: tras soltar la rueda, la barra de acento desaparecía pero la blanca no conservaba la posición — regresaba atrás y "perseguía" el punto ajustado, igual que el audio. Dos causas:
+
+1. `audio_ff_rewind()` es ASÍNCRONO: el motor tarda en completar el salto y `id3->elapsed` sigue reportando la posición vieja un rato. Al expirar la ventana yo soltaba el preview de inmediato → la barra blanca volvía al elapsed viejo y avanzaba hasta el nuevo. Ahora hay **fase de asentamiento**: la barra blanca SIGUE mostrando la posición ajustada hasta que el elapsed real la alcanza (tolerancia ~2s, tope de seguridad de 5s), con la posición final exacta aplicada una sola vez al expirar.
+2. El scrub de RUEDA aplicaba `audio_ff_rewind()` en cada click — los clicks en ráfaga reiniciaban la búsqueda del motor y el audio solo saltaba al parar. Mismo estrangulado que los botones (primer click inmediato, siguientes cada ~250ms).
+
+`needs_tick` cubre la fase de asentamiento para que la comprobación de alcance corra sola. (Confirmación audible/visual en vivo por el dueño — holds y ráfagas de rueda no son generables por el arnés.)
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

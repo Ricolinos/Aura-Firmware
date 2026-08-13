@@ -984,18 +984,42 @@ void aura_nowplaying_draw(void)
 
     reload_for_track(id3);
 
-    /* Barra de vuelta al reposo: cuando las ventanas de busqueda y
-     * scrub expiraron, el preview suelta la barra -- aplicando antes
-     * la posicion FINAL exacta si el ultimo salto estrangulado quedo
-     * atras del preview. */
+    /* Asentamiento tras el ajuste (correccion 2026-08-12: "la barra
+     * blanca no conserva la posicion, se tarda en llegar al punto
+     * ajustado"): audio_ff_rewind() es ASINCRONO -- el motor tarda en
+     * completar el salto y id3->elapsed sigue reportando la posicion
+     * vieja un rato. Soltar el preview al expirar la ventana hacia que
+     * la barra blanca regresara atras y "persiguiera" el ajuste. Ahora:
+     * (1) al expirar, se aplica la posicion final exacta UNA vez;
+     * (2) la barra blanca SIGUE mostrando la posicion ajustada hasta
+     * que el elapsed real la alcanza (~2s de tolerancia), con un
+     * tope de seguridad de 5s por si el salto fallara. */
     if (s_scrub_preview_ms >= 0
         && current_tick >= s_seek_show_until
         && current_tick >= s_scrub_show_until)
     {
+        static long s_settle_since = 0;
+        long diff;
+
         if (s_seek_applied_ms >= 0 && s_seek_applied_ms != s_scrub_preview_ms)
+        {
             audio_ff_rewind(s_scrub_preview_ms);
-        s_seek_applied_ms = -1;
-        s_scrub_preview_ms = -1;
+            s_seek_applied_ms = s_scrub_preview_ms;
+            s_settle_since = current_tick;
+        }
+        else if (s_settle_since == 0)
+            s_settle_since = current_tick;
+
+        diff = (long)id3->elapsed - s_scrub_preview_ms;
+        if (diff < 0)
+            diff = -diff;
+
+        if (diff < 2000 || current_tick - s_settle_since > 5 * HZ)
+        {
+            s_seek_applied_ms = -1;
+            s_scrub_preview_ms = -1;
+            s_settle_since = 0;
+        }
     }
 
     /* Tap pendiente de LEFT/RIGHT: si su ventana expiro sin repeats,
@@ -1027,6 +1051,7 @@ bool aura_nowplaying_needs_tick(void)
     return current_tick < s_volume_overlay_until
         || current_tick < s_seek_show_until
         || current_tick < s_scrub_show_until
+        || s_scrub_preview_ms >= 0 /* fase de asentamiento post-ajuste */
         || s_lr_pending_dir != 0
         || aura_nowplaying_wheel_animating();
 }
@@ -1196,7 +1221,17 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
                 if ((unsigned long)next > id3->length) next = (long)id3->length;
 
                 s_scrub_preview_ms = next;
-                audio_ff_rewind(next);
+                /* Mismo estrangulado de audio que los botones: primer
+                 * click aplica al instante, los siguientes cada ~250ms
+                 * -- clicks en rafaga reiniciaban la busqueda del
+                 * motor y el audio solo saltaba al parar la rueda. */
+                if (s_seek_applied_ms < 0
+                    || current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS)
+                {
+                    audio_ff_rewind(next);
+                    s_seek_last_apply = current_tick;
+                    s_seek_applied_ms = next;
+                }
                 s_scrub_show_until = current_tick + SEEK_SHOW_TICKS;
             }
             break;
