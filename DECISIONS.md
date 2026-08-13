@@ -1858,4 +1858,16 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-176 — Bootloader USB mode: sin vendor, invisible para `matchesIPodCriteria`
+
+**Encargo del dueño (2026-08-13), probando D-175 en vivo**: el iPod seguía sin reconocerse en "Bootloader USB mode" incluso con `diskModeNoFilesystem` ya construido. Causa raíz confirmada con datos reales (`diskutil info -plist disk9`): a diferencia del firmware original de Apple, el bootloader de `mks5lboot` en este modo **no reporta ningún `DeviceVendor`** en absoluto (la clave está ausente, no vacía) -- se traduce a `vendor: ""` en `DiskCandidateInfo`, y el guard obligatorio `vendor contiene "Apple"` de `matchesIPodCriteria` lo rechazaba de entrada, sin llegar siquiera a mirar que el nombre de media SÍ decía "iPod" (`"latform iPod Ada"`, recortado). `matchesIPodCriteria` ahora acepta el modelo diciendo "iPod" como señal suficiente por sí sola (ya lo era antes de este cambio, solo que el guard de vendor la tapaba antes de llegar ahí) -- el vendor Apple sigue siendo obligatorio únicamente para la ruta de respaldo por tamaño (el caso D-046, disco que no dice "iPod" en ningún lado). Nuevo test de regresión con los datos reales de esta sesión (`testBootloaderUSBModeWithNoVendorStringStillMatchesByModel`), verificado contra los tests de seguridad existentes (SSD interno del Mac, discos externos de terceros, Apple removible pero de otro tamaño) -- ninguno depende de que el guard de vendor sea incondicional, todos siguen rechazándose igual.
+
+**De paso, ajuste de tono en los mensajes** (encargo explícito del dueño): "no tiene un sistema de archivos válido... se interrumpió... lo prepara de nuevo" sonaba a error/reparación cuando en la práctica, para el usuario final, este es solo el siguiente paso esperado tras flashear el bootloader por primera vez. Nuevo texto en `DetectDeviceView`/`DeviceGeneralView`: "Tu iPod está en modo de arranque de Aura, listo para recibir los archivos del firmware." La explicación honesta de que esto borra el contenido del disco sigue estando -- vive en la hoja de autorización (`PendingAuthorization.formatDisk`) que aparece un paso después, que es donde el proyecto ya la pone para cualquier operación destructiva, no en la pantalla de detección.
+
+**Alcance verificado, no resuelto en este cambio**: el dueño notó correctamente que hoy Aura Studio solo copia `rockbox.ipod` suelto, no el árbol `.rockbox/` completo (fuentes, codecs, temas, plugins) -- gap ya documentado en D-045, sigue pendiente de una fase futura. No bloquea esta recuperación: el bootloader necesita `rockbox.ipod` para arrancar, no la carpeta de recursos.
+
+**Aceptación**: build limpio desde cero (sim y Xcode real), 100/101 tests (el único que no pasa, `testCoverArtArchiveFetchesRealCover`, depende de red y no tiene relación con este cambio). Confirmación final con el iPod real del dueño, en curso.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
