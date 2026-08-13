@@ -133,6 +133,19 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_EQ_SPOKEN] = "Voz",
     [AURA_STR_EQ_TREBLE_RED] = "Reducir agudos",
     [AURA_STR_EQ_VOCAL_BOOST] = "Aumentar voz",
+    [AURA_STR_LANG_DA] = "Dansk",
+    [AURA_STR_LANG_DE] = "Deutsch",
+    [AURA_STR_LANG_FR] = "Français",
+    [AURA_STR_LANG_IT] = "Italiano",
+    [AURA_STR_LANG_NL] = "Nederlands",
+    [AURA_STR_LANG_NO] = "Norsk",
+    [AURA_STR_LANG_PT] = "Português",
+    [AURA_STR_LANG_FI] = "Suomi",
+    [AURA_STR_LANG_SV] = "Svenska",
+    [AURA_STR_LANG_JA] = "日本語",
+    [AURA_STR_LANG_ZH] = "中文",
+    [AURA_STR_LANG_KO] = "한국어",
+    [AURA_STR_LANG_RU] = "Русский",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -266,6 +279,19 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_EQ_SPOKEN] = "Spoken Word",
     [AURA_STR_EQ_TREBLE_RED] = "Treble Reducer",
     [AURA_STR_EQ_VOCAL_BOOST] = "Vocal Booster",
+    [AURA_STR_LANG_DA] = "Dansk",
+    [AURA_STR_LANG_DE] = "Deutsch",
+    [AURA_STR_LANG_FR] = "Français",
+    [AURA_STR_LANG_IT] = "Italiano",
+    [AURA_STR_LANG_NL] = "Nederlands",
+    [AURA_STR_LANG_NO] = "Norsk",
+    [AURA_STR_LANG_PT] = "Português",
+    [AURA_STR_LANG_FI] = "Suomi",
+    [AURA_STR_LANG_SV] = "Svenska",
+    [AURA_STR_LANG_JA] = "Japanese",
+    [AURA_STR_LANG_ZH] = "Chinese",
+    [AURA_STR_LANG_KO] = "Korean",
+    [AURA_STR_LANG_RU] = "Russian",
 };
 
 const char *aura_str(aura_str_id_t id)

@@ -163,7 +163,10 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
             int icon_x = x + ICON_X;
             int icon_y = row_y + (ROW_H - ICON_SZ) / 2;
 
-            if (is_selected)
+            if (items[i].dimmed)
+                aura_widgets_draw_icon_tertiary_dimmed(items[i].icon_name, ICON_SZ,
+                                                        icon_x, icon_y, 128);
+            else if (is_selected)
                 aura_widgets_draw_icon_selected(items[i].icon_name, ICON_SZ, icon_x, icon_y);
             else
                 aura_widgets_draw_icon(items[i].icon_name, ICON_SZ, icon_x, icon_y);
@@ -197,8 +200,11 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
          * gris (correccion del dueno del diseno 2026-08-12, ver
          * aura_selector.c) -- mismo trato que el texto de las listas de
          * contenido, un solo lenguaje de seleccion en toda la app. */
-        lcd_set_foreground(is_selected ? aura_accent()
-                                        : a26_color(A26_TEXT_PRIMARY));
+        /* Fila inerte: misma tinta del texto normal, al 50% -- mismo
+         * lenguaje que los modos deshabilitados del reproductor. */
+        lcd_set_foreground(items[i].dimmed
+            ? a26_shell_blend(a26_color(A26_SHELL_BG), a26_color(A26_TEXT_PRIMARY), 128)
+            : (is_selected ? aura_accent() : a26_color(A26_TEXT_PRIMARY)));
         lcd_putsxy(text_x, row_y + (ROW_H - 10) / 2, (const unsigned char *)truncated);
     }
 

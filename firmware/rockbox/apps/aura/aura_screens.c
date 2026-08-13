@@ -280,9 +280,20 @@ static const aura_str_id_t eq_choice_labels[] = {
     AURA_STR_EQ_TREBLE_RED,
     AURA_STR_EQ_VOCAL_BOOST,
 };
+/* Lista completa del original (2026-08-13, P15b). Solo Español e
+ * Ingles estan traducidos hoy: el resto se muestra INERTE (fila
+ * atenuada que no se puede elegir) hasta que exista su traduccion --
+ * el usuario ve el catalogo completo sin que el firmware finja
+ * soportar un idioma que no tiene. */
 static const aura_str_id_t language_choice_labels[] = {
     AURA_STR_LANG_ES, AURA_STR_LANG_EN,
+    AURA_STR_LANG_DA, AURA_STR_LANG_DE, AURA_STR_LANG_FR, AURA_STR_LANG_IT,
+    AURA_STR_LANG_NL, AURA_STR_LANG_NO, AURA_STR_LANG_PT, AURA_STR_LANG_FI,
+    AURA_STR_LANG_SV, AURA_STR_LANG_JA, AURA_STR_LANG_ZH, AURA_STR_LANG_KO,
+    AURA_STR_LANG_RU,
 };
+/* Cuantos de esa lista estan realmente disponibles (los primeros N). */
+#define LANGUAGE_AVAILABLE_N 2
 /* Solo Desactivado/Todo/Uno -- REPEAT_SHUFFLE y REPEAT_AB quedan fuera
  * del modelo simplificado de Aura (el aleatorio ya es su propio
  * booleano independiente, D-014/Fase 17). El indice de esta lista
@@ -609,6 +620,9 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].checked = (i == current);
         items[i].toggle = -1;
         items[i].full_screen_target = 0;
+        /* Idiomas sin traduccion: fila presente pero inerte. */
+        items[i].dimmed = (screen == AURA_SCREEN_SETTINGS_LANGUAGE
+                           && i >= LANGUAGE_AVAILABLE_N);
     }
 
     panel_icon = (selected >= 0 && selected < count && items[selected].icon_name)
@@ -872,6 +886,7 @@ static void draw_backlight(aura_nav_t *nav)
         items[i].checked = (v == global_settings.backlight_timeout);
         items[i].toggle = -1;
         items[i].full_screen_target = 0;
+        items[i].dimmed = 0;
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
                          aura_nav_get_selection(nav),
@@ -929,6 +944,7 @@ static void draw_sleeptimer(aura_nav_t *nav)
         items[i].checked = (v == (int)global_settings.sleeptimer_duration);
         items[i].toggle = -1;
         items[i].full_screen_target = 0;
+        items[i].dimmed = 0;
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
                          aura_nav_get_selection(nav),
@@ -1033,6 +1049,7 @@ static void draw_mainmenu(aura_nav_t *nav)
     {
         items[i].toggle = -1;
         items[i].full_screen_target = 0;
+        items[i].dimmed = 0;
     }
 
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
@@ -1522,6 +1539,13 @@ static void handle_choice_list(aura_nav_t *nav, aura_screen_id_t screen, long bu
     const aura_str_id_t *labels;
     int count = get_choice_table(screen, &labels);
     int sel = aura_nav_get_selection(nav);
+
+    /* Filas inertes (idiomas sin traduccion): se pueden recorrer, no
+     * elegir -- el catalogo completo se ve, pero el firmware no finge
+     * soportar lo que no tiene. */
+    if (button == BUTTON_SELECT && screen == AURA_SCREEN_SETTINGS_LANGUAGE
+        && sel >= LANGUAGE_AVAILABLE_N)
+        return;
     (void)labels;
 
     switch (button)

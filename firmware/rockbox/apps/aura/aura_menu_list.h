@@ -26,6 +26,11 @@ typedef struct {
                              * pantalla completa -> flecha del Selector
                              * (solo si no hay otro elemento derecho,
                              * regla de selector.md) */
+    int dimmed;             /* 1 = fila presente pero INERTE (no se
+                             * puede elegir): mismo color al 50%, como
+                             * los modos deshabilitados del reproductor.
+                             * Para items del arbol del original que
+                             * todavia no existen de verdad. */
 } aura_menu_item_v2_t;
 
 /* Dibuja hasta AURA_DS_METRICS_MENU_LIST_MAX_VISIBLE_ROWS (10) filas
