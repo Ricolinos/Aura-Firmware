@@ -91,10 +91,26 @@ static long next_button(int timeout_ticks)
 
         if (b & BUTTON_REL)
         {
-            if ((b & ~BUTTON_REL) == s_hold_tracking)
+            long raw = b & ~BUTTON_REL;
+
+            if (raw == s_hold_tracking)
                 s_hold_tracking = BUTTON_NONE;
-            if ((b & ~BUTTON_REL) == s_swallow_btn)
+            if (raw == s_swallow_btn)
                 s_swallow_btn = BUTTON_NONE; /* soltado: fin del trago */
+
+            /* LEFT/RIGHT: el release SI se entrega (unico caso) -- el
+             * reproductor decide al soltar (tap = cambiar pista al
+             * instante; hold = aplicar el salto final de la busqueda
+             * SIN esperar el timeout de la ventana, correccion
+             * 2026-08-12 "el audio sigue quedandose atras"). Ninguna
+             * otra pantalla matchea un valor con BUTTON_REL, asi que
+             * cae en sus `default` sin efecto. */
+            if (raw == BUTTON_LEFT || raw == BUTTON_RIGHT)
+            {
+                s_last_was_repeat = false;
+                s_wheel_velocity = 0;
+                return b;
+            }
             continue;
         }
 

@@ -1537,4 +1537,15 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-129 — El salto final se decide al SOLTAR el botón, no por timeout
+
+**Corrección del dueño del diseño (2026-08-12) sobre D-128**: aún ~2s de retraso entre soltar y oír el audio en el punto ajustado. Dos causas estructurales: (1) el salto final solo se emitía cuando expiraba la ventana visual (`SEEK_SHOW_TICKS` = 500ms fijos DESPUÉS del último repeat), y (2) solo se emitía dentro de eventos de botón/rueda — si el motor estaba ocupado al llegar el último evento, el objetivo esperaba a otra vuelta. Fix doble:
+
+1. **El release de LEFT/RIGHT ahora se entrega al reproductor** (único caso en todo el firmware donde un `BUTTON_REL` pasa el filtro de `aura_main`; el resto de pantallas lo dejan caer en su `default` sin efecto). Al soltar: si había tap pendiente → cambia de pista AL INSTANTE (ya no espera los 350ms del timeout tap-vs-hold); si había búsqueda activa → emite el salto final YA y colapsa la ventana visual (la barra pasa directo a la fase de asentamiento).
+2. **Alcance continuo del motor**: mientras hay ajuste en curso, cada tick de dibujo empuja el objetivo más reciente en cuanto `seek_engine_ready()` da luz verde (espaciado mínimo HZ/5) — el último salto ya no depende de que llegue otro evento.
+
+El retraso restante queda reducido a la latencia real de seek+rebuffer del motor, que no es evitable desde la UI.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

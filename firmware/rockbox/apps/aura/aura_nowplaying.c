@@ -1005,6 +1005,22 @@ void aura_nowplaying_draw(void)
 
     reload_for_track(id3);
 
+    /* Alcance continuo del motor (correccion 2026-08-12): mientras hay
+     * un ajuste en curso, cada tick de dibujo empuja el objetivo MAS
+     * RECIENTE en cuanto el motor queda libre -- sin esperar otro
+     * evento de boton/rueda. Asi el ultimo salto nunca se queda
+     * esperando una ventana. */
+    if (s_scrub_preview_ms >= 0
+        && s_seek_applied_ms >= 0
+        && s_seek_applied_ms != s_scrub_preview_ms
+        && seek_engine_ready(id3)
+        && current_tick - s_seek_last_apply >= HZ / 5)
+    {
+        audio_ff_rewind(s_scrub_preview_ms);
+        s_seek_applied_ms = s_scrub_preview_ms;
+        s_seek_last_apply = current_tick;
+    }
+
     /* Asentamiento tras el ajuste (correccion 2026-08-12: "la barra
      * blanca no conserva la posicion, se tarda en llegar al punto
      * ajustado"): audio_ff_rewind() es ASINCRONO -- el motor tarda en
@@ -1165,6 +1181,33 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
             cycle_mode(1);
         }
         break;
+    case BUTTON_RIGHT | BUTTON_REL:
+    case BUTTON_LEFT | BUTTON_REL:
+        /* Al SOLTAR se decide todo, sin timeouts (correccion
+         * 2026-08-12): tap pendiente -> cambia de pista YA; busqueda
+         * activa -> el salto final se emite YA y la ventana visual se
+         * colapsa (la barra pasa a la fase de asentamiento, que la
+         * conserva hasta que el audio llega). */
+        if (s_lr_pending_dir != 0)
+        {
+            int dir = s_lr_pending_dir;
+            s_lr_pending_dir = 0;
+            s_scrub_preview_ms = -1;
+            s_seek_applied_ms = -1;
+            if (dir > 0)
+                audio_next();
+            else
+                audio_prev();
+        }
+        else if (s_scrub_preview_ms >= 0 && current_tick < s_seek_show_until)
+        {
+            audio_ff_rewind(s_scrub_preview_ms);
+            s_seek_applied_ms = s_scrub_preview_ms;
+            s_seek_last_apply = current_tick;
+            s_seek_show_until = current_tick; /* fin del modo busqueda */
+        }
+        break;
+
     case BUTTON_RIGHT:
     case BUTTON_LEFT:
     {
