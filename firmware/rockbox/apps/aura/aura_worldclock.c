@@ -27,6 +27,8 @@ typedef struct {
     const char *city;
     int8_t region;      /* indice en WC_REGIONS */
     int16_t utc_q;      /* cuartos de hora respecto de UTC */
+    int16_t lat10;       /* latitud en DECIMAS de grado, +N/-S (Zona horaria) */
+    int16_t lon10;       /* longitud en DECIMAS de grado, +E/-W */
 } wc_city_t;
 
 static const char *const WC_REGIONS[] = {
@@ -36,35 +38,35 @@ static const char *const WC_REGIONS[] = {
 #define WC_REGION_COUNT ((int)(sizeof(WC_REGIONS) / sizeof(WC_REGIONS[0])))
 
 static const wc_city_t WC_CITIES[] = {
-    /* África */
-    { "El Cairo",        0,  8 }, { "Johannesburgo", 0,  8 },
-    { "Lagos",           0,  4 }, { "Nairobi",       0, 12 },
+    /* África -- { ciudad, region, UTC en cuartos de hora, lat*10, lon*10 } */
+    { "El Cairo",        0,  8,  300,  312 }, { "Johannesburgo", 0,  8, -262,  280 },
+    { "Lagos",           0,  4,   65,   34 }, { "Nairobi",       0, 12,  -13,  368 },
     /* América del Norte */
-    { "Ciudad de México", 1, -24 }, { "Nueva York",   1, -20 },
-    { "Chicago",         1, -24 }, { "Denver",       1, -28 },
-    { "Los Ángeles",     1, -32 }, { "Toronto",      1, -20 },
-    { "Vancouver",       1, -32 }, { "La Habana",    1, -20 },
+    { "Ciudad de México", 1, -24,  194, -991 }, { "Nueva York",   1, -20,  407, -740 },
+    { "Chicago",         1, -24,  419, -876 }, { "Denver",       1, -28,  397, -1050 },
+    { "Los Ángeles",     1, -32,  341, -1182 }, { "Toronto",      1, -20,  437, -794 },
+    { "Vancouver",       1, -32,  493, -1231 }, { "La Habana",    1, -20,  231, -824 },
     /* América del Sur */
-    { "Bogotá",          2, -20 }, { "Lima",         2, -20 },
-    { "Santiago",        2, -16 }, { "Buenos Aires", 2, -12 },
-    { "São Paulo",       2, -12 }, { "Caracas",      2, -16 },
+    { "Bogotá",          2, -20,   47, -741 }, { "Lima",         2, -20, -120, -770 },
+    { "Santiago",        2, -16, -334, -707 }, { "Buenos Aires", 2, -12, -346, -584 },
+    { "São Paulo",       2, -12, -236, -466 }, { "Caracas",      2, -16,  105, -669 },
     /* Asia */
-    { "Tokio",           3,  36 }, { "Pekín",        3,  32 },
-    { "Hong Kong",       3,  32 }, { "Singapur",     3,  32 },
-    { "Bangkok",         3,  28 }, { "Nueva Delhi",  3,  22 },
-    { "Dubái",           3,  16 }, { "Seúl",         3,  36 },
+    { "Tokio",           3,  36,  357, 1397 }, { "Pekín",        3,  32,  399, 1164 },
+    { "Hong Kong",       3,  32,  223, 1142 }, { "Singapur",     3,  32,   13, 1038 },
+    { "Bangkok",         3,  28,  138, 1005 }, { "Nueva Delhi",  3,  22,  286,  772 },
+    { "Dubái",           3,  16,  252,  553 }, { "Seúl",         3,  36,  376, 1270 },
     /* Atlántico */
-    { "Azores",          4,  -4 }, { "Reikiavik",    4,   0 },
+    { "Azores",          4,  -4,  377, -257 }, { "Reikiavik",    4,   0,  641, -219 },
     /* Europa */
-    { "Londres",         5,   0 }, { "Madrid",       5,   4 },
-    { "París",           5,   4 }, { "Berlín",       5,   4 },
-    { "Roma",            5,   4 }, { "Lisboa",       5,   0 },
-    { "Atenas",          5,   8 }, { "Moscú",        5,  12 },
+    { "Londres",         5,   0,  515,  -1 }, { "Madrid",       5,   4,  404,  -37 },
+    { "París",           5,   4,  489,   23 }, { "Berlín",       5,   4,  525,  134 },
+    { "Roma",            5,   4,  419,  125 }, { "Lisboa",       5,   0,  387,  -91 },
+    { "Atenas",          5,   8,  380,  237 }, { "Moscú",        5,  12,  558,  376 },
     /* Oceanía */
-    { "Sídney",          6,  40 }, { "Melbourne",    6,  40 },
-    { "Auckland",        6,  48 },
+    { "Sídney",          6,  40, -339, 1512 }, { "Melbourne",    6,  40, -378, 1449 },
+    { "Auckland",        6,  48, -368, 1748 },
     /* Pacífico */
-    { "Honolulu",        7, -40 }, { "Fiyi",         7,  48 },
+    { "Honolulu",        7, -40,  213, -1578 }, { "Fiyi",         7,  48, -181, 1784 },
 };
 #define WC_CITY_COUNT ((int)(sizeof(WC_CITIES) / sizeof(WC_CITIES[0])))
 
@@ -76,6 +78,48 @@ const char *aura_worldclock_city_name(int i)
 int aura_worldclock_city_utc_quarters(int i)
 {
     return (i >= 0 && i < WC_CITY_COUNT) ? WC_CITIES[i].utc_q : 0;
+}
+int aura_worldclock_city_lat10(int i)
+{
+    return (i >= 0 && i < WC_CITY_COUNT) ? WC_CITIES[i].lat10 : 0;
+}
+int aura_worldclock_city_lon10(int i)
+{
+    return (i >= 0 && i < WC_CITY_COUNT) ? WC_CITIES[i].lon10 : 0;
+}
+
+/* Orden por LATITUD descendente (encargo del original: "al scrollear
+ * con el click wheel, se va moviendo en orden de latitud, para elegir
+ * exactamente el pais"), calculado una sola vez. Devuelve el indice
+ * REAL a WC_CITIES que corresponde a la posicion `order_pos` en ese
+ * orden. */
+int aura_worldclock_city_by_lat_order(int order_pos)
+{
+    static int8_t order[WC_CITY_COUNT];
+    static bool ready = false;
+
+    if (!ready)
+    {
+        int i, a, b;
+        for (i = 0; i < WC_CITY_COUNT; i++)
+            order[i] = (int8_t)i;
+        for (a = 1; a < WC_CITY_COUNT; a++)
+        {
+            int8_t key = order[a];
+            int16_t key_lat = WC_CITIES[key].lat10;
+            b = a - 1;
+            while (b >= 0 && WC_CITIES[order[b]].lat10 < key_lat)
+            {
+                order[b + 1] = order[b];
+                b--;
+            }
+            order[b + 1] = key;
+        }
+        ready = true;
+    }
+    if (order_pos < 0 || order_pos >= WC_CITY_COUNT)
+        return 0;
+    return order[order_pos];
 }
 
 /* -- Estado --------------------------------------------------------------- */

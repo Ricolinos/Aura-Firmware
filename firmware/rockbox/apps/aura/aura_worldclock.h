@@ -32,5 +32,11 @@ bool aura_worldclock_needs_tick(void);
 int aura_worldclock_city_count(void);
 const char *aura_worldclock_city_name(int i);
 int aura_worldclock_city_utc_quarters(int i);
+int aura_worldclock_city_lat10(int i);   /* Zona horaria: latitud*10 */
+int aura_worldclock_city_lon10(int i);   /* Zona horaria: longitud*10 */
+/* Indice REAL a la ciudad en la posicion `order_pos` del orden por
+ * LATITUD descendente (Zona horaria, "se va moviendo en orden de
+ * latitud"). */
+int aura_worldclock_city_by_lat_order(int order_pos);
 
 #endif /* AURA_WORLDCLOCK_H */

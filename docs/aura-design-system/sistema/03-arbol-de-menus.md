@@ -71,6 +71,7 @@ fila más.
 |---|---|
 | Cronómetro | ✅ contador `HH:MM:SS` con centésimas más chicas; SELECT arranca y luego marca registros; PLAY detiene conservando el tiempo (icono de pausa = reanudable); MENU sale guardando |
 | Reloj internacional | ✅ relojes analógicos con esfera clara (local) y oscura (otros husos); menú Añadir/Editar/Eliminar — ver `componentes/world-clock.md` |
+| Ajustes → Fecha y hora → Zona horaria | ✅ mapa esquemático (continentes como manchas redondeadas, proyección equirectangular) con un solo pin en acento; la rueda recorre las mismas 40 ciudades **ordenadas por latitud**; confirmación abajo con ciudad/GMT/hora, formato del original |
 | Notas | ✅ pantalla de instrucciones del original |
 | Juegos | ✅ **Klondike** (plugin `solitaire` de Rockbox); iQuiz y Vortex **inertes** |
 | Calendarios | ✅ rejilla del mes (semana desde lunes); rueda = días, botones = meses, Select = día |
@@ -99,13 +100,13 @@ agrupación, como en el original:
 | Sonido | Ecualizador ✅ (23 presets) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
 | Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
 
-Del original quedan pendientes: **Menú Música** configurable y el **mapa
-con pin** de Zona horaria — la lista de ciudades ya cumple su función.
-Los editores de **Fecha** (rejilla del mes con fecha en español en vivo)
-y **Hora** (reloj analógico) ya están construidos, reutilizando los
-mismos componentes ya verificados de Calendarios y Alarmas; persisten al
-RTC real en hardware (`rtc_write_datetime`, inerte en el simulador, que
-no tiene RTC propio). La velocidad de
+Del original quedan pendientes: **Menú Música** configurable. Los
+editores de **Fecha** (rejilla del mes con fecha en español en vivo),
+**Hora** (reloj analógico) y **Zona horaria** (mapa esquemático con un
+solo pin, recorrido por latitud) ya están construidos, reutilizando los
+mismos componentes ya verificados de Calendarios y Alarmas; los dos
+primeros persisten al RTC real en hardware (`rtc_write_datetime`,
+inerte en el simulador, que no tiene RTC propio). La velocidad de
 audiolibros y el orden por apellido se guardan pero todavía no cambian
 nada: Rockbox no tiene backend para ellos.
 

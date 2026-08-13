@@ -1810,4 +1810,12 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-171 — Zona horaria: mapa esquemático con un solo pin, recorrido por latitud
+
+**Encargo del dueño del diseño (2026-08-13)**: reemplaza la lista plana de D-164 por el mapa que pedía el original. Sin assets de imagen (todo el sistema se genera desde tokens, no bitmaps): **continentes esquemáticos** — manchas redondeadas en `SHELL_RAIL`, posicionadas por proyección equirectangular simple (`x=(lon+180)·W/360`, `y=(90-lat)·H/180`) sobre las 40 ciudades del catálogo, que ahora lleva **latitud y longitud reales** (`wc_city_t.lat10/lon10`, décimas de grado). La rueda recorre las ciudades **ordenadas por latitud descendente** (`aura_worldclock_city_by_lat_order()`, orden calculado una vez) — "se va moviendo en orden de latitud", como el original — con un **solo pin** en acento que salta de ciudad en ciudad; el resto se marca con puntos tenues para dar contexto. Abajo, la confirmación en el formato exacto del ejemplo del dueño: ciudad / `GMT ±H horas` / hora local de 12h. Al entrar, el pin arranca en la ciudad cuyo huso coincide con el ajuste vigente, no en el extremo norte del mapa. Limitación conocida: como el ajuste persistido es solo el desplazamiento UTC (`tz_local_quarters`), varias ciudades pueden compartirlo (Chicago y Ciudad de México son ambas GMT−6) — el punto de partida resuelve al primer match en orden de latitud, no necesariamente a la ciudad que se eligió originalmente.
+
+**Arreglo de infraestructura de pruebas, de paso**: el inyector de botones del simulador (`sim_tasks.c`) truncaba en silencio cualquier secuencia de más de 256 caracteres o 32 tokens — límite que esta sesión golpeó repetidamente al verificar pantallas profundas del árbol (Ajustes tiene 23 filas; llegar a Zona horaria desde el arranque son ~27 pulsaciones). Ampliado a 2048 caracteres / 128 tokens — herramienta de pruebas, solo compila en el simulador, sin impacto de hardware. Verificado en vivo con la secuencia completa desde el arranque: mapa, puntos, pin y confirmación ("Chicago / GMT -6 horas / 3:46AM") renderizando correctamente.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

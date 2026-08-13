@@ -58,7 +58,15 @@ static bool autodump_quit = false;
 static long autodump_tick = 0;
 static long autodump_settle_ticks = 0;
 
-#define AURA_MAX_INJECT_BUTTONS 32
+/* Ampliado 2026-08-13 (de 32/256 a 128/2048): la profundidad real del
+ * arbol de menus (Ajustes tiene 23 filas, Fecha y hora vive detras de
+ * Ajustes->fila18->submenu->fila2) hacia rutinariamente que la
+ * secuencia de botones necesaria para llegar a una pantalla profunda
+ * desde el arranque excediera el limite viejo y se truncara en
+ * silencio (varias verificaciones de esta sesion quedaron documentadas
+ * como "solo por compilacion" exactamente por esto). Herramienta de
+ * pruebas, solo compila en el simulador -- sin impacto de hardware. */
+#define AURA_MAX_INJECT_BUTTONS 128
 #define AURA_INJECT_RELEASE_GAP (HZ / 20)
 #define AURA_INJECT_PRESS_GAP   (HZ / 4)
 /* Token "WAIT" en AURA_SIM_BUTTONS: pausa de ~1s sin postear boton --
@@ -90,7 +98,7 @@ static long aura_button_name_to_code(const char *name)
 
 static void aura_parse_inject_buttons(const char *spec)
 {
-    char buf[256];
+    char buf[2048];
     char *tok, *saveptr;
 
     strlcpy(buf, spec, sizeof(buf));

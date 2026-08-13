@@ -1868,31 +1868,163 @@ static void handle_time_edit(aura_nav_t *nav, long button)
     }
 }
 
-/* Zona horaria: la MISMA tabla de ciudades del Reloj internacional --
- * una sola fuente de husos en todo el firmware. Elegir una fija
- * `tz_local_quarters`, que es de donde salen las horas de los demas
- * relojes. (El mapa con el pin del original queda pendiente.) */
-static int s_tz_sel = 0;
+/* -- Zona horaria: mapa con un solo pin (encargo 2026-08-13) --------------
+ *
+ * "Un mapa que tiene un solo pin, al scrollear con el click wheel, se
+ * va moviendo en orden de LATITUD... abajo aparece la confirmacion:
+ * ciudad, GMT, hora" -- misma tabla de ciudades del Reloj
+ * internacional (una sola fuente de husos en todo el firmware),
+ * recorrida en el orden por latitud que expone
+ * aura_worldclock_city_by_lat_order(). Mapa esquematico (continentes
+ * como manchas redondeadas via proyeccion equirectangular) en vez de
+ * un bitmap real -- coherente con el resto del sistema, sin assets de
+ * imagen, todo generado desde tokens. */
+#define TZM_X0  4
+#define TZM_Y0  22
+#define TZM_W   312
+#define TZM_H   118
+
+typedef struct { int x, y, w, h; } tzm_rect_t;
+
+/* Cajas de continentes precalculadas con la misma proyeccion que
+ * `tzm_project()` (equirectangular: x=(lon+180)*W/360, y=(90-lat)*H/180)
+ * sobre los limites aproximados de cada masa continental -- solo
+ * decoracion de fondo, no coordenadas de precision cartografica. */
+static const tzm_rect_t TZM_CONTINENTS[] = {
+    { 13,  35, 104, 36 },  /* America del Norte */
+    { 89,  73,  41, 44 },  /* America del Sur */
+    { 151, 35,  44, 22 },  /* Europa */
+    { 144, 57,  59, 47 },  /* Africa */
+    { 195, 35,  91, 43 },  /* Asia */
+    { 257, 88,  37, 19 },  /* Oceania (Australia) */
+};
+#define TZM_CONTINENT_N ((int)(sizeof(TZM_CONTINENTS) / sizeof(TZM_CONTINENTS[0])))
+
+static int s_tzm_pos = 0;      /* posicion en el orden por latitud */
+static bool s_tzm_inited = false;
+
+/* Ubica la posicion (en el orden por latitud) de la ciudad cuyo huso
+ * coincide con el ajuste vigente -- punto de partida al entrar, para
+ * que el pin arranque donde ya esta configurado, no en el extremo
+ * norte del mapa. */
+static int tzm_pos_for_current(void)
+{
+    int n = aura_worldclock_city_count();
+    int i;
+    for (i = 0; i < n; i++)
+        if (aura_worldclock_city_utc_quarters(aura_worldclock_city_by_lat_order(i))
+            == aura_settings.tz_local_quarters)
+            return i;
+    return 0;
+}
+
+static void tzm_project(int lat10, int lon10, int *px, int *py)
+{
+    *px = TZM_X0 + (lon10 + 1800) * TZM_W / 3600;
+    *py = TZM_Y0 + (900 - lat10) * TZM_H / 1800;
+}
 
 static void draw_timezone(void)
 {
-    static aura_list_item_t items[64];
     int n = aura_worldclock_city_count();
-    int i;
+    int idx, i, px, py, w, h;
+    int qtr, gmt_h, gmt_q;
+    char gmt_buf[24], time_buf[16], sign;
+    int hour24, minute;
 
-    if (n > 64)
-        n = 64;
+    if (n <= 0)
+        return;
+    if (!s_tzm_inited)
+    {
+        s_tzm_pos = tzm_pos_for_current();
+        s_tzm_inited = true;
+    }
+    if (s_tzm_pos >= n) s_tzm_pos = n - 1;
+    idx = aura_worldclock_city_by_lat_order(s_tzm_pos);
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_TIMEZONE));
+
+    /* Continentes: mancha suave (SHELL_RAIL), esquinas redondeadas --
+     * el mismo lenguaje de "tarjeta" que el resto del sistema, solo
+     * que sin borde. */
+    for (i = 0; i < TZM_CONTINENT_N; i++)
+    {
+        const tzm_rect_t *r = &TZM_CONTINENTS[i];
+        a26_shell_fill_rounded_rect(r->x, r->y, r->w, r->h, 6,
+                                     a26_color(A26_SHELL_RAIL),
+                                     a26_color(A26_SHELL_BG));
+    }
+
+    /* Puntos tenues del resto de ciudades, para dar contexto al mapa. */
     for (i = 0; i < n; i++)
     {
-        items[i].label = aura_worldclock_city_name(i);
-        items[i].icon_name = NULL;
-        items[i].toggle = -1;
-        items[i].dimmed = 0;
-        items[i].checked = (aura_worldclock_city_utc_quarters(i)
-                            == aura_settings.tz_local_quarters);
+        if (i == idx)
+            continue;
+        tzm_project(aura_worldclock_city_lat10(i), aura_worldclock_city_lon10(i),
+                    &px, &py);
+        lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
+        lcd_drawpixel(px, py);
     }
-    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_TIMEZONE), items, n,
-                            s_tz_sel);
+
+    /* El PIN: unico, en acento, con una sombra sutil para que se lea
+     * sobre cualquier continente. */
+    tzm_project(aura_worldclock_city_lat10(idx), aura_worldclock_city_lon10(idx),
+                &px, &py);
+    a26_shell_fill_capsule_over(px - 3, py - 2, 6, 6, LCD_RGBPACK(0, 0, 0), 60);
+    a26_shell_fill_rounded_rect(px - 4, py - 4, 8, 8, 4,
+                                 aura_accent(), a26_color(A26_SHELL_BG));
+
+    /* Confirmacion: ciudad / GMT +-H horas / hora local en 12h --
+     * exactamente el formato del original ("Ciudad de Mexico / GMT -6
+     * horas / 2:37PM"). */
+    qtr = aura_worldclock_city_utc_quarters(idx);
+    gmt_h = qtr / 4;
+    gmt_q = (qtr < 0 ? -qtr : qtr) % 4;
+    sign = qtr < 0 ? '-' : '+';
+    if (gmt_q == 0)
+        snprintf(gmt_buf, sizeof(gmt_buf), "GMT %c%d horas", sign,
+                  gmt_h < 0 ? -gmt_h : gmt_h);
+    else
+        snprintf(gmt_buf, sizeof(gmt_buf), "GMT %c%d:%02d horas", sign,
+                  gmt_h < 0 ? -gmt_h : gmt_h, gmt_q * 15);
+
+    {
+        struct tm *now = get_time();
+        long mins = now ? now->tm_hour * 60 + now->tm_min : 0;
+        int h12;
+
+        mins += (qtr - aura_settings.tz_local_quarters) * 15;
+        mins %= 24 * 60;
+        if (mins < 0) mins += 24 * 60;
+        hour24 = (int)(mins / 60);
+        minute = (int)(mins % 60);
+        h12 = hour24 % 12;
+        if (h12 == 0) h12 = 12;
+        snprintf(time_buf, sizeof(time_buf), "%d:%02d%s", h12, minute,
+                  hour24 < 12 ? "AM" : "PM");
+    }
+
+    {
+        int y = TZM_Y0 + TZM_H + A26_SPACING_MD;
+
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+        lcd_set_foreground(aura_accent());
+        lcd_getstringsize((const unsigned char *)aura_worldclock_city_name(idx), &w, &h);
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, y, (const unsigned char *)aura_worldclock_city_name(idx));
+        y += h + A26_SPACING_XS;
+
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_getstringsize((const unsigned char *)gmt_buf, &w, &h);
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, y, (const unsigned char *)gmt_buf);
+        y += h + A26_SPACING_XS;
+
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+        lcd_getstringsize((const unsigned char *)time_buf, &w, &h);
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, y, (const unsigned char *)time_buf);
+    }
 }
 
 static void handle_timezone(aura_nav_t *nav, long button)
@@ -1901,16 +2033,25 @@ static void handle_timezone(aura_nav_t *nav, long button)
 
     switch (button)
     {
-    case BUTTON_SCROLL_FWD:  s_tz_sel = aura_wheel_advance(s_tz_sel, n, 1); break;
-    case BUTTON_SCROLL_BACK: s_tz_sel = aura_wheel_advance(s_tz_sel, n, -1); break;
+    case BUTTON_SCROLL_FWD:
+        s_tzm_pos = aura_wheel_advance(s_tzm_pos, n, 1);
+        break;
+    case BUTTON_SCROLL_BACK:
+        s_tzm_pos = aura_wheel_advance(s_tzm_pos, n, -1);
+        break;
     case BUTTON_SELECT:
         aura_settings.tz_local_quarters =
-            aura_worldclock_city_utc_quarters(s_tz_sel);
+            aura_worldclock_city_utc_quarters(aura_worldclock_city_by_lat_order(s_tzm_pos));
         aura_settings_save();
+        s_tzm_inited = false;
         aura_nav_pop(nav);
         break;
-    case BUTTON_MENU: aura_nav_pop(nav); break;
-    default: break;
+    case BUTTON_MENU:
+        s_tzm_inited = false;
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
     }
 }
 
