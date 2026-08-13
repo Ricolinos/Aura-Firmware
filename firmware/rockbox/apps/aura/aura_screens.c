@@ -153,6 +153,7 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_CLICKER,    "tap",               AURA_SCREEN_SETTINGS_CLICKER },
     /* -- sistema -- */
     { AURA_STR_SETTINGS_SLEEPTIMER, "sleep",             AURA_SCREEN_SETTINGS_SLEEPTIMER },
+    { AURA_STR_SETTINGS_DATETIME,   "calendar",          AURA_SCREEN_SETTINGS_DATETIME },
     { AURA_STR_SETTINGS_SORT_BY,    "sort",              AURA_SCREEN_SETTINGS_SORT_BY },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
     { AURA_STR_SETTINGS_COPYRIGHT,  "legal",             AURA_SCREEN_SETTINGS_COPYRIGHT },
@@ -167,6 +168,17 @@ static const nav_entry_t settings_entries[] = {
  * iQuiz y Vortex no tienen equivalente y van inertes hasta que se
  * construyan nativos. La lista se arma en draw_games(), no aca: su
  * fila 0 LANZA un plugin en vez de navegar a una pantalla. */
+/* Fecha y hora del original (2026-08-13). Los editores de Fecha y Hora
+ * quedan pendientes; lo que si existe es la Zona horaria (que fija el
+ * huso local que ya consume el Reloj internacional) y los dos
+ * booleanos, cableados a ajustes REALES: formato de 12/24 h del nucleo
+ * y visibilidad del ClockIndicator de la StatusBar. */
+static const nav_entry_t datetime_entries[] = {
+    { AURA_STR_SETTINGS_TIMEZONE,    "clock", AURA_SCREEN_SETTINGS_TIMEZONE },
+    { AURA_STR_SETTINGS_CLOCK24,     NULL,    AURA_SCREEN_SETTINGS_CLOCK24 },
+    { AURA_STR_SETTINGS_CLOCK_TITLE, NULL,    AURA_SCREEN_SETTINGS_CLOCK_TITLE },
+};
+
 static const nav_entry_t extras_entries[] = {
     { AURA_STR_EXTRAS_CLOCKS,     "clock",      AURA_SCREEN_EXTRAS_CLOCKS },
     { AURA_STR_EXTRAS_CALENDAR,   "calendar",   AURA_SCREEN_EXTRAS_CALENDAR },
@@ -207,6 +219,9 @@ static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
     case AURA_SCREEN_PHOTOS:
         *out = photos_entries;
         return clamp_menu_count((int)(sizeof(photos_entries) / sizeof(photos_entries[0])));
+    case AURA_SCREEN_SETTINGS_DATETIME:
+        *out = datetime_entries;
+        return clamp_menu_count((int)(sizeof(datetime_entries) / sizeof(datetime_entries[0])));
     case AURA_SCREEN_EXTRAS:
         *out = extras_entries;
         return clamp_menu_count((int)(sizeof(extras_entries) / sizeof(extras_entries[0])));
@@ -281,6 +296,8 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_BRIGHTNESS: return AURA_STR_SETTINGS_BRIGHTNESS;
     case AURA_SCREEN_SETTINGS_LANGUAGE:   return AURA_STR_SETTINGS_LANGUAGE;
     case AURA_SCREEN_SETTINGS_SORT_BY:    return AURA_STR_SETTINGS_SORT_BY;
+    case AURA_SCREEN_SETTINGS_DATETIME:   return AURA_STR_SETTINGS_DATETIME;
+    case AURA_SCREEN_SETTINGS_TIMEZONE:   return AURA_STR_SETTINGS_TIMEZONE;
     case AURA_SCREEN_SETTINGS_AUDIOBOOKS: return AURA_STR_SETTINGS_AUDIOBOOKS;
     case AURA_SCREEN_SETTINGS_ACCENT:     return AURA_STR_SETTINGS_ACCENT;
     case AURA_SCREEN_SETTINGS_ABOUT:      return AURA_STR_SETTINGS_ABOUT;
@@ -520,6 +537,10 @@ static int settings_row_toggle_value(aura_screen_id_t target)
         return aura_settings.show_icons;
     /* "Ajuste volumen" del original = normalizacion de volumen; se
      * cablea al replaygain REAL del nucleo, no a un ajuste cosmetico. */
+    if (target == AURA_SCREEN_SETTINGS_CLOCK24)
+        return global_settings.timeformat == 0;
+    if (target == AURA_SCREEN_SETTINGS_CLOCK_TITLE)
+        return aura_settings.clock_visible;
     if (target == AURA_SCREEN_SETTINGS_VOLUME_NORM)
         return global_settings.replaygain_settings.noclip
                || global_settings.replaygain_settings.type != REPLAYGAIN_OFF;
@@ -546,6 +567,16 @@ static void toggle_settings_row(aura_screen_id_t target)
     else if (target == AURA_SCREEN_SETTINGS_SHOW_ICONS)
     {
         aura_settings.show_icons = !aura_settings.show_icons;
+        aura_settings_save();
+    }
+    else if (target == AURA_SCREEN_SETTINGS_CLOCK24)
+    {
+        global_settings.timeformat = global_settings.timeformat ? 0 : 1;
+        settings_save();
+    }
+    else if (target == AURA_SCREEN_SETTINGS_CLOCK_TITLE)
+    {
+        aura_settings.clock_visible = !aura_settings.clock_visible;
         aura_settings_save();
     }
     else if (target == AURA_SCREEN_SETTINGS_VOLUME_NORM)
@@ -1395,6 +1426,51 @@ static void handle_games(aura_nav_t *nav, long button)
     }
 }
 
+/* Zona horaria: la MISMA tabla de ciudades del Reloj internacional --
+ * una sola fuente de husos en todo el firmware. Elegir una fija
+ * `tz_local_quarters`, que es de donde salen las horas de los demas
+ * relojes. (El mapa con el pin del original queda pendiente.) */
+static int s_tz_sel = 0;
+
+static void draw_timezone(void)
+{
+    static aura_list_item_t items[64];
+    int n = aura_worldclock_city_count();
+    int i;
+
+    if (n > 64)
+        n = 64;
+    for (i = 0; i < n; i++)
+    {
+        items[i].label = aura_worldclock_city_name(i);
+        items[i].icon_name = NULL;
+        items[i].toggle = -1;
+        items[i].checked = (aura_worldclock_city_utc_quarters(i)
+                            == aura_settings.tz_local_quarters);
+    }
+    aura_widgets_draw_list(aura_str(AURA_STR_SETTINGS_TIMEZONE), items, n,
+                            s_tz_sel);
+}
+
+static void handle_timezone(aura_nav_t *nav, long button)
+{
+    int n = aura_worldclock_city_count();
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:  s_tz_sel = aura_wheel_advance(s_tz_sel, n, 1); break;
+    case BUTTON_SCROLL_BACK: s_tz_sel = aura_wheel_advance(s_tz_sel, n, -1); break;
+    case BUTTON_SELECT:
+        aura_settings.tz_local_quarters =
+            aura_worldclock_city_utc_quarters(s_tz_sel);
+        aura_settings_save();
+        aura_nav_pop(nav);
+        break;
+    case BUTTON_MENU: aura_nav_pop(nav); break;
+    default: break;
+    }
+}
+
 static void draw_message_centered(aura_str_id_t msg_id)
 {
     int w, h;
@@ -1653,6 +1729,7 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC
         || screen == AURA_SCREEN_EXTRAS
+        || screen == AURA_SCREEN_SETTINGS_DATETIME
         || is_choice_screen(screen)
         || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
         || screen == AURA_SCREEN_SETTINGS_SLEEPTIMER
@@ -1670,7 +1747,8 @@ void aura_screens_draw(aura_nav_t *nav)
 
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
-        || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS)
+        || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
+        || screen == AURA_SCREEN_SETTINGS_DATETIME)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -1708,6 +1786,8 @@ void aura_screens_draw(aura_nav_t *nav)
         aura_calendar_day_draw();
     else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
         aura_screenlock_draw();
+    else if (screen == AURA_SCREEN_SETTINGS_TIMEZONE)
+        draw_timezone();
     else if (screen == AURA_SCREEN_EXTRAS_ALARMS)
         aura_alarms_draw();
     else if (screen == AURA_SCREEN_EXTRAS_ALARM_EDIT)
@@ -2021,7 +2101,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
 
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
-        || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS)
+        || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
+        || screen == AURA_SCREEN_SETTINGS_DATETIME)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
@@ -2058,6 +2139,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_calendar_day_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
         aura_screenlock_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_TIMEZONE)
+        handle_timezone(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_ALARMS)
         aura_alarms_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_ALARM_EDIT)

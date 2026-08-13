@@ -177,6 +177,10 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ALARM_NEW]    = "Alarma nueva",
     [AURA_STR_ALARM_HOUR]   = "Ajustando la hora",
     [AURA_STR_ALARM_MINUTE] = "Ajustando los minutos",
+    [AURA_STR_SETTINGS_DATETIME]    = "Fecha y hora",
+    [AURA_STR_SETTINGS_TIMEZONE]    = "Zona horaria",
+    [AURA_STR_SETTINGS_CLOCK24]     = "Reloj 24 horas",
+    [AURA_STR_SETTINGS_CLOCK_TITLE] = "Hora en el título",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -354,6 +358,10 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ALARM_NEW]    = "New Alarm",
     [AURA_STR_ALARM_HOUR]   = "Setting hour",
     [AURA_STR_ALARM_MINUTE] = "Setting minutes",
+    [AURA_STR_SETTINGS_DATETIME]    = "Date & Time",
+    [AURA_STR_SETTINGS_TIMEZONE]    = "Time Zone",
+    [AURA_STR_SETTINGS_CLOCK24]     = "24 Hour Clock",
+    [AURA_STR_SETTINGS_CLOCK_TITLE] = "Time in Title",
 };
 
 const char *aura_str(aura_str_id_t id)

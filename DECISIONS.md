@@ -1766,4 +1766,10 @@ Con esto quedan construidas las 8 entradas de Extras: Reloj internacional, Calen
 
 ---
 
+## D-164 — Fecha y hora: submenú con zona horaria real
+
+**Encargo del dueño del diseño (2026-08-13).** Submenú **Fecha y hora** con tres filas cableadas a ajustes REALES, no cosméticos: **Zona horaria** (elige entre las mismas 40 ciudades del Reloj internacional — una sola tabla de husos en todo el firmware — y fija `tz_local_quarters`, que es exactamente de donde salen las horas de los demás relojes), **Reloj 24 horas** (formato del núcleo, `global_settings.timeformat`) y **Hora en el título** (visibilidad del `ClockIndicator` de la StatusBar). Los **editores de Fecha y Hora** con calendario y reloj analógico, y el **mapa con pin** de zona horaria del original, quedan pendientes: la lista de ciudades ya cumple la función y el mapa es trabajo de assets aparte.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

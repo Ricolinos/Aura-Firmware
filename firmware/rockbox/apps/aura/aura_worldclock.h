@@ -27,4 +27,10 @@ void aura_worldclock_cities_handle_button(aura_nav_t *nav, long button);
  * pantalla este activa. */
 bool aura_worldclock_needs_tick(void);
 
+/* Catalogo de husos, compartido con la pantalla de Zona horaria de
+ * Ajustes: una sola tabla de ciudades para todo el firmware. */
+int aura_worldclock_city_count(void);
+const char *aura_worldclock_city_name(int i);
+int aura_worldclock_city_utc_quarters(int i);
+
 #endif /* AURA_WORLDCLOCK_H */

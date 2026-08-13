@@ -97,9 +97,11 @@ agrupación, como en el original:
 | Apariencia (propios de Aura) | Tema ✅ · Color de acento ✅ · Animaciones ✅ · Gráficos ✅ · Mostrar sombras ✅ · Mostrar iconos ✅ |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |
 | Sonido | Ecualizador ✅ (23 presets) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
-| Sistema | Temporiz. reposo ✅ · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
+| Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
 
-Del original quedan pendientes: **Menú Música** configurable y **Fecha y
-hora** (con sus editores y el mapa de zona horaria). La velocidad de
+Del original quedan pendientes: **Menú Música** configurable, los
+**editores de Fecha y Hora** (calendario y reloj analógico) y el **mapa
+con pin** de Zona horaria — la lista de ciudades ya cumple su función.
+La velocidad de
 audiolibros y el orden por apellido se guardan pero todavía no cambian
 nada: Rockbox no tiene backend para ellos.

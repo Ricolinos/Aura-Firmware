@@ -68,6 +68,16 @@ static const wc_city_t WC_CITIES[] = {
 };
 #define WC_CITY_COUNT ((int)(sizeof(WC_CITIES) / sizeof(WC_CITIES[0])))
 
+int aura_worldclock_city_count(void) { return WC_CITY_COUNT; }
+const char *aura_worldclock_city_name(int i)
+{
+    return (i >= 0 && i < WC_CITY_COUNT) ? WC_CITIES[i].city : "";
+}
+int aura_worldclock_city_utc_quarters(int i)
+{
+    return (i >= 0 && i < WC_CITY_COUNT) ? WC_CITIES[i].utc_q : 0;
+}
+
 /* -- Estado --------------------------------------------------------------- */
 
 #define WC_MAX_CLOCKS 4
