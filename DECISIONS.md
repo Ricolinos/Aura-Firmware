@@ -2013,4 +2013,16 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-187 — El asistente de instalación sobrevive a la navegación
+
+**Reporte del dueño (2026-08-13)**: instalando Aura (o restaurando), navegar a otra sección de la barra lateral (Ajustes, Biblioteca, General) y volver a Instalador perdía la pantalla del asistente — ni progreso ni paso actual; aparecía el selector de cero.
+
+**Causa**: `InstallerHomeView` era dueña de su `InstallerViewModel` (`@StateObject`) y del modo elegido (`@State`). Al navegar, SwiftUI destruye la vista de la sección y con ella TODO ese estado — al volver se creaba un asistente nuevo. Doblemente grave: (1) las tareas de la instalación en curso (extracción, espera de DFU) seguían corriendo por detrás, sin ninguna UI que las reflejara; (2) el `.onDisappear` del asistente llamaba a `stop()`, que cortaba la observación del dispositivo y **reactivaba los agentes AMP a mitad del flujo** — la espera de DFU quedaba sorda.
+
+**Arreglo**: el `InstallerViewModel` ahora es propiedad de `ContentView` (el contenedor raíz, que vive toda la sesión) y se comparte con `InstallerHomeView` como `@ObservedObject`; `chosenMode` se movió al ViewModel (con su `didSet` manteniendo el registro global de flujo activo de D-185, antes en la vista). El arranque del flujo salió de `onAppear` (que se re-dispara en cada regreso a la sección y habría reiniciado el asistente) a `beginFlow(mode:)`, llamado solo desde el selector. El `.onDisappear { stop() }` se eliminó: el fin de flujo real vive en el ViewModel — los agentes AMP se reactivan en el `didSet` de `step` al llegar a `done`/`failed`/`restoreHandoff`, el punto único por el que pasan todos los caminos. De paso, `observeDeviceState()` limpia las suscripciones anteriores — con el ViewModel longevo, cada flujo habría agregado un sink duplicado.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests (los 2 de red pasan en re-corrida). Verificación del dueño: iniciar una instalación, pasear por Ajustes/General/Biblioteca, y volver — el asistente debe estar exactamente donde iba, con su progreso vivo.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
