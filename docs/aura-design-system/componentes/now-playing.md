@@ -208,7 +208,11 @@ interno derecho** de la pantalla.
 
 ### Modo 3 — Agregar a playlist (nuevo, no existía en el original)
 
-- Abre un modal de selección de playlist.
+- Abre un modal de selección de playlist, que **vive en el espacio
+  entre la fila de estrellas y la fila de modos** (confirmado
+  2026-08-12): alineado a la columna derecha del reproductor (borde
+  izquierdo de los textos, padding derecho de la fila de modos) y
+  centrado verticalmente en ese hueco.
 - **Si no hay playlists existentes, el modo no se activa** (se salta en el
   loop de modos) y su icono se muestra **deshabilitado al 50% de
   opacidad**, igual que el Modo 4 sin letras.

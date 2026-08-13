@@ -1652,4 +1652,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-147 — Modo 3: el panel flotante vive entre las estrellas y la fila de modos
+
+**Encargo del dueño del diseño (2026-08-12)**: la ventana de "agregar a playlist" está perfecta pero debe renderizarse en el espacio entre las estrellas y los iconos, alineada en ese espacio. Antes: 220px centrados en pantalla (encimaba la carátula) y anclada al transporte. Ahora: alineada a la columna derecha del reproductor (borde izquierdo = TEXT_X, borde derecho = padding de la fila de modos) y centrada verticalmente entre el borde inferior real de las estrellas (nuevo ancla `s_last_stars_bottom_y`, registrado en el render como ya se hacía con la fila de modos) y el tope de la fila de modos. Verificado con captura.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -295,6 +295,10 @@ static int mode_available(np_mode_t mode);
  * el layout REAL de la pantalla ya renderizada offscreen, sin duplicar
  * aca la logica de apilado de textos que decide su posicion. */
 static int s_last_mode_row_y = 120;
+/* Borde inferior real de la fila de estrellas en el ultimo render --
+ * ancla superior del panel flotante del Modo 3 (encargo 2026-08-12:
+ * "en el espacio entre las estrellas y los iconos"). */
+static int s_last_stars_bottom_y = 112;
 
 int aura_nowplaying_last_mode_row_y(void)
 {
@@ -929,6 +933,7 @@ static void draw_text_and_modes(const struct mp3entry *id3, int t256)
         /* Las estrellas DESAPARECEN en el Modo 4 (encargo 2026-08-12). */
         draw_stars(TEXT_X, y, stars_from_rating(id3->rating),
                    s_mode == NP_MODE_STARS, 256 - t256);
+        s_last_stars_bottom_y = y + A26_ICON_SIZE_STATUS; /* ancla del panel del Modo 3 */
         y += A26_ICON_SIZE_STATUS + A26_SPACING_MD;
     }
 
@@ -1197,9 +1202,15 @@ static void draw_playlist_panel(void)
     char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
     int n, i;
     int box_h = 28;
-    int box_w = 220;
-    int box_x = (A26_SCREEN_WIDTH - box_w) / 2;
-    int box_y = TRANSPORT_Y - box_h - A26_SPACING_LG - 20;
+    /* En el ESPACIO entre las estrellas y la fila de modos (encargo
+     * 2026-08-12), alineado a la columna derecha del reproductor:
+     * mismo borde izquierdo que los textos, mismo padding derecho que
+     * la fila de modos; centrado verticalmente en el hueco. */
+    int mode_row_top = PROGRESS_Y - 10 - A26_ICON_SIZE_MENU;
+    int box_x = TEXT_X;
+    int box_w = A26_SCREEN_WIDTH - A26_SPACING_LG - TEXT_X;
+    int box_y = s_last_stars_bottom_y
+                + (mode_row_top - s_last_stars_bottom_y - box_h) / 2;
     int w, h;
     const char *label;
 
