@@ -148,6 +148,9 @@ void aura_settings_reset_to_defaults(void);
 
 /* Aplica aura_settings.eq_preset al DSP real de Rockbox. */
 void aura_settings_apply_eq(void);
+/* Ganancias (decimas de dB) de un preset, para la vista grafica del
+ * Ecualizador (aura_screens.c) -- mismo indice que AURA_EQ_*. */
+const int *aura_settings_eq_preset_gains(int preset);
 
 /* Aplica los defaults opinados de Aura sobre ajustes reales de
  * Rockbox que tienen pantalla propia en Ajustes desde la Fase 18

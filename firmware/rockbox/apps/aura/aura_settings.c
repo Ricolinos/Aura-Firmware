@@ -85,6 +85,11 @@ static int clamp_enum(int value, int count)
     return value;
 }
 
+const int *aura_settings_eq_preset_gains(int preset)
+{
+    return aura_eq_presets[clamp_enum(preset, AURA_EQ_COUNT)].gain;
+}
+
 void aura_settings_apply_eq(void)
 {
     int i;

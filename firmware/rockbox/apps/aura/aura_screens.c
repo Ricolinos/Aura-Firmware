@@ -764,6 +764,137 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
                              : NULL);
 }
 
+/* -- Vista grafica del Ecualizador (encargo 2026-08-13) -------------------
+ *
+ * Reemplaza el panel derecho generico (icono + descripcion) SOLO para
+ * la lista de presets del EQ: en vez de un icono estatico, dibuja la
+ * curva de respuesta real del preset resaltado, en vivo mientras se
+ * recorre la lista. Aura no tiene edicion de banda por banda (el
+ * modelo son 23 presets fijos, D-156) asi que esta es una vista de
+ * PREVISUALIZACION, no el editor interactivo completo de tres campos
+ * (frecuencia/Q/ganancia) que el firmware de referencia investigado
+ * construye -- alcance honesto, coherente con el modelo real de Aura.
+ *
+ * Matematica identica a la investigada (aproximacion gaussiana de los
+ * filtros de pico/escalon, eje de frecuencia logaritmico en punto fijo
+ * 1/256 de octava) -- sin coma flotante, sin tabla nueva de por medio
+ * mas alla de la LUT gaussiana de 33 entradas. */
+static int eqg_log2(int hz)
+{
+    int e = 0, m;
+    if (hz < 1) hz = 1;
+    m = hz;
+    while (m > 1) { m >>= 1; e++; }
+    return (e << 8) + (int)(((long)(hz - (1 << e)) << 8) >> e);
+}
+
+static const unsigned short EQG_GAUSS[33] = {
+    256, 252, 240, 222, 199, 173, 146, 119,  94,  72,  54,  39,
+     27,  18,  12,   8,   5,   3,   2,   1,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,   0,   0,   0
+};
+
+static int eqg_bell(int x)
+{
+    int i, f;
+    if (x < 0) x = -x;
+    x >>= 1;
+    i = x >> 5;
+    if (i >= 32) return 0;
+    f = x & 31;
+    return (EQG_GAUSS[i] * (32 - f) + EQG_GAUSS[i + 1] * f) >> 5;
+}
+
+typedef struct { int u0, w, gain, shelf; } eqg_band_t;
+
+static int eqg_prepare(eqg_band_t *out, const int *gains)
+{
+    int n = 0, i;
+    for (i = 0; i < EQ_NUM_BANDS; i++)
+    {
+        if (gains[i] == 0)
+            continue;
+        out[n].u0 = eqg_log2(eq_defaults[i].cutoff);
+        out[n].w = (7 * 256) / (eq_defaults[i].q > 0 ? eq_defaults[i].q : 1);
+        if (out[n].w < 24) out[n].w = 24;
+        out[n].gain = gains[i];
+        out[n].shelf = (i == 0) ? -1 : (i == EQ_NUM_BANDS - 1) ? 1 : 0;
+        n++;
+    }
+    return n;
+}
+
+/* Respuesta total en decimas de dB en la posicion `u` (1/256 de
+ * octava). El escalon se construye con la MISMA campana que el pico:
+ * vale 1-bell/2 antes del corte y bell/2 despues (o al reves para el
+ * de agudos), cruzando por 0.5 exactamente en el corte -- una
+ * sigmoide gratis, sin funcion nueva. */
+static int eqg_response(const eqg_band_t *bands, int n, int u)
+{
+    int total = 0, i;
+    for (i = 0; i < n; i++)
+    {
+        int d = u - bands[i].u0;
+        int k = eqg_bell((d << 8) / bands[i].w);
+        if (bands[i].shelf < 0)
+            k = (d <= 0) ? 256 - (k >> 1) : (k >> 1);
+        else if (bands[i].shelf > 0)
+            k = (d >= 0) ? 256 - (k >> 1) : (k >> 1);
+        total += (bands[i].gain * k) >> 8;
+    }
+    return total;
+}
+
+#define EQG_U_MIN 1106 /* log2(20 Hz) x 256 */
+#define EQG_U_MAX 3658 /* log2(20000 Hz) x 256 */
+
+static void draw_eq_curve_panel(int x, int width, int preset)
+{
+    const int *gains = aura_settings_eq_preset_gains(preset);
+    eqg_band_t bands[EQ_NUM_BANDS];
+    int n = eqg_prepare(bands, gains);
+    int plot_x = x + A26_SPACING_MD;
+    int plot_w = width - 2 * A26_SPACING_MD;
+    int plot_y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL + A26_SPACING_MD;
+    int plot_h = 100;
+    int zero_y = plot_y + plot_h / 2;
+    int px_per_db = 2; /* +-24 dB caben en +-48px, holgado en 100px de alto */
+    unsigned fill = a26_shell_blend(aura_accent(), a26_color(A26_SHELL_BG), 38);
+    int px, prev_y = zero_y;
+
+    /* Icono/etiqueta del preset arriba del plot (reemplaza el icono
+     * generico del panel comun). */
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_putsxy(plot_x, A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_MD,
+               (const unsigned char *)aura_str(AURA_STR_SETTINGS_EQ));
+
+    /* Linea de 0 dB, ANTES que la curva -- si no, un preset plano
+     * (todas las bandas en 0) quedaria invisible bajo ella. */
+    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
+    lcd_hline(plot_x, plot_x + plot_w - 1, zero_y);
+
+    for (px = 0; px < plot_w; px++)
+    {
+        int u = EQG_U_MIN + (px * (EQG_U_MAX - EQG_U_MIN)) / (plot_w - 1);
+        int db = eqg_response(bands, n, u);
+        int y = zero_y - (db * px_per_db) / 10;
+        int sx = plot_x + px;
+
+        if (y < plot_y) y = plot_y;
+        if (y > plot_y + plot_h - 1) y = plot_y + plot_h - 1;
+
+        lcd_set_foreground(fill);
+        if (y < zero_y)      lcd_vline(sx, y, zero_y - 1);
+        else if (y > zero_y) lcd_vline(sx, zero_y + 1, y);
+
+        lcd_set_foreground(aura_accent());
+        if (px == 0) prev_y = y;
+        lcd_vline(sx, prev_y < y ? prev_y : y, prev_y > y ? prev_y : y);
+        prev_y = y;
+    }
+}
+
 static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
 {
     const aura_str_id_t *labels;
@@ -799,6 +930,21 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
     panel_icon = (selected >= 0 && selected < count && items[selected].icon_name)
         ? items[selected].icon_name
         : parent_settings_icon(screen);
+
+    /* Ecualizador: el panel derecho muestra la CURVA del preset
+     * resaltado (encargo 2026-08-13) en vez del icono generico -- la
+     * pieza que el dueno del diseno investigo y pidio replicar. */
+    if (screen == AURA_SCREEN_SETTINGS_EQ && aura_widgets_split_active())
+    {
+        a26_shell_clear_screen();
+        aura_widgets_draw_status_bar(aura_str(screen_title_id(screen)));
+        aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count, selected);
+        if (selected >= 0 && selected < count)
+            draw_eq_curve_panel(AURA_DS_METRICS_LEFT_PANEL_WIDTH,
+                                 A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH,
+                                 selected);
+        return;
+    }
 
     draw_menu_screen_v2(aura_str(screen_title_id(screen)), items, count,
                          selected, panel_icon, NULL);

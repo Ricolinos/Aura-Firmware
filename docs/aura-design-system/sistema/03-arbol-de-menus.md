@@ -97,7 +97,7 @@ agrupación, como en el original:
 | Reproducción | Aleatorio ✅ · Repetir ✅ · Menú principal ✅ |
 | Apariencia (propios de Aura) | Tema ✅ · Color de acento ✅ · Animaciones ✅ · Gráficos ✅ · Mostrar sombras ✅ · Mostrar iconos ✅ |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |
-| Sonido | Ecualizador ✅ (23 presets) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
+| Sonido | Ecualizador ✅ (23 presets **con vista gráfica de la curva en vivo**) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
 | Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
 
 Del original quedan pendientes: **Menú Música** configurable. Los

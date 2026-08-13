@@ -1818,4 +1818,10 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-172 — Ecualizador: vista gráfica de la curva de respuesta
+
+**Encargo del dueño del diseño (2026-08-13).** El panel derecho de la lista de presets del EQ (23 desde D-156) muestra ahora la **curva de respuesta real** del preset resaltado, actualizada en vivo mientras se recorre la lista — reemplaza el icono genérico que llevaba ese panel. Matemática íntegra de la investigación del proyecto de referencia del dueño: eje de frecuencia logarítmico en punto fijo (1/256 de octava, `eqg_log2`), aproximación gaussiana de 33 entradas para los filtros de pico (`eqg_bell`), y el mismo truco para los de estantería (low/high shelf): la campana reflejada cruza por el 50% exactamente en la frecuencia de corte, una sigmoide sin función nueva. Cero coma flotante. Relleno translúcido bajo la curva (acento al 15%) y línea sólida encima; la línea de 0 dB se dibuja ANTES que la curva para que un preset plano no quede invisible debajo. **Alcance honesto**: es una vista de PREVISUALIZACIÓN, no el editor interactivo de tres campos (frecuencia/Q/ganancia) de la investigación original — el modelo de Aura son 23 presets fijos (D-156), no edición banda por banda; construir esa edición sería una función nueva no pedida. Verificado en vivo con dos presets opuestos: "Reducir graves" muestra un hundimiento correcto en frecuencias bajas, "Amplif. graves" el realce equivalente hacia arriba — confirma que el signo y la magnitud de la ganancia se leen correctamente desde `aura_eq_presets` (nuevo accesor `aura_settings_eq_preset_gains()`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
