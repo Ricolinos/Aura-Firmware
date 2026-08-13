@@ -13,6 +13,7 @@
 #include "aura_nowplaying.h"
 #include "aura_stopwatch.h"
 #include "aura_search.h"
+#include "aura_worldclock.h"
 #include "aura_music.h"
 #include "aura_widgets.h"
 #include "aura_statusbar.h"
@@ -280,6 +281,13 @@ void aura_main(void)
             if (aura_nav_current(&nav) == AURA_SCREEN_MUSIC_SEARCH
                 && aura_search_needs_tick() && timeout_ticks < 0)
                 timeout_ticks = HZ / 4;
+
+            /* Reloj internacional: el minutero avanza solo. Un
+             * refresco por segundo basta (la manecilla se mueve por
+             * minuto), con la misma puerta de lcd_active(). */
+            if (aura_nav_current(&nav) == AURA_SCREEN_EXTRAS_CLOCKS
+                && aura_worldclock_needs_tick() && timeout_ticks < 0)
+                timeout_ticks = HZ;
 
             /* Cronometro en marcha: las centesimas exigen refresco
              * continuo, con la misma puerta de lcd_active() del resto. */

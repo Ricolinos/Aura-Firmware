@@ -335,6 +335,7 @@ aura/aura_nowplaying.c
 aura/aura_photos.c
 aura/aura_stopwatch.c
 aura/aura_search.c
+aura/aura_worldclock.c
 aura/aura_screens.c
 aura/aura_settings.c
 aura/aura_splash_lang.c

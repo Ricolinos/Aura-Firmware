@@ -33,6 +33,7 @@ static const aura_settings_t aura_settings_defaults = {
      * el comportamiento base documentado, el toggle solo la apaga. */
     .left_panel_shadow = true,
     .show_icons = true,
+    .tz_local_quarters = -24,
     .clock_visible = true,
 };
 
@@ -174,6 +175,8 @@ void aura_settings_load(void)
                 aura_settings.left_panel_shadow = (v != 0);
             else if (!strcmp(name, "show_icons"))
                 aura_settings.show_icons = (v != 0);
+            else if (!strcmp(name, "tz_local_quarters"))
+                aura_settings.tz_local_quarters = v;
             else if (!strcmp(name, "clock_visible"))
                 aura_settings.clock_visible = (v != 0);
         }
@@ -214,6 +217,7 @@ void aura_settings_save(void)
     fdprintf(fd, "accent_rgb24: %06lx\n", (unsigned long)aura_settings.accent_rgb24);
     fdprintf(fd, "left_panel_shadow: %d\n", (int)aura_settings.left_panel_shadow);
     fdprintf(fd, "show_icons: %d\n", (int)aura_settings.show_icons);
+    fdprintf(fd, "tz_local_quarters: %d\n", aura_settings.tz_local_quarters);
     fdprintf(fd, "clock_visible: %d\n", (int)aura_settings.clock_visible);
 
     close(fd);

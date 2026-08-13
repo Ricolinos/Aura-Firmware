@@ -101,6 +101,10 @@ typedef struct {
      * puede apagarlos para una lectura mas limpia. Activado por
      * defecto -- es el aspecto base del sistema. */
     bool show_icons;
+    /* Huso horario local en CUARTOS de hora respecto de UTC (encargo
+     * 2026-08-13, Reloj internacional): -24 = UTC-6, Ciudad de Mexico.
+     * Los demas relojes se calculan como local + (huso_ciudad - este). */
+    int tz_local_quarters;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

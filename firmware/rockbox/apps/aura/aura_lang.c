@@ -153,6 +153,10 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_PHOTOS_ALL]     = "Todas las fotos",
     [AURA_STR_SETTINGS_COPYRIGHT] = "Avisos legales",
     [AURA_STR_COPYRIGHT_BODY] = "Aura es un firmware CONCEPTUAL para iPod Classic, construido sobre Rockbox.\n\nRockbox\nEste firmware deriva del proyecto Rockbox y se distribuye bajo la Licencia Publica General de GNU (GPL v2). El nucleo, los controladores, el sistema de archivos, los codecs y el motor de reproduccion son obra del equipo de Rockbox y de sus colaboradores, a quienes corresponde todo el credito por ese trabajo.\n\nApple\niPod, iPod Classic, iTunes, Finder, SF Symbols y Apple son marcas registradas de Apple Inc. Aura no esta afiliado, patrocinado ni respaldado por Apple Inc. Los simbolos SF se renderizan desde el sistema operativo del equipo donde se compila y siguen sujetos a la licencia de Apple. Este proyecto es un ejercicio de diseno inspirado en el iPod, no un producto de Apple ni un sustituto de su software.\n\nDistribucion\nEste firmware es meramente conceptual. Esta PROHIBIDA su distribucion y ESTRICTAMENTE PROHIBIDA su venta. Si se comparte, es unicamente con fines didacticos y de investigacion.\n\nCreditos\nDiseno: Ricardo Gomez (Ricolinos).\nImplementacion del codigo: Claude, de Anthropic, bajo la direccion de diseno de Ricardo Gomez.\n\nSin garantia de ningun tipo, expresa o implicita.",
+    [AURA_STR_WC_LOCAL]  = "Hora local",
+    [AURA_STR_WC_ADD]    = "Añadir",
+    [AURA_STR_WC_EDIT]   = "Editar",
+    [AURA_STR_WC_DELETE] = "Eliminar",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -306,6 +310,10 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_PHOTOS_ALL]     = "All Photos",
     [AURA_STR_SETTINGS_COPYRIGHT] = "Legal",
     [AURA_STR_COPYRIGHT_BODY] = "Aura is a CONCEPTUAL firmware for the iPod Classic, built on Rockbox.\n\nRockbox\nThis firmware derives from the Rockbox project and is distributed under the GNU General Public License (GPL v2). The kernel, drivers, file system, codecs and playback engine are the work of the Rockbox team and its contributors, who deserve full credit for it.\n\nApple\niPod, iPod Classic, iTunes, Finder, SF Symbols and Apple are registered trademarks of Apple Inc. Aura is not affiliated with, sponsored by or endorsed by Apple Inc. SF Symbols are rendered from the operating system of the machine where this is built and remain subject to Apple's license. This project is a design exercise inspired by the iPod, not an Apple product nor a replacement for its software.\n\nDistribution\nThis firmware is purely conceptual. Its distribution is PROHIBITED and its sale is STRICTLY PROHIBITED. If shared, it is solely for educational and research purposes.\n\nCredits\nDesign: Ricardo Gomez (Ricolinos).\nCode implementation: Claude, by Anthropic, under the design direction of Ricardo Gomez.\n\nNo warranty of any kind, express or implied.",
+    [AURA_STR_WC_LOCAL]  = "Local Time",
+    [AURA_STR_WC_ADD]    = "Add",
+    [AURA_STR_WC_EDIT]   = "Edit",
+    [AURA_STR_WC_DELETE] = "Delete",
 };
 
 const char *aura_str(aura_str_id_t id)

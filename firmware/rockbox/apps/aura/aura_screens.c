@@ -26,6 +26,7 @@
 #include "aura_photos.h"
 #include "aura_stopwatch.h"
 #include "aura_search.h"
+#include "aura_worldclock.h"
 #include "aura_video.h"
 #include "aura_manifest.h"
 #include "aura_main.h"
@@ -223,7 +224,9 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_MUSIC_SEARCH:
     case AURA_SCREEN_MUSIC_SEARCH_RESULTS: return AURA_STR_MUSIC_SEARCH;
     case AURA_SCREEN_EXTRAS:              return AURA_STR_EXTRAS;
-    case AURA_SCREEN_EXTRAS_CLOCKS:       return AURA_STR_EXTRAS_CLOCKS;
+    case AURA_SCREEN_EXTRAS_CLOCKS:
+    case AURA_SCREEN_EXTRAS_CLOCK_REGIONS:
+    case AURA_SCREEN_EXTRAS_CLOCK_CITIES: return AURA_STR_EXTRAS_CLOCKS;
     case AURA_SCREEN_EXTRAS_CALENDAR:     return AURA_STR_EXTRAS_CALENDAR;
     case AURA_SCREEN_EXTRAS_CONTACTS:     return AURA_STR_EXTRAS_CONTACTS;
     case AURA_SCREEN_EXTRAS_ALARMS:       return AURA_STR_EXTRAS_ALARMS;
@@ -1536,11 +1539,17 @@ void aura_screens_draw(aura_nav_t *nav)
         aura_stopwatch_draw();
     else if (screen == AURA_SCREEN_MUSIC_SEARCH)
         aura_search_draw();
+    else if (screen == AURA_SCREEN_EXTRAS_CLOCKS)
+        aura_worldclock_draw();
+    else if (screen == AURA_SCREEN_EXTRAS_CLOCK_REGIONS)
+        aura_worldclock_regions_draw();
+    else if (screen == AURA_SCREEN_EXTRAS_CLOCK_CITIES)
+        aura_worldclock_cities_draw();
     else if (screen == AURA_SCREEN_MUSIC_SEARCH_RESULTS)
         aura_search_results_draw();
     else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS
              || screen == AURA_SCREEN_MUSIC_COMPILATIONS
-             || (screen >= AURA_SCREEN_EXTRAS_CLOCKS
+             || (screen >= AURA_SCREEN_EXTRAS_CALENDAR
                  && screen <= AURA_SCREEN_EXTRAS_SCREENLOCK))
     {
         /* Pantallas del arbol del original cuya interfaz propia
@@ -1863,6 +1872,12 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_stopwatch_handle_button(nav, button);
     else if (screen == AURA_SCREEN_MUSIC_SEARCH)
         aura_search_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_CLOCKS)
+        aura_worldclock_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_CLOCK_REGIONS)
+        aura_worldclock_regions_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_CLOCK_CITIES)
+        aura_worldclock_cities_handle_button(nav, button);
     else if (screen == AURA_SCREEN_MUSIC_SEARCH_RESULTS)
         aura_search_results_handle_button(nav, button);
     else if (is_coverflow_screen(screen))

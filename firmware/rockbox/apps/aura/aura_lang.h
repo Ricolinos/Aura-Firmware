@@ -178,6 +178,11 @@ typedef enum {
 
     AURA_STR_COPYRIGHT_BODY,
 
+    AURA_STR_WC_LOCAL,
+    AURA_STR_WC_ADD,
+    AURA_STR_WC_EDIT,
+    AURA_STR_WC_DELETE,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

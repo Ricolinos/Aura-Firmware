@@ -1740,4 +1740,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-160 — Reloj internacional
+
+**Encargo del dueño del diseño (2026-08-13).** Segunda pantalla especial de Extras. Lista de husos, cada uno con **reloj analógico** de 40px, lugar y hora en formato de 12 horas. Regla del original: la **hora local va con la esfera clara** y **los demás husos con la esfera oscura** (invertida). Las manecillas se dibujan con la LUT de senos en punto fijo que ya existe para CoverFlow (`IANGLE 1024`), sin coma flotante ni tabla nueva, y la horaria avanza con los minutos en vez de saltar de hora en hora. Catálogo de 40 ciudades por los 8 continentes del original, con el desplazamiento respecto de UTC en **cuartos de hora** (así caben husos como +5:30 sin decimales); sin horario de verano — el original tampoco lo resolvía por ciudad y fingirlo sería peor. La hora de cada ciudad sale de `local + (huso_ciudad − huso_local)`, con el huso local como ajuste propio nuevo (`tz_local_quarters`, por defecto UTC−6), que además servirá a la pantalla de Zona horaria de Ajustes cuando exista. SELECT abre un **menú flotante** (Añadir/Editar/Eliminar); añadir navega continente → ciudad y al elegir vuelve directo a la lista, sin obligar a salir de dos niveles a mano. Puerta de energía: un refresco por segundo mientras la pantalla está activa (la manecilla se mueve por minuto).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
