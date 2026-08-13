@@ -36,3 +36,26 @@ implementarse como un ítem de `MenuList` dentro de `LeftPanel`
 (`componentes/left-panel.md`) versus cuándo debe ser un componente de
 pantalla completa o vivir en `--layer-content`/`--layer-base` del lado
 derecho (`componentes/selection-summary.md`, `componentes/cover-drift.md`).
+
+
+## Política de listas: menú vs elementos (confirmada 2026-08-13)
+
+El criterio que decide el layout de CUALQUIER lista del sistema:
+
+| Tipo de lista | Qué es | Layout |
+|---|---|---|
+| **Lista de MENÚ** | Opciones del aparato: raíz, Música, Videos, Fotos, Ajustes, listas de elección (Tema, EQ, Idioma…), Menú pral. | `LeftPanel` **(split)** + `SelectionSummary` |
+| **Lista de ELEMENTOS** | Contenido del usuario: canciones, álbumes, artistas, géneros, autores, recopilaciones, listas de reproducción y **todos sus derivados**, a cualquier profundidad | **Pantalla completa (full)** |
+
+La profundidad **no** decide nada: una lista de canciones es pantalla
+completa lo mismo si se llegó desde Música que desde Artistas → Álbumes.
+Lo que decide es **qué contiene la lista**.
+
+Esta tabla es la **única fuente del layout**: de ella salen el
+`LeftPanel`, el ancho de la `StatusBar` (ver la regla dura en
+`componentes/status-bar.md`) y el ancho del push T1/T3 de las
+transiciones. Una pantalla nueva declara su layout ahí, no lo dibuja
+por su cuenta.
+
+**Corolario de transición:** menú → lista de elementos es siempre un
+**T3** (push de ancho completo), nunca un T1 de panel.

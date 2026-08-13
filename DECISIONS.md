@@ -1680,4 +1680,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-150 — Política de listas: menús en LeftPanel, elementos a pantalla completa
+
+**Regla del dueño del diseño (2026-08-13)**: las listas que son MENÚS van en el `LeftPanel`; las listas de ELEMENTOS (canciones, álbumes, artistas, géneros, listas de reproducción y todos sus derivados) van a pantalla completa. Antes, las 4 pantallas de nivel 2 (Artistas/Álbumes/Canciones/Géneros) y Listas repr. estaban declaradas SPLIT — listas de contenido con panel de menú, la incongruencia reportada. Ahora **todo browse de música es pantalla completa sin importar su profundidad**, así que la distinción nivel-2/nivel-3+ que introdujo AUDITORIA-01 A-03 desaparece (`is_music_browse_screen_level2()` retirado). Como la tabla de layout es la única fuente (D-149), el cambio arrastra solo el LeftPanel, el ancho de la StatusBar y el ancho del push: menú → lista de elementos pasa a ser T3 automáticamente. Verificado con capturas (Canciones y Listas a pantalla completa con título centrado; menú Música conserva panel y flecha de Selector).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

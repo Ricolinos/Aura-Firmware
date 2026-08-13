@@ -1086,28 +1086,6 @@ static int is_music_browse_screen(aura_screen_id_t screen)
     }
 }
 
-/* Nivel 2 real (hijos directos de Musica: Artistas/Albumes/Canciones/
- * Generos) -- AUDITORIA-01 A-03: doc de comportamiento SS1, "regla de
- * profundidad por defecto": nivel 1-2 -> SPLIT, nivel 3 en adelante ->
- * LISTA-COMPLETA. is_music_browse_screen() (mas abajo) sigue agrupando
- * las 7 pantallas para el resto de la logica (dispatch de dibujo/boton,
- * cache compartido) porque todas comparten el mismo mecanismo de
- * navegacion por tagcache -- separada solo para decidir layout, que es
- * donde el doc distingue nivel 2 (Artistas/Albumes/Canciones/Generos)
- * de nivel 3+ (Albumes por artista, Canciones por album/genero). */
-static int is_music_browse_screen_level2(aura_screen_id_t screen)
-{
-    switch (screen)
-    {
-    case AURA_SCREEN_MUSIC_ARTISTS:
-    case AURA_SCREEN_MUSIC_ALBUMS:
-    case AURA_SCREEN_MUSIC_SONGS:
-    case AURA_SCREEN_MUSIC_GENRES:
-        return 1;
-    default:
-        return 0;
-    }
-}
 
 /* Cover Flow es su propia puerta del submenu Musica (AURA_SCREEN_MUSIC_COVERFLOW,
  * music_entries[] arriba) -- YA NO una variante automatica de Albumes
@@ -1230,16 +1208,25 @@ static void draw_playlists(aura_nav_t *nav)
  * La consumen dos lugares: aura_screens_draw() (para el dibujo) y
  * aura_screens_handle_button() (para decidir si el empuje de la
  * transicion abarca solo el panel izquierdo o toda la pantalla). */
+/* POLITICA DE LISTAS (regla del dueno del diseno, 2026-08-13):
+ *
+ *   Lista de MENU (opciones del aparato)      -> LeftPanel, layout SPLIT
+ *   Lista de ELEMENTOS (contenido del usuario) -> pantalla COMPLETA
+ *
+ * "Elementos" son canciones, albumes, artistas, generos, autores,
+ * recopilaciones, listas de reproduccion y todos sus derivados: son
+ * contenido, no ajustes, y el original tambien los muestra a pantalla
+ * completa. Antes, las 4 pantallas de nivel 2 (Artistas/Albumes/
+ * Canciones/Generos) y Listas repr. se dibujaban SPLIT -- eran listas
+ * de contenido con panel de menu, la incongruencia que el dueno
+ * reporto. (La distincion nivel2/nivel3+ que introdujo AUDITORIA-01
+ * A-03 desaparece: ahora TODO browse de musica es pantalla completa,
+ * sin importar su profundidad.)
+ *
+ * Esta tabla es la UNICA fuente del layout: de ella salen el LeftPanel,
+ * el ancho de la StatusBar (D-149) y el ancho del push T1/T3. */
 static int screen_uses_split_layout(aura_screen_id_t screen)
 {
-    /* is_music_browse_screen_level2(), no is_music_browse_screen():
-     * AUDITORIA-01 A-03 -- las 3 pantallas de nivel 3+ (Albumes por
-     * artista, Canciones por album, Canciones por genero) violaban la
-     * regla de profundidad del doc de comportamiento (SS1) dibujandose
-     * SPLIT como si fueran hijos directos de Musica. El push T1/T3 ya
-     * decide su ancho consultando esta misma tabla (ver el comentario
-     * en aura_screens_handle_button), asi que la transicion se corrige
-     * sola sin tocarla. */
     return screen == AURA_SCREEN_ROOT
         || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC
@@ -1247,8 +1234,6 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
         || screen == AURA_SCREEN_SETTINGS_SLEEPTIMER
         || screen == AURA_SCREEN_SETTINGS_MAINMENU
-        || is_music_browse_screen_level2(screen)
-        || screen == AURA_SCREEN_MUSIC_PLAYLISTS
         || screen == AURA_SCREEN_VIDEOS
         || screen == AURA_SCREEN_PHOTOS;
 }
