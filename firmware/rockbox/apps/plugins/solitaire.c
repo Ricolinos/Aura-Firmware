@@ -887,10 +887,14 @@ CONFIG_KEYPAD == MROBE500_PAD
 
 #define CARD_START (CARD_HEIGHT+2*MARGIN+1)
 
-/* background color */
+/* Colores del sistema de diseno Aura (Apple2026): mesa gris-lavanda en
+ * vez del fieltro verde original, marco de seleccion con el acento por
+ * defecto (design-system/tokens.json, AURA_DS_COLOR_ACCENT_DEFAULT_RGB24)
+ * en vez del azul de Rockbox. Es una foto fija: los plugins se compilan
+ * aparte y no ven la paleta en vivo de Aura. */
 #ifdef HAVE_LCD_COLOR
-#   define BACKGROUND_COLOR LCD_RGBPACK(0,157,0)
-#   define FRAME_COLOR      LCD_RGBPACK(23,119,218)
+#   define BACKGROUND_COLOR LCD_RGBPACK(229,229,234)
+#   define FRAME_COLOR      LCD_RGBPACK(255,45,85)
 #elif LCD_DEPTH > 1
 #   define BACKGROUND_COLOR LCD_WHITE
 #   define FRAME_COLOR      LCD_BLACK
@@ -1032,27 +1036,28 @@ static void draw_empty_stack( int s, int x, int y, bool cursor )
     draw_card_ext( x, y, false, cursor );
 }
 
-/* Help */
+/* Ayuda */
 static bool solitaire_help( void )
 {
     static char* help_text[] = {
-        "Solitaire", "", "Controls", "",
-        HK_LR   ":", "Move", "the", "cursor", "to", "the",
-            "previous/", "next", "column.", "",
-        HK_UD   ":", "Move", "the", "cursor", "up/", "down", "in", "the",
-            "column.", "",
-        HK_MOVE ":", "Select", "cards,", "move", "cards...", "",
-        HK_DRAW ":", "Deselect", "a", "card", "if", "it", "was", "selected.",
-            "Else", "draw", "new", "card(s)", "from", "the", "remains",
-            "stack.", "", "",
-        "Shortcuts", "",
-        HK_REM2CUR   ":", "Put", "the", "card", "on", "top", "of", "the",
-            "remains", "stack", "on", "top", "of", "the", "cursor.", "",
-        HK_CUR2STACK ":", "Put", "the", "card", "under", "the", "cursor",
-            "on", "one", "of", "the", "4", "final", "stacks.", "",
-        HK_REM2STACK ":", "Put", "the", "card", "on", "top", "of", "the",
-            "remains", "stack", "on", "one", "of", "the", "4", "final",
-            "stacks."
+        "Solitario", "", "Controles", "",
+        HK_LR   ":", "Mueve", "el", "cursor", "a", "la",
+            "columna", "anterior/", "siguiente.", "",
+        HK_UD   ":", "Mueve", "el", "cursor", "arriba/", "abajo", "en", "la",
+            "columna.", "",
+        HK_MOVE ":", "Selecciona", "cartas,", "mueve", "cartas...", "",
+        HK_DRAW ":", "Deselecciona", "una", "carta", "si", "estaba",
+            "seleccionada.", "Si", "no,", "roba", "carta(s)", "nueva(s)",
+            "del", "montón", "de", "sobrantes.", "", "",
+        "Atajos", "",
+        HK_REM2CUR   ":", "Coloca", "la", "carta", "de", "arriba", "del",
+            "montón", "de", "sobrantes", "sobre", "la", "columna", "del",
+            "cursor.", "",
+        HK_CUR2STACK ":", "Coloca", "la", "carta", "bajo", "el", "cursor",
+            "en", "una", "de", "las", "4", "pilas", "finales.", "",
+        HK_REM2STACK ":", "Coloca", "la", "carta", "de", "arriba", "del",
+            "montón", "de", "sobrantes", "en", "una", "de", "las", "4",
+            "pilas", "finales."
     };
     static struct style_text formation[]={
         { 0, TEXT_CENTER|TEXT_UNDERLINE },
@@ -1083,8 +1088,8 @@ static struct configdata config[] = {
 };
 
 static const struct opt_items drawcards[2] = {
-    { "Draw Three Cards", -1 },
-    { "Draw One Card", -1 },
+    { "Robar tres cartas", -1 },
+    { "Robar una carta", -1 },
 };
 
 void solitaire_init(void);
@@ -1112,11 +1117,11 @@ static int solitaire_menu(bool in_game)
     int selected = 0;
     int result = -1;
 
-    MENUITEM_STRINGLIST(menu, "Solitaire", solitaire_menu_cb,
-                        "Resume Game", "Start New Game",
-                        "Draw Cards Option",
-                        "Help", "Playback Control",
-                        "Quit without Saving", "Quit");
+    MENUITEM_STRINGLIST(menu, "Solitario", solitaire_menu_cb,
+                        "Reanudar partida", "Empezar partida nueva",
+                        "Modo de robo",
+                        "Ayuda", "Control de reproducción",
+                        "Salir sin guardar", "Salir");
     _ingame = in_game;
 
     while (result < 0)
@@ -1141,7 +1146,7 @@ static int solitaire_menu(bool in_game)
                 break;
 
             case 2:
-                if (rb->set_option("Draw Cards Option", &sol.draw_type,
+                if (rb->set_option("Modo de robo", &sol.draw_type,
                                    RB_INT, drawcards, 2, NULL))
                     result = MENU_USB;
                 break;
@@ -1665,7 +1670,7 @@ static int save_game( void )
         || ( rb->write( fd, &checksum, sizeof( int ) ) < (ssize_t)(sizeof( int ) ) ) )
     {
         rb->close( fd );
-        rb->splash( 2*HZ, "Error while saving game. Aborting." );
+        rb->splash( 2*HZ, "Error al guardar la partida. Se canceló." );
         return -2;
     }
     rb->close( fd );
@@ -1695,12 +1700,12 @@ static int load_game( void )
         || save_read( fd, cols, COL_NUM * sizeof( int ), &checksum )
         || save_read( fd, stacks, SUITS * sizeof( int ), &checksum ) )
     {
-        rb->splash( 2*HZ, "Error while loading saved game. Aborting." );
+        rb->splash( 2*HZ, "Error al cargar la partida guardada. Se canceló." );
         retval = -2;
     }
     else if( checksum != 42 )
     {
-        rb->splash( 2*HZ, "Save file was corrupted. Aborting." );
+        rb->splash( 2*HZ, "El archivo guardado estaba dañado. Se canceló." );
         retval = -3;
     }
 
@@ -1726,6 +1731,13 @@ static int solitaire( int skipmenu )
 #endif
     int c,h,prevcard;
     int biggest_col_length;
+
+#if LCD_DEPTH > 1
+    /* BACKGROUND_COLOR solo pinta si se aplica explicitamente: sin esto
+     * lcd_clear_display() usaba el fondo que hubiera quedado puesto,
+     * nunca el de Aura. */
+    rb->lcd_set_background( BACKGROUND_COLOR );
+#endif
 
     rb->srand( *rb->current_tick );
     if( skipmenu != SOLITAIRE_QUIT )
@@ -1785,7 +1797,7 @@ static int solitaire( int skipmenu )
         if( biggest_col_length == 0 && rem == NOT_A_CARD )
         {
             rb->lcd_update();
-            rb->splash( HZ, "You Won :)" );
+            rb->splash( HZ, "¡Ganaste! :)" );
             return bouncing_cards();
         }
 
@@ -2247,7 +2259,7 @@ enum plugin_status plugin_start(const void* parameter )
 
     if( load_game() == 0 )
     {
-        rb->splash( HZ, "Resuming saved game." );
+        rb->splash( HZ, "Retomando la partida guardada." );
         result = SOLITAIRE_QUIT;
     }
     else

@@ -6,6 +6,8 @@
 #ifndef APPLE2026_SHELL_H
 #define APPLE2026_SHELL_H
 
+#include <stdbool.h>
+
 typedef enum {
     /* Fondo de toda pantalla. */
     A26_SHELL_BG = 0,

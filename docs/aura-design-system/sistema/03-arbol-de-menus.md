@@ -73,7 +73,7 @@ fila más.
 | Reloj internacional | ✅ relojes analógicos con esfera clara (local) y oscura (otros husos); menú Añadir/Editar/Eliminar — ver `componentes/world-clock.md` |
 | Ajustes → Fecha y hora → Zona horaria | ✅ mapa esquemático (continentes como manchas redondeadas, proyección equirectangular) con un solo pin en acento; la rueda recorre las mismas 40 ciudades **ordenadas por latitud**; confirmación abajo con ciudad/GMT/hora, formato del original |
 | Notas | ✅ pantalla de instrucciones del original |
-| Juegos | ✅ **Klondike** (plugin `solitaire` de Rockbox); iQuiz y Vortex **inertes** |
+| Juegos | ✅ **Klondike** (plugin `solitaire` de Rockbox, re-estilizado: mesa gris-lavanda `SELECTION_FILL`, marco de selección con el acento por defecto, menú/mensajes en español); iQuiz y Vortex **inertes** |
 | Calendarios | ✅ rejilla del mes (semana desde lunes); rueda = días, botones = meses, Select = día |
 | Bloqueo pantalla | ✅ candado + clave de 4 dígitos con confirmación; MENU restablece sin configurar |
 | Alarmas | ✅ lista + editor con las filas del original (Alarma, Hora con reloj analógico en vivo, Repetir, Sonido, las 23 Etiquetas, Eliminar) |
@@ -85,6 +85,24 @@ con llave única por dispositivo, y correrían sobre la API de RetailOS,
 indocumentada. La ruta viable es: Klondike vía el plugin `solitaire` de
 Rockbox re-estilizado, e iQuiz como pantalla nativa (su banco de
 preguntas es texto plano). Vortex requeriría motor propio.
+
+**Re-estilizado de Klondike** (2026-08-13): el plugin `solitaire.c` se
+compila aparte del árbol de Aura y solo ve la API `rb->`, sin acceso a
+la paleta en vivo (`a26_palette`). Se tomó como foto fija de la paleta
+por defecto (`design-system/tokens.json`, tema claro): fondo de mesa
+`LCD_RGBPACK(229,229,234)` (`SELECTION_FILL`, sustituye el fieltro
+verde original) y marco de carta seleccionada
+`LCD_RGBPACK(255,45,85)` (`AURA_DS_COLOR_ACCENT_DEFAULT_RGB24`,
+sustituye el azul de Rockbox) — `BACKGROUND_COLOR` existía en el
+código original pero nunca se aplicaba (`lcd_set_background()` no se
+llamaba), así que el fieltro verde tampoco se veía en la práctica; se
+conectó de una vez. Los ~10 textos de interfaz (menú de pausa, opción
+de robo, mensajes de guardado/carga y la pantalla de ayuda completa,
+con cuidado de no romper el indexado por posición del resaltado en
+rojo de "Controles"/"Atajos") se tradujeron al español mexicano. El
+menú propio de `do_menu()` de Rockbox (con su cromo) se dejó intacto —
+reconstruirlo está fuera del alcance de este pase; queda como decisión
+abierta si se quiere un reskin completo del menú de pausa.
 
 ## Ajustes
 
