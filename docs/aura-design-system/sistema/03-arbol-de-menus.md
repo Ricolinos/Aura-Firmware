@@ -75,7 +75,7 @@ fila más.
 | Juegos | ◐/✅ **Klondike** funciona (plugin `solitaire` de Rockbox); iQuiz y Vortex inertes |
 | Calendarios | ✅ rejilla del mes (semana desde lunes); rueda = días, botones = meses, Select = día |
 | Bloqueo pantalla | ✅ candado + clave de 4 dígitos con confirmación; MENU restablece sin configurar |
-| Alarmas | ⬜ estructura navegable, interfaz propia pendiente |
+| Alarmas | ✅ lista + editor con las filas del original (Alarma, Hora con reloj analógico en vivo, Repetir, Sonido, las 23 Etiquetas, Eliminar) |
 | Agenda | ◐ |
 
 **Juegos** (investigado 2026-08-13): los originales (iQuiz, Klondike,

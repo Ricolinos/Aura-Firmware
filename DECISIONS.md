@@ -1758,4 +1758,12 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-163 — Alarmas (cierra las pantallas especiales de Extras)
+
+**Encargo del dueño del diseño (2026-08-13).** Lista de alarmas (hasta 4) con su hora, etiqueta y switch de activación, más una fila final para crear una nueva. El **editor** replica las filas del original: Alarma (on/off) · Hora · Repetir (las 7 opciones) · Sonido (Ninguna/Bip) · Etiqueta (**las 23 del original**) · Eliminar. Salir del editor con MENU **guarda** — la alarma es el borrador que se estuvo viendo, el original no tiene un "aceptar" aparte. El **editor de hora** muestra un **reloj analógico que se mueve en vivo** con la configuración (manecillas con la misma LUT de punto fijo del Reloj internacional, la minutera en acento), con la hora numérica debajo y un rótulo que dice qué campo se está ajustando; SELECT pasa de hora a minutos y luego confirma. Verificado con capturas: lista y editor completos; el editor de hora quedó verificado solo por compilación — el harness de botones no logra alcanzarlo (sus secuencias se consumen antes), así que **queda pendiente de revisión visual en el simulador en vivo**.
+
+Con esto quedan construidas las 8 entradas de Extras: Reloj internacional, Calendarios, Alarmas, Juegos (Klondike real), Notas, Bloqueo de pantalla y Cronómetro; Agenda permanece inerte a propósito.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

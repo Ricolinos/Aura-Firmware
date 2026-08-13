@@ -29,6 +29,7 @@
 #include "aura_worldclock.h"
 #include "aura_calendar.h"
 #include "aura_screenlock.h"
+#include "aura_alarms.h"
 #include "plugin.h"
 #include "aura_video.h"
 #include "aura_manifest.h"
@@ -243,7 +244,10 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_EXTRAS_CALENDAR:
     case AURA_SCREEN_EXTRAS_CALENDAR_DAY: return AURA_STR_EXTRAS_CALENDAR;
     case AURA_SCREEN_EXTRAS_CONTACTS:     return AURA_STR_EXTRAS_CONTACTS;
-    case AURA_SCREEN_EXTRAS_ALARMS:       return AURA_STR_EXTRAS_ALARMS;
+    case AURA_SCREEN_EXTRAS_ALARMS:
+    case AURA_SCREEN_EXTRAS_ALARM_EDIT:
+    case AURA_SCREEN_EXTRAS_ALARM_TIME:
+    case AURA_SCREEN_EXTRAS_ALARM_CHOICE: return AURA_STR_EXTRAS_ALARMS;
     case AURA_SCREEN_EXTRAS_GAMES:        return AURA_STR_EXTRAS_GAMES;
     case AURA_SCREEN_EXTRAS_NOTES:        return AURA_STR_EXTRAS_NOTES;
     case AURA_SCREEN_EXTRAS_SCREENLOCK:   return AURA_STR_EXTRAS_SCREENLOCK;
@@ -1704,6 +1708,14 @@ void aura_screens_draw(aura_nav_t *nav)
         aura_calendar_day_draw();
     else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
         aura_screenlock_draw();
+    else if (screen == AURA_SCREEN_EXTRAS_ALARMS)
+        aura_alarms_draw();
+    else if (screen == AURA_SCREEN_EXTRAS_ALARM_EDIT)
+        aura_alarm_edit_draw();
+    else if (screen == AURA_SCREEN_EXTRAS_ALARM_TIME)
+        aura_alarm_time_draw();
+    else if (screen == AURA_SCREEN_EXTRAS_ALARM_CHOICE)
+        aura_alarm_choice_draw();
     else if (screen == AURA_SCREEN_EXTRAS_CLOCK_REGIONS)
         aura_worldclock_regions_draw();
     else if (screen == AURA_SCREEN_EXTRAS_CLOCK_CITIES)
@@ -1711,8 +1723,7 @@ void aura_screens_draw(aura_nav_t *nav)
     else if (screen == AURA_SCREEN_MUSIC_SEARCH_RESULTS)
         aura_search_results_draw();
     else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS
-             || screen == AURA_SCREEN_MUSIC_COMPILATIONS
-             || screen == AURA_SCREEN_EXTRAS_ALARMS)
+             || screen == AURA_SCREEN_MUSIC_COMPILATIONS)
     {
         /* Pantallas del arbol del original cuya interfaz propia
          * todavia no se construyo: estado vacio honesto con su titulo,
@@ -2047,6 +2058,14 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_calendar_day_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
         aura_screenlock_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_ALARMS)
+        aura_alarms_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_ALARM_EDIT)
+        aura_alarm_edit_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_ALARM_TIME)
+        aura_alarm_time_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_ALARM_CHOICE)
+        aura_alarm_choice_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_CLOCK_REGIONS)
         aura_worldclock_regions_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_CLOCK_CITIES)

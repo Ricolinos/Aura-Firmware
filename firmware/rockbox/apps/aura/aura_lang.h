@@ -203,6 +203,10 @@ typedef enum {
     AURA_STR_LOCK_SET,
     AURA_STR_LOCK_CONFIRM,
 
+    AURA_STR_ALARM_NEW,
+    AURA_STR_ALARM_HOUR,
+    AURA_STR_ALARM_MINUTE,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

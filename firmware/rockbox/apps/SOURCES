@@ -338,6 +338,7 @@ aura/aura_search.c
 aura/aura_worldclock.c
 aura/aura_calendar.c
 aura/aura_screenlock.c
+aura/aura_alarms.c
 aura/aura_screens.c
 aura/aura_settings.c
 aura/aura_splash_lang.c

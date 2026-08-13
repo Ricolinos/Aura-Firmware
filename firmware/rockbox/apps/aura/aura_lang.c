@@ -174,6 +174,9 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_CAL_NO_EVENTS] = "No hay eventos este día",
     [AURA_STR_LOCK_SET] = "Introduce una clave",
     [AURA_STR_LOCK_CONFIRM] = "Confirma la clave",
+    [AURA_STR_ALARM_NEW]    = "Alarma nueva",
+    [AURA_STR_ALARM_HOUR]   = "Ajustando la hora",
+    [AURA_STR_ALARM_MINUTE] = "Ajustando los minutos",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -348,6 +351,9 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_CAL_NO_EVENTS] = "No events on this day",
     [AURA_STR_LOCK_SET] = "Enter a passcode",
     [AURA_STR_LOCK_CONFIRM] = "Confirm the passcode",
+    [AURA_STR_ALARM_NEW]    = "New Alarm",
+    [AURA_STR_ALARM_HOUR]   = "Setting hour",
+    [AURA_STR_ALARM_MINUTE] = "Setting minutes",
 };
 
 const char *aura_str(aura_str_id_t id)
