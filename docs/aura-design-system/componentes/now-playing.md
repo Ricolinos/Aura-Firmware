@@ -164,6 +164,17 @@ Backward, Forward) siempre hacen lo mismo — nunca cambian de función según
 el modo. Lo que cambia entre modos es qué controla el **scroll** de la
 click wheel (y en algunos modos, qué hace Select).
 
+**Cambio de modo con un ajuste vivo (confirmado 2026-08-12):** si se
+acaba de ajustar algo (volumen, avance) y se presiona Select de
+inmediato, los elementos de ese ajuste que sigan en pantalla (bocinas,
+tiempos, píldora, acento del relleno) **fuerzan su desvanecimiento** —
+sus ventanas se recortan a un fade que arranca al instante, en vez de
+quedarse su duración completa sobre el modo nuevo. El desvanecimiento
+es el estándar compartido (~330ms); durante el fade del volumen, el
+ancho de la barra **planea** del nivel de volumen a la posición real de
+la canción. (El Modo 4 queda fuera: sus transiciones propias ya cubren
+la entrada/salida.)
+
 ### Fila de iconos de modos (confirmada 2026-08-12)
 
 | Modo | Inactivo (lineal) | Activo (fill, acento) |
@@ -308,8 +319,10 @@ regresa deslizándose al salir) — no desaparece de golpe. La sombra del
 panel izquierdo aparece con su **propio fade** después del acople de la
 hoja (~165ms).
 
-🔴 Pendiente menor: comportamiento del scroll en este modo (¿desplaza las
-letras manualmente, o el scroll queda sin función aquí?).
+**Scroll en este modo (resuelto 2026-08-12):** la rueda **avanza la
+canción** (mismo paso de 3s por click y mismo estrangulado de audio que
+el Modo 2), pero **sin números**: el ajuste se visualiza solo en la
+barra de progreso y en el avance de la propia letra.
 
 ### Modo 5 — Puntuar (estrellas)
 

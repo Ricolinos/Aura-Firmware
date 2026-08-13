@@ -989,37 +989,66 @@ static void draw_text_and_modes(const struct mp3entry *id3, int t256)
  * `x`/`width`: geometria interpolada por el morph del Modo 4 (0 =
  * normal, 256 = panel de 130px); el panel izquierdo conserva el fondo
  * normal, asi que fondos y tintas no cambian con el morph. */
+/* Alfa del tramo final de una ventana de ajuste: 256 mientras esta
+ * plenamente activa, decayendo linealmente en sus ultimos
+ * VOLUME_FADE_TICKS -- el desvanecimiento que todo elemento de ajuste
+ * comparte (encargo 2026-08-12: cambiar de modo lo FUERZA recortando
+ * la ventana, ver collapse_adjust_windows). */
+static int adjust_window_alpha(long until)
+{
+    long rem = until - current_tick;
+
+    if (rem <= 0)
+        return 0;
+    return (rem < VOLUME_FADE_TICKS) ? (int)(256L * rem / VOLUME_FADE_TICKS)
+                                      : 256;
+}
+
 static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
                            int x, int width)
 {
     int fill_x = x + 1;
     int fill_max = width - 2;
-    int fill_w;
+    int fill_w, prog_w;
     int fill_y = PROGRESS_Y + (PROGRESS_TRACK_H - PROGRESS_FILL_H) / 2;
     unsigned track_color = a26_color(A26_SELECTION_FILL);
     unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
     bool vol_active = current_tick < s_volume_overlay_until;
     bool seeking = current_tick < s_seek_show_until;
     bool scrubbing = (current_tick < s_scrub_show_until) && !vol_active;
-    unsigned fill_color = (vol_active || seeking || scrubbing) ? aura_accent() : white;
+    int seek_alpha = adjust_window_alpha(s_seek_show_until);
+    int scrub_alpha = adjust_window_alpha(s_scrub_show_until);
+    /* Alfa del estado de ajuste vigente: gobierna el acento del
+     * relleno, la pildora y los tiempos -- todos se DESVANECEN juntos
+     * en el tramo final de su ventana (natural o forzado por un cambio
+     * de modo). */
+    int vis_alpha = vol_active ? adjust_window_alpha(s_volume_overlay_until)
+                    : (seek_alpha > scrub_alpha ? seek_alpha : scrub_alpha);
+    unsigned fill_color = (vol_active || seeking || scrubbing)
+        ? a26_shell_blend(white, aura_accent(), vis_alpha) : white;
     unsigned long elapsed = (scrub_preview_ms >= 0) ? (unsigned long)scrub_preview_ms : id3->elapsed;
 
     a26_shell_fill_capsule(x, PROGRESS_Y, width, PROGRESS_TRACK_H,
                             track_color, a26_color(A26_SHELL_BG));
 
+    prog_w = id3->length ? (int)((unsigned long long)fill_max * elapsed / id3->length) : 0;
     if (vol_active)
     {
-        /* Nivel de volumen en la misma barra. */
+        /* Nivel de volumen en la misma barra -- durante el fade el
+         * ancho PLANEA del nivel de volumen a la posicion de la
+         * cancion, en vez de saltar al expirar la ventana. */
         int vol_min = sound_min(SOUND_VOLUME);
         int vol_max = sound_max(SOUND_VOLUME);
+        int vol_w;
         if (global_settings.volume_limit < vol_max)
             vol_max = global_settings.volume_limit;
-        fill_w = (vol_max > vol_min)
+        vol_w = (vol_max > vol_min)
             ? (fill_max * (global_status.volume - vol_min)) / (vol_max - vol_min)
             : 0;
+        fill_w = (vol_w * vis_alpha + prog_w * (256 - vis_alpha)) / 256;
     }
     else
-        fill_w = id3->length ? (int)((unsigned long long)fill_max * elapsed / id3->length) : 0;
+        fill_w = prog_w;
 
     if (fill_w < 0)        fill_w = 0;
     if (fill_w > fill_max) fill_w = fill_max;
@@ -1039,14 +1068,13 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
         if (tx < x) tx = x;
         if (tx + tw > x + width) tx = x + width - tw;
 
-        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0), 56);
-        a26_shell_fill_capsule_over(tx, ty, tw, th, white, 256);
+        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0),
+                                     56 * vis_alpha / 256);
+        a26_shell_fill_capsule_over(tx, ty, tw, th, white, vis_alpha);
 
         /* speaker-minus / speaker-plus en los extremos, con el fade
-         * sutil del tramo final de la ventana. */
-        long left_ticks = s_volume_overlay_until - current_tick;
-        int alpha = (left_ticks < VOLUME_FADE_TICKS)
-            ? (int)(256L * left_ticks / VOLUME_FADE_TICKS) : 256;
+         * del tramo final de la ventana (mismo alfa compartido). */
+        int alpha = vis_alpha;
         /* Centradas en el eje horizontal de la fila de transporte
          * (correccion 2026-08-12: "mas abajo, alineados al centro de
          * los iconos"), a 16px como repetir/aleatorio. */
@@ -1071,7 +1099,9 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
         aura_format_track_time(remaining, timebuf2 + 1, sizeof(timebuf2) - 1);
 
         lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
-        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_set_foreground(a26_shell_blend(a26_color(A26_SHELL_BG),
+                                            a26_color(A26_TEXT_SECONDARY),
+                                            seek_alpha));
         lcd_getstringsize((const unsigned char *)timebuf2, &w, &h);
         /* Centrados en el eje horizontal de la fila de transporte
          * (correccion 2026-08-12), como las bocinas -/+ de volumen. */
@@ -1096,8 +1126,9 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
         if (tx < x) tx = x;
         if (tx + tw > x + width) tx = x + width - tw;
 
-        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0), 56);
-        a26_shell_fill_capsule_over(tx, ty, tw, th, white, 256);
+        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0),
+                                     56 * vis_alpha / 256);
+        a26_shell_fill_capsule_over(tx, ty, tw, th, white, vis_alpha);
     }
 }
 
@@ -1161,9 +1192,7 @@ static void draw_transport(int t256)
         int vol_max = sound_max(SOUND_VOLUME);
         int pct;
         const char *icon;
-        long left_ticks = s_volume_overlay_until - current_tick;
-        int alpha = (left_ticks < VOLUME_FADE_TICKS)
-            ? (int)(256L * left_ticks / VOLUME_FADE_TICKS) : 256;
+        int alpha = adjust_window_alpha(s_volume_overlay_until);
 
         if (global_settings.volume_limit < vol_max)
             vol_max = global_settings.volume_limit;
@@ -1742,6 +1771,57 @@ static int mode_available(np_mode_t mode)
     return 1;
 }
 
+/* Cambiar de modo FUERZA el desvanecimiento de los elementos de ajuste
+ * que sigan en pantalla (encargo 2026-08-12: "acabamos de configurar el
+ * volumen e inmediatamente presionamos select... forzaremos su
+ * desvanecimiento"): las ventanas activas se recortan a un tramo de
+ * fade que arranca YA -- las bocinas, tiempos, pildora y acento se van
+ * con su desvanecimiento estandar en vez de quedarse su ventana entera
+ * sobre el modo nuevo. */
+static void collapse_adjust_windows(void)
+{
+    long fade_end = current_tick + VOLUME_FADE_TICKS;
+
+    if (s_volume_overlay_until > fade_end)
+        s_volume_overlay_until = fade_end;
+    if (s_seek_show_until > fade_end)
+        s_seek_show_until = fade_end;
+    if (s_scrub_show_until > fade_end)
+        s_scrub_show_until = fade_end;
+}
+
+/* Avance por rueda compartido por el modo 2 y el modo Letras (encargo
+ * 2026-08-12): mismo paso de 3s por click (doc SS5.2), mismo
+ * estrangulado de audio de un solo salto en vuelo; `show_times` decide
+ * si los tiempos se muestran bajo la barra (modo 2 si, Letras no -- ahi
+ * el ajuste se lee en la barra y en la propia letra). */
+static void wheel_seek(struct mp3entry *id3, int dir, bool show_times)
+{
+    long base = (s_scrub_preview_ms >= 0) ? s_scrub_preview_ms : (long)id3->elapsed;
+    long delta = 3000L * dir; /* 3s por click, doc SS5.2 */
+    long next = base + delta;
+
+    if (next < 0) next = 0;
+    if ((unsigned long)next > id3->length) next = (long)id3->length;
+
+    s_scrub_preview_ms = next;
+    /* Estrangulado de audio: primer click aplica al instante, los
+     * siguientes cuando el motor alcanzo el salto anterior -- clicks
+     * en rafaga reiniciaban la busqueda del motor y el audio solo
+     * saltaba al parar la rueda. */
+    if (s_seek_applied_ms < 0
+        || (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS
+            && seek_engine_ready(id3)))
+    {
+        audio_ff_rewind(next);
+        s_seek_last_apply = current_tick;
+        s_seek_applied_ms = next;
+    }
+    s_scrub_show_until = current_tick + SEEK_SHOW_TICKS;
+    if (show_times)
+        s_seek_show_until = current_tick + SEEK_SHOW_TICKS;
+}
+
 static void cycle_mode(int direction)
 {
     /* Acotado a NP_MODE_COUNT intentos -- nunca gira en un bucle
@@ -1750,6 +1830,8 @@ static void cycle_mode(int direction)
     np_mode_t prev = s_mode;
     int next = (int)s_mode;
     int tries;
+
+    collapse_adjust_windows();
 
     for (tries = 0; tries < NP_MODE_COUNT; tries++)
     {
@@ -1883,34 +1965,7 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
 
         case NP_MODE_SCRUB:
             if (id3)
-            {
-                long base = (s_scrub_preview_ms >= 0) ? s_scrub_preview_ms : (long)id3->elapsed;
-                long delta = 3000L * dir; /* 3s por click, doc SS5.2 */
-                long next = base + delta;
-
-                if (next < 0) next = 0;
-                if ((unsigned long)next > id3->length) next = (long)id3->length;
-
-                s_scrub_preview_ms = next;
-                /* Estrangulado de audio: primer click aplica al
-                 * instante, los siguientes cuando el motor alcanzo el
-                 * salto anterior -- clicks en rafaga reiniciaban la
-                 * busqueda del motor y el audio solo saltaba al parar
-                 * la rueda. */
-                if (s_seek_applied_ms < 0
-                    || (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS
-                        && seek_engine_ready(id3)))
-                {
-                    audio_ff_rewind(next);
-                    s_seek_last_apply = current_tick;
-                    s_seek_applied_ms = next;
-                }
-                /* El avance de rueda hereda el comportamiento completo
-                 * de la busqueda (encargo 2026-08-12): acento +
-                 * indicador + TIEMPOS debajo de la barra. */
-                s_scrub_show_until = current_tick + SEEK_SHOW_TICKS;
-                s_seek_show_until = current_tick + SEEK_SHOW_TICKS;
-            }
+                wheel_seek(id3, dir, true);
             break;
 
         case NP_MODE_PLAYLIST:
@@ -1929,7 +1984,11 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
         }
 
         case NP_MODE_LYRICS:
-            /* El icono no reacciona a la rueda directamente (doc SS5.4). */
+            /* La rueda AVANZA la cancion tambien aqui (encargo
+             * 2026-08-12), pero SIN numeros: el ajuste se ve en la
+             * barra de progreso y en el avance de la letra. */
+            if (id3)
+                wheel_seek(id3, dir, false);
             break;
 
         case NP_MODE_STARS:

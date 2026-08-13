@@ -1658,4 +1658,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-148 — Cierre del reproductor: fade forzado al cambiar de modo y rueda del Modo 4 avanza sin números
+
+**Encargos del dueño del diseño (2026-08-12, "con esto cerramos el apartado del reproductor").** (1) Cambiar de modo con un ajuste vivo fuerza el desvanecimiento de sus elementos: `collapse_adjust_windows()` recorta las ventanas activas (volumen/búsqueda/scrub) a un tramo de fade que arranca al instante. Para que ese fade sea real y no un corte, todos los elementos de ajuste comparten ahora el alfa del tramo final de su ventana (`adjust_window_alpha`): el acento del relleno se funde de vuelta al blanco, los tiempos hacia el fondo, la píldora y su sombra escalan su alfa, y el ancho de la barra de volumen PLANEA del nivel a la posición real de la canción en vez de saltar. Aplica al fade natural y al forzado por igual; el Modo 4 queda fuera (sus morphs ya cubren la transición). (2) La rueda en el Modo 4 avanza la canción (resuelve el "🔴 pendiente" del doc): mismo paso de 3s por click y mismo estrangulado de un salto en vuelo que el Modo 2, factorizado en `wheel_seek(id3, dir, show_times)` — con `show_times=false`: el ajuste se ve solo en la barra (acento + píldora) y en el avance de la letra. Verificado con capturas: elementos de volumen a media desvanecida con el modo nuevo ya activo, y scrub en Modo 4 sin números.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
