@@ -344,10 +344,18 @@ void aura_main(void)
 
         /* Clicker (Fase 18, PLAN-UX.md): Aura no usa apps/action.c (D-022),
          * asi que keyclick_click() -- su unico llamador real -- nunca
-         * corre; hay que pedir el beep directamente aca en cada boton
-         * real. system_sound_play() ya no hace nada si
-         * global_settings.keyclick esta en 0 (Desactivado). */
-        if (button != BUTTON_NONE)
+         * corre; hay que pedir el beep directamente aca. system_sound_play()
+         * ya no hace nada si global_settings.keyclick esta en 0.
+         *
+         * Suena SOLO en pulsaciones frescas y en cada paso de rueda
+         * (correccion 2026-08-12): los repeats de un boton sostenido
+         * (conmutadores de mantener backward/forward) sonaban como si
+         * se hiciera scroll, y los REL de LEFT/RIGHT que ahora se
+         * entregan duplicarian el click del tap. */
+        if (button != BUTTON_NONE
+            && !(button & BUTTON_REL)
+            && (button == BUTTON_SCROLL_FWD || button == BUTTON_SCROLL_BACK
+                || !aura_main_last_was_repeat()))
             system_sound_play(SOUND_KEYCLICK);
 
         aura_screens_handle_button(&nav, button);

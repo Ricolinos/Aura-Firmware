@@ -1568,4 +1568,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-133 — El clicker suena solo en pulsaciones frescas y pasos de rueda
+
+**Corrección del dueño del diseño (2026-08-12) sobre D-132**: con el clicker activado, mantener backward/forward sonaba "como si estuviéramos haciendo scroll". El hook del clicker en `aura_main` pedía el beep en CADA evento de botón — incluidos los ~10 repeats/segundo de un botón sostenido y los REL de LEFT/RIGHT que D-129 empezó a entregar (que habrían duplicado el click de cada tap). Ahora suena solo en pulsaciones frescas y en cada paso de rueda (el clicker del iPod original sí acompaña al scroll); los repeats y los releases son mudos.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
