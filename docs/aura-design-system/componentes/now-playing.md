@@ -230,9 +230,11 @@ confirmada 2026-08-12. Es **pantalla completa**: sin StatusBar.
   Es un **estado del propio reproductor**, con el **fondo normal**
   (corrección 2026-08-12: el color promedio NO lo toca). La carátula va
   **centrada verticalmente en el espacio sobre la fila de modos** (no
-  invade los controles de abajo), con una **sombra paralela** sutil
-  (4px hacia abajo, misma sombra dura del indicador de la barra) que
-  aparece con el morph mientras el reflejo se va.
+  invade los controles de abajo), con una **sombra difusa alrededor de
+  toda la imagen** (corrección 2026-08-12: no una rebanada inferior —
+  un resplandor de ~7px con decaimiento cuadrático, opacidad pico ~38%
+  en el borde) que **se desvanece con el morph** (aparece al entrar,
+  se va al salir).
 - **Panel derecho** (`LyricsPanel`) — una **HOJA que se desliza desde
   la derecha** (no un fade; corrección 2026-08-12) de **vidrio
   traslúcido** (~85% de tinte: lo de abajo se adivina a través)
@@ -258,7 +260,7 @@ el morph de regreso al carrusel):**
   **cuadrado perfecto de 106px** centrado en el panel (horizontal y
   verticalmente en el área sobre la fila de modos); su **reflejo se
   desvanece** en el trayecto (no existe en el Modo 4) y su **sombra
-  paralela aparece** en proporción.
+  difusa aparece** en proporción.
 - La **barra de progreso interpola a 122px** dentro del panel.
 - El **transporte completo** (repetir + play/pausa + aleatorio) y la
   **fila de modos** viajan al centro del panel, conservando sus anclas

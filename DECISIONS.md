@@ -1622,4 +1622,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-142 — Modo 4: la sombra del álbum es un difuminado alrededor, no una rebanada inferior
+
+**Aclaración del dueño del diseño (2026-08-12) sobre D-137** ("no me expliqué bien"): la sombra del álbum no es un offset duro de 4px abajo — es una **sombra con ligero difuminado detrás de la imagen, notoria alrededor de los cuatro bordes**, que se desvanece con el morph. Implementada como campo de distancia: banda de 7px rodeando el rect con opacidad decayendo cuadráticamente con la distancia euclidiana al borde (pico 96/256 en el borde) — un blur barato sin kernel real; el interior no se pinta porque el álbum lo tapa. El alfa pico escala con t256, así que aparece al entrar y se va al salir del modo. Reemplaza el `fill_rounded_rect` desplazado de D-137.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

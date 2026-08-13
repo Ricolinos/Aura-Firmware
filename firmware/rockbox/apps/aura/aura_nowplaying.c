@@ -91,7 +91,8 @@
 /* Centro vertical del area util del panel (del borde superior al tope
  * de la fila de modos): la fila de controles de abajo no se invade. */
 #define M4_ART_Y      (((PROGRESS_Y - 10 - A26_ICON_SIZE_MENU) - M4_ART_SIZE) / 2)
-#define M4_ART_SHADOW_DY 4
+#define M4_ART_SHADOW_R     7  /* radio del difuminado alrededor del album */
+#define M4_ART_SHADOW_ALPHA 96 /* opacidad pico en el borde de la imagen */
 #define M4_MORPH_MS   330 /* fundido lineal de contenido del sistema */
 /* Panel derecho del Modo 4 (correccion 2026-08-12): una HOJA que se
  * desliza desde la derecha (no un fade), de vidrio traslucido tenido
@@ -654,6 +655,48 @@ static void draw_m4_right_panel(int t256)
     }
 }
 
+/* Sombra DIFUSA alrededor del album (correccion 2026-08-12: "no unos
+ * cuantos pixeles abajo -- una sombra con ligero difuminado detras,
+ * que se note alrededor de la imagen"): banda de M4_ART_SHADOW_R px
+ * rodeando el rect, con la opacidad decayendo cuadraticamente con la
+ * distancia euclidiana al borde -- un blur barato sin kernel real. El
+ * interior no se pinta (el album lo tapa). `alpha_max` ya trae el
+ * desvanecimiento del morph aplicado. */
+static void draw_art_soft_shadow(int x, int y, int size, int alpha_max)
+{
+    int xx, yy;
+
+    if (alpha_max <= 0)
+        return;
+    for (yy = y - M4_ART_SHADOW_R; yy < y + size + M4_ART_SHADOW_R; yy++)
+    {
+        fb_data *row;
+
+        if (yy < 0 || yy >= A26_SCREEN_HEIGHT)
+            continue;
+        row = FBADDR(0, yy);
+        for (xx = x - M4_ART_SHADOW_R; xx < x + size + M4_ART_SHADOW_R; xx++)
+        {
+            int dx = 0, dy = 0, d2;
+
+            if (xx < 0 || xx >= A26_SCREEN_WIDTH)
+                continue;
+            if (xx < x)              dx = x - xx;
+            else if (xx >= x + size) dx = xx - (x + size - 1);
+            if (yy < y)              dy = y - yy;
+            else if (yy >= y + size) dy = yy - (y + size - 1);
+            if (dx == 0 && dy == 0)
+                continue; /* debajo del album: lo tapa la imagen */
+            d2 = dx * dx + dy * dy;
+            if (d2 >= M4_ART_SHADOW_R * M4_ART_SHADOW_R)
+                continue;
+            row[xx] = a26_shell_blend(row[xx], LCD_RGBPACK(0, 0, 0),
+                alpha_max * (M4_ART_SHADOW_R * M4_ART_SHADOW_R - d2)
+                          / (M4_ART_SHADOW_R * M4_ART_SHADOW_R));
+        }
+    }
+}
+
 /* `t256`: morph del Modo 4 -- 0 = caratula inclinada de 135px con
  * reflejo (layout normal), 256 = cuadrado perfecto de 106px centrado
  * en el panel de 130px, SIN reflejo (se desvanece en el trayecto). El
@@ -685,16 +728,11 @@ static void draw_cover_tilted(int t256)
 
     if (t256 > 0)
     {
-        /* Sombra paralela del album (correccion 2026-08-12): aparece
-         * con el morph mientras el reflejo se va -- mismo criterio del
-         * indicador de la barra (sombra dura sutil, D-123), sobre el
-         * fondo uniforme del panel izquierdo. */
-        int sx = aura_pattern_lerp(ART_X, M4_ART_X, t256);
-        int sy = cy - size_vis / 2 + M4_ART_SHADOW_DY;
-        unsigned sh = a26_shell_blend(shell, LCD_RGBPACK(0, 0, 0),
-                                       72 * t256 / 256);
-        a26_shell_fill_rounded_rect(sx, sy, size_vis, size_vis,
-                                     ART_RADIUS, sh, shell);
+        /* Resplandor difuso alrededor del album, desvaneciendose con
+         * el morph (aparece al entrar, se va al salir). */
+        draw_art_soft_shadow(aura_pattern_lerp(ART_X, M4_ART_X, t256),
+                              cy - size_vis / 2, size_vis,
+                              M4_ART_SHADOW_ALPHA * t256 / 256);
     }
 
     /* Signo positivo (no `-NP_TILT_IANGLE`): con el signo negativo
