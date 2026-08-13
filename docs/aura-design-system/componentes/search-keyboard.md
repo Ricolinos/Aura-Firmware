@@ -9,8 +9,8 @@ titulada "Búsqueda". Confirmado 2026-08-13.
 | Zona | Contenido |
 |---|---|
 | y=26 | **Texto completo** escrito, en letra chica (Regular 8) centrado |
-| y=44, alto 34 | **Caja de búsqueda**: pastilla de **ACENTO** a todo el ancho útil |
-| dentro, x+6 | **Campo** blanco de 84×24 con lo escrito y el cursor |
+| y=44, alto 34 | **Caja de búsqueda**: pastilla de **ACENTO** a todo el ancho útil, **radio 11** |
+| dentro, x+6 | **Campo** blanco de 84×24 con lo escrito y el cursor, **radio 6** |
 | dentro, tras el campo | **Tira** de caracteres deslizante |
 | y=92 en adelante | **Resultados en vivo** |
 
@@ -74,3 +74,14 @@ nunca cuesta el texto.
   un playlist de un solo elemento — la búsqueda no define un álbum ni un
   orden, así que encolar el resto sería inventar un contexto que el
   usuario no pidió.
+
+
+## Esquinas (confirmadas 2026-08-13)
+
+La caja usa un **radio propio de 11px**, no el genérico de 8 de
+tarjeta/pastilla: a 34px de alto, 8px se lee como esquina dura. El campo
+interior es **concéntrico** — su radio es el de la caja menos el margen
+que los separa (11 − 5 = **6**) — de modo que las dos curvas comparten
+centro y se leen como una pieza, no como dos rectángulos redondeados
+encimados. Ambas se rasterizan con el antialias de cobertura fraccional
+del sistema.

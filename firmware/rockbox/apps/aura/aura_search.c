@@ -29,12 +29,19 @@ static const char KB_CHARS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 /* Geometria (320x240, bajo la StatusBar de 20px). */
 #define KB_FULL_Y      26              /* texto completo, letra chica */
 #define KB_PILL_Y      44
-#define KB_PILL_H      34
+#define KB_PILL_H      AURA_DS_METRICS_SEARCH_PILL_HEIGHT
 #define KB_PILL_X      A26_SPACING_LG
 #define KB_PILL_W      (A26_SCREEN_WIDTH - 2 * A26_SPACING_LG)
-#define KB_FIELD_DX    6
+#define KB_FIELD_DX    AURA_DS_METRICS_SEARCH_FIELD_INSET_X
 #define KB_FIELD_W     84
-#define KB_FIELD_H     24
+#define KB_FIELD_H     AURA_DS_METRICS_SEARCH_FIELD_HEIGHT
+/* Radios CONCENTRICOS (encargo 2026-08-13): el campo comparte centro de
+ * curvatura con la caja, asi que su radio es el de la caja menos el
+ * margen que los separa -- con radios iguales las dos curvas se leen
+ * como dos rectangulos encimados, no como una pieza. */
+#define KB_PILL_R      AURA_DS_METRICS_SEARCH_PILL_RADIUS
+#define KB_FIELD_MY    ((KB_PILL_H - KB_FIELD_H) / 2)
+#define KB_FIELD_R     (KB_PILL_R - KB_FIELD_MY)
 #define KB_STRIP_DX    (KB_FIELD_DX + KB_FIELD_W + 10)
 #define KB_STRIP_PAD   10
 #define KB_LEAD        2               /* caracteres visibles detras del cursor */
@@ -260,13 +267,12 @@ void aura_search_draw(void)
     /* La caja de busqueda es una pastilla de ACENTO: es el unico
      * elemento vivo de la pantalla y la tira se lee encima de ella. */
     a26_shell_fill_rounded_rect(KB_PILL_X, KB_PILL_Y, KB_PILL_W, KB_PILL_H,
-                                 A26_LAYOUT_CORNER_RADIUS_PILL,
+                                 KB_PILL_R,
                                  aura_accent(), a26_color(A26_SHELL_BG));
     /* Campo blanco donde vive lo escrito. */
     a26_shell_fill_rounded_rect(KB_PILL_X + KB_FIELD_DX,
-                                 KB_PILL_Y + (KB_PILL_H - KB_FIELD_H) / 2,
-                                 KB_FIELD_W, KB_FIELD_H,
-                                 A26_LAYOUT_CORNER_RADIUS_CARD,
+                                 KB_PILL_Y + KB_FIELD_MY,
+                                 KB_FIELD_W, KB_FIELD_H, KB_FIELD_R,
                                  a26_color(A26_SHELL_BG), aura_accent());
 
     draw_field(KB_PILL_X + KB_FIELD_DX);
