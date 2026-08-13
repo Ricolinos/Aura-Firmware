@@ -104,6 +104,27 @@ static long s_seek_applied_ms = -1;
 #define SEEK_FIRST_KICK_MS 1500
 static long s_seek_last_event = 0;
 
+/* Nunca mas de UN salto de audio en vuelo (correccion 2026-08-12: "el
+ * audio sigue quedandose atras"): cada audio_ff_rewind() implica
+ * seek + rebuffer en el motor, y si uno tarda mas que el estrangulado
+ * los saltos se APILAN en su cola -- al soltar, el motor seguia
+ * procesando saltos viejos antes del final. Un salto intermedio solo
+ * se emite cuando el elapsed real ya alcanzo el salto anterior
+ * (motor listo); si el motor va lento, los intermedios se omiten (el
+ * visual avanza igual) y el salto final de la ventana aterriza sin
+ * cola por delante. */
+static bool seek_engine_ready(const struct mp3entry *id3)
+{
+    long d;
+
+    if (s_seek_applied_ms < 0)
+        return true;
+    d = (long)id3->elapsed - s_seek_applied_ms;
+    if (d < 0)
+        d = -d;
+    return d < 2000;
+}
+
 /* -- Modo 4 (Letras), panel comprimido (PLAN.md T3.1(c),
  * componentes/now-playing.md) --------------------------------------------
  * "Panel izquierdo delgado de 130px" (el token se llama
@@ -1178,7 +1199,8 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
                 s_scrub_preview_ms = next;
 
                 if (fresh_hold
-                    || current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS)
+                    || (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS
+                        && seek_engine_ready(id3)))
                 {
                     audio_ff_rewind(next);
                     s_seek_last_apply = current_tick;
@@ -1226,7 +1248,8 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
                  * -- clicks en rafaga reiniciaban la busqueda del
                  * motor y el audio solo saltaba al parar la rueda. */
                 if (s_seek_applied_ms < 0
-                    || current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS)
+                    || (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS
+                        && seek_engine_ready(id3)))
                 {
                     audio_ff_rewind(next);
                     s_seek_last_apply = current_tick;

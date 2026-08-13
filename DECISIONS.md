@@ -1531,4 +1531,10 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-128 — Un solo salto de audio en vuelo durante el ajuste
+
+**Corrección del dueño del diseño (2026-08-12) sobre D-127**: lo visual quedó correcto pero el audio seguía rezagado tras soltar. Causa: cada `audio_ff_rewind()` implica seek + rebuffer en el motor de reproducción; si un salto tarda más que el estrangulado de ~250ms, los siguientes se APILAN en la cola del motor — al soltar, seguía procesando saltos viejos antes de llegar al final. Fix: `seek_engine_ready()` — un salto intermedio solo se emite cuando el elapsed real ya alcanzó el salto anterior (a menos de 2s del objetivo); si el motor va lento, los intermedios se omiten (el visual avanza igual, por tiempo real) y el salto final de la ventana aterriza sin cola por delante. Aplica igual a los botones sostenidos y al scrub de rueda. Degradación limpia: motor rápido → saltos audibles frecuentes; motor lento → pocos saltos y aterrizaje final inmediato.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
