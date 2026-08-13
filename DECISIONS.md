@@ -1510,4 +1510,14 @@ Verificado: reproducción del álbum AIFF sin un solo CODEC_ERROR y con el icono
 
 ---
 
+## D-126 — Píldora también en volumen y seek por tiempo real (sin arrastre al soltar)
+
+**Dos correcciones del dueño del diseño (2026-08-12) sobre D-125:**
+
+**1) La píldora también en el ajuste de volumen** — mismo indicador (15×11 blanco con sombra) centrado en el borde del relleno de nivel. Verificado en tema oscuro del simulador del dueño (`fix16-volume-pill-dark.png`).
+
+**2) Seek por TIEMPO REAL, no por evento**: con paso fijo de 3s por repeat, la cola de botones se atrasaba respecto al render (~10 repeats/s contra cuadros más lentos) y la barra seguía avanzando sola después de soltar, mientras drenaba los eventos rezagados. Ahora cada repeat avanza `(ticks desde el repeat anterior) × SEEK_RATE` (25 segundos de canción por segundo sostenido): los eventos en ráfaga tras soltar aportan deltas casi nulos y la barra se detiene al instante. El primer repeat de un hold nuevo da un empujón fijo (1.5s) con salto de audio INMEDIATO; los siguientes saltos de audio siguen estrangulados a ~250ms para que se escuche avanzar. (Confirmación audible en vivo por el dueño.)
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

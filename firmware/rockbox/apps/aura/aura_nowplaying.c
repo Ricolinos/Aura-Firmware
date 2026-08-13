@@ -93,6 +93,16 @@ static long s_scrub_show_until = 0; /* ventana del indicador del modo scrub */
 #define AUDIO_SEEK_APPLY_TICKS (HZ / 4)
 static long s_seek_last_apply = 0;
 static long s_seek_applied_ms = -1;
+/* Paso de busqueda por TIEMPO REAL, no por evento (correccion
+ * 2026-08-12: con paso fijo por repeat, la cola de botones se atrasaba
+ * respecto al render y la barra seguia avanzando sola despues de
+ * soltar). Cada repeat avanza (ticks transcurridos desde el repeat
+ * anterior) x SEEK_RATE -- los eventos rezagados que se procesan en
+ * rafaga tras soltar aportan deltas casi nulos y la barra se detiene
+ * al instante. */
+#define SEEK_RATE          25  /* segundos de cancion por segundo sostenido */
+#define SEEK_FIRST_KICK_MS 1500
+static long s_seek_last_event = 0;
 
 /* -- Modo 4 (Letras), panel comprimido (PLAN.md T3.1(c),
  * componentes/now-playing.md) --------------------------------------------
@@ -673,6 +683,19 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int 
 
     if (vol_active)
     {
+        /* La pildora tambien indica el nivel de volumen (correccion
+         * 2026-08-12: "no se renderiza al subir o bajar el volumen"). */
+        int tw = AURA_DS_METRICS_NOW_PLAYING_SCRUB_THUMB_W;
+        int th = AURA_DS_METRICS_NOW_PLAYING_SCRUB_THUMB_H;
+        int tx = fill_x + fill_w - tw / 2;
+        int ty = PROGRESS_Y + PROGRESS_TRACK_H / 2 - th / 2;
+
+        if (tx < x) tx = x;
+        if (tx + tw > x + width) tx = x + width - tw;
+
+        a26_shell_fill_capsule_over(tx + 1, ty + 2, tw, th, LCD_RGBPACK(0, 0, 0), 56);
+        a26_shell_fill_capsule_over(tx, ty, tw, th, white, 256);
+
         /* speaker-minus / speaker-plus en los extremos, con el fade
          * sutil del tramo final de la ventana. */
         long left_ticks = s_volume_overlay_until - current_tick;
@@ -1112,15 +1135,25 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
             {
                 long base = (s_scrub_preview_ms >= 0) ? s_scrub_preview_ms
                                                        : (long)id3->elapsed;
-                long next = base + dir * SEEK_STEP_MS;
+                long delta_ticks = current_tick - s_seek_last_event;
+                long step_ms;
+                long next;
+                bool fresh_hold = (delta_ticks > HZ / 2);
 
+                /* Primer repeat de un hold nuevo: arranque con un
+                 * empujon fijo y salto de audio INMEDIATO; los
+                 * siguientes avanzan por tiempo real transcurrido. */
+                step_ms = fresh_hold ? SEEK_FIRST_KICK_MS
+                                      : delta_ticks * 1000L * SEEK_RATE / HZ;
+                s_seek_last_event = current_tick;
+
+                next = base + dir * step_ms;
                 if (next < 0) next = 0;
                 if ((unsigned long)next > id3->length) next = (long)id3->length;
                 s_scrub_preview_ms = next;
-                /* Audio estrangulado: un salto real cada ~250ms para
-                 * que se OIGA avanzar entre saltos; el visual sigue
-                 * cada repeat. */
-                if (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS)
+
+                if (fresh_hold
+                    || current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS)
                 {
                     audio_ff_rewind(next);
                     s_seek_last_apply = current_tick;
