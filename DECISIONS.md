@@ -1556,4 +1556,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-131 — Reproductor: play/pause muestra el estado real; transitorios al eje del transporte; separación 20px
+
+**Correcciones del dueño del diseño (2026-08-12) sobre D-130.** (1) El icono central mostraba la ACCIÓN pendiente (pause mientras suena); ahora muestra el ESTADO real: play mientras se reproduce, pause en pausa — en la fila normal y en el modo compacto de listas. (2) Los elementos transitorios (tiempos de búsqueda, bocinas −/+ de volumen) bajan del borde inmediato de la barra al **eje horizontal de la fila de transporte** (centrados verticalmente entre la barra y el borde inferior, como los iconos). (3) Las bocinas −/+ crecen de 12 a **16px** (mismo tamaño que repetir/aleatorio). (4) La separación de repetir/aleatorio respecto al bloque central pasa de 12 a **20px** (`transport_icon_gap`). Verificado con capturas de reposo y volumen; los "estados de búsqueda fantasma" vistos en dos capturas intermedias resultaron ser una carrera no determinista del harness (instrumentado: ningún LEFT/RIGHT llega en corridas limpias), no un defecto del firmware.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
