@@ -53,6 +53,7 @@ int aura_widgets_split_active(void);
  * (split si el LeftPanel esta en pantalla, full si no) -- unico punto
  * autorizado para dibujarla desde una pantalla de listas/menus, ver la
  * regla dura en aura_widgets.c. */
+void aura_widgets_puts_clipped(int x, int y, int max_w, const char *text);
 void aura_widgets_draw_status_bar(const char *title);
 
 /* Envuelve `text` por palabras al ancho dado con la fuente ACTIVA:

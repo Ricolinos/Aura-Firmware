@@ -12,6 +12,7 @@
 #include "aura_screens.h"
 #include "aura_nowplaying.h"
 #include "aura_stopwatch.h"
+#include "aura_search.h"
 #include "aura_music.h"
 #include "aura_widgets.h"
 #include "aura_statusbar.h"
@@ -272,6 +273,13 @@ void aura_main(void)
              * -- 20fps durante los ~380ms completos. */
             if (aura_widgets_pill_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
+
+            /* Cursor parpadeante del teclado de Busqueda: medio
+             * segundo encendido, medio apagado -- misma puerta de
+             * lcd_active() que el resto. */
+            if (aura_nav_current(&nav) == AURA_SCREEN_MUSIC_SEARCH
+                && aura_search_needs_tick() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
 
             /* Cronometro en marcha: las centesimas exigen refresco
              * continuo, con la misma puerta de lcd_active() del resto. */

@@ -1734,4 +1734,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-159 — Pantalla de Búsqueda: teclado clásico de tira con resultados en vivo
+
+**Encargo del dueño del diseño (2026-08-13, P3a).** Teclado del iPod original: **una tira de caracteres que la rueda recorre**, no una cuadrícula, con el activo fijo en la tercera posición visible y la tira cortada por la derecha. Se muestra en MAYÚSCULAS y **escribe minúsculas**. El texto se ve **completo arriba** (letra chica, 22 caracteres y luego `…` a la derecha) y **por la cola en el campo** (`…abc`), con cursor parpadeante a medio segundo. Forward inserta espacio, Backward borra un carácter y **mantenerlo borra todo** (mismo detector de repeat que el reproductor). **Lo escrito persiste** mientras dure la sesión: salir con MENU a cualquier profundidad y volver reanuda la búsqueda intacta — requisito explícito del encargo. Los **resultados se recalculan en vivo** al cambiar el texto (subcadena sin distinguir mayúsculas, criterio del `~` de tagcache) y PLAY los abre a pantalla completa, donde SELECT reproduce la pista en un playlist de un solo elemento. Estructura tomada del teclado que el dueño ya resolvió en su proyecto `mi-ipod-os` (investigado y portado a las convenciones de Aura, no copiado: aquí vive en su propia pantalla del árbol, no como suplantación del `kbd_input` de Rockbox). **Bug atrapado en la verificación**: se buscaba y mostraba el crudo de tagcache, así que `<Untagged>` aparecía como resultado de cualquier búsqueda con "a"/"un"/"tag" — ahora la resolución de etiqueta visible (título real o nombre de archivo) es un solo punto compartido con las listas, `aura_music_visible_title()`. De paso, `wheel_advance()` deja de ser privado de aura_screens y se comparte como `aura_wheel_advance()`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

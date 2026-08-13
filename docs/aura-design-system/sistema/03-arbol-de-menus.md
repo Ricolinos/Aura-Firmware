@@ -47,7 +47,7 @@ del iPod Classic (referencia levantada por el dueño del diseño el
 | Géneros | ✅ → *Todos* + géneros → artistas → álbumes → canciones |
 | Autores | ✅ (`tag_composer`) → *Todos* + autores → álbumes → canciones |
 | Audiolibros | ◐ |
-| Búsqueda | ⬜ (teclado clásico pendiente de construir) |
+| Búsqueda | ✅ teclado clásico con resultados en vivo — ver `componentes/search-keyboard.md` |
 | Genius | ⛔ (no existe la función; no se simula) |
 
 **Fila sintética**: las listas que agrupan encabezan con *Todos*

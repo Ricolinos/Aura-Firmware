@@ -61,6 +61,13 @@ int aura_music_filter_generation(void);
  * y arranca la reproduccion en start_index. */
 bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index);
 bool aura_music_play_all_shuffled(void);
+bool aura_music_play_track(int32_t idx_id);
+
+/* Etiqueta visible de la pista actual de una busqueda tagcache ABIERTA
+ * (titulo real, o nombre de archivo si no tiene tag). */
+struct tagcache_search;
+void aura_music_visible_title(struct tagcache_search *tcs, const char *raw,
+                               char *out, size_t outsz);
 
 /* Catalogo de playlists guardadas (archivos .m3u/.m3u8). `labels` trae
  * el nombre de archivo completo, CON extension -- hace falta tal cual

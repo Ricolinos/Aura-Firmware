@@ -130,6 +130,24 @@ static bool title_from_filename(struct tagcache_search *tcs, char *out, size_t o
     return out[0] != '\0';
 }
 
+/* Etiqueta VISIBLE de la pista actual de una busqueda abierta: el
+ * titulo real, o el nombre de archivo si la pista no tiene tag de
+ * titulo. "<Untagged>" es jerga tecnica de tagcache y nunca puede
+ * llegar a la pantalla (regla dura del proyecto) -- este es el unico
+ * punto que decide esa sustitucion, compartido por las listas y por
+ * los resultados de Busqueda. */
+void aura_music_visible_title(struct tagcache_search *tcs, const char *raw,
+                               char *out, size_t outsz)
+{
+    if (strcmp(raw, UNTAGGED) != 0)
+    {
+        strlcpy(out, raw, outsz);
+        return;
+    }
+    if (!title_from_filename(tcs, out, outsz))
+        strlcpy(out, aura_str(AURA_STR_UNKNOWN_TITLE), outsz);
+}
+
 /* Ejecuta una busqueda tagcache sobre `tag`, aplicando los filtros que
  * correspondan segun la pantalla, y vuelca hasta `max` resultados en
  * `out`. Devuelve la cantidad de items. */
@@ -493,6 +511,34 @@ bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index)
  * biblioteca en orden aleatorio, empezando a sonar de inmediato. Reusa
  * el constructor de playlist sin filtros y el barajado real del nucleo
  * (el mismo de playlist_randomise, no un indice al azar). */
+/* Reproduce UNA pista por su idx_id de tagcache (resultados de
+ * Busqueda, 2026-08-13): playlist de un solo elemento -- la busqueda no
+ * define un album ni un orden, asi que encolar el resto seria inventar
+ * un contexto que el usuario no pidio. */
+bool aura_music_play_track(int32_t idx_id)
+{
+    struct tagcache_search tcs;
+    char path[MAX_PATH];
+    bool ok = false;
+
+    if (!tagcache_is_usable())
+        return false;
+    if (!tagcache_search(&tcs, tag_title))
+        return false;
+
+    if (tagcache_retrieve(&tcs, idx_id, tag_filename, path, sizeof(path)))
+    {
+        playlist_create(NULL, NULL);
+        if (playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true) >= 0)
+        {
+            playlist_start(0, 0, 0);
+            ok = true;
+        }
+    }
+    tagcache_search_finish(&tcs);
+    return ok;
+}
+
 bool aura_music_play_all_shuffled(void)
 {
     if (!build_playlist_from_songs(AURA_SCREEN_MUSIC_SONGS))

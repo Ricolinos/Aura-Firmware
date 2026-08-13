@@ -256,6 +256,23 @@ static int list_width(void)
  * dentro de una pantalla split. Ahora barra y panel salen del MISMO
  * dato (aura_widgets_split_active(), que ya combina la tabla de layout
  * de la pantalla con el ajuste de Graficos). */
+/* Dibuja `text` recortado a `max_w` con la fuente y el color activos
+ * (mismo mecanismo de viewport que el resto del sistema). */
+void aura_widgets_puts_clipped(int x, int y, int max_w, const char *text)
+{
+    struct viewport vp = *lcd_current_viewport;
+    struct viewport *saved;
+
+    if (max_w <= 0)
+        return;
+    vp.x = x;
+    vp.y = y;
+    vp.width = max_w;
+    saved = lcd_set_viewport(&vp);
+    lcd_putsxy(0, 0, (const unsigned char *)text);
+    lcd_set_viewport(saved);
+}
+
 void aura_widgets_draw_status_bar(const char *title)
 {
     aura_status_bar_v2_draw_auto(0, list_width(), title);

@@ -25,6 +25,7 @@
 #include "aura_coverflow.h"
 #include "aura_photos.h"
 #include "aura_stopwatch.h"
+#include "aura_search.h"
 #include "aura_video.h"
 #include "aura_manifest.h"
 #include "aura_main.h"
@@ -219,7 +220,8 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_MUSIC_COMPOSERS:     return AURA_STR_MUSIC_COMPOSERS;
     case AURA_SCREEN_MUSIC_COMPILATIONS:  return AURA_STR_MUSIC_COMPILATIONS;
     case AURA_SCREEN_MUSIC_AUDIOBOOKS:    return AURA_STR_MUSIC_AUDIOBOOKS;
-    case AURA_SCREEN_MUSIC_SEARCH:        return AURA_STR_MUSIC_SEARCH;
+    case AURA_SCREEN_MUSIC_SEARCH:
+    case AURA_SCREEN_MUSIC_SEARCH_RESULTS: return AURA_STR_MUSIC_SEARCH;
     case AURA_SCREEN_EXTRAS:              return AURA_STR_EXTRAS;
     case AURA_SCREEN_EXTRAS_CLOCKS:       return AURA_STR_EXTRAS_CLOCKS;
     case AURA_SCREEN_EXTRAS_CALENDAR:     return AURA_STR_EXTRAS_CALENDAR;
@@ -1532,8 +1534,11 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_legal_text();
     else if (screen == AURA_SCREEN_EXTRAS_STOPWATCH)
         aura_stopwatch_draw();
+    else if (screen == AURA_SCREEN_MUSIC_SEARCH)
+        aura_search_draw();
+    else if (screen == AURA_SCREEN_MUSIC_SEARCH_RESULTS)
+        aura_search_results_draw();
     else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS
-             || screen == AURA_SCREEN_MUSIC_SEARCH
              || screen == AURA_SCREEN_MUSIC_COMPILATIONS
              || (screen >= AURA_SCREEN_EXTRAS_CLOCKS
                  && screen <= AURA_SCREEN_EXTRAS_SCREENLOCK))
@@ -1569,7 +1574,7 @@ void aura_screens_draw(aura_nav_t *nav)
  * (aura_main_wheel_velocity(), leida del driver real del clickwheel) a
  * 1-3 items. Con velocidad 0 (arnes de botones pautado, eventos
  * sinteticos) siempre da 1 -- degrada al comportamiento de antes. */
-static int wheel_advance(int sel, int count, int direction)
+int aura_wheel_advance(int sel, int count, int direction)
 {
     int step, next;
 
@@ -1595,10 +1600,10 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        aura_nav_set_selection(nav, wheel_advance(sel, count, 1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        aura_nav_set_selection(nav, wheel_advance(sel, count, -1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, -1));
         break;
     case BUTTON_SELECT:
         /* Filas booleanas (Aleatorio, Clicker): SELECT invierte el
@@ -1655,10 +1660,10 @@ static void handle_choice_list(aura_nav_t *nav, aura_screen_id_t screen, long bu
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        aura_nav_set_selection(nav, wheel_advance(sel, count, 1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        aura_nav_set_selection(nav, wheel_advance(sel, count, -1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, -1));
         break;
     case BUTTON_SELECT:
         apply_choice(screen, sel);
@@ -1714,10 +1719,10 @@ static void handle_music_browse(aura_nav_t *nav, aura_screen_id_t screen, long b
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        aura_nav_set_selection(nav, wheel_advance(sel, count, 1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        aura_nav_set_selection(nav, wheel_advance(sel, count, -1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, -1));
         break;
     case BUTTON_SELECT:
         if (count == 0)
@@ -1784,13 +1789,13 @@ static void handle_playlists(aura_nav_t *nav, long button)
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        /* wheel_advance(), no +-1 fijo (AUDITORIA-01 A-18): unico
+        /* aura_wheel_advance(), no +-1 fijo (AUDITORIA-01 A-18): unico
          * manejador de lista que se habia quedado afuera de la
          * aceleracion real de rueda de Fase 29 (D-077). */
-        aura_nav_set_selection(nav, wheel_advance(sel, s_playlist_cache_count, 1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, s_playlist_cache_count, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        aura_nav_set_selection(nav, wheel_advance(sel, s_playlist_cache_count, -1));
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, s_playlist_cache_count, -1));
         break;
     case BUTTON_SELECT:
         if (s_playlist_cache_count > 0 && aura_music_play_playlist(sel))
@@ -1856,6 +1861,10 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_legal_text(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_STOPWATCH)
         aura_stopwatch_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_MUSIC_SEARCH)
+        aura_search_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_MUSIC_SEARCH_RESULTS)
+        aura_search_results_handle_button(nav, button);
     else if (is_coverflow_screen(screen))
         aura_coverflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))
