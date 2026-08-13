@@ -105,6 +105,13 @@ typedef struct {
      * 2026-08-13, Reloj internacional): -24 = UTC-6, Ciudad de Mexico.
      * Los demas relojes se calculan como local + (huso_ciudad - este). */
     int tz_local_quarters;
+    /* Ajustes del original agregados el 2026-08-13. La velocidad de
+     * audiolibros y el orden por nombre/apellido no tienen backend real
+     * en Rockbox: se guardan y se muestran, pero no cambian nada
+     * todavia -- documentado, no simulado. "Ajuste volumen" SI se
+     * cablea al replaygain real del nucleo. */
+    int audiobook_speed;   /* 0 lenta, 1 normal, 2 rapida */
+    int sort_by_lastname;  /* 0 nombre, 1 apellido */
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

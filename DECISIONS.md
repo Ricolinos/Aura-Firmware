@@ -1746,4 +1746,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-161 — Notas, Juegos y los ajustes que faltaban del original
+
+**Encargo del dueño del diseño (2026-08-13).** (1) **Notas**: pantalla de instrucciones con el texto del original (activar el iPod como disco en iTunes y arrastrar los archivos a la carpeta Notes). La pantalla de texto largo se generaliza (`draw_long_text`) y la comparte con Avisos legales. (2) **Juegos**: lista propia — su fila 0 LANZA un plugin en vez de navegar. **Klondike funciona**: es exactamente el plugin `solitaire` de Rockbox, que se lanza igual que el reproductor de video (`plugin_load` restaura pantalla/viewport/fuente al volver). iQuiz y Vortex quedan inertes: no hay equivalente y los originales son inviables (DRM FairPlay por dispositivo + RetailOS indocumentada). (3) **Ajustes del original**: *Audiolibros* con la pregunta del original y las tres velocidades en fila; *Ajuste volumen*, cableado al **replaygain real** del núcleo, no a un ajuste cosmético; *Ordenar por* (nombre/apellido). La velocidad de audiolibros y el orden por apellido se guardan y se muestran pero **todavía no cambian nada** — Rockbox no tiene backend para ellos; queda documentado, no simulado. **Corrección de fondo**: `wrap_text()` ignoraba los saltos de línea, así que todo texto largo con párrafos (Notas, Avisos legales, Audiolibros) se leía como un bloque corrido; ahora corta en `\n` y respeta las líneas en blanco entre párrafos.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

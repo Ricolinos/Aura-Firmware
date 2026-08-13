@@ -157,6 +157,20 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_WC_ADD]    = "Añadir",
     [AURA_STR_WC_EDIT]   = "Editar",
     [AURA_STR_WC_DELETE] = "Eliminar",
+    [AURA_STR_SETTINGS_AUDIOBOOKS]  = "Audiolibros",
+    [AURA_STR_SETTINGS_VOLUME_NORM] = "Ajuste volumen",
+    [AURA_STR_SETTINGS_SORT_BY]     = "Ordenar por",
+    [AURA_STR_SETTINGS_MUSICMENU]   = "Menú Música",
+    [AURA_STR_SPEED_SLOW]           = "Lenta",
+    [AURA_STR_SPEED_NORMAL]         = "Normal",
+    [AURA_STR_SPEED_FAST]           = "Rápida",
+    [AURA_STR_AUDIOBOOKS_BODY]      = "¿Deseas ajustar la velocidad de reproducción de los audiolibros?\n\nLa velocidad de reproducción no afectará al tono de voz de la reproducción de los audiolibros.",
+    [AURA_STR_SORT_FIRSTNAME]       = "Nombre",
+    [AURA_STR_SORT_LASTNAME]        = "Apellido",
+    [AURA_STR_NOTES_BODY]           = "Visualización y creación de notas\n\nPara ver archivos de texto aquí, activa la opción de usar el iPod como disco en iTunes y, a continuación, arrastra los archivos de texto a la carpeta Notes del iPod.\n\nPara más información, consulta el Manual de funciones del iPod o visita www.apple.com/es/support/ipod.",
+    [AURA_STR_GAME_IQUIZ]           = "iQuiz",
+    [AURA_STR_GAME_KLONDIKE]        = "Klondike",
+    [AURA_STR_GAME_VORTEX]          = "Vortex",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -314,6 +328,20 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_WC_ADD]    = "Add",
     [AURA_STR_WC_EDIT]   = "Edit",
     [AURA_STR_WC_DELETE] = "Delete",
+    [AURA_STR_SETTINGS_AUDIOBOOKS]  = "Audiobooks",
+    [AURA_STR_SETTINGS_VOLUME_NORM] = "Sound Check",
+    [AURA_STR_SETTINGS_SORT_BY]     = "Sort By",
+    [AURA_STR_SETTINGS_MUSICMENU]   = "Music Menu",
+    [AURA_STR_SPEED_SLOW]           = "Slower",
+    [AURA_STR_SPEED_NORMAL]         = "Normal",
+    [AURA_STR_SPEED_FAST]           = "Faster",
+    [AURA_STR_AUDIOBOOKS_BODY]      = "Do you want to adjust the playback speed of audiobooks?\n\nPlayback speed will not affect the pitch of the voice in audiobook playback.",
+    [AURA_STR_SORT_FIRSTNAME]       = "First Name",
+    [AURA_STR_SORT_LASTNAME]        = "Last Name",
+    [AURA_STR_NOTES_BODY]           = "Viewing and creating notes\n\nTo view text files here, enable the option to use your iPod as a disk in iTunes, then drag the text files to the Notes folder on your iPod.\n\nFor more information, see the iPod Features Guide or visit www.apple.com/support/ipod.",
+    [AURA_STR_GAME_IQUIZ]           = "iQuiz",
+    [AURA_STR_GAME_KLONDIKE]        = "Klondike",
+    [AURA_STR_GAME_VORTEX]          = "Vortex",
 };
 
 const char *aura_str(aura_str_id_t id)

@@ -27,6 +27,7 @@
 #include "aura_stopwatch.h"
 #include "aura_search.h"
 #include "aura_worldclock.h"
+#include "plugin.h"
 #include "aura_video.h"
 #include "aura_manifest.h"
 #include "aura_main.h"
@@ -144,15 +145,25 @@ static const nav_entry_t settings_entries[] = {
     /* -- sonido -- */
     { AURA_STR_SETTINGS_EQ,         "equalizer",         AURA_SCREEN_SETTINGS_EQ },
     { AURA_STR_SETTINGS_VOLUME_LIMIT, "volume-limit",    AURA_SCREEN_SETTINGS_VOLUME_LIMIT },
+    { AURA_STR_SETTINGS_VOLUME_NORM, "volume-2",         AURA_SCREEN_SETTINGS_VOLUME_NORM },
+    { AURA_STR_SETTINGS_AUDIOBOOKS, "audiobook",         AURA_SCREEN_SETTINGS_AUDIOBOOKS },
     { AURA_STR_SETTINGS_CLICKER,    "tap",               AURA_SCREEN_SETTINGS_CLICKER },
     /* -- sistema -- */
     { AURA_STR_SETTINGS_SLEEPTIMER, "sleep",             AURA_SCREEN_SETTINGS_SLEEPTIMER },
+    { AURA_STR_SETTINGS_SORT_BY,    "sort",              AURA_SCREEN_SETTINGS_SORT_BY },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
     { AURA_STR_SETTINGS_COPYRIGHT,  "legal",             AURA_SCREEN_SETTINGS_COPYRIGHT },
     { AURA_STR_SETTINGS_RESET,      "reset",             AURA_SCREEN_SETTINGS_RESET },
 };
 
 /* Extras del firmware original (2026-08-13), en su orden. */
+/* Juegos (2026-08-13): los originales del iPod son inviables (sus
+ * ejecutables llevan DRM FairPlay con llave por dispositivo y corren
+ * sobre RetailOS, indocumentada -- ver sistema/03-arbol-de-menus.md).
+ * Klondike SI existe: es exactamente el plugin `solitaire` de Rockbox.
+ * iQuiz y Vortex no tienen equivalente y van inertes hasta que se
+ * construyan nativos. La lista se arma en draw_games(), no aca: su
+ * fila 0 LANZA un plugin en vez de navegar a una pantalla. */
 static const nav_entry_t extras_entries[] = {
     { AURA_STR_EXTRAS_CLOCKS,     "clock",      AURA_SCREEN_EXTRAS_CLOCKS },
     { AURA_STR_EXTRAS_CALENDAR,   "calendar",   AURA_SCREEN_EXTRAS_CALENDAR },
@@ -262,6 +273,8 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_EQ:         return AURA_STR_SETTINGS_EQ;
     case AURA_SCREEN_SETTINGS_BRIGHTNESS: return AURA_STR_SETTINGS_BRIGHTNESS;
     case AURA_SCREEN_SETTINGS_LANGUAGE:   return AURA_STR_SETTINGS_LANGUAGE;
+    case AURA_SCREEN_SETTINGS_SORT_BY:    return AURA_STR_SETTINGS_SORT_BY;
+    case AURA_SCREEN_SETTINGS_AUDIOBOOKS: return AURA_STR_SETTINGS_AUDIOBOOKS;
     case AURA_SCREEN_SETTINGS_ACCENT:     return AURA_STR_SETTINGS_ACCENT;
     case AURA_SCREEN_SETTINGS_ABOUT:      return AURA_STR_SETTINGS_ABOUT;
     case AURA_SCREEN_SETTINGS_SHUFFLE:    return AURA_STR_SETTINGS_SHUFFLE;
@@ -318,6 +331,10 @@ static const aura_str_id_t eq_choice_labels[] = {
  * atenuada que no se puede elegir) hasta que exista su traduccion --
  * el usuario ve el catalogo completo sin que el firmware finja
  * soportar un idioma que no tiene. */
+static const aura_str_id_t sort_choice_labels[] = {
+    AURA_STR_SORT_FIRSTNAME, AURA_STR_SORT_LASTNAME,
+};
+
 static const aura_str_id_t language_choice_labels[] = {
     AURA_STR_LANG_ES, AURA_STR_LANG_EN,
     AURA_STR_LANG_DA, AURA_STR_LANG_DE, AURA_STR_LANG_FR, AURA_STR_LANG_IT,
@@ -361,6 +378,7 @@ static int is_choice_screen(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS_EQ
         || screen == AURA_SCREEN_SETTINGS_LANGUAGE
         || screen == AURA_SCREEN_SETTINGS_REPEAT
+        || screen == AURA_SCREEN_SETTINGS_SORT_BY
         || screen == AURA_SCREEN_SETTINGS_ACCENT;
 }
 
@@ -380,6 +398,9 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
     case AURA_SCREEN_SETTINGS_EQ:
         *out = eq_choice_labels;
         return sizeof(eq_choice_labels) / sizeof(eq_choice_labels[0]);
+    case AURA_SCREEN_SETTINGS_SORT_BY:
+        *out = sort_choice_labels;
+        return clamp_menu_count((int)(sizeof(sort_choice_labels) / sizeof(sort_choice_labels[0])));
     case AURA_SCREEN_SETTINGS_LANGUAGE:
         *out = language_choice_labels;
         return sizeof(language_choice_labels) / sizeof(language_choice_labels[0]);
@@ -404,6 +425,7 @@ static int get_choice_current(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_GRAPHICS:   return (int)aura_settings.graphics_mode;
     case AURA_SCREEN_SETTINGS_EQ:       return (int)aura_settings.eq_preset;
     case AURA_SCREEN_SETTINGS_LANGUAGE: return (int)aura_settings.language;
+    case AURA_SCREEN_SETTINGS_SORT_BY:  return aura_settings.sort_by_lastname;
     case AURA_SCREEN_SETTINGS_REPEAT:   return global_settings.repeat_mode;
     case AURA_SCREEN_SETTINGS_ACCENT:
     {
@@ -453,6 +475,9 @@ static void apply_choice(aura_screen_id_t screen, int index)
     case AURA_SCREEN_SETTINGS_LANGUAGE:
         aura_settings.language = (aura_lang_t)index;
         break;
+    case AURA_SCREEN_SETTINGS_SORT_BY:
+        aura_settings.sort_by_lastname = index;
+        break;
     case AURA_SCREEN_SETTINGS_ACCENT:
         if (index >= 0 && (size_t)index < sizeof(accent_choice_rgb24) / sizeof(accent_choice_rgb24[0]))
             aura_settings.accent_rgb24 = accent_choice_rgb24[index];
@@ -486,6 +511,11 @@ static int settings_row_toggle_value(aura_screen_id_t target)
         return aura_settings.left_panel_shadow;
     if (target == AURA_SCREEN_SETTINGS_SHOW_ICONS)
         return aura_settings.show_icons;
+    /* "Ajuste volumen" del original = normalizacion de volumen; se
+     * cablea al replaygain REAL del nucleo, no a un ajuste cosmetico. */
+    if (target == AURA_SCREEN_SETTINGS_VOLUME_NORM)
+        return global_settings.replaygain_settings.noclip
+               || global_settings.replaygain_settings.type != REPLAYGAIN_OFF;
     return -1;
 }
 
@@ -510,6 +540,13 @@ static void toggle_settings_row(aura_screen_id_t target)
     {
         aura_settings.show_icons = !aura_settings.show_icons;
         aura_settings_save();
+    }
+    else if (target == AURA_SCREEN_SETTINGS_VOLUME_NORM)
+    {
+        bool on = global_settings.replaygain_settings.type != REPLAYGAIN_OFF;
+        global_settings.replaygain_settings.type = on ? REPLAYGAIN_OFF
+                                                       : REPLAYGAIN_TRACK;
+        settings_save();
     }
 }
 
@@ -1189,9 +1226,9 @@ static void handle_reset_confirm(aura_nav_t *nav, long button)
 #define LEGAL_LINE_H 12
 static int s_legal_scroll = 0;
 
-static void draw_legal_text(void)
+static void draw_long_text(aura_str_id_t title_id, aura_str_id_t body_id)
 {
-    const char *body = aura_str(AURA_STR_COPYRIGHT_BODY);
+    const char *body = aura_str(body_id);
     const char *lines[64];
     int lens[64];
     int box_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_LG;
@@ -1200,7 +1237,7 @@ static void draw_legal_text(void)
     int n, i, y;
 
     a26_shell_clear_screen();
-    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_COPYRIGHT));
+    aura_widgets_draw_status_bar(aura_str(title_id));
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
@@ -1236,6 +1273,117 @@ static void handle_legal_text(aura_nav_t *nav, long button)
         s_legal_scroll = 0;
         aura_nav_pop(nav);
         break;
+    default: break;
+    }
+}
+
+/* Audiolibros (original): la pregunta y, debajo, las tres velocidades
+ * en una fila -- la elegida en acento. */
+static void draw_audiobooks(aura_nav_t *nav)
+{
+    static const aura_str_id_t opts[3] = {
+        AURA_STR_SPEED_SLOW, AURA_STR_SPEED_NORMAL, AURA_STR_SPEED_FAST,
+    };
+    const char *lines[16];
+    int lens[16];
+    int box_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
+    int sel = aura_nav_get_selection(nav);
+    int n, i, y, total_w = 0, x;
+    int widths[3];
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_AUDIOBOOKS));
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    n = aura_widgets_wrap_text(aura_str(AURA_STR_AUDIOBOOKS_BODY), box_w,
+                                lines, lens, 16);
+    y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL;
+    for (i = 0; i < n; i++)
+    {
+        char buf[128];
+        int len = lens[i] < (int)sizeof(buf) - 1 ? lens[i] : (int)sizeof(buf) - 1;
+        memcpy(buf, lines[i], len);
+        buf[len] = '\0';
+        lcd_putsxy(A26_SPACING_XXL, y, (const unsigned char *)buf);
+        y += 15;
+    }
+
+    /* Fila de opciones, centrada. */
+    y += A26_SPACING_XXL;
+    for (i = 0; i < 3; i++)
+    {
+        int w, h;
+        lcd_getstringsize((const unsigned char *)aura_str(opts[i]), &w, &h);
+        widths[i] = w;
+        total_w += w + (i < 2 ? A26_SPACING_XXL : 0);
+    }
+    x = (A26_SCREEN_WIDTH - total_w) / 2;
+    for (i = 0; i < 3; i++)
+    {
+        lcd_set_foreground(i == sel ? aura_accent()
+                                     : a26_color(A26_TEXT_PRIMARY));
+        lcd_putsxy(x, y, (const unsigned char *)aura_str(opts[i]));
+        x += widths[i] + A26_SPACING_XXL;
+    }
+}
+
+static void handle_audiobooks(aura_nav_t *nav, long button)
+{
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:  aura_nav_set_selection(nav, aura_wheel_advance(sel, 3, 1)); break;
+    case BUTTON_SCROLL_BACK: aura_nav_set_selection(nav, aura_wheel_advance(sel, 3, -1)); break;
+    case BUTTON_SELECT:
+        aura_settings.audiobook_speed = sel;
+        aura_settings_save();
+        aura_nav_pop(nav);
+        break;
+    case BUTTON_MENU: aura_nav_pop(nav); break;
+    default: break;
+    }
+}
+
+/* Juegos: lista propia (no nav_entry_t generico) porque la fila 0
+ * LANZA un plugin en vez de navegar. */
+static void draw_games(aura_nav_t *nav)
+{
+    static aura_list_item_t items[3];
+    static const aura_str_id_t labels[3] = {
+        AURA_STR_GAME_KLONDIKE, AURA_STR_GAME_IQUIZ, AURA_STR_GAME_VORTEX,
+    };
+    int i;
+
+    for (i = 0; i < 3; i++)
+    {
+        items[i].label = aura_str(labels[i]);
+        items[i].icon_name = NULL;
+        items[i].checked = 0;
+        items[i].toggle = -1;
+    }
+    aura_widgets_draw_list(aura_str(AURA_STR_EXTRAS_GAMES), items, 3,
+                            aura_nav_get_selection(nav));
+}
+
+static void handle_games(aura_nav_t *nav, long button)
+{
+    int sel = aura_nav_get_selection(nav);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:  aura_nav_set_selection(nav, aura_wheel_advance(sel, 3, 1)); break;
+    case BUTTON_SCROLL_BACK: aura_nav_set_selection(nav, aura_wheel_advance(sel, 3, -1)); break;
+    case BUTTON_SELECT:
+        /* Solo Klondike existe hoy: es el plugin solitaire de Rockbox.
+         * plugin_load() restaura pantalla/viewport/fuente al volver, el
+         * siguiente ciclo redibuja esta pantalla sin pasos extra (mismo
+         * camino que el reproductor de video). */
+        if (sel == 0)
+            plugin_load(PLUGIN_GAMES_DIR "/solitaire.rock", NULL);
+        break;
+    case BUTTON_MENU: aura_nav_pop(nav); break;
     default: break;
     }
 }
@@ -1534,7 +1682,13 @@ void aura_screens_draw(aura_nav_t *nav)
     else if (screen == AURA_SCREEN_SETTINGS_RESET)
         draw_reset_confirm();
     else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
-        draw_legal_text();
+        draw_long_text(AURA_STR_SETTINGS_COPYRIGHT, AURA_STR_COPYRIGHT_BODY);
+    else if (screen == AURA_SCREEN_EXTRAS_NOTES)
+        draw_long_text(AURA_STR_EXTRAS_NOTES, AURA_STR_NOTES_BODY);
+    else if (screen == AURA_SCREEN_EXTRAS_GAMES)
+        draw_games(nav);
+    else if (screen == AURA_SCREEN_SETTINGS_AUDIOBOOKS)
+        draw_audiobooks(nav);
     else if (screen == AURA_SCREEN_EXTRAS_STOPWATCH)
         aura_stopwatch_draw();
     else if (screen == AURA_SCREEN_MUSIC_SEARCH)
@@ -1866,8 +2020,13 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_reset_confirm(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
         handle_about(nav, button);
-    else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
+    else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT
+             || screen == AURA_SCREEN_EXTRAS_NOTES)
         handle_legal_text(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_AUDIOBOOKS)
+        handle_audiobooks(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_GAMES)
+        handle_games(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_STOPWATCH)
         aura_stopwatch_handle_button(nav, button);
     else if (screen == AURA_SCREEN_MUSIC_SEARCH)

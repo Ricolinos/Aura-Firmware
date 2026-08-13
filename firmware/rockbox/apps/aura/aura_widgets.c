@@ -862,7 +862,20 @@ int aura_widgets_wrap_text(const char *text, int max_width, const char **lines, 
         const char *cursor = p;
         char buf[128];
 
-        while (*cursor)
+        /* Salto de linea explicito: corta AQUI y arranca parrafo nuevo
+         * (correccion 2026-08-13 -- sin esto, los textos largos con
+         * parrafos, como Notas o Avisos legales, se leian como un solo
+         * bloque corrido). */
+        if (*p == '\n')
+        {
+            lines[n] = p;
+            lens[n] = 0;   /* linea en blanco = separacion de parrafos */
+            n++;
+            p++;
+            continue;
+        }
+
+        while (*cursor && *cursor != '\n')
         {
             int len = (int)(cursor - line_start) + 1;
             int w, h;
@@ -876,6 +889,15 @@ int aura_widgets_wrap_text(const char *text, int max_width, const char **lines, 
             if (*cursor == ' ')
                 last_space = cursor;
             cursor++;
+        }
+
+        if (*cursor == '\n')
+        {
+            lines[n] = line_start;
+            lens[n] = (int)(cursor - line_start);
+            n++;
+            p = cursor + 1;
+            continue;
         }
 
         if (*cursor == '\0')

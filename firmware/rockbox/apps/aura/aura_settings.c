@@ -34,6 +34,8 @@ static const aura_settings_t aura_settings_defaults = {
     .left_panel_shadow = true,
     .show_icons = true,
     .tz_local_quarters = -24,
+    .audiobook_speed = 1,
+    .sort_by_lastname = 0,
     .clock_visible = true,
 };
 
@@ -177,6 +179,10 @@ void aura_settings_load(void)
                 aura_settings.show_icons = (v != 0);
             else if (!strcmp(name, "tz_local_quarters"))
                 aura_settings.tz_local_quarters = v;
+            else if (!strcmp(name, "audiobook_speed"))
+                aura_settings.audiobook_speed = v;
+            else if (!strcmp(name, "sort_by_lastname"))
+                aura_settings.sort_by_lastname = (v != 0);
             else if (!strcmp(name, "clock_visible"))
                 aura_settings.clock_visible = (v != 0);
         }
@@ -218,6 +224,8 @@ void aura_settings_save(void)
     fdprintf(fd, "left_panel_shadow: %d\n", (int)aura_settings.left_panel_shadow);
     fdprintf(fd, "show_icons: %d\n", (int)aura_settings.show_icons);
     fdprintf(fd, "tz_local_quarters: %d\n", aura_settings.tz_local_quarters);
+    fdprintf(fd, "audiobook_speed: %d\n", aura_settings.audiobook_speed);
+    fdprintf(fd, "sort_by_lastname: %d\n", aura_settings.sort_by_lastname);
     fdprintf(fd, "clock_visible: %d\n", (int)aura_settings.clock_visible);
 
     close(fd);

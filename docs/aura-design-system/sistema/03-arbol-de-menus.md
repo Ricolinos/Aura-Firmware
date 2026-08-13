@@ -71,7 +71,9 @@ fila más.
 |---|---|
 | Cronómetro | ✅ contador `HH:MM:SS` con centésimas más chicas; SELECT arranca y luego marca registros; PLAY detiene conservando el tiempo (icono de pausa = reanudable); MENU sale guardando |
 | Reloj internacional | ✅ relojes analógicos con esfera clara (local) y oscura (otros husos); menú Añadir/Editar/Eliminar — ver `componentes/world-clock.md` |
-| Calendarios · Alarmas · Juegos · Notas · Bloqueo pantalla | ⬜ estructura navegable, interfaz propia pendiente |
+| Notas | ✅ pantalla de instrucciones del original |
+| Juegos | ◐/✅ **Klondike** funciona (plugin `solitaire` de Rockbox); iQuiz y Vortex inertes |
+| Calendarios · Alarmas · Bloqueo pantalla | ⬜ estructura navegable, interfaz propia pendiente |
 | Agenda | ◐ |
 
 **Juegos** (investigado 2026-08-13): los originales (iQuiz, Klondike,
@@ -92,9 +94,10 @@ agrupación, como en el original:
 | Reproducción | Aleatorio ✅ · Repetir ✅ · Menú principal ✅ |
 | Apariencia (propios de Aura) | Tema ✅ · Color de acento ✅ · Animaciones ✅ · Gráficos ✅ · Mostrar sombras ✅ · Mostrar iconos ✅ |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |
-| Sonido | Ecualizador ✅ (23 presets) · Límite volumen ✅ · Sonido de clic ✅ |
-| Sistema | Temporiz. reposo ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
+| Sonido | Ecualizador ✅ (23 presets) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
+| Sistema | Temporiz. reposo ✅ · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
 
-Del original quedan pendientes: Menú Música configurable, Audiolibros
-(velocidad), Ajuste volumen, Fecha y hora (con sus editores y el mapa de
-zona horaria) y Ordenar por.
+Del original quedan pendientes: **Menú Música** configurable y **Fecha y
+hora** (con sus editores y el mapa de zona horaria). La velocidad de
+audiolibros y el orden por apellido se guardan pero todavía no cambian
+nada: Rockbox no tiene backend para ellos.
