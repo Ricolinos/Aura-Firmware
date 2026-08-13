@@ -97,6 +97,31 @@ static aura_str_id_t untagged_label_for(int tag)
     }
 }
 
+/* Nombre del archivo de la pista actual de la busqueda, sin ruta ni
+ * extension -- respaldo de titulo para pistas sin etiquetar. Devuelve
+ * false si tagcache no puede darlo (entonces manda la etiqueta
+ * natural). */
+static bool title_from_filename(struct tagcache_search *tcs, char *out, size_t outsz)
+{
+    char path[MAX_PATH];
+    const char *base;
+    char *dot;
+
+    if (!tagcache_retrieve(tcs, tcs->idx_id, tag_filename, path, sizeof(path)))
+        return false;
+
+    base = strrchr(path, '/');
+    base = base ? base + 1 : path;
+    if (!base[0])
+        return false;
+
+    strlcpy(out, base, outsz);
+    dot = strrchr(out, '.');
+    if (dot && dot != out)
+        *dot = '\0';
+    return out[0] != '\0';
+}
+
 /* Ejecuta una busqueda tagcache sobre `tag`, aplicando los filtros que
  * correspondan segun la pantalla, y vuelca hasta `max` resultados en
  * `out`. Devuelve la cantidad de items. */
@@ -133,7 +158,24 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
          * del tipo de tag; el seek se conserva tal cual, el filtro
          * sigue funcionando sobre la entrada real. */
         if (!strcmp(buf, UNTAGGED))
-            strlcpy(out[n].label, aura_str(untagged_label_for(tag)), AURA_MUSIC_ITEM_LEN);
+        {
+            /* Una CANCION sin tag de titulo se muestra con el nombre
+             * de su archivo, sin extension ni ruta -- exactamente lo
+             * que hace el iPod original (y Rockbox) con material sin
+             * etiquetar (correccion 2026-08-13: la biblioteca real del
+             * dueno son exports de CD en AIFF que no traen chunk ID3
+             * alguno -- verificado chunk por chunk: solo FVER/COMM/SSND
+             * --, y la lista entera se veia como "Sin titulo" repetido,
+             * indistinguible). Los demas tags (album/artista/genero)
+             * si conservan su etiqueta natural: ahi el nombre de
+             * archivo no aporta nada. */
+            if (tag == tag_title && title_from_filename(&tcs, out[n].label,
+                                                         AURA_MUSIC_ITEM_LEN))
+                ; /* listo: nombre de archivo */
+            else
+                strlcpy(out[n].label, aura_str(untagged_label_for(tag)),
+                        AURA_MUSIC_ITEM_LEN);
+        }
         else
             strlcpy(out[n].label, buf, AURA_MUSIC_ITEM_LEN);
         out[n].seek = (tag == tag_title) ? tcs.idx_id : tcs.result_seek;

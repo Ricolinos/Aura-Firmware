@@ -1692,4 +1692,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-152 — Canciones sin tag de título se muestran con su nombre de archivo
+
+**Encargo del dueño del diseño (2026-08-13, P19).** El encargo pedía "corregir el lector de metadata AIFF"; la auditoría mostró que **no hay nada que corregir ahí**: los AIFF de la biblioteca real (exports de CD) se inspeccionaron chunk por chunk y solo traen `FVER`/`COMM`/`SSND` — cero chunk `ID3`, ni al final ni intercalado, y el último chunk cierra exactamente en el fin de archivo. No tienen tags que leer. El síntoma real era otro: sin tag de título, la lista entera se veía como "Sin título" repetido, indistinguible. Fix: una canción sin título se muestra con el **nombre de su archivo, sin ruta ni extensión** (`title_from_filename()` vía `tag_filename` de tagcache), exactamente como hacen el iPod original y Rockbox. Los demás tags (álbum/artista/género) conservan su etiqueta natural: ahí el nombre de archivo no aportaría nada. Verificado con captura de la biblioteca real.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
