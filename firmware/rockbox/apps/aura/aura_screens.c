@@ -145,6 +145,7 @@ static const nav_entry_t settings_entries[] = {
     /* -- sistema -- */
     { AURA_STR_SETTINGS_SLEEPTIMER, "sleep",             AURA_SCREEN_SETTINGS_SLEEPTIMER },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
+    { AURA_STR_SETTINGS_COPYRIGHT,  "legal",             AURA_SCREEN_SETTINGS_COPYRIGHT },
     { AURA_STR_SETTINGS_RESET,      "reset",             AURA_SCREEN_SETTINGS_RESET },
 };
 
@@ -165,10 +166,30 @@ static int clamp_menu_count(int n)
     return (n > MAX_MENU_ENTRIES) ? MAX_MENU_ENTRIES : n;
 }
 
+/* Videos y Fotos del original (2026-08-13). Las filas que no tienen
+ * contenido propio en Aura van INERTES (el reproductor de video real
+ * vive en "Todos los videos", que si funciona). */
+static const nav_entry_t videos_entries[] = {
+    { AURA_STR_VIDEOS_ALL,     "video",  AURA_SCREEN_VIDEOS_ALL },
+    { AURA_STR_VIDEOS_MOVIES,  "movie",  AURA_SCREEN_VIDEOS_MOVIES },
+    { AURA_STR_VIDEOS_TVSHOWS, "tv",     AURA_SCREEN_VIDEOS_TVSHOWS },
+    { AURA_STR_VIDEOS_CLIPS,   "clip",   AURA_SCREEN_VIDEOS_CLIPS },
+};
+
+static const nav_entry_t photos_entries[] = {
+    { AURA_STR_PHOTOS_ALL, "image", AURA_SCREEN_PHOTOS_ALL },
+};
+
 static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
 {
     switch (screen)
     {
+    case AURA_SCREEN_VIDEOS:
+        *out = videos_entries;
+        return clamp_menu_count((int)(sizeof(videos_entries) / sizeof(videos_entries[0])));
+    case AURA_SCREEN_PHOTOS:
+        *out = photos_entries;
+        return clamp_menu_count((int)(sizeof(photos_entries) / sizeof(photos_entries[0])));
     case AURA_SCREEN_EXTRAS:
         *out = extras_entries;
         return clamp_menu_count((int)(sizeof(extras_entries) / sizeof(extras_entries[0])));
@@ -207,6 +228,12 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_EXTRAS_NOTES:        return AURA_STR_EXTRAS_NOTES;
     case AURA_SCREEN_EXTRAS_SCREENLOCK:   return AURA_STR_EXTRAS_SCREENLOCK;
     case AURA_SCREEN_EXTRAS_STOPWATCH:    return AURA_STR_EXTRAS_STOPWATCH;
+    case AURA_SCREEN_VIDEOS_MOVIES:       return AURA_STR_VIDEOS_MOVIES;
+    case AURA_SCREEN_VIDEOS_TVSHOWS:      return AURA_STR_VIDEOS_TVSHOWS;
+    case AURA_SCREEN_VIDEOS_CLIPS:        return AURA_STR_VIDEOS_CLIPS;
+    case AURA_SCREEN_VIDEOS_ALL:          return AURA_STR_VIDEOS;
+    case AURA_SCREEN_PHOTOS_ALL:          return AURA_STR_PHOTOS;
+    case AURA_SCREEN_SETTINGS_COPYRIGHT:  return AURA_STR_SETTINGS_COPYRIGHT;
     case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER: return AURA_STR_MUSIC_ALBUMS;
     case AURA_SCREEN_MUSIC_SONGS_BY_ARTIST:
     case AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER:  return AURA_STR_MUSIC_SONGS;
@@ -573,6 +600,12 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
          * cubre pero se evita marcarlo siquiera. */
         items[i].full_screen_target = (items[i].toggle < 0)
             && !screen_uses_split_layout(entries[i].target);
+        /* Filas del arbol del original sin contenido propio todavia. */
+        items[i].dimmed = (entries[i].target == AURA_SCREEN_VIDEOS_MOVIES
+                           || entries[i].target == AURA_SCREEN_VIDEOS_TVSHOWS
+                           || entries[i].target == AURA_SCREEN_VIDEOS_CLIPS
+                           || entries[i].target == AURA_SCREEN_MUSIC_AUDIOBOOKS
+                           || entries[i].target == AURA_SCREEN_EXTRAS_CONTACTS);
     }
 
     if (selected >= 0 && selected < count)
@@ -1143,6 +1176,64 @@ static void handle_reset_confirm(aura_nav_t *nav, long button)
     }
 }
 
+/* Pantalla de texto largo desplazable (Avisos legales, 2026-08-13):
+ * pantalla completa, envuelve por palabras al ancho util y la rueda
+ * desplaza por lineas. Sin dependencias nuevas -- reusa el mismo
+ * wrap_text() de los confirmadores. */
+#define LEGAL_LINE_H 12
+static int s_legal_scroll = 0;
+
+static void draw_legal_text(void)
+{
+    const char *body = aura_str(AURA_STR_COPYRIGHT_BODY);
+    const char *lines[64];
+    int lens[64];
+    int box_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_LG;
+    int visible = (A26_SCREEN_HEIGHT - A26_LAYOUT_STATUSBAR_HEIGHT
+                   - A26_SPACING_MD) / LEGAL_LINE_H;
+    int n, i, y;
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_COPYRIGHT));
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+
+    n = aura_widgets_wrap_text(body, box_w, lines, lens, 64);
+    if (s_legal_scroll > n - visible)
+        s_legal_scroll = (n > visible) ? n - visible : 0;
+    if (s_legal_scroll < 0)
+        s_legal_scroll = 0;
+
+    y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_SM;
+    for (i = s_legal_scroll; i < n && i < s_legal_scroll + visible; i++)
+    {
+        char buf[128];
+        int len = lens[i];
+
+        if (len > (int)sizeof(buf) - 1)
+            len = (int)sizeof(buf) - 1;
+        memcpy(buf, lines[i], len);
+        buf[len] = '\0';
+        lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)buf);
+        y += LEGAL_LINE_H;
+    }
+}
+
+static void handle_legal_text(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:  s_legal_scroll++; break;
+    case BUTTON_SCROLL_BACK: s_legal_scroll--; break;
+    case BUTTON_MENU:
+        s_legal_scroll = 0;
+        aura_nav_pop(nav);
+        break;
+    default: break;
+    }
+}
+
 static void draw_message_centered(aura_str_id_t msg_id)
 {
     int w, h;
@@ -1417,7 +1508,8 @@ void aura_screens_draw(aura_nav_t *nav)
                                   ? AURA_LIST_SPLIT : AURA_LIST_FULL);
 
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
-        || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS)
+        || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
+        || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -1435,6 +1527,8 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_mainmenu(nav);
     else if (screen == AURA_SCREEN_SETTINGS_RESET)
         draw_reset_confirm();
+    else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
+        draw_legal_text();
     else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS
              || screen == AURA_SCREEN_MUSIC_SEARCH
              || screen == AURA_SCREEN_MUSIC_COMPILATIONS
@@ -1508,6 +1602,13 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
          * switch in situ y NO navega -- doc de comportamiento SS1,
          * `[OPCION]` "no tiene mecanica propia" (D-075). Distinto de
          * cualquier otra fila de Ajustes, que si empuja su pantalla. */
+        /* Filas inertes: presentes, no elegibles. */
+        if (entries[sel].target == AURA_SCREEN_VIDEOS_MOVIES
+            || entries[sel].target == AURA_SCREEN_VIDEOS_TVSHOWS
+            || entries[sel].target == AURA_SCREEN_VIDEOS_CLIPS
+            || entries[sel].target == AURA_SCREEN_MUSIC_AUDIOBOOKS
+            || entries[sel].target == AURA_SCREEN_EXTRAS_CONTACTS)
+            break;
         if (settings_row_toggle_value(entries[sel].target) >= 0)
         {
             toggle_settings_row(entries[sel].target);
@@ -1729,7 +1830,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     }
 
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
-        || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS)
+        || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
+        || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
@@ -1747,17 +1849,19 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_reset_confirm(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
         handle_about(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
+        handle_legal_text(nav, button);
     else if (is_coverflow_screen(screen))
         aura_coverflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))
         handle_music_browse(nav, screen, button);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
         handle_playlists(nav, button);
-    else if (screen == AURA_SCREEN_PHOTOS)
+    else if (screen == AURA_SCREEN_PHOTOS_ALL)
         aura_photos_handle_button(nav, button);
     else if (screen == AURA_SCREEN_PHOTO_VIEWER)
         aura_photo_viewer_handle_button(nav, button);
-    else if (screen == AURA_SCREEN_VIDEOS)
+    else if (screen == AURA_SCREEN_VIDEOS_ALL)
         aura_video_handle_button(nav, button);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_handle_button(nav, button);

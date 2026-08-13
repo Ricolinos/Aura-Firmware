@@ -55,6 +55,13 @@ int aura_widgets_split_active(void);
  * regla dura en aura_widgets.c. */
 void aura_widgets_draw_status_bar(const char *title);
 
+/* Envuelve `text` por palabras al ancho dado con la fuente ACTIVA:
+ * devuelve cuantas lineas uso y llena `lines`/`lens` con punteros al
+ * texto original (sin copiar). Compartido por los confirmadores y por
+ * las pantallas de texto largo. */
+int aura_widgets_wrap_text(const char *text, int max_width, const char **lines,
+                            int *lens, int max_lines);
+
 /* True mientras el panel derecho tiene un icono nuevo pendiente de
  * mostrar (retardo de 1s, L3) -- aura_main.c lo usa para decidir si
  * redibujar con un timeout corto en vez de bloquear indefinidamente

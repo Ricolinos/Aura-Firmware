@@ -833,7 +833,7 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
 /* Word-wrap simple y propio: no hace falta la generalidad de
  * apps/gui/splash.c (tabs, multi-pantalla, memoria de tamano maximo)
  * para un cuerpo corto de 2-3 lineas fijas. */
-static int wrap_text(const char *text, int max_width, const char **lines, int *lens, int max_lines)
+int aura_widgets_wrap_text(const char *text, int max_width, const char **lines, int *lens, int max_lines)
 {
     int n = 0;
     const char *p = text;
@@ -903,7 +903,7 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
 
-    n = wrap_text(body, box_w, lines, lens, CONFIRM_MAX_LINES);
+    n = aura_widgets_wrap_text(body, box_w, lines, lens, CONFIRM_MAX_LINES);
     text_y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL;
     for (i = 0; i < n; i++)
     {

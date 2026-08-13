@@ -1722,4 +1722,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-157 — Videos y Fotos con submenú propio; pantalla de Avisos legales
+
+**Encargo del dueño del diseño (2026-08-13).** (1) **Videos** y **Fotos** dejan de ser una pantalla suelta y pasan a ser menús como en el original: Videos → Todos los videos · Películas · Programas de TV · Videoclips; Fotos → Todas las fotos. El visor real cuelga ahora de la fila "Todos los…"; las categorías sin contenido propio en Aura van **inertes** (fila presente, texto e icono al 50%, SELECT no hace nada) — mismo tratamiento para Audiolibros y Agenda. Los ajustes de TV del original (Salida TV, Señal TV, Pantalla TV…) se omiten por no haber hardware que los soporte (P6). (2) **Avisos legales** (P11): pantalla de texto largo desplazable con rueda, que acredita a Rockbox y su GPL v2, aclara que iPod/Apple/SF Symbols son marcas de Apple Inc. sin afiliación, declara el firmware **conceptual con distribución prohibida y venta estrictamente prohibida** (solo compartible con fines didácticos y de investigación) y da los créditos: diseño de Ricardo Gómez (Ricolinos), implementación de código por Claude bajo su dirección. `wrap_text()` se expone como `aura_widgets_wrap_text()` en vez de duplicarlo.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
