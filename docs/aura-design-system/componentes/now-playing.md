@@ -166,13 +166,13 @@ click wheel (y en algunos modos, qué hace Select).
 
 ### Fila de iconos de modos (confirmada 2026-08-12)
 
-| Modo | SF Symbol (lineal / fill) |
-|---|---|
-| 1 Volumen | `speaker.wave.2.circle` |
-| 2 Avance | `arrowtriangle.left.and.line.vertical.and.arrowtriangle.right` |
-| 3 Playlist | `list.bullet.circle` |
-| 4 Letras | `quote.bubble` |
-| 5 Favorito | `star.circle` |
+| Modo | Inactivo (lineal) | Activo (fill, acento) |
+|---|---|---|
+| 1 Volumen | `speaker.wave.1` | `speaker.wave.2.fill` |
+| 2 Avance | `arrowtriangle.left.and.line.vertical.and.arrowtriangle.right` | su `.fill` |
+| 3 Playlist | `text.badge.plus` | el mismo glifo en acento (SF no tiene variante fill) |
+| 4 Letras | `quote.bubble` | `quote.bubble.fill` |
+| 5 Favorito | `star` | `star.fill` |
 
 **Estados** (excepción documentada a la regla "nunca .fill" del doc SS4,
 misma familia que play-fill/pause-fill):

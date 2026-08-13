@@ -1580,4 +1580,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-135 — Fila de modos: segundo pase de símbolos del dueño del diseño
+
+**Corrección del dueño del diseño (2026-08-12) sobre D-134** ("no me gustaron los que propuse"): Volumen pasa a `speaker.wave.1` lineal inactivo con activo `speaker.wave.2.fill` (par asimétrico pedido explícitamente); Playlist pasa a `text.badge.plus` (SF no tiene variante fill — el activo es el mismo glifo lineal en acento, verificado contra el renderizador que falla ruidosamente con símbolos inexistentes); Favorito pasa a `star`/`star.fill`. Avance y Letras quedan como en D-134. Solo cambia el mapeo en tokens.json — el código C usa los nombres estables `mode-*`/`mode-*-fill`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
