@@ -1966,4 +1966,14 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-184 — Restauración completa: doble formateo y entrega a Finder
+
+**Encargo del dueño (2026-08-13), procedimiento verificado por él a mano en hardware real**: la restauración que hacía la app (quitar el bootloader por DFU) era correcta pero incompleta — el firmware original lo instala FINDER, no la app, y para que Finder reconozca el iPod el disco debe pasar por un doble formateo: primero un formato "puente" FAT/MBR y después Mac OS Plus con registro (JHFS+) con mapa de particiones GUID. Además hay que cerrar Aura Studio antes de continuar en Finder — su sondeo USB/DFU y el monitoreo de discos compiten con la detección de Finder.
+
+**Flujo nuevo de restaurar** (dos pasos nuevos, `restoreFormatting` y `restoreHandoff`, con su propia lista de pasos en la barra de progreso — restaurar ya no termina en "done" dentro de la app): tras el desinstalado por DFU, la app espera a que el iPod reaparezca como disco (con la pista de SELECT + PLAY para entrar a modo disco manualmente si no aparece solo), lo reidentifica, pide autorización con explicación del doble formateo (`PendingAuthorization.restoreFormatDisk`), y ejecuta `formatDiskForAppleRestore` — dos `diskutil eraseDisk` en secuencia (FAT32/MBR → JHFS+/GPT), ambos vía el daemon del sistema (sin escritura cruda, sin Acceso total al disco, mismo criterio D-181, mismas verificaciones de identidad dentro del script). Al terminar, la pantalla de entrega (`RestoreHandoffView`) explica los tres pasos restantes en Finder y el botón "Cerrar Aura Studio y abrir Finder" hace ambas cosas — `applicationShouldTerminate` garantiza que los agentes AMP pausados se reactivan antes de morir (D-175). La bandera `restoreFormatStarted` evita que cada evento de montaje durante el proceso (el puente FAT monta, se borra, monta el HFS+) re-dispare la autorización.
+
+**Aceptación**: build limpio (sim y Xcode real), 103/105 tests (los 2 de red de siempre). El flujo completo (DFU → reaparición → doble formateo → Finder restaurando de verdad) depende de hardware real — verificación con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
