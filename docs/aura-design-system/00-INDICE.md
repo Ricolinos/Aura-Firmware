@@ -29,6 +29,7 @@ primero, no solo en el código.
 | `componentes/` | Componentes individuales con sus estados | 🟡 `StatusBar` casi cerrado; `LeftPanel`, `Selector`, `ScrollIndicator` con medidas exactas; `SelectionSummary` y `CoverDrift` con diseño y comportamiento definidos; `CoverFlow` con investigación técnica y decisiones estructurales; `NowPlaying` CERRADO 2026-08-12 (barra unificada, transporte, 5 modos, conmutadores por hold, coreografías); `LyricsPanel` (Modo 4) con spec propia completa; `MarqueeText`, `DynamicTitle`, `ClockIndicator` definidos; `DateEditor` es solo stub |
 | `transiciones/` | Vocabulario de patrones de animación reutilizables | 🟢 10 patrones documentados: `Morph Directo`, `Push-and-Drop`, `Fade-on-Idle`, `Marquee Loop`, `Shift-and-Reveal`, `Fade-Slide`, `Scroll-Slide`, `Drop-and-Lift`, `Push-and-Pull`, `Flip-and-Flow` |
 | `efectos/` | Sombras, elevación, otros efectos visuales | 🟡 Regla capturada, faltan valores |
+| `sistema/03-arbol-de-menus.md` | Árbol de navegación completo (original + añadidos de Aura) con el estado real de cada rama | 🟢 Al día 2026-08-13 |
 | `modulos/` | Composiciones de componentes reutilizables entre pantallas | ⚪ Sin empezar |
 
 🟢 Definido y completo · 🟡 Parcial / con huecos marcados explícitamente · ⚪ Placeholder

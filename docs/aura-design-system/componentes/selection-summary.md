@@ -14,8 +14,35 @@ un texto que describen la selección actual de `LeftPanel`.
 
 ## Diseño
 
-**Ícono:** 40×40px, centrado tanto horizontal como verticalmente en todo
-el espacio disponible del lado derecho.
+**Ícono sobre tile (confirmado 2026-08, según mockups):** el ícono no se
+renderiza "suelto" — va sobre un **tile de 90×90px con esquinas redondeadas
+visibles de 8px**, con el **símbolo interno de ~60×60px** (o ligeramente
+más grande). Estilo app icon de iOS: símbolo claro sobre tile de color
+pleno. El conjunto va centrado horizontal y verticalmente en el espacio
+disponible del lado derecho.
+
+*(Nota: la medida original de 40×40px quedó obsoleta con este rediseño.)*
+
+**Color del tile:** por ahora, `--color-accent`
+(`fundamentos/01-color.md`). Más adelante se definirá un mapeo de color por
+selección (Música, Videos, Fotos, etc., como sugieren los mockups con rojo
+y verde) — el dueño del diseño avisará cuándo; no es un pendiente activo.
+
+## Fondo del panel derecho (confirmado)
+
+El fondo de `SelectionSummary` no es neutro — es un **degradado en
+diagonal** compuesto por:
+
+- **`--color-accent` al centro**
+- "Contaminado" por dos colores derivados: uno **ligeramente más oscuro**
+  y otro **ligeramente más claro** que el acento.
+
+Como el acento es configurable por el usuario, los dos colores derivados
+deben **calcularse** a partir del acento vigente (no ser valores fijos).
+
+🔴 Pendiente: dirección exacta de la diagonal (¿de qué esquina a qué
+esquina va el claro y el oscuro?) y el porcentaje de aclarado/oscurecido
+de los colores derivados.
 
 **Modelo de texto — dos slots, no un solo texto:**
 

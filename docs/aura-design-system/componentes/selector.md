@@ -53,3 +53,15 @@ este componente detrás.
 ## Pendiente de definir
 
 - [ ] Ancho exacto de la flecha/ícono de carga (solo se dio el alto máximo)
+
+
+## Fila inerte (confirmada 2026-08-13)
+
+Una fila que existe en el árbol del original pero **todavía no tiene
+contenido propio** en Aura se dibuja **inerte**: mismo texto e icono, al
+**50% de opacidad**, y `SELECT` no hace nada sobre ella. Es el mismo
+lenguaje que los modos deshabilitados del reproductor
+(`componentes/now-playing.md`). Se puede recorrer con la rueda — el
+catálogo completo se ve — pero el firmware no finge soportar lo que no
+tiene. Alternativa cuando la pantalla sí existe pero está vacía: entrar
+y mostrar un **estado vacío honesto** con su título.

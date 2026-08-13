@@ -29,10 +29,28 @@ intencional.
    punto 1 nos lleva a una fuente propia de todas formas, esto se resuelve
    solo: se genera directamente como bitmap a 12px.
 
+## Tokens de NowPlaying (confirmados 2026-08)
+
+Familia SF Pro en todos:
+
+| Token | Tamaño | Peso | Uso |
+|---|---|---|---|
+| `--font-np-title` | 12px | Bold | Título de canción en NowPlaying |
+| `--font-np-album` | 12px | Regular | Álbum |
+| `--font-np-artist` | 12px | Regular | Artista |
+| `--font-np-counter` | 10px | Bold | Tiempos de progreso y contador "n of m" |
+| `--font-lyrics` | 12px | Regular | Letras (Modo 4) |
+| `--font-lyrics-active` | 14px | Bold | Línea activa de letras (Modo 4) |
+
+## Tokens de LeftPanel (confirmados)
+
+| Token | Tamaño | Peso | Uso |
+|---|---|---|---|
+| `--font-menu-item` | 10px | Regular | Texto de ítems en `MenuList` (SF Pro) |
+
 ## Estructura sugerida (resto, a llenar)
 
 | Token | Tamaño | Uso |
 |---|---|---|
-| `--font-display` | — | Título de canción en Now Playing |
-| `--font-body` | — | Listas de menú |
-| `--font-caption` | — | Metadata secundaria (artista, álbum) |
+| `--font-body` | — | Otros contextos de lista aún no definidos |
+| `--font-caption` | — | Metadata secundaria en otras pantallas |
