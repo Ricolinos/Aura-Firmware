@@ -1790,4 +1790,10 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-168 — Menú principal configurable: jerarquía de dos niveles
+
+**Encargo del dueño del diseño (2026-08-13), con referencia visual del aparato real.** La pantalla "Menú pral." se reconstruye como jerarquía de dos niveles: los padres (Música, Videos, Fotos, Extras, Ahora suena) con checkmark si aparecen en el menú de inicio — Música y Extras fijos, atenuados, no se pueden quitar — y los hijos de Música (Cover Flow, Listas, Artistas, Álbumes, Canciones, Géneros) listados debajo con sangría, marcables por separado: un hijo marcado aparece *además* en el raíz, justo después de Música. Nuevo campo `aura_menu_item_v2_t.indent`, que `aura_menu_list_draw()` traduce a un desplazamiento de **toda la fila** (icono + texto) — un primer intento desplazó solo el texto y, verificado por píxel, los iconos quedaban alineados entre padre e hijo sin comunicar jerarquía alguna. Persistencia vía `aura_settings.root_shortcuts` (máscara de bits) y `aura_screens_root_shortcut_bit()`. **Bug real atrapado en la implementación, antes de cualquier verificación visual**: al reordenar las declaraciones para resolver dependencias circulares (`ROOT_SHORTCUTS` y `music_entries` referenciados desde `rebuild_root_entries`, definida más arriba en el archivo), cuatro de los cinco constructores de filas de menú quedaron sin inicializar el campo `indent` nuevo — memoria de pila sin inicializar, que habría producido sangrías aleatorias en Ajustes, Idioma, Temporiz. luz y Temporiz. reposo. Corregido antes del build; los 5 sitios quedan cubiertos. Verificado en vivo: la indentación se lee con claridad y marcar "Cover Flow" lo agrega al menú de inicio en la posición correcta. Pendiente: "Menú Música" (mismo mecanismo para el submenú de Música).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -112,6 +112,11 @@ typedef struct {
      * cablea al replaygain real del nucleo. */
     int audiobook_speed;   /* 0 lenta, 1 normal, 2 rapida */
     int sort_by_lastname;  /* 0 nombre, 1 apellido */
+    /* Atajos del menu de inicio (Menu principal configurable, del
+     * original): mascara de bits sobre ROOT_SHORTCUTS -- un hijo de
+     * Musica marcado aparece ADEMAS en el menu de inicio, sin dejar de
+     * vivir dentro de su padre. */
+    unsigned root_shortcuts;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

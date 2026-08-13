@@ -26,6 +26,9 @@ typedef struct {
                              * pantalla completa -> flecha del Selector
                              * (solo si no hay otro elemento derecho,
                              * regla de selector.md) */
+    int indent;             /* Nivel de sangria: 1 = hijo de la fila padre
+                             * de arriba (Menu principal configurable, la
+                             * sangria ES lo que comunica la pertenencia) */
     int dimmed;             /* 1 = fila presente pero INERTE (no se
                              * puede elegir): mismo color al 50%, como
                              * los modos deshabilitados del reproductor.

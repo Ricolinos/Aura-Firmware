@@ -107,22 +107,36 @@ audiolibros y el orden por apellido se guardan pero todavía no cambian
 nada: Rockbox no tiene backend para ellos.
 
 
-## Menú principal configurable — jerarquía (referencia del original, 2026-08-13)
+## Menú principal configurable — jerarquía (construido 2026-08-13)
 
-⚠️ **Pendiente de construir.** La pantalla "Menú pral." del original no es
-una lista plana de opciones: muestra **una jerarquía de dos niveles**.
+✅ **Construido**, con referencia visual del aparato real. La pantalla
+"Menú pral." no es una lista plana: es una **jerarquía de dos niveles**.
 
-- Los **padres** (Música, Radio, Videos, Fotos, Podcasts, Extras…) van
+- Los **padres** (Música, Videos, Fotos, Extras, Ahora suena) van
   alineados al margen normal, con **checkmark** si aparecen en el menú
-  de inicio.
-- Sus **hijos** (Cover Flow, Genius, Listas repr., Artistas, Álbumes,
-  Recopilaciones, Canciones…) se listan **debajo del padre, indentados
-  unos píxeles**, y también pueden marcarse: un hijo marcado aparece
-  *además* en el menú de inicio, sin dejar de vivir dentro de su padre.
-  La indentación es lo que comunica que pertenecen a esa sección y lo
-  que divide visualmente el listado.
-- El panel derecho muestra el símbolo de "Personalizar menú principal".
-- La lista cierra con **Restaurar menú principal**.
+  de inicio. Música y Extras son **fijos** (checkmark inerte, atenuado
+  al 50%): no se pueden quitar del menú de inicio, igual que en el
+  original.
+- Los **hijos de Música** (Cover Flow, Listas repr., Artistas, Álbumes,
+  Canciones, Géneros) se listan **debajo, con TODA la fila —
+  icono y texto— desplazada 12px** respecto de su padre. (Desplazar
+  solo el texto se probó primero y no se leía como jerarquía: con el
+  icono alineado al del padre, verificado por píxel, el ojo no
+  distinguía nivel alguno.) Cada hijo se puede marcar por separado: un
+  hijo marcado aparece **además** en el menú de inicio, **justo después
+  de Música**, sin dejar de vivir dentro de su padre — verificado en
+  vivo (marcar "Cover Flow" lo agrega al raíz entre Música y Videos).
+- El panel derecho muestra el símbolo del ítem enfocado.
+- La lista cierra con **Restaurar menú principal**: repone
+  Videos/Fotos/Ahora suena visibles y limpia todos los atajos de
+  Música.
 
-Lo mismo aplica a "Menú Música", que configura el submenú de Música con
-el mismo mecanismo.
+**Implementación**: `aura_settings.root_shortcuts` es una máscara de
+bits (uno por atajo posible de Música); `aura_menu_item_v2_t.indent`
+(nuevo) es el nivel de sangría que `aura_menu_list_draw()` aplica a la
+fila completa. `aura_screens_root_shortcut_bit()` traduce entre pantalla
+y bit.
+
+**Pendiente**: "Menú Música" (el mismo mecanismo para configurar el
+submenú de Música, con sus propios hijos si los original define
+alguno) — no construido en esta pasada.

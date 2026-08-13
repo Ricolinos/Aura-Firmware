@@ -74,25 +74,6 @@ static const nav_entry_t root_entries_all[] = {
 static nav_entry_t root_entries[sizeof(root_entries_all) / sizeof(root_entries_all[0])];
 static int root_entries_count;
 
-static void rebuild_root_entries(void)
-{
-    int i, n = 0;
-    for (i = 0; i < (int)(sizeof(root_entries_all) / sizeof(root_entries_all[0])); i++)
-    {
-        const nav_entry_t *e = &root_entries_all[i];
-        if (e->target == AURA_SCREEN_VIDEOS && !aura_settings.show_videos)
-            continue;
-        if (e->target == AURA_SCREEN_PHOTOS && !aura_settings.show_photos)
-            continue;
-        /* Como el original: solo con reproduccion en curso (ademas del
-         * ajuste de Menu principal, que puede ocultarla igual). */
-        if (e->target == AURA_SCREEN_NOWPLAYING
-            && (!aura_settings.show_nowplaying || !aura_nowplaying_active()))
-            continue;
-        root_entries[n++] = *e;
-    }
-    root_entries_count = n;
-}
 
 /* Orden de "Cover Flow" primero: unico orden que da un documento fuente
  * (componentes/left-panel.md, ejemplo de LeftPanel persistente) --
@@ -120,6 +101,69 @@ static const nav_entry_t music_entries[] = {
     { AURA_STR_MUSIC_AUDIOBOOKS,   "audiobook",  AURA_SCREEN_MUSIC_AUDIOBOOKS },
     { AURA_STR_MUSIC_SEARCH,       "search",     AURA_SCREEN_MUSIC_SEARCH },
 };
+
+/* Atajos de Musica que pueden vivir tambien en el menu de inicio: cada
+ * uno con su bit en aura_settings.root_shortcuts. */
+static const aura_screen_id_t ROOT_SHORTCUTS[] = {
+    AURA_SCREEN_MUSIC_COVERFLOW, AURA_SCREEN_MUSIC_PLAYLISTS,
+    AURA_SCREEN_MUSIC_ARTISTS,   AURA_SCREEN_MUSIC_ALBUMS,
+    AURA_SCREEN_MUSIC_SONGS,     AURA_SCREEN_MUSIC_GENRES,
+};
+#define ROOT_SHORTCUT_N ((int)(sizeof(ROOT_SHORTCUTS) / sizeof(ROOT_SHORTCUTS[0])))
+
+int aura_screens_root_shortcut_bit(aura_screen_id_t target)
+{
+    int i;
+    for (i = 0; i < ROOT_SHORTCUT_N; i++)
+        if (ROOT_SHORTCUTS[i] == target)
+            return i;
+    return -1;
+}
+
+static void rebuild_root_entries(void)
+{
+    int i, n = 0;
+    for (i = 0; i < (int)(sizeof(root_entries_all) / sizeof(root_entries_all[0])); i++)
+    {
+        const nav_entry_t *e = &root_entries_all[i];
+        if (e->target == AURA_SCREEN_VIDEOS && !aura_settings.show_videos)
+            continue;
+        if (e->target == AURA_SCREEN_PHOTOS && !aura_settings.show_photos)
+            continue;
+        /* Como el original: solo con reproduccion en curso (ademas del
+         * ajuste de Menu principal, que puede ocultarla igual). */
+        if (e->target == AURA_SCREEN_NOWPLAYING
+            && (!aura_settings.show_nowplaying || !aura_nowplaying_active()))
+            continue;
+        root_entries[n++] = *e;
+
+        /* Atajos de Musica marcados en el Menu principal: van JUSTO
+         * despues de su padre, como en el original. */
+        if (e->target == AURA_SCREEN_MUSIC)
+        {
+            int k;
+            for (k = 0; k < ROOT_SHORTCUT_N && n < (int)(sizeof(root_entries)
+                                                    / sizeof(root_entries[0])); k++)
+            {
+                const nav_entry_t *m;
+                int j2, mcount;
+
+                if (!(aura_settings.root_shortcuts & (1u << k)))
+                    continue;
+                mcount = (int)(sizeof(music_entries) / sizeof(music_entries[0]));
+                m = music_entries;
+                for (j2 = 0; j2 < mcount; j2++)
+                    if (m[j2].target == ROOT_SHORTCUTS[k])
+                    {
+                        root_entries[n++] = m[j2];
+                        break;
+                    }
+            }
+        }
+    }
+    root_entries_count = n;
+}
+
 
 /* Iconos elegidos y verificados contra el catalogo real de SF Symbols
  * (D-075) -- ninguno se repite dentro de la lista (doc SS4, "hermanos se
@@ -679,6 +723,7 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
          * navegables de pantalla completa -- un toggle inline no navega
          * a ningun lado, la regla de exclusion del documento ya lo
          * cubre pero se evita marcarlo siquiera. */
+        items[i].indent = 0;
         items[i].full_screen_target = (items[i].toggle < 0)
             && !screen_uses_split_layout(entries[i].target);
         /* Filas del arbol del original sin contenido propio todavia. */
@@ -734,6 +779,7 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
             : NULL;
         items[i].checked = (i == current);
         items[i].toggle = -1;
+        items[i].indent = 0;
         items[i].dimmed = 0;
         items[i].full_screen_target = 0;
         /* Idiomas sin traduccion: fila presente pero inerte. */
@@ -1001,9 +1047,9 @@ static void draw_backlight(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == global_settings.backlight_timeout);
         items[i].toggle = -1;
+        items[i].indent = 0;
         items[i].dimmed = 0;
         items[i].full_screen_target = 0;
-        items[i].dimmed = 0;
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
                          aura_nav_get_selection(nav),
@@ -1060,9 +1106,9 @@ static void draw_sleeptimer(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == (int)global_settings.sleeptimer_duration);
         items[i].toggle = -1;
+        items[i].indent = 0;
         items[i].dimmed = 0;
         items[i].full_screen_target = 0;
-        items[i].dimmed = 0;
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
                          aura_nav_get_selection(nav),
@@ -1143,7 +1189,57 @@ static void handle_volume_limit(aura_nav_t *nav, long button)
 
 /* -- Menu principal configurable (L14) --------------------------------- */
 
-#define MAINMENU_ROWS 4
+/* -- Menu principal configurable (jerarquia del original) --------------
+ *
+ * No es una lista plana: los PADRES van al margen normal y sus HIJOS
+ * indentados debajo (referencia del aparato real, 2026-08-13). Un hijo
+ * marcado aparece ADEMAS en el menu de inicio sin dejar de vivir dentro
+ * de su padre -- la sangria es lo que comunica esa pertenencia y lo que
+ * divide visualmente el listado. */
+typedef struct {
+    aura_str_id_t label;
+    const char *icon;
+    int indent;
+    aura_screen_id_t target;   /* AURA_SCREEN_COUNT = fila de accion */
+} mainmenu_row_t;
+
+
+static const mainmenu_row_t mainmenu_rows[] = {
+    { AURA_STR_MUSIC,           "music",           0, AURA_SCREEN_MUSIC },
+    { AURA_STR_MUSIC_COVERFLOW, "square-on-square", 1, AURA_SCREEN_MUSIC_COVERFLOW },
+    { AURA_STR_MUSIC_PLAYLISTS, "playlist",        1, AURA_SCREEN_MUSIC_PLAYLISTS },
+    { AURA_STR_MUSIC_ARTISTS,   "artist",          1, AURA_SCREEN_MUSIC_ARTISTS },
+    { AURA_STR_MUSIC_ALBUMS,    "album",           1, AURA_SCREEN_MUSIC_ALBUMS },
+    { AURA_STR_MUSIC_SONGS,     "song",            1, AURA_SCREEN_MUSIC_SONGS },
+    { AURA_STR_MUSIC_GENRES,    "genre",           1, AURA_SCREEN_MUSIC_GENRES },
+    { AURA_STR_VIDEOS,          "video",           0, AURA_SCREEN_VIDEOS },
+    { AURA_STR_PHOTOS,          "image",           0, AURA_SCREEN_PHOTOS },
+    { AURA_STR_EXTRAS,          "extras",          0, AURA_SCREEN_EXTRAS },
+    { AURA_STR_NOWPLAYING,      "play",            0, AURA_SCREEN_NOWPLAYING },
+    { AURA_STR_MAINMENU_RESTORE, "reset",          0, AURA_SCREEN_COUNT },
+};
+#define MAINMENU_ROWS ((int)(sizeof(mainmenu_rows) / sizeof(mainmenu_rows[0])))
+
+/* Marcado actual de cada fila. Musica y Extras son fijos (siempre en el
+ * menu de inicio, como en el original); el resto es configurable. */
+static int mainmenu_row_checked(const mainmenu_row_t *r)
+{
+    int bit;
+
+    switch (r->target)
+    {
+    case AURA_SCREEN_MUSIC:
+    case AURA_SCREEN_EXTRAS:      return 1;
+    case AURA_SCREEN_VIDEOS:      return aura_settings.show_videos;
+    case AURA_SCREEN_PHOTOS:      return aura_settings.show_photos;
+    case AURA_SCREEN_NOWPLAYING:  return aura_settings.show_nowplaying;
+    case AURA_SCREEN_COUNT:       return 0;
+    default:
+        bit = aura_screens_root_shortcut_bit(r->target);
+        return (bit >= 0)
+            && (aura_settings.root_shortcuts & (1u << bit)) != 0;
+    }
+}
 
 static void draw_mainmenu(aura_nav_t *nav)
 {
@@ -1151,24 +1247,17 @@ static void draw_mainmenu(aura_nav_t *nav)
     int sel = aura_nav_get_selection(nav);
     int i;
 
-    items[0].label = aura_str(AURA_STR_VIDEOS);
-    items[0].icon_name = "video";
-    items[0].checked = aura_settings.show_videos;
-    items[1].label = aura_str(AURA_STR_PHOTOS);
-    items[1].icon_name = "image";
-    items[1].checked = aura_settings.show_photos;
-    items[2].label = aura_str(AURA_STR_NOWPLAYING);
-    items[2].icon_name = "play";
-    items[2].checked = aura_settings.show_nowplaying;
-    items[3].label = aura_str(AURA_STR_MAINMENU_RESTORE);
-    items[3].icon_name = "reset";
-    items[3].checked = 0;
     for (i = 0; i < MAINMENU_ROWS; i++)
     {
+        items[i].label = aura_str(mainmenu_rows[i].label);
+        items[i].icon_name = mainmenu_rows[i].icon;
+        items[i].indent = mainmenu_rows[i].indent;
+        items[i].checked = mainmenu_row_checked(&mainmenu_rows[i]);
         items[i].toggle = -1;
-        items[i].dimmed = 0;
         items[i].full_screen_target = 0;
-        items[i].dimmed = 0;
+        /* Musica y Extras no se pueden quitar del menu de inicio. */
+        items[i].dimmed = (mainmenu_rows[i].target == AURA_SCREEN_MUSIC
+                           || mainmenu_rows[i].target == AURA_SCREEN_EXTRAS);
     }
 
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
@@ -1180,27 +1269,41 @@ static void draw_mainmenu(aura_nav_t *nav)
 static void handle_mainmenu(aura_nav_t *nav, long button)
 {
     int sel = aura_nav_get_selection(nav);
+    const mainmenu_row_t *r;
+    int bit;
 
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < MAINMENU_ROWS - 1)
-            aura_nav_set_selection(nav, sel + 1);
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, MAINMENU_ROWS, 1));
         break;
     case BUTTON_SCROLL_BACK:
-        if (sel > 0)
-            aura_nav_set_selection(nav, sel - 1);
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, MAINMENU_ROWS, -1));
         break;
     case BUTTON_SELECT:
-        switch (sel)
+        r = &mainmenu_rows[sel];
+        switch (r->target)
         {
-        case 0: aura_settings.show_videos = !aura_settings.show_videos; break;
-        case 1: aura_settings.show_photos = !aura_settings.show_photos; break;
-        case 2: aura_settings.show_nowplaying = !aura_settings.show_nowplaying; break;
-        case 3:
+        case AURA_SCREEN_MUSIC:
+        case AURA_SCREEN_EXTRAS:
+            break; /* fijos */
+        case AURA_SCREEN_VIDEOS:
+            aura_settings.show_videos = !aura_settings.show_videos; break;
+        case AURA_SCREEN_PHOTOS:
+            aura_settings.show_photos = !aura_settings.show_photos; break;
+        case AURA_SCREEN_NOWPLAYING:
+            aura_settings.show_nowplaying = !aura_settings.show_nowplaying; break;
+        case AURA_SCREEN_COUNT:
+            /* Restaurar menu principal: el estado de fabrica. */
             aura_settings.show_videos = true;
             aura_settings.show_photos = true;
             aura_settings.show_nowplaying = true;
+            aura_settings.root_shortcuts = 0;
+            break;
+        default:
+            bit = aura_screens_root_shortcut_bit(r->target);
+            if (bit >= 0)
+                aura_settings.root_shortcuts ^= (1u << bit);
             break;
         }
         aura_settings_save();

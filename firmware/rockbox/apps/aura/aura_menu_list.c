@@ -168,14 +168,22 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
     {
         int row_y = y + (i - first) * ROW_H;
         int is_selected = (i == selected);
-        int text_x = has_any_icon ? (x + ICON_X + ICON_SZ + TEXT_GAP) : (x + PADDING);
+        /* La sangria mueve TODA la fila (icono + texto), no solo el
+         * texto -- con solo el texto desplazado, los iconos quedaban
+         * alineados entre padre e hijo y la jerarquia no se leia
+         * (verificado por pixel: icono de "Cover Flow" en el mismo x
+         * que el de "Musica"). Referencia del dueno del diseno,
+         * 2026-08-13 (Menu principal configurable). */
+        int indent_px = items[i].indent * 12;
+        int text_x = (has_any_icon ? (x + ICON_X + ICON_SZ + TEXT_GAP)
+                                    : (x + PADDING)) + indent_px;
         int text_right = x + panel_w - PADDING;
         char truncated[64];
         int max_text_w;
 
         if (items[i].icon_name && aura_settings.show_icons)
         {
-            int icon_x = x + ICON_X;
+            int icon_x = x + ICON_X + indent_px;
             int icon_y = row_y + (ROW_H - ICON_SZ) / 2;
 
             if (items[i].dimmed)
