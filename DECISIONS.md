@@ -1598,4 +1598,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-138 — Modo 4, tercer pase: hoja de vidrio deslizante, degradado diagonal, regreso al coverflow
+
+**Correcciones del dueño del diseño (2026-08-12) sobre D-137**: (1) El panel derecho ya no aparece con fade: es una **hoja que se desliza desde la derecha** con todo su contenido montado (los textos llegan ya renderizados sobre ella). (2) Es de **vidrio traslúcido** (tinte del 85%: lo dibujado debajo se adivina a través, sobre todo durante el morph) con el degradado del color promedio **en diagonal** — excepción deliberada del dueño a "el vidrio vive solo en la capa de controles" (pedido explícito: "si se puede, mejor un efecto traslúcido"). (3) La hoja **proyecta una sombra paralela** de 8px sobre el contenido bajo su borde izquierdo. (4) **El regreso al coverflow se restaura**: si se entró por el carrusel, MENU desde el Modo 4 encadena el despliegue inverso del panel (`aura_nowplaying_unfold_from_lyrics`) con el morph de regreso existente (`aura_transition_flow_return`) — "si podemos desplazarnos con un morph, sí podemos regresar"; hacia cualquier otro destino se mantiene el slide de pantalla completa de D-136. Verificado con capturas: hoja con degradado diagonal y sombra (tema claro, tinta oscura por luminancia) y aterrizaje en el carrusel con el álbum correcto centrado.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

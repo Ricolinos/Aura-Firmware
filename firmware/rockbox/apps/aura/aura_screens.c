@@ -1575,14 +1575,19 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
                  && aura_nowplaying_take_fullscreen_exit())
         {
-            /* Salida desde el Modo 4 (letras, encargo 2026-08-12): la
+            /* Salida desde el Modo 4 (letras). Correccion 2026-08-12:
+             * si se ENTRO por coverflow, SI se regresa al coverflow --
+             * despliegue inverso del panel encadenado con el morph de
+             * regreso al carrusel. A cualquier otro destino, la
              * pantalla se comporta como pantalla completa y se
-             * desplaza a la derecha dando paso al MENU anterior --
-             * nunca transiciona al coverflow: si el tope de la pila
-             * es el carrusel, se salta tambien. */
-            if (is_coverflow_screen(aura_nav_current(nav)))
-                aura_nav_pop(nav);
-            aura_transition_slide(nav, -1, A26_SCREEN_WIDTH);
+             * desplaza a la derecha dando paso al menu anterior. */
+            if (is_coverflow_screen(to))
+            {
+                aura_nowplaying_unfold_from_lyrics();
+                aura_transition_flow_return(nav);
+            }
+            else
+                aura_transition_slide(nav, -1, A26_SCREEN_WIDTH);
         }
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
                  && is_coverflow_screen(to))

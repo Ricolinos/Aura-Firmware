@@ -93,6 +93,16 @@
 #define M4_ART_Y      (((PROGRESS_Y - 10 - A26_ICON_SIZE_MENU) - M4_ART_SIZE) / 2)
 #define M4_ART_SHADOW_DY 4
 #define M4_MORPH_MS   330 /* fundido lineal de contenido del sistema */
+/* Panel derecho del Modo 4 (correccion 2026-08-12): una HOJA que se
+ * desliza desde la derecha (no un fade), de vidrio traslucido tenido
+ * con el color promedio de la caratula en degradado DIAGONAL, y que
+ * proyecta una sombra paralela sobre lo que queda debajo de su borde
+ * izquierdo. Excepcion deliberada del dueno del diseno a "el vidrio
+ * vive solo en la capa de controles": pedido explicito ("si se puede,
+ * mejor un efecto traslucido"). */
+#define M4_RPANEL_W       (A26_SCREEN_WIDTH - MORPH_PANEL_W)
+#define M4_GLASS_ALPHA    216 /* ~85% tinte, ~15% deja ver lo de abajo */
+#define M4_PANEL_SHADOW_W 8
 
 /* Ventanas de estado de la barra (ver draw_progress): el avance con
  * la rueda (modo 2) muestra tiempos + acento + indicador; el ajuste de
@@ -223,6 +233,18 @@ bool aura_nowplaying_take_fullscreen_exit(void)
     bool v = s_exit_fullscreen;
     s_exit_fullscreen = false;
     return v;
+}
+
+static void mode4_morph(int dir); /* definida junto a draw_player */
+
+/* Regreso Modo 4 -> coverflow (correccion 2026-08-12: "si accedimos
+ * por coverflow, SI podemos regresar al coverflow"): primero el
+ * despliegue inverso del panel (sincrono), y el llamador encadena el
+ * morph de regreso al carrusel -- dos morphs confirmados, un solo
+ * gesto fluido. */
+void aura_nowplaying_unfold_from_lyrics(void)
+{
+    mode4_morph(-1);
 }
 
 /* -- Modos de la rueda (doc SS5): un icono activo a la vez, SELECT
@@ -551,41 +573,63 @@ static void ensure_panel_colors(void)
     s_panel_colors_valid = true;
 }
 
-/* Color de fondo efectivo del panel DERECHO (letras) en la fila `y`
- * con el morph a t256 (t=0 -> SHELL_BG puro, t=256 -> degradado del
- * color promedio de la caratula). El panel izquierdo conserva el fondo
- * normal (correccion 2026-08-12). */
-static unsigned m4_bg_at(int y, int t256)
-{
-    unsigned grad;
-
-    if (t256 <= 0)
-        return a26_color(A26_SHELL_BG);
-    ensure_panel_colors();
-    grad = a26_shell_blend(s_panel_top, s_panel_bot,
-                            y * 256 / (A26_SCREEN_HEIGHT - 1));
-    return (t256 >= 256) ? grad
-                          : a26_shell_blend(a26_color(A26_SHELL_BG), grad, t256);
-}
-
-/* Tinta de texto sobre el panel derecho: la tinta legible por
- * luminancia, con `strength` (0..256) para la jerarquia (titulo/linea
- * activa plenos, secundarios atenuados) y el alfa del morph encima. */
-static unsigned m4_text_ink(int y, int t256, int strength)
+/* Degradado DIAGONAL del panel derecho: interpola del color promedio
+ * aclarado (esquina superior izquierda de la hoja) al oscurecido
+ * (inferior derecha). `x_rel` es la columna relativa al borde de la
+ * hoja. */
+static unsigned m4_grad_diag(int x_rel, int y)
 {
     ensure_panel_colors();
-    return a26_shell_blend(m4_bg_at(y, t256), s_panel_ink,
-                            strength * t256 / 256);
+    return a26_shell_blend(s_panel_top, s_panel_bot,
+                            (x_rel + y) * 256 / (M4_RPANEL_W + A26_SCREEN_HEIGHT));
 }
 
-static void draw_m4_panel_bg(int t256)
+/* Tinta de texto sobre la hoja: la tinta legible por luminancia contra
+ * el degradado aproximado en esa fila, con `strength` (0..256) para la
+ * jerarquia (titulo/linea activa plenos, secundarios atenuados). Los
+ * textos llegan YA RENDERIZADOS montados en la hoja (sin fade). */
+static unsigned m4_text_ink(int y, int strength)
 {
-    int y;
+    ensure_panel_colors();
+    return a26_shell_blend(m4_grad_diag(M4_RPANEL_W / 2, y), s_panel_ink,
+                            strength);
+}
+
+/* Desplazamiento de la hoja: entra desde la derecha con el morph. */
+static int m4_panel_dx(int t256)
+{
+    return (256 - t256) * M4_RPANEL_W / 256;
+}
+
+/* La hoja de vidrio: tinte traslucido del degradado diagonal sobre lo
+ * que YA este dibujado debajo (durante el morph se adivinan los restos
+ * del layout viejo a traves del vidrio), mas la sombra paralela que la
+ * hoja proyecta sobre el contenido a su izquierda. */
+static void draw_m4_right_panel(int t256)
+{
+    int x0 = MORPH_PANEL_W + m4_panel_dx(t256);
+    int x, y, sx;
+
+    if (t256 <= 0 || x0 >= A26_SCREEN_WIDTH)
+        return;
 
     for (y = 0; y < A26_SCREEN_HEIGHT; y++)
     {
-        lcd_set_foreground(m4_bg_at(y, t256));
-        lcd_hline(MORPH_PANEL_W, A26_SCREEN_WIDTH - 1, y);
+        fb_data *row = FBADDR(0, y);
+
+        /* Sombra paralela de la hoja sobre lo que queda debajo. */
+        for (sx = x0 - M4_PANEL_SHADOW_W; sx < x0; sx++)
+        {
+            if (sx < 0)
+                continue;
+            row[sx] = a26_shell_blend(row[sx], LCD_RGBPACK(0, 0, 0),
+                                       88 * (M4_PANEL_SHADOW_W - (x0 - sx))
+                                          / M4_PANEL_SHADOW_W);
+        }
+
+        for (x = x0; x < A26_SCREEN_WIDTH; x++)
+            row[x] = a26_shell_blend(row[x], m4_grad_diag(x - x0, y),
+                                      M4_GLASS_ALPHA);
     }
 }
 
@@ -1157,34 +1201,33 @@ static void draw_lyrics_line_clipped(int x, int y, int w, const char *text)
 static void draw_lyrics_panel(const struct mp3entry *id3, int t256)
 {
     int active = aura_lrc_find_active_line(&s_lrc, (long)id3->elapsed);
-    int panel_x = LYRICS_PANEL_X + A26_SPACING_LG;
+    int dx = m4_panel_dx(t256);
+    int panel_x = LYRICS_PANEL_X + dx + A26_SPACING_LG;
     int panel_w = LYRICS_PANEL_W - 2 * A26_SPACING_LG;
-    unsigned shell = a26_color(A26_SHELL_BG);
     int cy;
     int active_w, active_h;
     int y, i, w, h;
     char line[160];
 
-    /* Cabecera en la parte superior de la pantalla, con la tinta
-     * legible por luminancia sobre el panel de color (correccion
-     * 2026-08-12: el color promedio vive en el panel DERECHO). */
-    (void)shell;
+    /* Cabecera en la parte superior de la pantalla, MONTADA en la hoja
+     * (se desliza con ella, sin fade -- correccion 2026-08-12), con la
+     * tinta legible por luminancia sobre el vidrio de color. */
     y = A26_SPACING_LG;
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
-    lcd_set_foreground(m4_text_ink(y, t256, 256));
+    lcd_set_foreground(m4_text_ink(y, 256));
     snprintf(line, sizeof(line), "%s", id3->title ? id3->title : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     draw_lyrics_line_clipped(panel_x, y, panel_w, line);
     y += h + A26_SPACING_XS;
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    lcd_set_foreground(m4_text_ink(y, t256, 176));
+    lcd_set_foreground(m4_text_ink(y, 176));
     snprintf(line, sizeof(line), "%s", id3->artist ? id3->artist : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     draw_lyrics_line_clipped(panel_x, y, panel_w, line);
     y += h + A26_SPACING_XS;
 
-    lcd_set_foreground(m4_text_ink(y, t256, 176));
+    lcd_set_foreground(m4_text_ink(y, 176));
     snprintf(line, sizeof(line), "%s", id3->album ? id3->album : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     draw_lyrics_line_clipped(panel_x, y, panel_w, line);
@@ -1197,12 +1240,12 @@ static void draw_lyrics_panel(const struct mp3entry *id3, int t256)
         return;
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_14));
-    lcd_set_foreground(m4_text_ink(cy, t256, 256));
+    lcd_set_foreground(m4_text_ink(cy, 256));
     lcd_getstringsize((const unsigned char *)s_lrc.lines[active].text, &active_w, &active_h);
     draw_lyrics_line_clipped(panel_x, cy - active_h / 2, panel_w, s_lrc.lines[active].text);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    lcd_set_foreground(m4_text_ink(cy, t256, 150));
+    lcd_set_foreground(m4_text_ink(cy, 150));
 
     y = cy - active_h / 2 - A26_SPACING_XS;
     for (i = active - 1; i >= 0 && i >= active - 2; i--)
@@ -1234,14 +1277,18 @@ static void draw_player(const struct mp3entry *id3, int scrub_preview_ms, int t2
     int px = aura_pattern_lerp(PROGRESS_X, MORPH_PROGRESS_X, t256);
     int pw = aura_pattern_lerp(PROGRESS_W, MORPH_PROGRESS_W, t256);
 
-    if (t256 > 0)
-        draw_m4_panel_bg(t256);
     draw_cover_tilted(t256);
     draw_text_and_modes(id3, t256);
     draw_progress(id3, scrub_preview_ms, px, pw);
     draw_transport(t256);
     if (t256 > 0)
+    {
+        /* La hoja de vidrio AL FINAL: tinte sobre lo ya dibujado +
+         * sombra sobre el contenido a su izquierda; sus textos van
+         * montados encima. */
+        draw_m4_right_panel(t256);
         draw_lyrics_panel(id3, t256);
+    }
 
     if (t256 == 0 && s_mode == NP_MODE_PLAYLIST)
         draw_playlist_panel();

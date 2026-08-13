@@ -233,14 +233,21 @@ confirmada 2026-08-12. Es **pantalla completa**: sin StatusBar.
   invade los controles de abajo), con una **sombra paralela** sutil
   (4px hacia abajo, misma sombra dura del indicador de la barra) que
   aparece con el morph mientras el reflejo se va.
-- **Panel derecho** (`LyricsPanel`) — su color es el **PROMEDIO de la
-  carátula en curso con un ligero degradado** (más claro arriba, más
-  oscuro abajo), derivado en runtime de la imagen real; la tinta de los
-  textos se decide por **luminancia** (blanco constante sobre panel
-  oscuro; una versión muy oscura del mismo color sobre panel claro),
-  con la jerarquía por atenuación. **Título, artista y álbum viven en
-  la parte superior de la pantalla** y la letra corre debajo, con
-  avance automático sincronizado.
+- **Panel derecho** (`LyricsPanel`) — una **HOJA que se desliza desde
+  la derecha** (no un fade; corrección 2026-08-12) de **vidrio
+  traslúcido** (~85% de tinte: lo de abajo se adivina a través)
+  teñido con el **PROMEDIO de la carátula en curso en degradado
+  DIAGONAL** (aclarado en la esquina superior izquierda, oscurecido en
+  la inferior derecha), derivado en runtime de la imagen real. La hoja
+  **proyecta una sombra paralela** sobre el contenido bajo su borde
+  izquierdo. La tinta de los textos se decide por **luminancia**
+  (blanco constante sobre vidrio oscuro; una versión muy oscura del
+  mismo color sobre claro), con la jerarquía por atenuación. **Título,
+  artista y álbum viven en la parte superior de la pantalla**, montados
+  en la hoja (llegan ya renderizados, deslizándose con ella), y la
+  letra corre debajo con avance automático sincronizado. ⚠️ Excepción
+  deliberada del dueño del diseño a "el vidrio vive solo en la capa de
+  controles" (pedido explícito 2026-08-12).
 
 **El morph hacia el Modo 4 (mismo motor de proyección por columnas que
 el morph de regreso al carrusel):**
@@ -262,10 +269,12 @@ el morph de regreso al carrusel):**
 **Salidas:**
 
 - **Al modo siguiente** (Select): la misma transición, invertida.
-- **Del reproductor** (Menu): la pantalla se comporta como pantalla
-  completa y **se desplaza hacia la derecha dando paso al MENÚ
-  anterior** — **nunca transiciona al coverflow** (si el tope de la
-  pila es el carrusel, se salta también).
+- **Del reproductor** (Menu): si se **entró por coverflow, SÍ se
+  regresa al coverflow** (corrección 2026-08-12): el despliegue inverso
+  del panel se **encadena con el morph de regreso al carrusel** — dos
+  morphs confirmados, un solo gesto fluido. A cualquier otro destino,
+  la pantalla se comporta como pantalla completa y **se desplaza hacia
+  la derecha dando paso al menú anterior**.
 
 **Si la canción no tiene letras: el modo se desactiva** — su ícono sigue
 apareciendo en la fila de modos pero al **50% de opacidad** y no se puede

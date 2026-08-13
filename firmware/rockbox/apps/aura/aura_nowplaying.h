@@ -35,6 +35,11 @@ int aura_nowplaying_last_mode_row_y(void);
  * anterior en vez del morph de regreso al coverflow. */
 bool aura_nowplaying_take_fullscreen_exit(void);
 
+/* Despliegue inverso del Modo 4 (panel -> layout normal), sincrono --
+ * lo encadena aura_screens antes del morph de regreso al carrusel
+ * cuando la salida del Modo 4 va hacia el coverflow. */
+void aura_nowplaying_unfold_from_lyrics(void);
+
 void aura_nowplaying_draw(void);
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button);
 
