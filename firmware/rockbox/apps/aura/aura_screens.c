@@ -40,12 +40,19 @@ typedef struct {
     aura_screen_id_t target;
 } nav_entry_t;
 
+/* Orden del menu de inicio del firmware original (2026-08-13):
+ * Musica, Videos, Fotos, Extras, Ajustes, Canciones aleat. Podcasts se
+ * omite hasta que exista soporte real. "Ahora suena" no es una entrada
+ * del original: aparece SOLO cuando hay reproduccion activa (y el
+ * ajuste de Menu principal la sigue pudiendo ocultar). */
 static const nav_entry_t root_entries_all[] = {
-    { AURA_STR_MUSIC,      "music",    AURA_SCREEN_MUSIC },
-    { AURA_STR_VIDEOS,     "video",    AURA_SCREEN_VIDEOS },
-    { AURA_STR_PHOTOS,     "image",    AURA_SCREEN_PHOTOS },
-    { AURA_STR_NOWPLAYING, "play",     AURA_SCREEN_NOWPLAYING },
-    { AURA_STR_SETTINGS,   "settings", AURA_SCREEN_SETTINGS },
+    { AURA_STR_MUSIC,         "music",    AURA_SCREEN_MUSIC },
+    { AURA_STR_VIDEOS,        "video",    AURA_SCREEN_VIDEOS },
+    { AURA_STR_PHOTOS,        "image",    AURA_SCREEN_PHOTOS },
+    { AURA_STR_EXTRAS,        "extras",   AURA_SCREEN_EXTRAS },
+    { AURA_STR_SETTINGS,      "settings", AURA_SCREEN_SETTINGS },
+    { AURA_STR_NOWPLAYING,    "play",     AURA_SCREEN_NOWPLAYING },
+    { AURA_STR_SHUFFLE_SONGS, "shuffle",  AURA_SCREEN_SHUFFLE_SONGS },
 };
 /* Musica y Ajustes son fijos; Videos/Fotos/Ahora suena son opcionales
  * (Menu principal configurable, L14, Fase 18) -- se filtran en tiempo
@@ -63,7 +70,10 @@ static void rebuild_root_entries(void)
             continue;
         if (e->target == AURA_SCREEN_PHOTOS && !aura_settings.show_photos)
             continue;
-        if (e->target == AURA_SCREEN_NOWPLAYING && !aura_settings.show_nowplaying)
+        /* Como el original: solo con reproduccion en curso (ademas del
+         * ajuste de Menu principal, que puede ocultarla igual). */
+        if (e->target == AURA_SCREEN_NOWPLAYING
+            && (!aura_settings.show_nowplaying || !aura_nowplaying_active()))
             continue;
         root_entries[n++] = *e;
     }
@@ -80,13 +90,21 @@ static void rebuild_root_entries(void)
  * "pila de caratulas" todavia producido -- mismo tipo de pendiente de
  * produccion de assets que selection-summary.md ya documenta para otros
  * iconos 1:1. */
+/* Orden del submenu Musica del firmware original (2026-08-13). Genius
+ * se omite (no existe la funcion y el dueno pidio no simular la
+ * pantalla). Audiolibros es una fila presente e inerte, como en el
+ * original cuando no hay material del tipo. */
 static const nav_entry_t music_entries[] = {
-    { AURA_STR_MUSIC_COVERFLOW, "square-on-square", AURA_SCREEN_MUSIC_COVERFLOW },
-    { AURA_STR_MUSIC_ARTISTS,   NULL, AURA_SCREEN_MUSIC_ARTISTS },
-    { AURA_STR_MUSIC_ALBUMS,    NULL, AURA_SCREEN_MUSIC_ALBUMS },
-    { AURA_STR_MUSIC_SONGS,     NULL, AURA_SCREEN_MUSIC_SONGS },
-    { AURA_STR_MUSIC_PLAYLISTS, NULL, AURA_SCREEN_MUSIC_PLAYLISTS },
-    { AURA_STR_MUSIC_GENRES,    NULL, AURA_SCREEN_MUSIC_GENRES },
+    { AURA_STR_MUSIC_COVERFLOW,    "square-on-square", AURA_SCREEN_MUSIC_COVERFLOW },
+    { AURA_STR_MUSIC_PLAYLISTS,    "playlist",   AURA_SCREEN_MUSIC_PLAYLISTS },
+    { AURA_STR_MUSIC_ARTISTS,      "artist",     AURA_SCREEN_MUSIC_ARTISTS },
+    { AURA_STR_MUSIC_ALBUMS,       "album",      AURA_SCREEN_MUSIC_ALBUMS },
+    { AURA_STR_MUSIC_COMPILATIONS, "compilation", AURA_SCREEN_MUSIC_COMPILATIONS },
+    { AURA_STR_MUSIC_SONGS,        "song",       AURA_SCREEN_MUSIC_SONGS },
+    { AURA_STR_MUSIC_GENRES,       "genre",      AURA_SCREEN_MUSIC_GENRES },
+    { AURA_STR_MUSIC_COMPOSERS,    "composer",   AURA_SCREEN_MUSIC_COMPOSERS },
+    { AURA_STR_MUSIC_AUDIOBOOKS,   "audiobook",  AURA_SCREEN_MUSIC_AUDIOBOOKS },
+    { AURA_STR_MUSIC_SEARCH,       "search",     AURA_SCREEN_MUSIC_SEARCH },
 };
 
 /* Iconos elegidos y verificados contra el catalogo real de SF Symbols
@@ -112,10 +130,25 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_RESET,         "reset",          AURA_SCREEN_SETTINGS_RESET },
 };
 
+/* Extras del firmware original (2026-08-13), en su orden. */
+static const nav_entry_t extras_entries[] = {
+    { AURA_STR_EXTRAS_CLOCKS,     "clock",      AURA_SCREEN_EXTRAS_CLOCKS },
+    { AURA_STR_EXTRAS_CALENDAR,   "calendar",   AURA_SCREEN_EXTRAS_CALENDAR },
+    { AURA_STR_EXTRAS_CONTACTS,   "contacts",   AURA_SCREEN_EXTRAS_CONTACTS },
+    { AURA_STR_EXTRAS_ALARMS,     "alarm",      AURA_SCREEN_EXTRAS_ALARMS },
+    { AURA_STR_EXTRAS_GAMES,      "games",      AURA_SCREEN_EXTRAS_GAMES },
+    { AURA_STR_EXTRAS_NOTES,      "notes",      AURA_SCREEN_EXTRAS_NOTES },
+    { AURA_STR_EXTRAS_SCREENLOCK, "lock",       AURA_SCREEN_EXTRAS_SCREENLOCK },
+    { AURA_STR_EXTRAS_STOPWATCH,  "stopwatch",  AURA_SCREEN_EXTRAS_STOPWATCH },
+};
+
 static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
 {
     switch (screen)
     {
+    case AURA_SCREEN_EXTRAS:
+        *out = extras_entries;
+        return (int)(sizeof(extras_entries) / sizeof(extras_entries[0]));
     case AURA_SCREEN_ROOT:
         rebuild_root_entries();
         *out = root_entries;
@@ -138,6 +171,23 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     {
     case AURA_SCREEN_MUSIC:               return AURA_STR_MUSIC;
     case AURA_SCREEN_MUSIC_ARTISTS:       return AURA_STR_MUSIC_ARTISTS;
+    case AURA_SCREEN_MUSIC_COMPOSERS:     return AURA_STR_MUSIC_COMPOSERS;
+    case AURA_SCREEN_MUSIC_COMPILATIONS:  return AURA_STR_MUSIC_COMPILATIONS;
+    case AURA_SCREEN_MUSIC_AUDIOBOOKS:    return AURA_STR_MUSIC_AUDIOBOOKS;
+    case AURA_SCREEN_MUSIC_SEARCH:        return AURA_STR_MUSIC_SEARCH;
+    case AURA_SCREEN_EXTRAS:              return AURA_STR_EXTRAS;
+    case AURA_SCREEN_EXTRAS_CLOCKS:       return AURA_STR_EXTRAS_CLOCKS;
+    case AURA_SCREEN_EXTRAS_CALENDAR:     return AURA_STR_EXTRAS_CALENDAR;
+    case AURA_SCREEN_EXTRAS_CONTACTS:     return AURA_STR_EXTRAS_CONTACTS;
+    case AURA_SCREEN_EXTRAS_ALARMS:       return AURA_STR_EXTRAS_ALARMS;
+    case AURA_SCREEN_EXTRAS_GAMES:        return AURA_STR_EXTRAS_GAMES;
+    case AURA_SCREEN_EXTRAS_NOTES:        return AURA_STR_EXTRAS_NOTES;
+    case AURA_SCREEN_EXTRAS_SCREENLOCK:   return AURA_STR_EXTRAS_SCREENLOCK;
+    case AURA_SCREEN_EXTRAS_STOPWATCH:    return AURA_STR_EXTRAS_STOPWATCH;
+    case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER: return AURA_STR_MUSIC_ALBUMS;
+    case AURA_SCREEN_MUSIC_SONGS_BY_ARTIST:
+    case AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER:  return AURA_STR_MUSIC_SONGS;
+    case AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE:   return AURA_STR_MUSIC_ARTISTS;
     case AURA_SCREEN_MUSIC_ALBUMS:
     case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST: return AURA_STR_MUSIC_ALBUMS;
     case AURA_SCREEN_MUSIC_SONGS:
@@ -1080,6 +1130,11 @@ static int is_music_browse_screen(aura_screen_id_t screen)
     case AURA_SCREEN_MUSIC_SONGS_BY_ALBUM:
     case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:
     case AURA_SCREEN_MUSIC_GENRES:
+    case AURA_SCREEN_MUSIC_COMPOSERS:
+    case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER:
+    case AURA_SCREEN_MUSIC_SONGS_BY_ARTIST:
+    case AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER:
+    case AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE:
         return 1;
     default:
         return 0;
@@ -1107,16 +1162,61 @@ static aura_music_item_t s_music_cache[AURA_MUSIC_MAX_ITEMS];
 static int s_music_cache_count = 0;
 static aura_list_item_t s_music_items_buf[AURA_MUSIC_MAX_ITEMS];
 
+/* Fila sintetica al tope de ciertas listas del original (2026-08-13):
+ * "Canciones" en Albumes, "Todos" en las listas que agrupan (Artistas,
+ * Autores, Albumes de un artista/autor, Generos, Artistas de un
+ * genero). Devuelve la pantalla destino, o AURA_SCREEN_COUNT si esa
+ * lista no lleva fila sintetica. Vive DENTRO de la cache de la lista
+ * (indice 0), asi que rueda, seleccion y ScrollIndicator la tratan como
+ * una fila mas, sin corrimientos por todos lados. */
+static aura_screen_id_t browse_all_row_target(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_MUSIC_ALBUMS:            return AURA_SCREEN_MUSIC_SONGS;
+    case AURA_SCREEN_MUSIC_ARTISTS:           return AURA_SCREEN_MUSIC_ALBUMS;
+    case AURA_SCREEN_MUSIC_COMPOSERS:         return AURA_SCREEN_MUSIC_ALBUMS;
+    case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST:  return AURA_SCREEN_MUSIC_SONGS_BY_ARTIST;
+    case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER:return AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER;
+    case AURA_SCREEN_MUSIC_GENRES:            return AURA_SCREEN_MUSIC_ARTISTS;
+    case AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE:  return AURA_SCREEN_MUSIC_SONGS_BY_GENRE;
+    default:                                  return AURA_SCREEN_COUNT;
+    }
+}
+
+static aura_str_id_t browse_all_row_label(aura_screen_id_t screen)
+{
+    /* Albumes encabeza con "Canciones" (lleva a TODAS las canciones);
+     * el resto con "Todos". */
+    return (screen == AURA_SCREEN_MUSIC_ALBUMS) ? AURA_STR_MUSIC_SONGS
+                                                 : AURA_STR_ALL;
+}
+
 static void ensure_music_cache(aura_screen_id_t screen)
 {
     int gen = aura_music_filter_generation();
+    int n;
 
     if (s_music_cache_screen == screen && s_music_cache_generation == gen)
         return;
 
     s_music_cache_screen = screen;
     s_music_cache_generation = gen;
-    s_music_cache_count = aura_music_browse(screen, s_music_cache, AURA_MUSIC_MAX_ITEMS);
+
+    if (browse_all_row_target(screen) == AURA_SCREEN_COUNT)
+    {
+        s_music_cache_count = aura_music_browse(screen, s_music_cache,
+                                                 AURA_MUSIC_MAX_ITEMS);
+        return;
+    }
+
+    /* Con fila sintetica: se busca desde el indice 1 y la fila 0 se
+     * rellena despues, para no mover memoria de mas. */
+    n = aura_music_browse(screen, s_music_cache + 1, AURA_MUSIC_MAX_ITEMS - 1);
+    strlcpy(s_music_cache[0].label, aura_str(browse_all_row_label(screen)),
+            AURA_MUSIC_ITEM_LEN);
+    s_music_cache[0].seek = -1; /* marca de fila sintetica */
+    s_music_cache_count = n + 1;
 }
 
 static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
@@ -1230,6 +1330,7 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
     return screen == AURA_SCREEN_ROOT
         || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC
+        || screen == AURA_SCREEN_EXTRAS
         || is_choice_screen(screen)
         || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
         || screen == AURA_SCREEN_SETTINGS_SLEEPTIMER
@@ -1245,7 +1346,8 @@ void aura_screens_draw(aura_nav_t *nav)
     aura_widgets_set_list_layout(screen_uses_split_layout(screen)
                                   ? AURA_LIST_SPLIT : AURA_LIST_FULL);
 
-    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
+    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
+        || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -1263,6 +1365,17 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_mainmenu(nav);
     else if (screen == AURA_SCREEN_SETTINGS_RESET)
         draw_reset_confirm();
+    else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS
+             || screen == AURA_SCREEN_MUSIC_SEARCH
+             || screen == AURA_SCREEN_MUSIC_COMPILATIONS
+             || (screen >= AURA_SCREEN_EXTRAS_CLOCKS
+                 && screen <= AURA_SCREEN_EXTRAS_STOPWATCH))
+    {
+        /* Pantallas del arbol del original cuya interfaz propia
+         * todavia no se construyo: estado vacio honesto con su titulo,
+         * nunca una pantalla en blanco ni una fila que no responde. */
+        draw_message_centered(AURA_STR_EMPTY_GENERIC);
+    }
     else if (is_coverflow_screen(screen))
         aura_coverflow_draw(nav, screen);
     else if (is_music_browse_screen(screen))
@@ -1328,6 +1441,15 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
         if (settings_row_toggle_value(entries[sel].target) >= 0)
         {
             toggle_settings_row(entries[sel].target);
+            break;
+        }
+        /* "Canciones aleat." (menu de inicio del original) es una
+         * ACCION, no una pantalla: baraja toda la biblioteca, arranca
+         * la reproduccion y abre el reproductor. */
+        if (entries[sel].target == AURA_SCREEN_SHUFFLE_SONGS)
+        {
+            if (aura_music_play_all_shuffled())
+                aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
             break;
         }
         if (screen == AURA_SCREEN_MUSIC)
@@ -1419,6 +1541,14 @@ static void handle_music_browse(aura_nav_t *nav, aura_screen_id_t screen, long b
     case BUTTON_SELECT:
         if (count == 0)
             break;
+        /* Fila sintetica: no filtra por si misma, solo abre la lista
+         * agregada del nivel siguiente conservando los filtros vigentes
+         * (p.ej. "Todos" dentro de un artista = todas sus canciones). */
+        if (sel == 0 && browse_all_row_target(screen) != AURA_SCREEN_COUNT)
+        {
+            aura_nav_push(nav, browse_all_row_target(screen));
+            break;
+        }
         switch (screen)
         {
         case AURA_SCREEN_MUSIC_ARTISTS:
@@ -1432,11 +1562,25 @@ static void handle_music_browse(aura_nav_t *nav, aura_screen_id_t screen, long b
             break;
         case AURA_SCREEN_MUSIC_GENRES:
             aura_music_select_genre(s_music_cache[sel].seek);
-            aura_nav_push(nav, AURA_SCREEN_MUSIC_SONGS_BY_GENRE);
+            aura_nav_push(nav, AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE);
+            break;
+        case AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE:
+            aura_music_select_artist(s_music_cache[sel].seek);
+            aura_nav_push(nav, AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST);
+            break;
+        case AURA_SCREEN_MUSIC_COMPOSERS:
+            aura_music_select_composer(s_music_cache[sel].seek);
+            aura_nav_push(nav, AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER);
+            break;
+        case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER:
+            aura_music_select_album(s_music_cache[sel].seek);
+            aura_nav_push(nav, AURA_SCREEN_MUSIC_SONGS_BY_ALBUM);
             break;
         case AURA_SCREEN_MUSIC_SONGS:
         case AURA_SCREEN_MUSIC_SONGS_BY_ALBUM:
         case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:
+        case AURA_SCREEN_MUSIC_SONGS_BY_ARTIST:
+        case AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER:
             if (aura_music_play_songs(screen, sel))
                 aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
             break;
@@ -1507,7 +1651,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         return;
     }
 
-    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_MUSIC)
+    if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
+        || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);

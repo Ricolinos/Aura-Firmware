@@ -1698,4 +1698,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-153 — Árbol de menús del firmware original: raíz, Música y Extras
+
+**Encargo del dueño del diseño (2026-08-13, Fase B del plan de interfaz).** Se replica la estructura del firmware original de Apple. (1) **Raíz**: Música · Videos · Fotos · Extras · Ajustes · Ahora suena · Canciones aleat. "Ahora suena" ya no es una fila permanente — aparece SOLO con reproducción activa, como el original (P22a), sin perder el ajuste de Menú principal que también puede ocultarla; Podcasts se omite hasta que exista soporte real (P17b); "Canciones aleat." es una ACCIÓN, no una pantalla: baraja toda la biblioteca con el barajado real del núcleo y abre el reproductor (P16a). (2) **Música**: Cover Flow · Listas repr. · Artistas · Álbumes · Recopilaciones · Canciones · Géneros · Autores · Audiolibros · Búsqueda (Genius omitido, P2c). Se agregan las jerarquías reales del original: Autores sobre `tag_composer` con su cadena completa (Autores → Álbumes → Canciones), Artistas por género, y **fila sintética** al tope de las listas que agrupan ("Canciones" en Álbumes, "Todos" en Artistas/Autores/Géneros y en los álbumes de un artista/autor). Esa fila vive DENTRO de la caché de la lista en el índice 0, así que rueda, selección y ScrollIndicator la tratan como una fila más, sin corrimientos de índice repartidos por el código. El playlist de reproducción hereda exactamente los mismos filtros que la lista visible, incluidas las jerarquías nuevas. (3) **Extras**: Reloj internacional · Calendarios · Agenda · Alarmas · Juegos · Notas · Bloqueo pantalla · Cronómetro. (4) **Iconos** (P9b): 17 símbolos SF nuevos elegidos con el criterio de Apple Music/Finder (`music.mic` artistas, `square.stack` álbumes, `pianokeys` autores, `guitars` géneros, `globe.americas` reloj mundial…), ninguno repetido entre hermanos. Las pantallas del árbol cuya interfaz propia todavía no existe muestran un estado vacío honesto con su título, nunca una pantalla en blanco ni una fila muerta.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

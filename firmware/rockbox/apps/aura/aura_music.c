@@ -26,6 +26,7 @@
 static int32_t s_artist_seek = -1;
 static int32_t s_album_seek = -1;
 static int32_t s_genre_seek = -1;
+static int32_t s_composer_seek = -1;
 static int s_filter_generation = 0;
 
 /* Suficiente para varios cientos de valores unicos (artista/album/genero);
@@ -35,10 +36,17 @@ static uint32_t s_uniqbuf[2048];
 
 void aura_music_select_artist(int32_t seek) { s_artist_seek = seek; s_filter_generation++; }
 void aura_music_select_album(int32_t seek)  { s_album_seek = seek; s_filter_generation++; }
+void aura_music_select_composer(int32_t seek)
+{
+    s_composer_seek = seek;
+    s_filter_generation++;
+}
+
 void aura_music_select_genre(int32_t seek)  { s_genre_seek = seek; s_filter_generation++; }
 
 void aura_music_reset_filters(void)
 {
+    s_composer_seek = -1;
     s_artist_seek = -1;
     s_album_seek = -1;
     s_genre_seek = -1;
@@ -126,7 +134,7 @@ static bool title_from_filename(struct tagcache_search *tcs, char *out, size_t o
  * correspondan segun la pantalla, y vuelca hasta `max` resultados en
  * `out`. Devuelve la cantidad de items. */
 static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
-                       aura_music_item_t *out, int max)
+                       bool use_composer, aura_music_item_t *out, int max)
 {
     struct tagcache_search tcs;
     char buf[TAGCACHE_BUFSZ];
@@ -139,12 +147,16 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
 
     tagcache_search_set_uniqbuf(&tcs, s_uniqbuf, sizeof(s_uniqbuf));
 
+    if (use_composer && s_composer_seek >= 0)
+        tagcache_search_add_filter(&tcs, tag_composer, s_composer_seek);
     if (use_artist && s_artist_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_artist, s_artist_seek);
     if (use_album && s_album_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_album, s_album_seek);
     if (use_genre && s_genre_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_genre, s_genre_seek);
+    if (use_composer && s_composer_seek >= 0)
+        tagcache_search_add_filter(&tcs, tag_composer, s_composer_seek);
 
     /* Numero de pista real por fila -- solo interesa para las listas
      * de canciones DE UN ALBUM (ordenarlas como el disco, D-118/nota);
@@ -220,20 +232,33 @@ int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_i
     switch (screen)
     {
     case AURA_SCREEN_MUSIC_ARTISTS:
-        return run_search(tag_artist, false, false, false, out, max_items);
+        return run_search(tag_artist, false, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_ALBUMS:
     case AURA_SCREEN_MUSIC_COVERFLOW:
-        return run_search(tag_album, false, false, false, out, max_items);
+        return run_search(tag_album, false, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST:
-        return run_search(tag_album, true, false, false, out, max_items);
+        return run_search(tag_album, true, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_SONGS:
-        return run_search(tag_title, false, false, false, out, max_items);
+        return run_search(tag_title, false, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_SONGS_BY_ALBUM:
-        return run_search(tag_title, true, true, false, out, max_items);
+        return run_search(tag_title, true, true, false, false, out, max_items);
+    case AURA_SCREEN_MUSIC_SONGS_BY_ARTIST:
+        return run_search(tag_title, true, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:
-        return run_search(tag_title, false, false, true, out, max_items);
+        return run_search(tag_title, false, false, true, false, out, max_items);
     case AURA_SCREEN_MUSIC_GENRES:
-        return run_search(tag_genre, false, false, false, out, max_items);
+        return run_search(tag_genre, false, false, false, false, out, max_items);
+    /* Arbol del original (2026-08-13): Autores es la misma jerarquia
+     * que Artistas pero sobre tag_composer; Artistas por genero y
+     * Recopilaciones reusan los mismos filtros. */
+    case AURA_SCREEN_MUSIC_COMPOSERS:
+        return run_search(tag_composer, false, false, false, false, out, max_items);
+    case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER:
+        return run_search(tag_album, false, false, false, true, out, max_items);
+    case AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER:
+        return run_search(tag_title, false, false, false, true, out, max_items);
+    case AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE:
+        return run_search(tag_artist, false, false, true, false, out, max_items);
     default:
         return 0;
     }
@@ -266,9 +291,15 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
     struct tagcache_search tcs;
     char path[MAX_PATH];
     int tag = tag_title;
-    bool use_artist = (songs_screen == AURA_SCREEN_MUSIC_SONGS_BY_ALBUM);
+    /* Los mismos filtros con los que se construyo la lista visible
+     * (aura_music_browse) -- el playlist tiene que coincidir con lo que
+     * el usuario esta viendo, incluidas las jerarquias del original
+     * agregadas el 2026-08-13 (por artista, por autor). */
+    bool use_artist = (songs_screen == AURA_SCREEN_MUSIC_SONGS_BY_ALBUM
+                       || songs_screen == AURA_SCREEN_MUSIC_SONGS_BY_ARTIST);
     bool use_album = (songs_screen == AURA_SCREEN_MUSIC_SONGS_BY_ALBUM);
     bool use_genre = (songs_screen == AURA_SCREEN_MUSIC_SONGS_BY_GENRE);
+    bool use_composer = (songs_screen == AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER);
     int inserted = 0;
 
     if (!tagcache_is_usable())
@@ -283,6 +314,8 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
         tagcache_search_add_filter(&tcs, tag_album, s_album_seek);
     if (use_genre && s_genre_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_genre, s_genre_seek);
+    if (use_composer && s_composer_seek >= 0)
+        tagcache_search_add_filter(&tcs, tag_composer, s_composer_seek);
 
     playlist_create(NULL, NULL);
 
@@ -356,6 +389,20 @@ bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index)
         return false;
 
     playlist_start(start_index, 0, 0);
+    return true;
+}
+
+/* "Canciones aleat." del menu de inicio (encargo 2026-08-13): toda la
+ * biblioteca en orden aleatorio, empezando a sonar de inmediato. Reusa
+ * el constructor de playlist sin filtros y el barajado real del nucleo
+ * (el mismo de playlist_randomise, no un indice al azar). */
+bool aura_music_play_all_shuffled(void)
+{
+    if (!build_playlist_from_songs(AURA_SCREEN_MUSIC_SONGS))
+        return false;
+
+    playlist_randomise(NULL, current_tick, true);
+    playlist_start(0, 0, 0);
     return true;
 }
 

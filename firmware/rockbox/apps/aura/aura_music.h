@@ -34,6 +34,7 @@ int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_i
  * albumes). `seek` es el aura_music_item_t.seek del item elegido. */
 void aura_music_select_artist(int32_t seek);
 void aura_music_select_album(int32_t seek);
+void aura_music_select_composer(int32_t seek);
 void aura_music_select_genre(int32_t seek);
 
 /* Limpia todo el contexto de filtro; llamar al entrar a cualquier modo
@@ -59,6 +60,7 @@ int aura_music_filter_generation(void);
  * `screen` está mostrando actualmente (mismo filtro que aura_music_browse)
  * y arranca la reproduccion en start_index. */
 bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index);
+bool aura_music_play_all_shuffled(void);
 
 /* Catalogo de playlists guardadas (archivos .m3u/.m3u8). `labels` trae
  * el nombre de archivo completo, CON extension -- hace falta tal cual
