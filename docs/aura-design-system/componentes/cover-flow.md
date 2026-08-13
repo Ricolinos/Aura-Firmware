@@ -35,6 +35,15 @@ reescribir desde cero.
 - **Reflejo**: la misma imagen invertida verticalmente + desvanecimiento.
 - **Máquina de estados**: `idle → scrolling → cover_in → show_tracks →
   cover_out` — compatible con nuestro modelo de estados+transiciones.
+- **Orden pintor real** (corregido 2026-08-12): las laterales se dibujan
+  por distancia decreciente al centro, ambos lados por nivel (t±3, t±2,
+  t±1) — la aproximación de "alternar extremos" dejaba carátulas del
+  fondo encima de las de adelante durante los morphs.
+- **El tema es parte de la llave de los cachés** (2026-08-12): el
+  `.pfraw` en disco y los slots decodificados en RAM hornean las
+  esquinas contra el fondo del tema vigente — al cambiar de tema se
+  auto-invalidan y regeneran (sin esto quedaban halos del tema
+  anterior).
 
 ### Carátulas: archivos y embebidas (resuelto 2026-08)
 
@@ -146,7 +155,9 @@ viaja de una pantalla a la otra (requisito duro de continuidad).
 NO es la inversa del vuelo: la carátula ya está de frente, así que **no
 hay giro ni paso por el reverso** — hace un **morph fluido de posición y
 geometría** (135px/tilt 7° → 130px/frontal en el centro del carrusel) con
-el reflejo visible todo el trayecto. Las tapas laterales **entran desde
+el reflejo visible todo el trayecto. Desde el **Modo 4 (letras)** el
+regreso también existe: el despliegue inverso del panel se **encadena**
+con este mismo morph (2026-08-12, ver `componentes/lyrics-panel.md`). Las tapas laterales **entran desde
 los bordes** de la pantalla y el título/artista **suben desde el borde
 inferior**. El carrusel queda EN REPOSO mostrando la carátula (no la
 lista abierta).

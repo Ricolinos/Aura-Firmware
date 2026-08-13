@@ -24,10 +24,10 @@ primero, no solo en el código.
 
 | Carpeta | Contenido | Estado |
 |---|---|---|
-| `fundamentos/` | Color, tipografía, espaciado, bordes, breakpoints/tamaños de pantalla | 🟡 Primer token de tipografía definido (`--font-statusbar`); resto pendiente |
+| `fundamentos/` | Color, tipografía, espaciado, bordes, breakpoints/tamaños de pantalla | 🟡 Tipografía con 9 tokens definidos (StatusBar, NowPlaying, MenuList); color con `--color-accent`; resto pendiente |
 | `sistema/` | El sistema de capas y jerarquía de dibujo, y la analogía de navegación menú/contenido | 🟢 Definido |
-| `componentes/` | Componentes individuales con sus estados | 🟡 `StatusBar` casi cerrado; `LeftPanel`, `Selector`, `ScrollIndicator` con medidas exactas; `SelectionSummary` y `CoverDrift` con diseño y comportamiento definidos; `MarqueeText`, `DynamicTitle`, `ClockIndicator` definidos; `DateEditor` es solo stub |
-| `transiciones/` | Vocabulario de patrones de animación reutilizables | 🟢 9 patrones documentados: `Morph Directo`, `Push-and-Drop`, `Fade-on-Idle`, `Marquee Loop`, `Shift-and-Reveal`, `Fade-Slide`, `Scroll-Slide`, `Drop-and-Lift`, `Push-and-Pull` |
+| `componentes/` | Componentes individuales con sus estados | 🟡 `StatusBar` casi cerrado; `LeftPanel`, `Selector`, `ScrollIndicator` con medidas exactas; `SelectionSummary` y `CoverDrift` con diseño y comportamiento definidos; `CoverFlow` con investigación técnica y decisiones estructurales; `NowPlaying` CERRADO 2026-08-12 (barra unificada, transporte, 5 modos, conmutadores por hold, coreografías); `LyricsPanel` (Modo 4) con spec propia completa; `MarqueeText`, `DynamicTitle`, `ClockIndicator` definidos; `DateEditor` es solo stub |
+| `transiciones/` | Vocabulario de patrones de animación reutilizables | 🟢 10 patrones documentados: `Morph Directo`, `Push-and-Drop`, `Fade-on-Idle`, `Marquee Loop`, `Shift-and-Reveal`, `Fade-Slide`, `Scroll-Slide`, `Drop-and-Lift`, `Push-and-Pull`, `Flip-and-Flow` |
 | `efectos/` | Sombras, elevación, otros efectos visuales | 🟡 Regla capturada, faltan valores |
 | `modulos/` | Composiciones de componentes reutilizables entre pantallas | ⚪ Sin empezar |
 

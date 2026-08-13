@@ -2,14 +2,16 @@
 
 La pantalla de reproducción — una **habitación** en términos de
 `sistema/02-navegacion-menus-contenido.md`. Pantalla completa, con
-`StatusBar` en modo `(full)` (título "Ahora suena" / "Now Playing").
+`StatusBar` en modo `(full)` (título "Ahora suena" / "Now Playing") —
+salvo en el Modo 4 (Letras), que la oculta (ver
+`componentes/lyrics-panel.md`).
 
 ## Geometría de la carátula (rescatada del original, confirmada)
 
 Decisión: se rescata la **geometría, tamaño y posición de la carátula del
 Now Playing original del iPod Classic** — con todo y reflejo — pero
 manteniendo la interfaz nueva de Aura alrededor y aplicando las esquinas
-redondeadas ya definidas (5-6px, mismas de CoverFlow).
+redondeadas ya definidas (8px, mismas de CoverFlow).
 
 Medidas estimadas de la captura del firmware original (escala a 320×240
 reales — ⚠️ valores aproximados leídos de captura, a validar contra el
@@ -49,6 +51,11 @@ Centrada verticalmente **entre la base de la barra y el borde inferior**:
   icono central con 20px de separación** — ya no en los extremos de la
   barra. Activo = acento, inactivo = tinta normal. Repetir tiene
   **variante de glifo**: `repeat` (todo) y `repeat.1` (una canción).
+- Al ajustar volumen, el centro lo ocupa la **bocina dinámica** (lienzo
+  de 36px): sus 5 estados se renderizan a **pointSize fijo** (el de un
+  icono de 24px) sin escalar-para-caber, de modo que **el cuerpo de la
+  bocina mide exactamente igual en los 5 estados** y solo las ondas
+  ocupan más lienzo. Renderizada desde el centro.
 
 ### Mantener backward/forward = modos de reproducción (confirmado 2026-08-12)
 
@@ -63,11 +70,9 @@ En **cualquier modo de la rueda**, incluido el principal:
 - El efecto es **inmediato** sobre la reproducción en curso: aleatorio
   re-baraja (o re-ordena) el playlist vivo conservando la pista actual;
   repetir recarga la cola de pistas próximas.
-- Al ajustar volumen, el centro lo ocupa la **bocina dinámica** (lienzo
-  de 36px): sus 5 estados se renderizan a **pointSize fijo** (el de un
-  icono de 24px) sin escalar-para-caber, de modo que **el cuerpo de la
-  bocina mide exactamente igual en los 5 estados** y solo las ondas
-  ocupan más lienzo. Renderizada desde el centro.
+- El **clicker** suena solo en la pulsación fresca — los repeats del
+  botón sostenido son mudos (sonaban como scroll); la rueda conserva su
+  click por paso, como el iPod original.
 
 **Punto clave de continuidad:** esa inclinación sutil ES el ángulo de
 aterrizaje de `Flip-and-Flow` — el original ya estaba diseñado como si la
@@ -75,7 +80,7 @@ carátula viniera de Cover Flow. La spec de ambos componentes queda acoplada
 por diseño: el slide central de CoverFlow al hacer flip/unflip termina
 exactamente en esta posición/ángulo/tamaño.
 
-**Esquinas redondeadas:** la carátula y su reflejo llevan el radio de 5-6px
+**Esquinas redondeadas:** la carátula y su reflejo llevan el radio de 8px
 definido en `componentes/cover-flow.md` (heredadas del bitmap `.pfraw` ya
 enmascarado — sin costo extra en runtime).
 
@@ -137,20 +142,18 @@ de entrar.
 sistema para las transiciones `(split) → (full)`. No es un patrón nuevo:
 NowPlaying es un caso de uso más de `Push-and-Drop`.
 
-## Layout actual (capturado de la implementación existente, 2026-08)
-
-Orden general a mantener (con correcciones pendientes de detallar):
+## Layout (cerrado 2026-08-12)
 
 | Zona | Contenido |
 |---|---|
-| Superior izquierda | Carátula del álbum, con reflejo debajo |
-| Superior derecha | Título de la canción (bold), artista debajo, rating de 5 estrellas debajo |
-| Media derecha | Fila de íconos de acción: volumen, ¿repeat/crossfade?, lista, ¿letras/comentarios?, favorito |
-| Inferior media | Barra de progreso con tiempo transcurrido (izq) y restante/total (der) |
-| Inferior | Controles de transporte: repeat, retroceder, play/pausa, adelantar, shuffle |
+| Superior izquierda | Carátula del álbum (135×135, 7°), con reflejo debajo |
+| Superior derecha | Título (Bold 12), artista y álbum (Regular 12), rating de 5 estrellas |
+| Franja sobre la barra | Fila de íconos de los 5 modos, anclada 10px sobre la barra, alineada al padding derecho |
+| Inferior | Barra unificada de progreso/volumen (300×7, a 44px del borde) |
+| Fondo | Transporte: repetir · play/pausa (estado real) · aleatorio, centrado entre la barra y el borde |
 
-🔴 Pendiente: el propósito exacto de cada ícono de la fila de acciones (los
-signos de interrogación arriba) — a confirmar del dueño del diseño.
+El hueco entre las estrellas y la fila de modos es donde vive el panel
+flotante del Modo 3.
 
 ## Modos del reproductor
 
@@ -211,11 +214,14 @@ interno derecho** de la pantalla.
 
 ### Modo 2 — Búsqueda precisa (scrub)
 
-- Scroll = desplazarse con precisión sobre la línea de tiempo de la
-  canción, **visualizando** el punto donde uno quiere posicionarse.
-- Coexiste con el comportamiento estándar de mantener presionado
-  Backward/Forward para adelantar rápido — este modo es la versión visual
-  y precisa de eso.
+- Scroll = desplazarse sobre la línea de tiempo (3s por click),
+  **visualizando** el punto donde uno quiere posicionarse: relleno en
+  acento + indicador de 15×11 + tiempos bajo la barra.
+- Es **el único lugar de la búsqueda dentro de la canción** desde el
+  2026-08-12: mantener Backward/Forward ya no busca — ahora conmuta
+  repetir/aleatorio (ver "Mantener backward/forward" arriba). El audio
+  acompaña el ajuste con un solo salto en vuelo a la vez y la posición
+  final aterriza sin cola.
 
 ### Modo 3 — Agregar a playlist (nuevo, no existía en el original)
 
@@ -250,23 +256,12 @@ confirmada 2026-08-12. Es **pantalla completa**: sin StatusBar.
   un resplandor de ~8px con decaimiento cuadrático, opacidad pico ~19%
   en el borde, siguiendo la **silueta redondeada** del álbum) que **se desvanece con el morph** (aparece al entrar,
   se va al salir).
-- **Panel derecho** (`LyricsPanel`) — una **HOJA que se desliza desde
-  la derecha** (no un fade; corrección 2026-08-12) de **vidrio
-  traslúcido** (~85% de tinte: lo de abajo se adivina a través)
-  teñido con el **PROMEDIO de la carátula en curso en degradado
-  DIAGONAL** (aclarado en la esquina superior izquierda, oscurecido en
-  la inferior derecha), derivado en runtime de la imagen real. El **panel
-  izquierdo es la capa elevada**: proyecta una **sombra paralela sobre
-  la hoja** desde su borde (franja de 8px decayendo a la derecha,
-  corrección 2026-08-12). La hoja es **cuadrada** — las esquinas
-  redondeadas de pantalla no se estampan sobre ella. La tinta de los textos se decide por **luminancia**
-  (blanco constante sobre vidrio oscuro; una versión muy oscura del
-  mismo color sobre claro), con la jerarquía por atenuación. **Título,
-  artista y álbum viven en la parte superior de la pantalla**, montados
-  en la hoja (llegan ya renderizados, deslizándose con ella), y la
-  letra corre debajo con avance automático sincronizado. ⚠️ Excepción
-  deliberada del dueño del diseño a "el vidrio vive solo en la capa de
-  controles" (pedido explícito 2026-08-12).
+- **Panel derecho**: la hoja de vidrio del `LyricsPanel` — componente
+  con spec propia completa en **`componentes/lyrics-panel.md`**
+  (deslizamiento desde la derecha, vidrio traslúcido del color promedio
+  del álbum en degradado diagonal, sombra del panel izquierdo sobre la
+  hoja, tinta por luminancia, cabecera, renglones, silencios,
+  interacción y salidas).
 
 **El morph hacia el Modo 4 (mismo motor de proyección por columnas que
 el morph de regreso al carrusel):**
@@ -299,30 +294,11 @@ el morph de regreso al carrusel):**
 apareciendo en la fila de modos pero al **50% de opacidad** y no se puede
 seleccionar (el loop de modos lo salta, igual que el Modo 3 sin playlists).
 
-**Tipografía de `LyricsPanel`:** letras a 12px Regular; la línea activa a
-**14px Bold**; cabecera con los mismos estilos del bloque de texto del
-reproductor (título Bold 12, artista/álbum Regular 12).
-
-**Líneas largas (confirmado 2026-08-12):** aquí NO hay Marquee Loop —
-las líneas **no activas se recortan** al ancho del panel; la línea
-**activa se divide en los renglones necesarios** (hasta 3) para leerse
-completa, cortando por palabras.
-
-**Silencios (confirmado 2026-08-12):** cuando el hueco entre líneas es
-largo (provisional: ≥8s, con ~3s de "lectura" de la línea saliente), el
-centro muestra **3 puntos indicadores** que se **iluminan uno a uno**
-conforme avanza el silencio — los tres encendidos = la letra está por
-volver. La última línea cantada queda arriba y las próximas debajo.
-
 **La StatusBar se desliza hacia arriba** durante el morph de entrada (y
-regresa deslizándose al salir) — no desaparece de golpe. La sombra del
-panel izquierdo aparece con su **propio fade** después del acople de la
-hoja (~165ms).
+regresa deslizándose al salir) — no desaparece de golpe.
 
-**Scroll en este modo (resuelto 2026-08-12):** la rueda **avanza la
-canción** (mismo paso de 3s por click y mismo estrangulado de audio que
-el Modo 2), pero **sin números**: el ajuste se visualiza solo en la
-barra de progreso y en el avance de la propia letra.
+Tipografía, letras (renglones, silencios), scroll e interacción del
+panel: ver **`componentes/lyrics-panel.md`**.
 
 ### Modo 5 — Puntuar (estrellas)
 
@@ -336,10 +312,10 @@ barra de progreso y en el avance de la propia letra.
 
 ### Reglas confirmadas del sistema de modos
 
-- **Indicadores de modo:** la fila de íconos (bocina, flechas, lista,
-  globo, estrella) son los indicadores de los 5 modos — un ícono por modo,
-  en orden (M1→M5). 🔴 Pendiente menor: cómo se resalta el activo
-  (presumiblemente `--color-accent`, a confirmar).
+- **Indicadores de modo:** la fila de íconos son los indicadores de los
+  5 modos — un ícono por modo, en orden (M1→M5). El activo se resalta
+  con la **variante `.fill` en acento** (resuelto 2026-08-12, ver "Fila
+  de iconos de modos").
 - **Orden del loop:** 1→2→3→4→5→1.
 - **Cambio entre modos: instantáneo** — con la única excepción del Modo 4
   (Letras), que entra y sale con la transición morph fluida.
@@ -361,17 +337,20 @@ Familia: **SF Pro siempre** (tokens en `fundamentos/02-tipografia.md`):
 | Letras (Modo 4) | Regular | 12px |
 | Letra activa (Modo 4) | Bold | 14px |
 
-## Barra de progreso (confirmada)
+## Barra de progreso
 
-Dos capas:
+⚠️ Superseded 2026-08-12: la spec vigente es la **"Barra unificada de
+progreso/volumen"** de arriba (carril `SELECTION_FILL` 300×7, relleno
+298×5 blanco/acento, indicador de 15×11). De la versión anterior
+sobrevive solo el **formato de tiempos** del original: transcurrido a
+la izquierda, restante con signo negativo a la derecha (ej. `1:56` /
+`-1:52`), Bold 10px — visibles únicamente durante el ajuste del Modo 2.
 
-- **Track persistente (fondo):** negro al 60% de opacidad, 6px de grosor.
-- **Barra de avance (encima):** 4px de grosor, puntas redondeadas.
-  **Blanca** en reposo; cambia a **`--color-accent`** mientras se está
-  manipulando (Modo 2 / scrub).
-
-**Formato de tiempos:** como el original — transcurrido a la izquierda,
-restante con signo negativo a la derecha (ej. `1:56` / `-1:52`). Bold 10px.
+**Desvanecimiento compartido:** todos los elementos de ajuste de la
+barra (acento del relleno, tiempos, indicador, bocinas) se apagan con
+el mismo fade (~330ms) al expirar su ventana — o de inmediato si se
+cambia de modo con el ajuste vivo; durante el fade del volumen, el
+ancho de la barra planea del nivel de volumen a la posición real.
 
 En el Modo 4 (Letras), la barra se comprime a 122px de ancho (ver Modo 4).
 
@@ -380,6 +359,7 @@ En el Modo 4 (Letras), la barra se comprime a 122px de ancho (ver Modo 4).
 - [ ] Validar las medidas estimadas de la carátula (x≈10, y≈43, ≈135×135px)
       contra dispositivo/prototipo — el ángulo ya quedó fijado en 7°
 - [ ] Orden exacto del stagger de entrada y duración de cada grupo
-- [ ] Diseño fino de los controles de transporte (tamaños de íconos)
-- [ ] Cómo se resalta el ícono del modo activo (¿`--color-accent`?)
-- [ ] Scroll en Modo 4: ¿desplaza letras manualmente o queda sin función?
+      (provisional vigente: los tres grupos de contenido en paralelo y
+      la StatusBar cae al final)
+- [ ] Umbrales definitivos de los silencios del `LyricsPanel` (los ≥8s /
+      3s actuales son provisionales, ver `componentes/lyrics-panel.md`)
