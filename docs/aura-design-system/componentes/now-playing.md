@@ -238,9 +238,11 @@ confirmada 2026-08-12. Es **pantalla completa**: sin StatusBar.
   traslúcido** (~85% de tinte: lo de abajo se adivina a través)
   teñido con el **PROMEDIO de la carátula en curso en degradado
   DIAGONAL** (aclarado en la esquina superior izquierda, oscurecido en
-  la inferior derecha), derivado en runtime de la imagen real. La hoja
-  **proyecta una sombra paralela** sobre el contenido bajo su borde
-  izquierdo. La tinta de los textos se decide por **luminancia**
+  la inferior derecha), derivado en runtime de la imagen real. El **panel
+  izquierdo es la capa elevada**: proyecta una **sombra paralela sobre
+  la hoja** desde su borde (franja de 8px decayendo a la derecha,
+  corrección 2026-08-12). La hoja es **cuadrada** — las esquinas
+  redondeadas de pantalla no se estampan sobre ella. La tinta de los textos se decide por **luminancia**
   (blanco constante sobre vidrio oscuro; una versión muy oscura del
   mismo color sobre claro), con la jerarquía por atenuación. **Título,
   artista y álbum viven en la parte superior de la pantalla**, montados

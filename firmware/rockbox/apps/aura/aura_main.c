@@ -202,7 +202,14 @@ void aura_main(void)
         int timeout_ticks = -1;
 
         aura_screens_draw(&nav);
-        a26_shell_stamp_corners();
+        /* La hoja de vidrio del Modo 4 es CUADRADA: sobre ella no se
+         * estampan las esquinas derechas de pantalla (se leian como
+         * esquinas redondeadas de la hoja, correccion 2026-08-12). */
+        if (aura_nav_current(&nav) == AURA_SCREEN_NOWPLAYING
+            && aura_nowplaying_sheet_active())
+            a26_shell_stamp_corners_left_only();
+        else
+            a26_shell_stamp_corners();
         lcd_update();
 
         /* aura_music_db_ready() dispara el escaneo inicial de la

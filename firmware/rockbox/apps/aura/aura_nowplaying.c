@@ -617,19 +617,18 @@ static void draw_m4_right_panel(int t256)
     {
         fb_data *row = FBADDR(0, y);
 
-        /* Sombra paralela de la hoja sobre lo que queda debajo. */
-        for (sx = x0 - M4_PANEL_SHADOW_W; sx < x0; sx++)
-        {
-            if (sx < 0)
-                continue;
-            row[sx] = a26_shell_blend(row[sx], LCD_RGBPACK(0, 0, 0),
-                                       88 * (M4_PANEL_SHADOW_W - (x0 - sx))
-                                          / M4_PANEL_SHADOW_W);
-        }
-
         for (x = x0; x < A26_SCREEN_WIDTH; x++)
             row[x] = a26_shell_blend(row[x], m4_grad_diag(x - x0, y),
                                       M4_GLASS_ALPHA);
+
+        /* Sombra paralela del panel IZQUIERDO sobre la hoja
+         * (correccion 2026-08-12: es el panel izquierdo el elevado,
+         * no la hoja): franja fija en su borde, decayendo hacia la
+         * derecha, que aparece con el morph. */
+        for (sx = MORPH_PANEL_W; sx < MORPH_PANEL_W + M4_PANEL_SHADOW_W; sx++)
+            row[sx] = a26_shell_blend(row[sx], LCD_RGBPACK(0, 0, 0),
+                                       88 * (M4_PANEL_SHADOW_W - (sx - MORPH_PANEL_W))
+                                          * t256 / (M4_PANEL_SHADOW_W * 256));
     }
 }
 
@@ -1438,6 +1437,13 @@ bool aura_nowplaying_needs_tick(void)
         || current_tick < s_scrub_show_until
         || s_scrub_preview_ms >= 0 /* fase de asentamiento post-ajuste */
         || s_lr_pending_dir != 0;
+}
+
+/* La hoja del Modo 4 esta en pantalla: aura_main estampa solo las
+ * esquinas izquierdas (la hoja es cuadrada). */
+bool aura_nowplaying_sheet_active(void)
+{
+    return s_mode == NP_MODE_LYRICS && s_lrc_valid;
 }
 
 static int playlist_count(void)

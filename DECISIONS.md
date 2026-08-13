@@ -1604,4 +1604,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-139 — Modo 4: la sombra la proyecta el panel izquierdo; la hoja es cuadrada
+
+**Correcciones del dueño del diseño (2026-08-12) sobre D-138** ("me equivoqué con la instrucción"): (1) La jerarquía de capas se invierte — el panel IZQUIERDO es el elevado y proyecta la sombra paralela sobre la hoja de vidrio (franja fija de 8px desde x=130 decayendo a la derecha, apareciendo con el morph), no al revés. (2) La hoja no debe tener esquinas redondeadas: las tenía porque `aura_main` estampa las 4 esquinas de pantalla sobre TODO cuadro — con la hoja activa ahora estampa solo las izquierdas (`a26_shell_stamp_corners_left_only()` + `aura_nowplaying_sheet_active()`). Verificado por píxel: esquinas derechas con el color del degradado hasta el borde exacto; sombra en x=130..137 decayendo sobre el vidrio.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

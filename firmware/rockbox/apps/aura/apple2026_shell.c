@@ -232,6 +232,20 @@ void a26_shell_stamp_corners(void)
     stamp_corner(w - 1, h - 1,-1, -1,  radius, bg); /* inferior derecha   */
 }
 
+/* Solo las esquinas IZQUIERDAS (Modo 4 del reproductor, correccion
+ * 2026-08-12: la hoja de vidrio del panel derecho es CUADRADA -- las
+ * esquinas de pantalla estampadas encima se leian como esquinas
+ * redondeadas de la hoja). */
+void a26_shell_stamp_corners_left_only(void)
+{
+    int radius = A26_LAYOUT_CORNER_RADIUS_SCREEN;
+    unsigned bg = a26_color(A26_SHELL_BG);
+    int h = A26_SCREEN_HEIGHT;
+
+    stamp_corner(0, 0,     1,  1, radius, bg);
+    stamp_corner(0, h - 1, 1, -1, radius, bg);
+}
+
 /* Capsula horizontal VERDADERA (encargo 2026-08-12, barra del
  * reproductor): extremos semicirculares de radio h/2 exacto -- con
  * radio entero h/2 en alturas impares (p.ej. 7px -> radio 3), la

@@ -124,6 +124,7 @@ void a26_shell_clear_screen(void);
  * movimiento hace que el recorte de esquina sea mucho menos perceptible
  * y el costo extra por cuadro no se justifica. */
 void a26_shell_stamp_corners(void);
+void a26_shell_stamp_corners_left_only(void);
 
 /* Rellena un rectangulo con esquinas redondeadas: fillrect completo +
  * mascara de las 4 esquinas con `bg` (mismo corte por distancia que

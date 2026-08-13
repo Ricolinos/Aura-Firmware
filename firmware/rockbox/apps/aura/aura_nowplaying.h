@@ -40,6 +40,11 @@ bool aura_nowplaying_take_fullscreen_exit(void);
  * cuando la salida del Modo 4 va hacia el coverflow. */
 void aura_nowplaying_unfold_from_lyrics(void);
 
+/* true mientras el Modo 4 (hoja de vidrio) esta en pantalla -- las
+ * esquinas derechas de pantalla no se estampan encima (la hoja es
+ * cuadrada). */
+bool aura_nowplaying_sheet_active(void);
+
 void aura_nowplaying_draw(void);
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button);
 
