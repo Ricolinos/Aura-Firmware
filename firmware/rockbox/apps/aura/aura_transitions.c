@@ -528,8 +528,15 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
         struct viewport *msaved;
         unsigned bg = a26_color(A26_SHELL_BG);
         const int bar_h = A26_LAYOUT_STATUSBAR_HEIGHT;
-        const int right_x = 160;          /* zona de texto/modos: derecha de la caratula */
-        const int bottom_y = 200;         /* grupo "desde abajo": progreso + transporte */
+        /* Limites DERIVADOS del layout real (correccion 2026-08-12:
+         * con 160/200 fijos, los primeros pixeles del titulo/album
+         * (TEXT_X=157) quedaban tapados por el fondo hasta el redibujo
+         * final -- notorio en tema oscuro -- y el tope de la barra
+         * (y=196) se perdia el morph). */
+        const int right_x = AURA_DS_METRICS_NOW_PLAYING_COVER_X
+                            + AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE + 1;
+        const int bottom_y = A26_SCREEN_HEIGHT
+                             - AURA_DS_METRICS_NOW_PLAYING_PROGRESS_BOTTOM_OFFSET;
         const int mode_h = 22;            /* fila de modos: iconos de 20px + margen */
         int mode_y, morph_frames, x, yy;
 

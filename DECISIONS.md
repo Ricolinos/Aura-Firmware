@@ -1640,4 +1640,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-145 — Morph de entrada al reproductor: regiones derivadas del layout real
+
+**Reporte del dueño del diseño (2026-08-12)**: "algo tapando el título y el nombre del álbum al final de la transición coverflow → reproductor". Capturado cuadro a cuadro con el harness (dumps a mitad del morph): la región de fade de textos empezaba en un x=160 fijo, pero los textos empiezan en TEXT_X=157 — sus primeros ~3 píxeles quedaban tapados por el fondo durante todo el morph hasta el redibujo final (en tema oscuro: tapón oscuro sobre texto claro, mucho más notorio, consistente con D-144). Además el grupo "desde abajo" empezaba en y=200 fijo cuando la barra ahora arranca en y=196 (D-130): el tope de la barra se perdía la animación. Ambos límites ahora se DERIVAN de los tokens (borde de la carátula +1; alto de pantalla − offset de la barra), así que siguen al layout si vuelve a moverse. Verificado con dumps a mitad del morph: textos completos desde el primer píxel. Nota al margen (preexistente, no corregido hoy): los iconos compuestos por máscara escriben al framebuffer VIVO incluso durante el render offscreen del morph (FBADDR absoluto, limitación documentada en aura_widgets.c), por lo que aparecen en su posición final unos cuadros antes de que su grupo los "traiga" — invisible en la práctica porque coinciden con el destino.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
