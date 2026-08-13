@@ -78,14 +78,20 @@
 #define TRANSPORT_Y        (TRANSPORT_CENTER_Y - A26_ICON_SIZE_TRANSPORT / 2)
 #define TRANSPORT_GAP      AURA_DS_METRICS_NOW_PLAYING_TRANSPORT_ICON_GAP
 
-/* Modo 4 (letras, encargo 2026-08-12): panel izquierdo de 130x240 a
- * pantalla completa. La caratula pasa a un cuadrado perfecto mas
- * pequeno; barra, transporte y fila de modos se reacomodan al panel
- * via el MISMO morph parametrizado por t256 (0 = layout normal,
- * 256 = panel) que anima la entrada/salida del modo. */
+/* Modo 4 (letras, encargo 2026-08-12, correccion del mismo dia): panel
+ * izquierdo de 130x240 a pantalla completa con el FONDO NORMAL; el
+ * color promedio de la caratula pinta el panel DERECHO (letras). La
+ * caratula pasa a un cuadrado perfecto mas pequeno con sombra
+ * paralela, centrado verticalmente en el espacio sobre la fila de
+ * modos; barra, transporte y fila de modos se reacomodan al panel via
+ * el MISMO morph parametrizado por t256 (0 = layout normal, 256 =
+ * panel) que anima la entrada/salida del modo. */
 #define M4_ART_SIZE   106
 #define M4_ART_X      ((MORPH_PANEL_W - M4_ART_SIZE) / 2)
-#define M4_ART_Y      24
+/* Centro vertical del area util del panel (del borde superior al tope
+ * de la fila de modos): la fila de controles de abajo no se invade. */
+#define M4_ART_Y      (((PROGRESS_Y - 10 - A26_ICON_SIZE_MENU) - M4_ART_SIZE) / 2)
+#define M4_ART_SHADOW_DY 4
 #define M4_MORPH_MS   330 /* fundido lineal de contenido del sistema */
 
 /* Ventanas de estado de la barra (ver draw_progress): el avance con
@@ -545,8 +551,10 @@ static void ensure_panel_colors(void)
     s_panel_colors_valid = true;
 }
 
-/* Color de fondo efectivo del panel en la fila `y` con el morph a t256
- * (t=0 -> SHELL_BG puro, t=256 -> degradado del panel). */
+/* Color de fondo efectivo del panel DERECHO (letras) en la fila `y`
+ * con el morph a t256 (t=0 -> SHELL_BG puro, t=256 -> degradado del
+ * color promedio de la caratula). El panel izquierdo conserva el fondo
+ * normal (correccion 2026-08-12). */
 static unsigned m4_bg_at(int y, int t256)
 {
     unsigned grad;
@@ -560,13 +568,14 @@ static unsigned m4_bg_at(int y, int t256)
                           : a26_shell_blend(a26_color(A26_SHELL_BG), grad, t256);
 }
 
-/* Tinta interpolada hacia la tinta legible del panel. */
-static unsigned m4_ink(unsigned base, int t256)
+/* Tinta de texto sobre el panel derecho: la tinta legible por
+ * luminancia, con `strength` (0..256) para la jerarquia (titulo/linea
+ * activa plenos, secundarios atenuados) y el alfa del morph encima. */
+static unsigned m4_text_ink(int y, int t256, int strength)
 {
-    if (t256 <= 0)
-        return base;
     ensure_panel_colors();
-    return a26_shell_blend(base, s_panel_ink, t256);
+    return a26_shell_blend(m4_bg_at(y, t256), s_panel_ink,
+                            strength * t256 / 256);
 }
 
 static void draw_m4_panel_bg(int t256)
@@ -576,7 +585,7 @@ static void draw_m4_panel_bg(int t256)
     for (y = 0; y < A26_SCREEN_HEIGHT; y++)
     {
         lcd_set_foreground(m4_bg_at(y, t256));
-        lcd_hline(0, MORPH_PANEL_W - 1, y);
+        lcd_hline(MORPH_PANEL_W, A26_SCREEN_WIDTH - 1, y);
     }
 }
 
@@ -609,6 +618,20 @@ static void draw_cover_tilted(int t256)
         return;
     }
 
+    if (t256 > 0)
+    {
+        /* Sombra paralela del album (correccion 2026-08-12): aparece
+         * con el morph mientras el reflejo se va -- mismo criterio del
+         * indicador de la barra (sombra dura sutil, D-123), sobre el
+         * fondo uniforme del panel izquierdo. */
+        int sx = aura_pattern_lerp(ART_X, M4_ART_X, t256);
+        int sy = cy - size_vis / 2 + M4_ART_SHADOW_DY;
+        unsigned sh = a26_shell_blend(shell, LCD_RGBPACK(0, 0, 0),
+                                       72 * t256 / 256);
+        a26_shell_fill_rounded_rect(sx, sy, size_vis, size_vis,
+                                     ART_RADIUS, sh, shell);
+    }
+
     /* Signo positivo (no `-NP_TILT_IANGLE`): con el signo negativo
      * original, el lado IZQUIERDO quedaba corto/retrocedido y el
      * DERECHO alto/completo -- al reves de lo pedido por el dueno del
@@ -621,8 +644,15 @@ static void draw_cover_tilted(int t256)
      * cayendo en ART_X con el signo nuevo. */
     slide.angle = aura_pattern_lerp(NP_TILT_IANGLE, 0, t256);
     slide.distance = AURA_FLOW_CAM_DIST * ART_SIZE / size_vis - AURA_FLOW_CAM_DIST;
+    /* El proyector escala cx junto con el zoom (distance): un cx
+     * pensado en pixeles de pantalla se pre-multiplica por
+     * fuente/visible para aterrizar donde se pide (el morph de regreso
+     * al carrusel no lo nota porque su destino es el centro exacto,
+     * cx = 0 -- medido en captura: sin esto la caratula caia 21px a la
+     * derecha, a 106/135 del desplazamiento pedido). */
     slide.cx = aura_pattern_lerp(NP_TILT_CX,
-        (MORPH_PANEL_W / 2 - A26_SCREEN_WIDTH / 2) << AURA_FLOW_SHIFT, t256);
+        (MORPH_PANEL_W / 2 - A26_SCREEN_WIDTH / 2) << AURA_FLOW_SHIFT, t256)
+        * ART_SIZE / size_vis;
 
     aura_flow_begin_projection(&proj, &slide, ART_SIZE);
 
@@ -801,9 +831,8 @@ static void draw_text_and_modes(const struct mp3entry *id3, int t256)
              * opacidad -- el loop de modos ya lo salta
              * (cycle_mode/mode_available). Sobre el panel del Modo 4
              * la tinta interpola hacia la tinta legible del panel. */
-            aura_widgets_draw_icon_ink(MODE_ICONS[i], A26_ICON_SIZE_MENU,
-                                        icon_x, mode_y,
-                                        m4_ink(a26_color(A26_TEXT_TERTIARY), t256), 128);
+            aura_widgets_draw_icon_tertiary_dimmed(MODE_ICONS[i], A26_ICON_SIZE_MENU,
+                                                    icon_x, mode_y, 128);
         }
         else if (active)
             /* Activo: variante FILL en ACENTO, cambio inmediato (sin
@@ -811,9 +840,8 @@ static void draw_text_and_modes(const struct mp3entry *id3, int t256)
             aura_widgets_draw_icon_selected(MODE_ICONS_FILL[i], A26_ICON_SIZE_MENU,
                                              icon_x, mode_y);
         else
-            aura_widgets_draw_icon_ink(MODE_ICONS[i], A26_ICON_SIZE_MENU,
-                                        icon_x, mode_y,
-                                        m4_ink(a26_color(A26_TEXT_TERTIARY), t256), 256);
+            aura_widgets_draw_icon_tertiary(MODE_ICONS[i], A26_ICON_SIZE_MENU,
+                                             icon_x, mode_y);
     }
 }
 
@@ -831,17 +859,16 @@ static void draw_text_and_modes(const struct mp3entry *id3, int t256)
  * - Volumen (rueda en modo volumen): la MISMA barra muestra el nivel
  *   de volumen en ACENTO; speaker-minus/plus en los extremos donde
  *   vivian los tiempos.
- * `x`/`width`: geometria interpolada por el morph del Modo 4 (t256:
- * 0 = normal, 256 = panel de 130px); `t256` ademas decide el fondo del
- * antialias de las puntas y las tintas sobre el panel de color. */
+ * `x`/`width`: geometria interpolada por el morph del Modo 4 (0 =
+ * normal, 256 = panel de 130px); el panel izquierdo conserva el fondo
+ * normal, asi que fondos y tintas no cambian con el morph. */
 static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
-                           int x, int width, int t256)
+                           int x, int width)
 {
     int fill_x = x + 1;
     int fill_max = width - 2;
     int fill_w;
     int fill_y = PROGRESS_Y + (PROGRESS_TRACK_H - PROGRESS_FILL_H) / 2;
-    unsigned cap_bg = m4_bg_at(PROGRESS_Y + PROGRESS_TRACK_H / 2, t256);
     unsigned track_color = a26_color(A26_SELECTION_FILL);
     unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
     bool vol_active = current_tick < s_volume_overlay_until;
@@ -851,7 +878,7 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
     unsigned long elapsed = (scrub_preview_ms >= 0) ? (unsigned long)scrub_preview_ms : id3->elapsed;
 
     a26_shell_fill_capsule(x, PROGRESS_Y, width, PROGRESS_TRACK_H,
-                            track_color, cap_bg);
+                            track_color, a26_color(A26_SHELL_BG));
 
     if (vol_active)
     {
@@ -898,12 +925,11 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
          * los iconos"), a 16px como repetir/aleatorio. */
         int icon_y = TRANSPORT_CENTER_Y - A26_ICON_SIZE_TRANSPORT_SIDE / 2;
 
-        aura_widgets_draw_icon_ink("speaker-minus", A26_ICON_SIZE_TRANSPORT_SIDE,
-                                    x, icon_y,
-                                    m4_ink(a26_color(A26_TEXT_PRIMARY), t256), alpha);
-        aura_widgets_draw_icon_ink("speaker-plus", A26_ICON_SIZE_TRANSPORT_SIDE,
-                                    x + width - A26_ICON_SIZE_TRANSPORT_SIDE, icon_y,
-                                    m4_ink(a26_color(A26_TEXT_PRIMARY), t256), alpha);
+        aura_widgets_draw_icon_dimmed("speaker-minus", A26_ICON_SIZE_TRANSPORT_SIDE,
+                                       x, icon_y, alpha);
+        aura_widgets_draw_icon_dimmed("speaker-plus", A26_ICON_SIZE_TRANSPORT_SIDE,
+                                       x + width - A26_ICON_SIZE_TRANSPORT_SIDE, icon_y,
+                                       alpha);
     }
     else if (seeking)
     {
@@ -918,7 +944,7 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms,
         aura_format_track_time(remaining, timebuf2 + 1, sizeof(timebuf2) - 1);
 
         lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
-        lcd_set_foreground(m4_ink(a26_color(A26_TEXT_SECONDARY), t256));
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
         lcd_getstringsize((const unsigned char *)timebuf2, &w, &h);
         /* Centrados en el eje horizontal de la fila de transporte
          * (correccion 2026-08-12), como las bocinas -/+ de volumen. */
@@ -958,7 +984,6 @@ static void draw_transport(int t256)
 {
     int status = audio_status();
     bool paused = (status & AUDIO_STATUS_PAUSE) != 0;
-    unsigned ink = m4_ink(a26_color(A26_TEXT_PRIMARY), t256);
     int cx = aura_pattern_lerp(A26_SCREEN_WIDTH / 2, MORPH_PANEL_W / 2, t256);
     int y = TRANSPORT_Y;
     int side_y = TRANSPORT_CENTER_Y - A26_ICON_SIZE_TRANSPORT_SIDE / 2;
@@ -987,16 +1012,16 @@ static void draw_transport(int t256)
             aura_widgets_draw_icon_selected(rep_icon, A26_ICON_SIZE_TRANSPORT_SIDE,
                                              repeat_x, side_y);
         else
-            aura_widgets_draw_icon_ink(rep_icon, A26_ICON_SIZE_TRANSPORT_SIDE,
-                                        repeat_x, side_y, ink, 256);
+            aura_widgets_draw_icon(rep_icon, A26_ICON_SIZE_TRANSPORT_SIDE,
+                                    repeat_x, side_y);
     }
 
     if (global_settings.playlist_shuffle)
         aura_widgets_draw_icon_selected("shuffle", A26_ICON_SIZE_TRANSPORT_SIDE,
                                          shuffle_x, side_y);
     else
-        aura_widgets_draw_icon_ink("shuffle", A26_ICON_SIZE_TRANSPORT_SIDE,
-                                    shuffle_x, side_y, ink, 256);
+        aura_widgets_draw_icon("shuffle", A26_ICON_SIZE_TRANSPORT_SIDE,
+                                shuffle_x, side_y);
 
     /* Solo play/pausa al centro (encargo 2026-08-12: los glifos de
      * backward/forward se retiraron -- la interaccion vive en los
@@ -1032,15 +1057,15 @@ static void draw_transport(int t256)
          * las ondas ocupan mas lienzo (encargo 2026-08-12: "la bocina
          * siempre debe ser del mismo tamano"). Centrada en el mismo
          * centro que play/pause. */
-        aura_widgets_draw_icon_ink(icon, A26_ICON_SIZE_VOL_DYNAMIC,
-                                    cx - A26_ICON_SIZE_VOL_DYNAMIC / 2,
-                                    TRANSPORT_CENTER_Y - A26_ICON_SIZE_VOL_DYNAMIC / 2,
-                                    ink, alpha);
+        aura_widgets_draw_icon_dimmed(icon, A26_ICON_SIZE_VOL_DYNAMIC,
+                                       cx - A26_ICON_SIZE_VOL_DYNAMIC / 2,
+                                       TRANSPORT_CENTER_Y - A26_ICON_SIZE_VOL_DYNAMIC / 2,
+                                       alpha);
     }
     else
         /* Estado real, no accion pendiente (correccion 2026-08-12). */
-        aura_widgets_draw_icon_ink(paused ? "pause-fill" : "play-fill", A26_ICON_SIZE_TRANSPORT,
-                                    cx - A26_ICON_SIZE_TRANSPORT / 2, y, ink, 256);
+        aura_widgets_draw_icon(paused ? "pause-fill" : "play-fill", A26_ICON_SIZE_TRANSPORT,
+                                cx - A26_ICON_SIZE_TRANSPORT / 2, y);
 }
 
 /* -- Modo 5.3: anadir a lista (doc SS5.3) --------------------------------- */
@@ -1140,22 +1165,26 @@ static void draw_lyrics_panel(const struct mp3entry *id3, int t256)
     int y, i, w, h;
     char line[160];
 
-    /* Cabecera en la parte superior de la pantalla. */
+    /* Cabecera en la parte superior de la pantalla, con la tinta
+     * legible por luminancia sobre el panel de color (correccion
+     * 2026-08-12: el color promedio vive en el panel DERECHO). */
+    (void)shell;
     y = A26_SPACING_LG;
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
-    lcd_set_foreground(a26_shell_blend(shell, a26_color(A26_TEXT_PRIMARY), t256));
+    lcd_set_foreground(m4_text_ink(y, t256, 256));
     snprintf(line, sizeof(line), "%s", id3->title ? id3->title : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     draw_lyrics_line_clipped(panel_x, y, panel_w, line);
     y += h + A26_SPACING_XS;
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    lcd_set_foreground(a26_shell_blend(shell, a26_color(A26_TEXT_SECONDARY), t256));
+    lcd_set_foreground(m4_text_ink(y, t256, 176));
     snprintf(line, sizeof(line), "%s", id3->artist ? id3->artist : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     draw_lyrics_line_clipped(panel_x, y, panel_w, line);
     y += h + A26_SPACING_XS;
 
+    lcd_set_foreground(m4_text_ink(y, t256, 176));
     snprintf(line, sizeof(line), "%s", id3->album ? id3->album : "");
     lcd_getstringsize((const unsigned char *)line, &w, &h);
     draw_lyrics_line_clipped(panel_x, y, panel_w, line);
@@ -1168,12 +1197,12 @@ static void draw_lyrics_panel(const struct mp3entry *id3, int t256)
         return;
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_14));
-    lcd_set_foreground(a26_shell_blend(shell, a26_color(A26_TEXT_PRIMARY), t256));
+    lcd_set_foreground(m4_text_ink(cy, t256, 256));
     lcd_getstringsize((const unsigned char *)s_lrc.lines[active].text, &active_w, &active_h);
     draw_lyrics_line_clipped(panel_x, cy - active_h / 2, panel_w, s_lrc.lines[active].text);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    lcd_set_foreground(a26_shell_blend(shell, a26_color(A26_TEXT_SECONDARY), t256));
+    lcd_set_foreground(m4_text_ink(cy, t256, 150));
 
     y = cy - active_h / 2 - A26_SPACING_XS;
     for (i = active - 1; i >= 0 && i >= active - 2; i--)
@@ -1209,7 +1238,7 @@ static void draw_player(const struct mp3entry *id3, int scrub_preview_ms, int t2
         draw_m4_panel_bg(t256);
     draw_cover_tilted(t256);
     draw_text_and_modes(id3, t256);
-    draw_progress(id3, scrub_preview_ms, px, pw, t256);
+    draw_progress(id3, scrub_preview_ms, px, pw);
     draw_transport(t256);
     if (t256 > 0)
         draw_lyrics_panel(id3, t256);

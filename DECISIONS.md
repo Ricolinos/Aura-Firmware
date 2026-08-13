@@ -1592,4 +1592,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-137 — Modo 4, segundo pase: color al panel derecho, carátula centrada con sombra
+
+**Correcciones del dueño del diseño (2026-08-12) sobre D-136**: (1) el color promedio de la carátula pinta el panel DERECHO (letras), no el izquierdo — el izquierdo conserva el fondo normal, así que barras/iconos del panel vuelven a sus tintas de token y la tinta por luminancia queda solo para los textos del panel de color (jerarquía por atenuación: título/línea activa plenos, secundarios ~65%). (2) Carátula centrada verticalmente en el área útil sobre la fila de modos (y=30; centrarla en los 240 completos invadiría los controles — 7px de traslape, decisión documentada). (3) Sombra paralela de 4px bajo el álbum (misma sombra dura del indicador D-123), que aparece con el morph mientras el reflejo se desvanece. Bug real encontrado midiendo la captura por píxel: el proyector de columnas escala `cx` junto con el zoom (`distance`) — la carátula aterrizaba 21px a la derecha (exactamente 106/135 del desplazamiento pedido); el morph de regreso al carrusel nunca lo notó porque su destino es cx=0. Fix: pre-multiplicar cx por fuente/visible.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

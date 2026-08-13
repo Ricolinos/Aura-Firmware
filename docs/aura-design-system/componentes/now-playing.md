@@ -227,22 +227,29 @@ transición **morph fluida** de ~330ms (fundido lineal de contenido),
 confirmada 2026-08-12. Es **pantalla completa**: sin StatusBar.
 
 - **Panel izquierdo de 130×240** — ⚠️ NO es el componente `LeftPanel`.
-  Es un **estado del propio reproductor**. Su color es el **PROMEDIO de
-  la carátula en curso con un ligero degradado** (más claro arriba, más
+  Es un **estado del propio reproductor**, con el **fondo normal**
+  (corrección 2026-08-12: el color promedio NO lo toca). La carátula va
+  **centrada verticalmente en el espacio sobre la fila de modos** (no
+  invade los controles de abajo), con una **sombra paralela** sutil
+  (4px hacia abajo, misma sombra dura del indicador de la barra) que
+  aparece con el morph mientras el reflejo se va.
+- **Panel derecho** (`LyricsPanel`) — su color es el **PROMEDIO de la
+  carátula en curso con un ligero degradado** (más claro arriba, más
   oscuro abajo), derivado en runtime de la imagen real; la tinta de los
-  elementos encima se decide por **luminancia** (blanco constante sobre
-  panel oscuro; una versión muy oscura del mismo color sobre panel
-  claro).
-- **Panel derecho** (`LyricsPanel`) — **título, artista y álbum viven en
-  la parte superior de la pantalla** y la letra corre debajo, con avance
-  automático sincronizado.
+  textos se decide por **luminancia** (blanco constante sobre panel
+  oscuro; una versión muy oscura del mismo color sobre panel claro),
+  con la jerarquía por atenuación. **Título, artista y álbum viven en
+  la parte superior de la pantalla** y la letra corre debajo, con
+  avance automático sincronizado.
 
 **El morph hacia el Modo 4 (mismo motor de proyección por columnas que
 el morph de regreso al carrusel):**
 
 - La **carátula es el mismo elemento**: pasa de 135px inclinada 7° a un
-  **cuadrado perfecto de 106px** centrado en el panel; su **reflejo se
-  desvanece** en el trayecto (no existe en el Modo 4).
+  **cuadrado perfecto de 106px** centrado en el panel (horizontal y
+  verticalmente en el área sobre la fila de modos); su **reflejo se
+  desvanece** en el trayecto (no existe en el Modo 4) y su **sombra
+  paralela aparece** en proporción.
 - La **barra de progreso interpola a 122px** dentro del panel.
 - El **transporte completo** (repetir + play/pausa + aleatorio) y la
   **fila de modos** viajan al centro del panel, conservando sus anclas
