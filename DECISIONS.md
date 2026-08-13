@@ -1610,4 +1610,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-140 — Modo 4: dos bugs visuales del deslizamiento de la hoja
+
+**Reporte del dueño del diseño (2026-08-12) sobre D-139**: (1) "Las letras aparecen momentáneamente sobre el panel izquierdo" — mientras la hoja entra deslizándose, sus textos se dibujaban en x > 320 y el framebuffer los envolvía a la fila siguiente (el viewport de `draw_lyrics_line_clipped` no recortaba contra el borde de pantalla); ahora recorte duro: si x ≥ 320 no se dibuja, y el ancho se recorta al borde. (2) "Una sombra persistente vertical" — la franja de sombra del panel izquierdo se pintaba en x=130 desde el PRIMER cuadro del morph, flotando sobre el contenido viejo antes de que la hoja llegara debajo; ahora solo cae sobre la hoja (sx ≥ borde actual de la hoja), así que aparece en el momento del acople.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

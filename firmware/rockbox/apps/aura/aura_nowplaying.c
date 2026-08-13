@@ -623,12 +623,18 @@ static void draw_m4_right_panel(int t256)
 
         /* Sombra paralela del panel IZQUIERDO sobre la hoja
          * (correccion 2026-08-12: es el panel izquierdo el elevado,
-         * no la hoja): franja fija en su borde, decayendo hacia la
-         * derecha, que aparece con el morph. */
+         * no la hoja): franja en su borde, decayendo hacia la derecha.
+         * Solo cae SOBRE la hoja (sx >= x0) -- pintarla desde el
+         * primer cuadro dejaba una banda vertical flotando sobre el
+         * contenido viejo antes de que la hoja llegara debajo. */
         for (sx = MORPH_PANEL_W; sx < MORPH_PANEL_W + M4_PANEL_SHADOW_W; sx++)
+        {
+            if (sx < x0)
+                continue;
             row[sx] = a26_shell_blend(row[sx], LCD_RGBPACK(0, 0, 0),
                                        88 * (M4_PANEL_SHADOW_W - (sx - MORPH_PANEL_W))
                                           * t256 / (M4_PANEL_SHADOW_W * 256));
+        }
     }
 }
 
@@ -1183,6 +1189,16 @@ static void draw_lyrics_line_clipped(int x, int y, int w, const char *text)
 {
     struct viewport vp = *lcd_current_viewport;
     struct viewport *saved;
+
+    /* Recorte DURO al borde de pantalla (correccion 2026-08-12):
+     * mientras la hoja del Modo 4 entra deslizandose, sus textos caen
+     * en x > 320 -- sin este recorte, el framebuffer los envolvia a la
+     * fila siguiente y las letras aparecian un instante SOBRE el panel
+     * izquierdo. */
+    if (x >= A26_SCREEN_WIDTH)
+        return;
+    if (x + w > A26_SCREEN_WIDTH)
+        w = A26_SCREEN_WIDTH - x;
 
     vp.x = x;
     vp.y = y;
