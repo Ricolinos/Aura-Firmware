@@ -359,6 +359,7 @@ void aura_search_results_draw(void)
         items[i].icon_name = NULL;
         items[i].checked = 0;
         items[i].toggle = -1;
+        items[i].dimmed = 0;
     }
 
     if (s_result_count == 0)

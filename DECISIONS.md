@@ -1778,4 +1778,12 @@ Con esto quedan construidas las 8 entradas de Extras: Reloj internacional, Calen
 
 ---
 
+## D-166 — iQuiz, Vortex y Recopilaciones quedan inertes
+
+**Encargo del dueño del diseño (2026-08-13).** Las tres filas se marcan **inertes** (presentes, al 50%, no seleccionables) en vez de ocultarse: el catálogo del original se sigue viendo completo pero el firmware no finge soportar lo que no tiene. *iQuiz* y *Vortex* porque los originales son inviables (DRM FairPlay por dispositivo + RetailOS indocumentada) y no hay equivalente — solo Klondike funciona, vía el plugin `solitaire`. *Recopilaciones* porque Rockbox no tiene tag de compilación y falta decidir con qué criterio se detecta una. Para esto, `aura_list_item_t` gana el campo `dimmed` que `aura_menu_item_v2_t` ya tenía, así que la regla de fila inerte vale igual en listas de contenido y en menús.
+
+También queda documentada, con referencia visual del aparato real, la **jerarquía de dos niveles del Menú principal configurable**: los padres al margen normal con checkmark y sus hijos indentados debajo, marcables por separado — un hijo marcado aparece además en el menú de inicio sin dejar de vivir dentro de su padre. Es lo que faltaba definir para construir esa pantalla.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

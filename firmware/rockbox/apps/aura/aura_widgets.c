@@ -689,8 +689,9 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                 text_x += w + ICON_TEXT_GAP;
         }
 
-        lcd_set_foreground(is_selected ? a26_color(A26_ACCENT)
-                                        : a26_color(A26_TEXT_PRIMARY));
+        lcd_set_foreground(items[i].dimmed
+            ? a26_shell_blend(a26_color(A26_SHELL_BG), a26_color(A26_TEXT_PRIMARY), 128)
+            : (is_selected ? a26_color(A26_ACCENT) : a26_color(A26_TEXT_PRIMARY)));
         /* En pantalla completa el riel A-Z ocupa la columna derecha:
          * el texto se recorta antes de invadirla. */
         {

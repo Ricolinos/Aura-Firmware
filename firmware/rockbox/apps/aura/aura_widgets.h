@@ -16,6 +16,8 @@ typedef struct {
                              * booleano "sigue la regla de profundidad por
                              * defecto, no tiene mecanica propia", es decir
                              * vive en la fila misma, nunca en pantalla propia) */
+    int dimmed;            /* 1 = fila presente pero INERTE (no elegible):
+                            * misma tinta al 50%, igual que en MenuList */
 } aura_list_item_t;
 
 /* Dibuja una pantalla de lista completa: limpia con el color de fondo

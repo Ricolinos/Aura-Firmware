@@ -682,7 +682,8 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].full_screen_target = (items[i].toggle < 0)
             && !screen_uses_split_layout(entries[i].target);
         /* Filas del arbol del original sin contenido propio todavia. */
-        items[i].dimmed = (entries[i].target == AURA_SCREEN_VIDEOS_MOVIES
+        items[i].dimmed = (entries[i].target == AURA_SCREEN_MUSIC_COMPILATIONS
+                           || entries[i].target == AURA_SCREEN_VIDEOS_MOVIES
                            || entries[i].target == AURA_SCREEN_VIDEOS_TVSHOWS
                            || entries[i].target == AURA_SCREEN_VIDEOS_CLIPS
                            || entries[i].target == AURA_SCREEN_MUSIC_AUDIOBOOKS
@@ -733,6 +734,7 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
             : NULL;
         items[i].checked = (i == current);
         items[i].toggle = -1;
+        items[i].dimmed = 0;
         items[i].full_screen_target = 0;
         /* Idiomas sin traduccion: fila presente pero inerte. */
         items[i].dimmed = (screen == AURA_SCREEN_SETTINGS_LANGUAGE
@@ -999,6 +1001,7 @@ static void draw_backlight(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == global_settings.backlight_timeout);
         items[i].toggle = -1;
+        items[i].dimmed = 0;
         items[i].full_screen_target = 0;
         items[i].dimmed = 0;
     }
@@ -1057,6 +1060,7 @@ static void draw_sleeptimer(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == (int)global_settings.sleeptimer_duration);
         items[i].toggle = -1;
+        items[i].dimmed = 0;
         items[i].full_screen_target = 0;
         items[i].dimmed = 0;
     }
@@ -1162,6 +1166,7 @@ static void draw_mainmenu(aura_nav_t *nav)
     for (i = 0; i < MAINMENU_ROWS; i++)
     {
         items[i].toggle = -1;
+        items[i].dimmed = 0;
         items[i].full_screen_target = 0;
         items[i].dimmed = 0;
     }
@@ -1400,6 +1405,12 @@ static void draw_games(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = 0;
         items[i].toggle = -1;
+        items[i].dimmed = 0;
+        /* Solo Klondike (fila 0) existe: es el plugin solitaire de
+         * Rockbox. iQuiz y Vortex quedan INERTES -- los originales son
+         * inviables (DRM FairPlay por dispositivo + RetailOS) y no hay
+         * equivalente todavia. */
+        items[i].dimmed = (i != 0);
     }
     aura_widgets_draw_list(aura_str(AURA_STR_EXTRAS_GAMES), items, 3,
                             aura_nav_get_selection(nav));
@@ -1445,6 +1456,7 @@ static void draw_timezone(void)
         items[i].label = aura_worldclock_city_name(i);
         items[i].icon_name = NULL;
         items[i].toggle = -1;
+        items[i].dimmed = 0;
         items[i].checked = (aura_worldclock_city_utc_quarters(i)
                             == aura_settings.tz_local_quarters);
     }
@@ -1802,8 +1814,7 @@ void aura_screens_draw(aura_nav_t *nav)
         aura_worldclock_cities_draw();
     else if (screen == AURA_SCREEN_MUSIC_SEARCH_RESULTS)
         aura_search_results_draw();
-    else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS
-             || screen == AURA_SCREEN_MUSIC_COMPILATIONS)
+    else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS)
     {
         /* Pantallas del arbol del original cuya interfaz propia
          * todavia no se construyo: estado vacio honesto con su titulo,
@@ -1873,7 +1884,8 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
          * `[OPCION]` "no tiene mecanica propia" (D-075). Distinto de
          * cualquier otra fila de Ajustes, que si empuja su pantalla. */
         /* Filas inertes: presentes, no elegibles. */
-        if (entries[sel].target == AURA_SCREEN_VIDEOS_MOVIES
+        if (entries[sel].target == AURA_SCREEN_MUSIC_COMPILATIONS
+            || entries[sel].target == AURA_SCREEN_VIDEOS_MOVIES
             || entries[sel].target == AURA_SCREEN_VIDEOS_TVSHOWS
             || entries[sel].target == AURA_SCREEN_VIDEOS_CLIPS
             || entries[sel].target == AURA_SCREEN_MUSIC_AUDIOBOOKS

@@ -137,6 +137,7 @@ void aura_photos_draw(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = 0;
         items[i].toggle = -1;
+        items[i].dimmed = 0;
     }
     aura_widgets_draw_list(aura_str(AURA_STR_PHOTOS), items, s_photo_count,
                             aura_nav_get_selection(nav));

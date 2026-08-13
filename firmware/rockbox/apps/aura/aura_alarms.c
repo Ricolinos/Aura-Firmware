@@ -88,6 +88,7 @@ void aura_alarms_draw(void)
     items[n].icon_name = "alarm";
     items[n].checked = 0;
     items[n].toggle = -1;
+    items[n].dimmed = 0;
     n++;
 
     aura_widgets_draw_list(aura_str(AURA_STR_EXTRAS_ALARMS), items, n, s_sel);
@@ -344,6 +345,7 @@ void aura_alarm_choice_draw(void)
         items[i].label = choice_label(i);
         items[i].icon_name = NULL;
         items[i].toggle = -1;
+        items[i].dimmed = 0;
         items[i].checked = (i == s_choice_sel);
     }
     aura_widgets_draw_list(aura_str(AURA_STR_EXTRAS_ALARMS), items, n,

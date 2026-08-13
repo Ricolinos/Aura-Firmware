@@ -378,6 +378,7 @@ void aura_worldclock_regions_draw(void)
         items[i].icon_name = NULL;
         items[i].checked = 0;
         items[i].toggle = -1;
+        items[i].dimmed = 0;
     }
     aura_widgets_draw_list(aura_str(AURA_STR_WC_ADD), items,
                             WC_REGION_COUNT, s_region_sel);
@@ -430,6 +431,7 @@ void aura_worldclock_cities_draw(void)
         items[i].icon_name = NULL;
         items[i].checked = 0;
         items[i].toggle = -1;
+        items[i].dimmed = 0;
     }
     aura_widgets_draw_list(WC_REGIONS[s_region_sel], items, n, s_city_sel);
 }

@@ -42,7 +42,7 @@ del iPod Classic (referencia levantada por el dueño del diseño el
 | Listas repr. | ✅ → canciones |
 | Artistas | ✅ → *Todos* + artistas → álbumes → canciones |
 | Álbumes | ✅ → *Canciones* + álbumes → canciones |
-| Recopilaciones | ⬜ |
+| Recopilaciones | ◐ inerte (Rockbox no tiene tag de compilación; falta decidir cómo se detecta) |
 | Canciones | ✅ |
 | Géneros | ✅ → *Todos* + géneros → artistas → álbumes → canciones |
 | Autores | ✅ (`tag_composer`) → *Todos* + autores → álbumes → canciones |
@@ -72,7 +72,7 @@ fila más.
 | Cronómetro | ✅ contador `HH:MM:SS` con centésimas más chicas; SELECT arranca y luego marca registros; PLAY detiene conservando el tiempo (icono de pausa = reanudable); MENU sale guardando |
 | Reloj internacional | ✅ relojes analógicos con esfera clara (local) y oscura (otros husos); menú Añadir/Editar/Eliminar — ver `componentes/world-clock.md` |
 | Notas | ✅ pantalla de instrucciones del original |
-| Juegos | ◐/✅ **Klondike** funciona (plugin `solitaire` de Rockbox); iQuiz y Vortex inertes |
+| Juegos | ✅ **Klondike** (plugin `solitaire` de Rockbox); iQuiz y Vortex **inertes** |
 | Calendarios | ✅ rejilla del mes (semana desde lunes); rueda = días, botones = meses, Select = día |
 | Bloqueo pantalla | ✅ candado + clave de 4 dígitos con confirmación; MENU restablece sin configurar |
 | Alarmas | ✅ lista + editor con las filas del original (Alarma, Hora con reloj analógico en vivo, Repetir, Sonido, las 23 Etiquetas, Eliminar) |
@@ -105,3 +105,24 @@ con pin** de Zona horaria — la lista de ciudades ya cumple su función.
 La velocidad de
 audiolibros y el orden por apellido se guardan pero todavía no cambian
 nada: Rockbox no tiene backend para ellos.
+
+
+## Menú principal configurable — jerarquía (referencia del original, 2026-08-13)
+
+⚠️ **Pendiente de construir.** La pantalla "Menú pral." del original no es
+una lista plana de opciones: muestra **una jerarquía de dos niveles**.
+
+- Los **padres** (Música, Radio, Videos, Fotos, Podcasts, Extras…) van
+  alineados al margen normal, con **checkmark** si aparecen en el menú
+  de inicio.
+- Sus **hijos** (Cover Flow, Genius, Listas repr., Artistas, Álbumes,
+  Recopilaciones, Canciones…) se listan **debajo del padre, indentados
+  unos píxeles**, y también pueden marcarse: un hijo marcado aparece
+  *además* en el menú de inicio, sin dejar de vivir dentro de su padre.
+  La indentación es lo que comunica que pertenecen a esa sección y lo
+  que divide visualmente el listado.
+- El panel derecho muestra el símbolo de "Personalizar menú principal".
+- La lista cierra con **Restaurar menú principal**.
+
+Lo mismo aplica a "Menú Música", que configura el submenú de Música con
+el mismo mecanismo.
