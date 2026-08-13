@@ -107,6 +107,7 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
      * 20px y el mismo criterio de icon_y/text_y -- aplica igual ahi. */
     int clock_y = (AURA_DS_METRICS_STATUSBAR_HEIGHT - AURA_DS_METRICS_CLOCK_INDICATOR_HEIGHT) / 2;
     int title_max_w, title_x;
+    int title_center = 0;
     int w, h, text_y;
     unsigned bg = a26_color(A26_SHELL_BG);
     unsigned ink;
@@ -181,6 +182,7 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
          * se mueve durante la animacion. */
         title_max_w = AURA_DS_METRICS_DYNAMIC_TITLE_MAX_WIDTH_FULL;
         title_x = aura_pattern_lerp(left, x + (width - title_max_w) / 2, clock_progress);
+        title_center = 1; /* el TEXTO se centra dentro de su caja (A2) */
         if (clock_progress > 0)
         {
             /* Horizontal, no vertical: enter_progress_256 se le pasa
@@ -227,6 +229,16 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
         lcd_set_foreground(ink);
         lcd_getstringsize((const unsigned char *)title, &w, &h);
         text_y = (AURA_DS_METRICS_STATUSBAR_HEIGHT - h) / 2;
+
+        /* (full): el titulo va CENTRADO de verdad (correccion
+         * 2026-08-13 del dueno del diseno: "creo que si esta al centro
+         * pero alineado a la izquierda"). Antes se centraba la CAJA de
+         * 120px y el texto se dibujaba pegado a su borde izquierdo, asi
+         * que un titulo corto quedaba visiblemente descentrado. Si el
+         * texto no cabe, se deja en 0 y manda el Marquee (que arranca
+         * desde la izquierda de su caja, como siempre). */
+        if (title_center && w < title_max_w)
+            title_x += (title_max_w - w) / 2;
 
         /* DynamicTitle estatico por ahora (transition=NONE): disparar
          * Fade-Slide/Scroll-Slide reales en cada navegacion es follow-up

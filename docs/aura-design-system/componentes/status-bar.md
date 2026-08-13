@@ -149,3 +149,28 @@ de cualquier transición a pantalla completa.
 - [ ] ¿`StatusBar` reacciona a la sombra descrita en `efectos/01-sombras.md`,
       o al estar en `--layer-chrome` queda siempre por encima/exenta de ese
       efecto?
+
+
+## Regla dura: (split) ⇔ LeftPanel (confirmada 2026-08-13)
+
+La barra va en **`(split)` si y solo si el `LeftPanel` de 160px está en
+pantalla**; en cualquier otro caso va en `(full)`. No es una decisión
+por pantalla: **barra y panel se derivan del MISMO dato** (el layout
+declarado por la pantalla, combinado con el ajuste de Gráficos, que
+puede apagar el panel). Consecuencias:
+
+- Con **Gráficos = Ninguno** no hay `LeftPanel`, así que tampoco hay
+  barra `(split)` ni `SelectionSummary` — todo pasa a `(full)`.
+- Los estados vacíos y de espera heredan el layout de su pantalla; no
+  pueden dibujar barra `(full)` dentro de un contexto `(split)`.
+- Una pantalla nueva no elige el ancho de su barra: declara su layout
+  y la barra sale de ahí.
+
+## Título en (full): centrado real (confirmado 2026-08-13)
+
+En `(full)` el título va **centrado de verdad**: se centra el TEXTO
+medido dentro de su caja de 120px, no solo la caja. (Antes se centraba
+la caja y el texto se dibujaba pegado a su borde izquierdo, así que un
+título corto quedaba visiblemente descentrado ~40px.) Si el texto no
+cabe en la caja, manda el `MarqueeText`, que arranca desde la izquierda
+como siempre. En `(split)` el título sigue alineado a la izquierda.

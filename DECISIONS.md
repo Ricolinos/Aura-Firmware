@@ -1674,4 +1674,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-149 — StatusBar: (split) ⇔ LeftPanel derivado de un solo dato, y título centrado real en (full)
+
+**Encargo del dueño del diseño (2026-08-13, Fase A del pulido de interfaz).** (1) La barra divergía del layout porque cada pantalla elegía su ancho por su cuenta: `draw_menu_screen_v2()` forzaba `STATUSBAR_WIDTH_SPLIT` (y dibujaba SelectionSummary) aunque Gráficos=Ninguno hubiera apagado el LeftPanel, y los estados vacío/espera dibujaban barra full dentro de pantallas declaradas split. Ahora existe `aura_widgets_draw_status_bar(title)` — único punto autorizado desde pantallas de listas/menús — que toma el ancho de `aura_widgets_split_active()`, el MISMO dato del que sale el panel. (2) En (full) el título se centraba solo como CAJA de 120px, con el texto pegado a su borde izquierdo: medido por píxel, un título corto caía en el centro 120 en vez de 160. Ahora se centra el texto medido dentro de su caja (si no cabe, manda el Marquee desde la izquierda). Verificado por píxel: centro 159/160.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

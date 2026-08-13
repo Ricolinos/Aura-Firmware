@@ -392,9 +392,13 @@ static void draw_menu_screen_v2(const char *title,
                                  const char *panel_desc)
 {
     a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, AURA_DS_METRICS_STATUSBAR_WIDTH_SPLIT, title);
+    /* Barra y panel del MISMO dato (regla dura 2026-08-13): con
+     * Graficos=Ninguno no hay LeftPanel, asi que tampoco hay barra
+     * (split) ni SelectionSummary -- antes la barra se forzaba split
+     * en ese caso y quedaba una barra de 160px sobre una lista de 320. */
+    aura_widgets_draw_status_bar(title);
     aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count, selected);
-    if (panel_icon)
+    if (panel_icon && aura_widgets_split_active())
         aura_selection_summary_draw(AURA_DS_METRICS_LEFT_PANEL_WIDTH,
                                      A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH,
                                      panel_icon, NULL, panel_desc);
@@ -1026,7 +1030,7 @@ static void draw_message_centered(aura_str_id_t msg_id)
     int content_h = A26_SCREEN_HEIGHT - content_top;
 
     a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, NULL);
+    aura_widgets_draw_status_bar(NULL);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
@@ -1044,7 +1048,7 @@ static void draw_message_centered(aura_str_id_t msg_id)
 static void draw_waiting_state(aura_str_id_t msg_id)
 {
     a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, NULL);
+    aura_widgets_draw_status_bar(NULL);
     aura_widgets_draw_wait_capsule(aura_str(msg_id));
 }
 

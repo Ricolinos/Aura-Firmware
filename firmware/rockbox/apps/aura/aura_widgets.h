@@ -49,6 +49,12 @@ void aura_widgets_set_list_layout(aura_list_layout_t layout);
  * ajuste de Graficos no este en Ninguno. */
 int aura_widgets_split_active(void);
 
+/* Dibuja la StatusBar con el ancho que corresponde al layout ACTIVO
+ * (split si el LeftPanel esta en pantalla, full si no) -- unico punto
+ * autorizado para dibujarla desde una pantalla de listas/menus, ver la
+ * regla dura en aura_widgets.c. */
+void aura_widgets_draw_status_bar(const char *title);
+
 /* True mientras el panel derecho tiene un icono nuevo pendiente de
  * mostrar (retardo de 1s, L3) -- aura_main.c lo usa para decidir si
  * redibujar con un timeout corto en vez de bloquear indefinidamente

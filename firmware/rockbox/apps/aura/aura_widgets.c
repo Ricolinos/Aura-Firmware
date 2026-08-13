@@ -248,6 +248,19 @@ static int list_width(void)
     return aura_widgets_split_active() ? A26_LAYOUT_PANEL_LEFT_WIDTH : A26_SCREEN_WIDTH;
 }
 
+/* REGLA DURA (encargo 2026-08-13): la StatusBar va en (split) SI Y SOLO
+ * SI el LeftPanel de 160px esta en pantalla. Antes cada pantalla elegia
+ * el ancho de la barra por su cuenta y divergia del layout real -- p.ej.
+ * los menus forzaban STATUSBAR_WIDTH_SPLIT aunque Graficos=Ninguno
+ * hubiera apagado el panel, y los estados vacios dibujaban barra full
+ * dentro de una pantalla split. Ahora barra y panel salen del MISMO
+ * dato (aura_widgets_split_active(), que ya combina la tabla de layout
+ * de la pantalla con el ajuste de Graficos). */
+void aura_widgets_draw_status_bar(const char *title)
+{
+    aura_status_bar_v2_draw_auto(0, list_width(), title);
+}
+
 int aura_widgets_visible_rows(void)
 {
     int rows = (A26_SCREEN_HEIGHT - LIST_TOP) / ROW_HEIGHT;
@@ -541,7 +554,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     }
 
     a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, width, title);
+    aura_widgets_draw_status_bar(title);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
 
