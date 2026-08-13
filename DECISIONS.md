@@ -1870,4 +1870,14 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-177 — Recuperación: sin segundo DFU cuando el bootloader ya está grabado
+
+**Encargo del dueño (2026-08-13), probando D-176 en vivo**: tras formatear y copiar los archivos, el asistente volvía a pedir modo DFU — pero si el flujo arrancó desde el "Bootloader USB mode" de Aura, la NOR ya tiene el bootloader grabado y el DFU solo reescribiría byte a byte lo mismo. Pedirle al usuario repetir la combinación de botones (el paso más pesado de todo el asistente) para un no-op es fricción pura.
+
+**Arreglo**: nueva bandera `bootloaderAlreadyInstalled` en `InstallerViewModel`, encendida únicamente cuando `acknowledgeDeviceReady()` parte de `.diskModeNoFilesystem` (la señal de que el dispositivo está corriendo el bootloader de Aura ahora mismo — es su modo de recuperación el que expone el disco por USB). Con ella encendida, `copyFirmwareFiles()` termina en `.done` directamente, expulsando antes el volumen (`unmountCurrentDisk()`) para que el bootloader suelte el disco y pueda reiniciar a Aura. Se apaga en `start()` y en `retry()` — un reintento reevalúa el estado real del dispositivo, nunca hereda el salto de DFU de un intento anterior. La pantalla de Listo tampoco afirma "instalaste en dual boot" en este camino: esta corrida no flasheó nada, el modo de arranque lo decidió la instalación anterior.
+
+**Aceptación**: build limpio (sim y Xcode real), 99/101 tests (los dos que no pasan dependen de red — Cover Art Archive — sin relación). Confirmación final con el iPod real del dueño, en curso.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
