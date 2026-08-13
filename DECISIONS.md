@@ -2025,4 +2025,20 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-188 — Falso "disco ilegible" por ventana corta; se retira la pantalla completa; botón Cancelar
+
+**Reporte del dueño (2026-08-13)**: la app seguía detectando "modo bootloader" con el iPod en modo almacenamiento normal, y pidió además que mientras eso no esté resuelto, la app no oculte la barra lateral, y que se agregue un botón de cancelar con advertencia de que detener el proceso puede dañar el disco.
+
+**Diagnóstico en vivo, con el iPod real conectado**: se escribió y corrió un monitor de DiskArbitration standalone (mismo mecanismo que usa la app) contra el disco9 real. El volumen FAT32 de 125GB tarda perceptiblemente en aparecer montado tras la conexión — macOS lo verifica antes de montarlo. `IPodMonitor` declaraba `diskModeNoFilesystem` tras **un solo tick sin volumen montado** (1 segundo): esa ventana de verificación, no una detección real de disco vacío, disparaba el falso positivo. Confirmado con `DADeviceVendor`/`DADeviceModel` reales del aparato (`iFlash-P` / `latform iPod Ada`, un iFlash con adaptador de disco duro — coincide con `matchesIPodCriteria` por modelo).
+
+**Arreglo de la detección**: `noFilesystemStreak`, un contador de ticks consecutivos sin volumen montado; solo tras 5 segundos sostenidos (`noFilesystemStreakRequired`) se declara el disco ilegible. Se reinicia a cero en cualquier evento real: disco montado, intento de montaje disparado, o disco desconectado. Con esto, la ventana de verificación normal del FAT32 grande ya no se confunde con un disco vacío.
+
+**Se retira la pantalla completa (D-183), a pedido explícito**: mientras la detección no sea 100% confiable, ocultar la barra lateral y tomar toda la ventana agravaba cualquier falso positivo — el usuario quedaba atrapado en un recorrido de instalación sin salida visible. `AutoInstallView` se elimina; al detectar disco ilegible, `ContentView` solo **navega** a la sección Instalador (barra lateral intacta, nada arranca solo) — una vez por detección, nunca encima de un flujo ya activo (se conserva el registro global de D-185).
+
+**Botón Cancelar**: nuevo en los pasos largos (`preparingDisk`, `copyingFiles`, `restoreFormatting`, `enterDFU`) — deliberadamente **excluido de `installing`**, donde mks5lboot puede estar escribiendo la NOR por DFU y cortar eso a la mitad sí puede inutilizar el arranque; no se ofrece una acción insegura. Confirmación con `.alert` explicando el riesgo real ("puede dejar el disco con errores... vuelve a correr el instalador para repararlo"). La cancelación se aplica en el punto seguro más próximo: la extracción del árbol se termina de inmediato (`ditto` es reintentable sin daño), pero un formateo privilegiado en curso **se deja terminar** — matarlo a la mitad es exactamente el daño del que advierte el diálogo — y la cancelación aplica justo después, vía la bandera `cancelRequested` observada en los tres puntos de trabajo largo.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests (los 2 de red pasan en re-corrida). La detección corregida y el cancelar dependen de hardware real para confirmación final — verificación con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
