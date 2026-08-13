@@ -2059,4 +2059,20 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-190 — Tamaño de sector dinámico al formatear; la pantalla de "necesita winpod" deja de parecer un error
+
+**Investigación previa a este cambio** (encargo del dueño: "investígalo en internet, avísame y proponme una solución antes de implementar nada" -- confirmado antes de tocar código): el binario `mks5lboot` que empaqueta la app es **arm64 nativo, sin dependencia de `libusb`** (habla directo con IOKit) -- descarta la clase de problema más documentada para Apple Silicon (binarios Intel bajo Rosetta, `libusb` con arquitectura equivocada). No se encontró evidencia de que el chip M4 en sí cause fallas de DFU o de modo disco.
+
+La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/storage_ata-6g.c`: el controlador ATA del firmware **detecta por hardware, en cada arranque**, si el adaptador de almacenamiento es CE-ATA (necesita la tabla de particiones en sectores de 4096 bytes) o ATA común (512) -- algo que **no se puede consultar desde la Mac**, solo el propio aparato lo sabe al encender. Un blog externo (instalación de Rockbox con iFlash en Linux) documentó de forma independiente el síntoma exacto: formatear con un tamaño de sector que no coincide con el que el bootloader usará al leer la tabla de particiones con su driver nativo produce un desplazamiento de sector equivocado ("No partition found") -- aunque el formateo en sí no reporte ningún error. Esto explica por qué todo parecía funcionar (formateo, copia y DFU exitosos) y aun así "dual boot no funciona correctamente": el problema no está en ningún paso individual, está en la aritmética de la tabla de particiones.
+
+**Arreglo implementado**: `eraseAndFormatDisk` ya no fuerza `-S 4096` a ciegas -- lee `DeviceBlockSize` del disco tal cual está conectado en ese momento (la misma sesión USB, re-verificado dentro del script privilegiado como el resto de las comprobaciones de seguridad) y formatea con ESE valor, con reserva a 512 si la clave no está disponible o reporta algo fuera de lo esperado.
+
+**Segundo punto del dueño, investigado antes de "arreglarlo" a ciegas**: dual boot no pedía la misma autorización de administrador que Solo Aura. Investigando por qué reveló que esto es **intencional, no un descuido** -- ya documentado en D-185: el formateo de esta app (`diskutil eraseDisk FAT32 ... MBR`, una sola partición) nunca puede producir un "winpod" real, porque el contenido genuino de la partición de firmware de Apple lo escribe únicamente iTunes (no es una geometría que baste con recrear -- es una imagen propietaria de Apple). Dejar que dual boot formateara igual que Solo Aura habría destruido un winpod real si existía, o producido un "dual boot" que aparenta funcionar pero nunca arranca Apple. La falta de contraseña es correcta -- lo que estaba mal era la PRESENTACIÓN: la pantalla se veía igual que cualquier error real (X roja, "Algo salió mal"), sin explicar la diferencia.
+
+**Arreglo de presentación**: `FailedView` distingue este caso -- ícono de bifurcación en el color de acento (no X roja), título "Este iPod no está listo para dual boot", el texto explica ahora explícitamente por qué no se pidió contraseña, y dos botones de acción directa: "Instalar solo Aura en este iPod" (cambia `destroyOriginalFirmware` y reintenta sin volver atrás a mano) o "Reintentar" para cuando ya se preparó el iPod con iTunes.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests. El tamaño de sector correcto para el adaptador iFlash-P del dueño depende de su detección por hardware al arrancar -- confirmación final de que el bootloader encuentra la partición queda con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
