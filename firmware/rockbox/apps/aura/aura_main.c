@@ -265,11 +265,6 @@ void aura_main(void)
             if (aura_widgets_pill_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
 
-            /* Resorte del icono de modo en Ahora suena (Fase 30, mismo
-             * criterio que la pastilla de arriba). */
-            if (aura_nowplaying_wheel_animating() && timeout_ticks < 0)
-                timeout_ticks = HZ / 20;
-
             /* ScrollIndicator de MenuList v2 (T2.4) -- mismo par
              * pending()/animating() que el resto de esta puerta. */
             if (aura_menu_list_scroll_indicator_animating() && timeout_ticks < 0)

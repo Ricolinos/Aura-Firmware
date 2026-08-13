@@ -204,11 +204,19 @@ typedef enum {
     NP_MODE_COUNT,
 } np_mode_t;
 
+/* Juego de iconos de modos (encargo 2026-08-12): inactivo = version
+ * LINEAL en -tertiary; activo = version FILL en ACENTO; deshabilitado
+ * (solo Playlist y Letra pueden estarlo) = lineal -tertiary al 50%. */
 static const char *const MODE_ICONS[NP_MODE_COUNT] = {
-    "volume-2", "scrub", "playlist-add", "lyrics", "star",
+    "mode-volume", "mode-scrub", "mode-playlist", "mode-lyrics", "mode-stars",
+};
+static const char *const MODE_ICONS_FILL[NP_MODE_COUNT] = {
+    "mode-volume-fill", "mode-scrub-fill", "mode-playlist-fill",
+    "mode-lyrics-fill", "mode-stars-fill",
 };
 
 static np_mode_t s_mode = NP_MODE_VOLUME;
+static int mode_available(np_mode_t mode);
 
 /* Y real de la fila de iconos de modos en el ultimo render no-compacto
  * -- lo consume aura_transition_flip_and_flow() para animar ese grupo
@@ -222,13 +230,9 @@ int aura_nowplaying_last_mode_row_y(void)
     return s_last_mode_row_y;
 }
 
-/* Resorte del icono que se activa (doc SS5: "mismo resorte corto con
- * sobrepaso que la pastilla de seleccion") -- un pequeno salto vertical
- * en vez de aparecer de golpe. El que se desactiva no se anima (fundido
- * lineal simple per doc, que en un icono binario ya-coloreado equivale
- * a simplemente redibujarlo en TEXT_TERTIARY sin mas). */
-#define MODE_POP_TICKS (HZ * AURA_MOTION_SPRING_MS / 1000)
-static long s_mode_pop_since = -1000000;
+/* El cambio de modo es INMEDIATO (encargo 2026-08-12: se retira el
+ * salto de resorte del icono que se activa; la entrada al modo Letra
+ * tendra su propio tratamiento, pendiente de detallar). */
 
 /* Panel de anadir a lista (modo 5.3). */
 static int s_playlist_sel = -1; /* -1 = sin seleccion todavia, ver cycle_mode() */
@@ -239,12 +243,6 @@ static int s_playlist_sel = -1; /* -1 = sin seleccion todavia, ver cycle_mode() 
  * posicion real en cada tick de scroll (solo al confirmar el gesto).
  * -1 = sin vista previa activa (se usa el elapsed real). */
 static long s_scrub_preview_ms = -1;
-
-int aura_nowplaying_wheel_animating(void)
-{
-    long elapsed = current_tick - s_mode_pop_since;
-    return elapsed >= 0 && elapsed < MODE_POP_TICKS;
-}
 
 bool aura_nowplaying_active(void)
 {
@@ -640,46 +638,37 @@ static void draw_text_and_modes(const struct mp3entry *id3, bool compact)
         y = ART_Y + ART_SIZE + A26_SPACING_MD;
     }
 
-    /* Fila de modos: debajo del bloque de texto, alineada a la derecha
-     * de la pantalla (doc SS2) -- o centrada en MORPH_PANEL_W en Modo 4.
-     * El icono activo va en ACCENT con un pequeno salto de resorte al
-     * activarse (SS5); los otros 4 en TEXT_TERTIARY -- variante real
-     * desde el Lote 5 de AUDITORIA-01 (A-16), ya no la aproximacion con
-     * TEXT_PRIMARY que D-078 dejo documentada como limite de D-010. */
-    mode_y = y;
-    if (!compact && mode_y + A26_ICON_SIZE_MENU > ART_Y + ART_SIZE + REFL_GAP)
-        mode_y = ART_Y + ART_SIZE + REFL_GAP - A26_ICON_SIZE_MENU; /* no invade el reflejo */
+    /* Fila de modos (encargo 2026-08-12): anclada a la barra -- el
+     * borde inferior de los iconos queda 10px por encima de la barra
+     * de progreso, alineados entre si por su centro, separados 4px;
+     * la estrella (ultimo icono) respeta el padding interno derecho.
+     * En Modo 4 (compacto) se mantiene centrada bajo la caratula. */
+    mode_y = compact ? y : PROGRESS_Y - 10 - A26_ICON_SIZE_MENU;
     if (!compact)
         s_last_mode_row_y = mode_y; /* para el morph de entrada, ver getter */
 
     for (i = 0; i < NP_MODE_COUNT; i++)
     {
         int icon_x = mode_x + i * (A26_ICON_SIZE_MENU + A26_SPACING_SM);
-        int icon_y = mode_y;
         bool active = (i == (int)s_mode);
 
-        if (active && aura_nowplaying_wheel_animating())
+        if (!mode_available((np_mode_t)i))
         {
-            int eased = aura_motion_spring(current_tick - s_mode_pop_since, MODE_POP_TICKS);
-            /* Salto vertical corto (doc: resorte de la pastilla,
-             * reaplicado aca) -- hasta 4px de recorrido, con el mismo
-             * sobrepaso que ya se ve en la pastilla de seleccion. */
-            icon_y -= (4 * (256 - eased)) / 256;
-        }
-
-        if (i == (int)NP_MODE_LYRICS && !s_lrc_valid)
-        {
-            /* "Su icono sigue apareciendo... pero al 50% de opacidad"
-             * (componentes/now-playing.md) -- distinto de -tertiary
-             * (que es un color fijo para "inactivo pero disponible"):
-             * este estado es "no disponible en absoluto", el loop de
-             * modos ya lo salta (cycle_mode/mode_available). */
-            aura_widgets_draw_icon_dimmed(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y, 128);
+            /* Deshabilitado (solo Playlist y Letra pueden estarlo):
+             * mismo glifo LINEAL y color del inactivo, al 50% de
+             * opacidad -- el loop de modos ya lo salta
+             * (cycle_mode/mode_available). */
+            aura_widgets_draw_icon_tertiary_dimmed(MODE_ICONS[i], A26_ICON_SIZE_MENU,
+                                                    icon_x, mode_y, 128);
         }
         else if (active)
-            aura_widgets_draw_icon_selected(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y);
+            /* Activo: variante FILL en ACENTO, cambio inmediato (sin
+             * salto de resorte, encargo 2026-08-12). */
+            aura_widgets_draw_icon_selected(MODE_ICONS_FILL[i], A26_ICON_SIZE_MENU,
+                                             icon_x, mode_y);
         else
-            aura_widgets_draw_icon_tertiary(MODE_ICONS[i], A26_ICON_SIZE_MENU, icon_x, icon_y);
+            aura_widgets_draw_icon_tertiary(MODE_ICONS[i], A26_ICON_SIZE_MENU,
+                                             icon_x, mode_y);
     }
 }
 
@@ -1148,8 +1137,7 @@ bool aura_nowplaying_needs_tick(void)
         || current_tick < s_seek_show_until
         || current_tick < s_scrub_show_until
         || s_scrub_preview_ms >= 0 /* fase de asentamiento post-ajuste */
-        || s_lr_pending_dir != 0
-        || aura_nowplaying_wheel_animating();
+        || s_lr_pending_dir != 0;
 }
 
 static int playlist_count(void)
@@ -1188,7 +1176,6 @@ static void cycle_mode(int direction)
     }
 
     s_mode = (np_mode_t)next;
-    s_mode_pop_since = current_tick;
     s_scrub_preview_ms = -1;
     /* Doc SS8 (anti-patron): "Seleccion inicial activa en listas
      * destructivas -- anadir a playlist debe entrar sin seleccion".
@@ -1232,7 +1219,6 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
             if (aura_music_add_track_to_playlist(s_playlist_sel, id3->path))
             {
                 s_mode = NP_MODE_VOLUME;
-                s_mode_pop_since = current_tick;
             }
         }
         else if (s_mode != NP_MODE_PLAYLIST || s_playlist_sel < 0)
@@ -1379,7 +1365,6 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
         if (s_mode == NP_MODE_LYRICS || s_mode == NP_MODE_PLAYLIST)
         {
             s_mode = NP_MODE_VOLUME;
-            s_mode_pop_since = current_tick;
         }
         else
         {

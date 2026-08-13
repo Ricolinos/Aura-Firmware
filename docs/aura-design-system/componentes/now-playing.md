@@ -164,6 +164,34 @@ Backward, Forward) siempre hacen lo mismo — nunca cambian de función según
 el modo. Lo que cambia entre modos es qué controla el **scroll** de la
 click wheel (y en algunos modos, qué hace Select).
 
+### Fila de iconos de modos (confirmada 2026-08-12)
+
+| Modo | SF Symbol (lineal / fill) |
+|---|---|
+| 1 Volumen | `speaker.wave.2.circle` |
+| 2 Avance | `arrowtriangle.left.and.line.vertical.and.arrowtriangle.right` |
+| 3 Playlist | `list.bullet.circle` |
+| 4 Letras | `quote.bubble` |
+| 5 Favorito | `star.circle` |
+
+**Estados** (excepción documentada a la regla "nunca .fill" del doc SS4,
+misma familia que play-fill/pause-fill):
+
+- **Inactivo**: versión **lineal** del símbolo, tinta terciaria.
+- **Activo**: versión **`.fill`** del símbolo, en **ACENTO**.
+- **Deshabilitado** (solo Playlist sin listas y Letras sin `.lrc`):
+  mismo glifo lineal y color del inactivo, al **50% de opacidad**; el
+  loop de modos lo salta.
+
+El cambio de estado es **INMEDIATO** — se retiró el salto de resorte del
+icono que se activa (la entrada al Modo 4 tendrá su propio tratamiento,
+pendiente de detallar).
+
+**Posición**: iconos de 20px alineados entre sí por su centro, separados
+**4px**; el borde inferior de la fila queda **10px por encima de la barra
+de progreso** y el último icono (la estrella) respeta el **padding
+interno derecho** de la pantalla.
+
 ### Modo 1 — Normal (reproducción)
 
 - Scroll = subir/bajar volumen.
@@ -182,7 +210,8 @@ click wheel (y en algunos modos, qué hace Select).
 
 - Abre un modal de selección de playlist.
 - **Si no hay playlists existentes, el modo no se activa** (se salta en el
-  loop de modos).
+  loop de modos) y su icono se muestra **deshabilitado al 50% de
+  opacidad**, igual que el Modo 4 sin letras.
 - **Ninguna playlist viene seleccionada de inicio** — decisión deliberada
   para evitar agregar canciones sin querer a la primera de la lista.
 - Scroll = desplazarse entre playlists.

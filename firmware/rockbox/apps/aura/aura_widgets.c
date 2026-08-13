@@ -206,6 +206,15 @@ int aura_widgets_draw_icon_dimmed(const char *name, int size, int x, int y, int 
     return draw_icon_mask(name, size, x, y, a26_color(A26_TEXT_PRIMARY), alpha_256);
 }
 
+/* Estado "deshabilitado" de la fila de modos de Ahora suena (encargo
+ * 2026-08-12): mismo color que el inactivo (-tertiary), atenuado. */
+int aura_widgets_draw_icon_tertiary_dimmed(const char *name, int size, int x, int y, int alpha_256)
+{
+    if (!name)
+        return 0;
+    return draw_icon_mask(name, size, x, y, a26_color(A26_TEXT_TERTIARY), alpha_256);
+}
+
 /* Layout declarado por la pantalla actual (lo fija aura_screens_draw
  * desde su tabla). Por defecto SPLIT: es el layout de la mayoria de los
  * menus del firmware original. */

@@ -1574,4 +1574,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-134 — Fila de modos: símbolos nuevos, estados lineal/fill/deshabilitado, anclada a la barra, sin salto
+
+**Encargo del dueño del diseño (2026-08-12).** (1) Símbolos nuevos por modo: `speaker.wave.2.circle`, `arrowtriangle.left.and.line.vertical.and.arrowtriangle.right`, `list.bullet.circle`, `quote.bubble`, `star.circle` — 10 iconos nuevos en tokens.json (lineal + `.fill` por modo; excepción documentada a "nunca .fill"). (2) Estados: inactivo = lineal en terciario; activo = `.fill` en acento; deshabilitado (Playlist sin listas, Letras sin `.lrc`) = lineal terciario al 50% (`aura_widgets_draw_icon_tertiary_dimmed`, nuevo — el dimmed existente tiñe en primario). El deshabilitado ahora también aplica a Playlist (antes solo Letras tenía el tratamiento visual). (3) El cambio de modo es INMEDIATO: se retiró el salto de resorte completo (MODE_POP, `s_mode_pop_since`, `aura_nowplaying_wheel_animating()` y su rama de energía en aura_main); la entrada al Modo 4 tendrá tratamiento propio, pendiente de detallar. (4) Posición: fila anclada a la barra — borde inferior 10px por encima de la barra de progreso, iconos de 20px alineados por su centro con 4px de separación, la estrella respeta el padding interno derecho (12px); en el modo compacto (Letras) se mantiene centrada bajo la carátula. Verificado con capturas de los modos 1 y 2 (cambio inmediato, letras deshabilitado al 50%).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
