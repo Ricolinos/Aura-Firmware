@@ -29,13 +29,29 @@ Una sola pieza con cuatro caras:
 | Estado | Aspecto |
 |---|---|
 | Reposo | Carril **300×7px centrado**, color del Selector de menús (`SELECTION_FILL`), puntas completamente redondeadas; relleno **298×5px BLANCO**. **Sin números de tiempo.** |
-| Buscando (mantener backward/forward) | El relleno pasa a **ACENTO** y los tiempos (`00:00` / `-00:00`) aparecen SOLO mientras dura la búsqueda. Tap corto = pista anterior/siguiente (la decisión es al soltar, como el iPod original). |
+| Buscando (mantener backward/forward) | El relleno pasa a **ACENTO** y los tiempos (`00:00` / `-00:00`) aparecen SOLO mientras dura la búsqueda, **debajo de la barra**, alineados a sus extremos. Tap corto = pista anterior/siguiente (la decisión es al soltar, como el iPod original). |
 | Scrub (modo avance, rueda) | Relleno en ACENTO + **indicador de avance de 15×11px blanco con sombra paralela sutil**, su centro en el borde derecho del relleno. |
-| Volumen (rueda en modo volumen) | La misma barra muestra el **nivel de volumen** en acento; `speaker.minus`/`speaker.plus` en los extremos donde vivían los tiempos; el play/pausa del transporte se convierte en la **bocina dinámica de 5 estados** (0-2% mute, 2-15% bocina sola, 15-50/50-80/80-100% una/dos/tres ondas) y todo se desvanece con un fade sutil al soltar. |
+| Volumen (rueda en modo volumen) | La misma barra muestra el **nivel de volumen** en acento (con el mismo indicador de 15×11); `speaker.minus`/`speaker.plus` **debajo de la barra**, alineados a sus extremos; el play/pausa del transporte se convierte en la **bocina dinámica de 5 estados** (0-2% mute, 2-15% bocina sola, 15-50/50-80/80-100% una/dos/tres ondas) y todo se desvanece con un fade sutil al soltar. |
 
-El transporte muestra **solo play/pausa al centro** (los glifos de
-backward/forward se retiraron — la interacción vive en los botones
-físicos). Repetir y aleatorio siguen en los extremos.
+**Posición de la barra (confirmada 2026-08-12):** borde superior a
+**44px del borde inferior** de la pantalla — los elementos transitorios
+(tiempos de búsqueda, bocinas −/+ de volumen) viven **debajo** de ella,
+nunca encima.
+
+### Fila de transporte (confirmada 2026-08-12)
+
+Centrada verticalmente **entre la base de la barra y el borde inferior**:
+
+- **Play/pausa al centro, 24px** (los glifos de backward/forward se
+  retiraron — la interacción vive en los botones físicos).
+- **Repetir (izq.) y aleatorio (der.) a 16px**, a los **costados del
+  icono central con 12px de separación** — ya no en los extremos de la
+  barra. Activo = acento, inactivo = tinta normal.
+- Al ajustar volumen, el centro lo ocupa la **bocina dinámica** (lienzo
+  de 36px): sus 5 estados se renderizan a **pointSize fijo** (el de un
+  icono de 24px) sin escalar-para-caber, de modo que **el cuerpo de la
+  bocina mide exactamente igual en los 5 estados** y solo las ondas
+  ocupan más lienzo. Renderizada desde el centro.
 
 **Punto clave de continuidad:** esa inclinación sutil ES el ángulo de
 aterrizaje de `Flip-and-Flow` — el original ya estaba diseñado como si la

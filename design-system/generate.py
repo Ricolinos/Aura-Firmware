@@ -334,16 +334,29 @@ def render_symbol_shapes(tokens, shapes_dir):
     icon_cfg = tokens["icon"]
     shapes_dir.mkdir(parents=True, exist_ok=True)
 
+    # Bocina dinamica (encargo 2026-08-12): sus 5 estados se renderizan
+    # a pointSize FIJO (el de un icono de body_ref px) en el lienzo de
+    # su tamano dedicado, sin contain -- el cuerpo de la bocina queda
+    # identico entre variantes (ver comment en tokens.json).
+    dyn = icon_cfg.get("dynamic_speaker")
+
     jobs = []
     for icon_key, symbol_name in icon_cfg["names"].items():
         for size_name, size_px in icon_cfg["sizes"].items():
             render_px = size_px * SUPERSAMPLE
-            jobs.append({
+            job = {
                 "symbol": symbol_name,
                 "px": render_px,
                 "weight": icon_cfg["weight_by_size"][size_name],
                 "out": str(shapes_dir / f"{icon_key}-{size_px}.png"),
-            })
+            }
+            if (dyn and icon_key in dyn["icons"]
+                    and size_name == dyn["size"]):
+                ref_px = icon_cfg["sizes"][dyn["body_ref"]]
+                # mismo factor 0.82 que usa el renderizador en su via
+                # normal para relacionar lienzo con pointSize
+                job["pt"] = ref_px * SUPERSAMPLE * 0.82
+            jobs.append(job)
 
     result = subprocess.run(
         ["swift", str(ROOT / "scripts" / "apple2026_sf_render.swift")],
@@ -462,7 +475,12 @@ def generate_icons(tokens):
 
                     tones = {px for px in out_img.getdata() if px != TRANSPARENT_RGB}
                     tone_report.append((str(out_path), len(tones)))
-                    if len(tones) < MIN_INK_TONES:
+                    # Tinta == fondo de composicion (unico caso real:
+                    # "-selector" blanco sobre shell_bg blanco del tema
+                    # claro): la rampa de 1 tono es matematicamente
+                    # inevitable, no una regresion del pipeline -- el
+                    # camino primario de ese icono son las mascaras.
+                    if fg_rgb != bg_rgb and len(tones) < MIN_INK_TONES:
                         fail_files.append((str(out_path), len(tones)))
 
         total = len(icon_cfg["names"]) * len(icon_cfg["sizes"]) * len(icon_cfg["variants"])

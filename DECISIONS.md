@@ -1548,4 +1548,12 @@ El retraso restante queda reducido a la latencia real de seek+rebuffer del motor
 
 ---
 
+## D-130 — Reproductor: barra a 44px, transitorios debajo, fila de transporte grande y compacta
+
+**Encargo del dueño del diseño (2026-08-12).** (1) La barra sube 10px (borde superior a 44px del borde inferior, token `progress_bottom_offset`): los elementos que aparecen y desaparecen — tiempos de búsqueda, bocinas −/+ de volumen — ahora viven DEBAJO de ella. (2) Play/pausa crece a 24px (`transport`); repetir y aleatorio a 16px (`transport_side`) y se reubican a los costados del icono central con 12px de separación (`transport_icon_gap`), ya no en los extremos de la barra; la fila se centra verticalmente entre la base de la barra y el borde inferior. (3) La bocina dinámica de volumen ocupa ese mismo centro con lienzo de 36px (`vol_dynamic`) y — corrección clave — sus 5 estados se renderizan a **pointSize fijo** (el de un icono de 24px) sin contain: el cuerpo de la bocina mide idéntico entre estados (verificado: corrida vertical máxima de 18px en los 4 estados con cuerpo visible) y solo las ondas ocupan más lienzo. El render contain anterior encogía la bocina conforme el glifo se ensanchaba. Infraestructura: campo opcional `pt` en el renderizador Swift (dibujo a tamaño natural centrado, falla ruidosamente si no cabe) + config `icon.dynamic_speaker` en tokens.json.
+
+De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de composición (variante `-selector` blanca sobre `shell_bg` blanco del tema claro — 1 tono es matemáticamente inevitable ahí y el camino primario de esos iconos son las máscaras); ese fallo existía desde antes, oculto por un `| tail` que se comía el exit code del generador.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

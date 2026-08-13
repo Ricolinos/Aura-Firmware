@@ -56,7 +56,9 @@
 
 #define STAR_COUNT 5
 
-#define PROGRESS_Y       (A26_SCREEN_HEIGHT - 34)
+/* La barra sube (encargo 2026-08-12): los elementos transitorios
+ * (tiempos de busqueda, bocinas -/+ de volumen) viven DEBAJO de ella. */
+#define PROGRESS_Y       (A26_SCREEN_HEIGHT - AURA_DS_METRICS_NOW_PLAYING_PROGRESS_BOTTOM_OFFSET)
 #define PROGRESS_TRACK_H AURA_DS_METRICS_NOW_PLAYING_PROGRESS_TRACK_HEIGHT
 #define PROGRESS_FILL_H  AURA_DS_METRICS_NOW_PLAYING_PROGRESS_FILL_HEIGHT
 /* Barra unificada progreso/volumen (encargo 2026-08-12): carril de
@@ -64,7 +66,14 @@
  * completamente redondeadas. Sin numeros de tiempo en reposo. */
 #define PROGRESS_W       AURA_DS_METRICS_NOW_PLAYING_PROGRESS_WIDTH
 #define PROGRESS_X       ((A26_SCREEN_WIDTH - PROGRESS_W) / 2)
-#define TRANSPORT_Y      (A26_SCREEN_HEIGHT - 14)
+/* Fila de transporte (encargo 2026-08-12): centrada verticalmente
+ * entre la base de la barra y el borde inferior. Play/pause de 24px al
+ * centro (al ajustar volumen, el mismo centro lo ocupa la bocina
+ * dinamica); repetir (izq.) y aleatorio (der.) de 16px a los costados,
+ * a 12px del bloque central -- ya no en los extremos de la barra. */
+#define TRANSPORT_CENTER_Y ((PROGRESS_Y + PROGRESS_TRACK_H + A26_SCREEN_HEIGHT) / 2)
+#define TRANSPORT_Y        (TRANSPORT_CENTER_Y - A26_ICON_SIZE_TRANSPORT / 2)
+#define TRANSPORT_GAP      AURA_DS_METRICS_NOW_PLAYING_TRANSPORT_ICON_GAP
 
 /* Ventanas de estado de la barra (ver draw_progress): buscar con
  * botones sostenidos muestra tiempos + acento; el ajuste de volumen la
@@ -722,7 +731,7 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int 
         long left_ticks = s_volume_overlay_until - current_tick;
         int alpha = (left_ticks < VOLUME_FADE_TICKS)
             ? (int)(256L * left_ticks / VOLUME_FADE_TICKS) : 256;
-        int icon_y = PROGRESS_Y - A26_ICON_SIZE_STATUS - A26_SPACING_XS;
+        int icon_y = PROGRESS_Y + PROGRESS_TRACK_H + A26_SPACING_XS;
 
         aura_widgets_draw_icon_dimmed("speaker-minus", A26_ICON_SIZE_STATUS,
                                        x, icon_y, alpha);
@@ -735,6 +744,7 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int 
          * transcurrido / restante con signo). */
         char timebuf[24], timebuf2[24];
         int w, h;
+        int text_y = PROGRESS_Y + PROGRESS_TRACK_H + A26_SPACING_XS;
         unsigned long remaining = (id3->length > elapsed) ? (id3->length - elapsed) : 0;
 
         aura_format_track_time(elapsed, timebuf, sizeof(timebuf));
@@ -743,11 +753,9 @@ static void draw_progress(const struct mp3entry *id3, int scrub_preview_ms, int 
 
         lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
         lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-        lcd_putsxy(x, PROGRESS_Y - A26_SPACING_MD - A26_SPACING_XS,
-                   (const unsigned char *)timebuf);
+        lcd_putsxy(x, text_y, (const unsigned char *)timebuf);
         lcd_getstringsize((const unsigned char *)timebuf2, &w, &h);
-        lcd_putsxy(x + width - w, PROGRESS_Y - A26_SPACING_MD - A26_SPACING_XS,
-                   (const unsigned char *)timebuf2);
+        lcd_putsxy(x + width - w, text_y, (const unsigned char *)timebuf2);
     }
 
     if (scrubbing || seeking)
@@ -781,19 +789,22 @@ static void draw_transport(bool compact)
     if (compact)
     {
         int cx = MORPH_PANEL_W / 2;
-        aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_STATUS,
-                                cx - A26_ICON_SIZE_STATUS / 2, TRANSPORT_Y);
+        aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_TRANSPORT,
+                                cx - A26_ICON_SIZE_TRANSPORT / 2, TRANSPORT_Y);
         return;
     }
     int cx = A26_SCREEN_WIDTH / 2;
     int y = TRANSPORT_Y;
+    int side_y = TRANSPORT_CENTER_Y - A26_ICON_SIZE_TRANSPORT_SIDE / 2;
+    int repeat_x = cx - A26_ICON_SIZE_TRANSPORT / 2 - TRANSPORT_GAP
+                   - A26_ICON_SIZE_TRANSPORT_SIDE;
+    int shuffle_x = cx + A26_ICON_SIZE_TRANSPORT / 2 + TRANSPORT_GAP;
 
-    /* Repetir (izq.) / retroceder-play/pausa-avanzar (centro) / aleatorio
-     * (der.) -- doc SS2. Son indicadores de estado real (repeat_mode,
-     * playlist_shuffle) mas los glifos de transporte; la interaccion en
-     * si ya existe (BUTTON_LEFT/RIGHT = pista ant./sig., PLAY global
-     * desde Fase 29) -- esta fila solo la hace visible en la pantalla,
-     * no agrega botones nuevos.
+    /* Repetir (izq.) / play-pausa (centro) / aleatorio (der.), como
+     * bloque compacto a los costados del icono central -- ya no en los
+     * extremos de la barra (encargo 2026-08-12). Son indicadores de
+     * estado real (repeat_mode, playlist_shuffle); la interaccion vive
+     * en los botones fisicos, la fila solo la hace visible.
      *
      * Los iconos son bitmaps ya horneados en un color fijo (D-010):
      * lcd_set_foreground() no los tine, asi que "activo" se expresa
@@ -801,16 +812,18 @@ static void draw_transport(bool compact)
      * en vez de intentar recolorear -- no hay variante TEXT_TERTIARY
      * horneada, mismo limite que el resto de la pantalla (D-078). */
     if (global_settings.repeat_mode != 0)
-        aura_widgets_draw_icon_selected("repeat", A26_ICON_SIZE_STATUS, A26_SPACING_XXL, y);
+        aura_widgets_draw_icon_selected("repeat", A26_ICON_SIZE_TRANSPORT_SIDE,
+                                         repeat_x, side_y);
     else
-        aura_widgets_draw_icon("repeat", A26_ICON_SIZE_STATUS, A26_SPACING_XXL, y);
+        aura_widgets_draw_icon("repeat", A26_ICON_SIZE_TRANSPORT_SIDE,
+                                repeat_x, side_y);
 
     if (global_settings.playlist_shuffle)
-        aura_widgets_draw_icon_selected("shuffle", A26_ICON_SIZE_STATUS,
-                                         A26_SCREEN_WIDTH - A26_SPACING_XXL - A26_ICON_SIZE_STATUS, y);
+        aura_widgets_draw_icon_selected("shuffle", A26_ICON_SIZE_TRANSPORT_SIDE,
+                                         shuffle_x, side_y);
     else
-        aura_widgets_draw_icon("shuffle", A26_ICON_SIZE_STATUS,
-                                A26_SCREEN_WIDTH - A26_SPACING_XXL - A26_ICON_SIZE_STATUS, y);
+        aura_widgets_draw_icon("shuffle", A26_ICON_SIZE_TRANSPORT_SIDE,
+                                shuffle_x, side_y);
 
     /* Solo play/pausa al centro (encargo 2026-08-12: los glifos de
      * backward/forward se retiraron -- la interaccion vive en los
@@ -841,12 +854,19 @@ static void draw_transport(bool compact)
         else if (pct <= 80) icon = "speaker-wave-2";
         else                icon = "speaker-wave-3";
 
-        aura_widgets_draw_icon_dimmed(icon, A26_ICON_SIZE_STATUS,
-                                       cx - A26_ICON_SIZE_STATUS / 2, y, alpha);
+        /* Lienzo de 36px renderizado a pointSize FIJO (el de 24px):
+         * el cuerpo de la bocina mide IGUAL en los 5 estados y solo
+         * las ondas ocupan mas lienzo (encargo 2026-08-12: "la bocina
+         * siempre debe ser del mismo tamano"). Centrada en el mismo
+         * centro que play/pause. */
+        aura_widgets_draw_icon_dimmed(icon, A26_ICON_SIZE_VOL_DYNAMIC,
+                                       cx - A26_ICON_SIZE_VOL_DYNAMIC / 2,
+                                       TRANSPORT_CENTER_Y - A26_ICON_SIZE_VOL_DYNAMIC / 2,
+                                       alpha);
     }
     else
-        aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_STATUS,
-                                cx - A26_ICON_SIZE_STATUS / 2, y);
+        aura_widgets_draw_icon(paused ? "play-fill" : "pause-fill", A26_ICON_SIZE_TRANSPORT,
+                                cx - A26_ICON_SIZE_TRANSPORT / 2, y);
 }
 
 /* -- Modo 5.3: anadir a lista (doc SS5.3) --------------------------------- */

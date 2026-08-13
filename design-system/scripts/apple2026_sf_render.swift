@@ -25,6 +25,10 @@ struct Job: Decodable {
     let px: Int
     let weight: String
     let out: String
+    // pointSize fijo opcional: se dibuja a tamano NATURAL centrado en el
+    // lienzo, sin contain -- para familias cuyo cuerpo debe medir igual
+    // entre variantes de distinto ancho (bocina dinamica, 2026-08-12).
+    let pt: Double?
 }
 
 let weights: [String: NSFont.Weight] = [
@@ -54,7 +58,7 @@ for job in jobs {
     // pointSize se pide algo menor que el lienzo: a un pointSize P la caja
     // de un SF Symbol es mas alta que P, asi que pedir P = px lo dejaria
     // recortado o con un relleno optico distinto al del resto del set.
-    let config = NSImage.SymbolConfiguration(pointSize: Double(job.px) * 0.82, weight: weight)
+    let config = NSImage.SymbolConfiguration(pointSize: job.pt ?? Double(job.px) * 0.82, weight: weight)
     guard let configured = symbol.withSymbolConfiguration(config) else {
         fail("no se pudo configurar \(job.symbol)")
     }
@@ -75,7 +79,14 @@ for job in jobs {
     // nativas de cada simbolo, que es lo que los hace ver opticamente
     // consistentes entre si dentro de un mismo tamano.
     let natural = configured.size
-    let scale = min(Double(job.px) / natural.width, Double(job.px) / natural.height)
+    var scale = min(Double(job.px) / natural.width, Double(job.px) / natural.height)
+    if job.pt != nil {
+        if natural.width > Double(job.px) || natural.height > Double(job.px) {
+            fail("\(job.symbol) a pointSize fijo no cabe en el lienzo de \(job.px)px "
+                 + "(natural \(natural)) -- agranda el lienzo en tokens.json")
+        }
+        scale = 1.0 // tamano natural: el cuerpo mide igual en toda la familia
+    }
     let drawn = NSSize(width: natural.width * scale, height: natural.height * scale)
     let origin = NSPoint(x: (Double(job.px) - drawn.width) / 2.0,
                          y: (Double(job.px) - drawn.height) / 2.0)
