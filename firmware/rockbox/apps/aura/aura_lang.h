@@ -198,6 +198,11 @@ typedef enum {
     AURA_STR_GAME_KLONDIKE,
     AURA_STR_GAME_VORTEX,
 
+    AURA_STR_CAL_NO_EVENTS,
+
+    AURA_STR_LOCK_SET,
+    AURA_STR_LOCK_CONFIRM,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

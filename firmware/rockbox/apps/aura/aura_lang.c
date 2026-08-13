@@ -171,6 +171,9 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_GAME_IQUIZ]           = "iQuiz",
     [AURA_STR_GAME_KLONDIKE]        = "Klondike",
     [AURA_STR_GAME_VORTEX]          = "Vortex",
+    [AURA_STR_CAL_NO_EVENTS] = "No hay eventos este día",
+    [AURA_STR_LOCK_SET] = "Introduce una clave",
+    [AURA_STR_LOCK_CONFIRM] = "Confirma la clave",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -342,6 +345,9 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_GAME_IQUIZ]           = "iQuiz",
     [AURA_STR_GAME_KLONDIKE]        = "Klondike",
     [AURA_STR_GAME_VORTEX]          = "Vortex",
+    [AURA_STR_CAL_NO_EVENTS] = "No events on this day",
+    [AURA_STR_LOCK_SET] = "Enter a passcode",
+    [AURA_STR_LOCK_CONFIRM] = "Confirm the passcode",
 };
 
 const char *aura_str(aura_str_id_t id)

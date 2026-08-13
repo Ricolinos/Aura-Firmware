@@ -1752,4 +1752,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-162 — Calendario y Bloqueo de pantalla
+
+**Encargo del dueño del diseño (2026-08-13).** (1) **Calendario**: rejilla del mes de 7×6 con la semana empezando en **lunes** (convención en español, no la del calendario estadounidense). El día de la semana del día 1 se calcula con Zeller adaptado — sin tablas ni bibliotecas de fecha. La **rueda recorre los días** y los **botones de avanzar/retroceder cambian de mes** (como el original), con el día acotado al pasar a un mes más corto; SELECT entra al día, que muestra "No hay eventos este día"; Play no hace nada ahí, como en el original. Arranca en la fecha de hoy. (2) **Bloqueo de pantalla**: candado grande y cuatro dígitos que la rueda cambia (0-9 con vuelta) y SELECT avanza. Al completar los cuatro **pide confirmación**; si coincide queda establecida y sale, si no vuelve a la primera pasada — el propio reinicio de los dígitos es la señal, sin mensajes de error técnicos. **MENU restablece y no configura nada**, exactamente la regla del original.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

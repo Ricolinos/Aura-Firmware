@@ -73,7 +73,9 @@ fila más.
 | Reloj internacional | ✅ relojes analógicos con esfera clara (local) y oscura (otros husos); menú Añadir/Editar/Eliminar — ver `componentes/world-clock.md` |
 | Notas | ✅ pantalla de instrucciones del original |
 | Juegos | ◐/✅ **Klondike** funciona (plugin `solitaire` de Rockbox); iQuiz y Vortex inertes |
-| Calendarios · Alarmas · Bloqueo pantalla | ⬜ estructura navegable, interfaz propia pendiente |
+| Calendarios | ✅ rejilla del mes (semana desde lunes); rueda = días, botones = meses, Select = día |
+| Bloqueo pantalla | ✅ candado + clave de 4 dígitos con confirmación; MENU restablece sin configurar |
+| Alarmas | ⬜ estructura navegable, interfaz propia pendiente |
 | Agenda | ◐ |
 
 **Juegos** (investigado 2026-08-13): los originales (iQuiz, Klondike,
