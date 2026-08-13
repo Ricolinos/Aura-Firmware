@@ -1928,4 +1928,18 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-181 — Formateo sin Acceso total al disco (y el error críptico, explicado)
+
+**Reporte del dueño en vivo (2026-08-13)**: `newfs_msdos: /dev/rdisk7s1: Operation not permitted` otra vez, tras haber funcionado en la sesión anterior. Causa confirmada: con firma ad-hoc (sin Team ID, D-042), el permiso de Acceso total al disco queda atado a la firma de ESA compilación — **cada recompilación lo invalida**. Tolerable en desarrollo; inaceptable como experiencia de usuario final (y aun con firma real, pedir FDA es fricción evitable).
+
+**Arreglo de fondo — el formateo ya no depende de FDA en el caso común**: `eraseAndFormatDisk` ahora es de dos etapas. (1) `diskutil eraseDisk` — lo ejecuta el daemon del sistema con sus propios permisos, sin TCC sobre Aura Studio — y si el volumen resultante MONTA (verificado esperando hasta 10s), terminó: camino feliz sin ningún permiso especial. Es el caso de los iPod con mod de flash (sectores 512), hoy los más comunes — incluido el del dueño. (2) Solo si no monta (el caso histórico D-044: disco original de 4096 donde el FAT32 de 512 queda escrito pero inmontable) se cae al `newfs_msdos -S 4096` crudo, que sí está sujeto a TCC; si macOS lo bloquea, el script emite `AURA_FDA_REQUIRED` y la UI muestra una pantalla clara (qué pasó, qué hacer, botón directo al panel de Acceso total al disco con la instrucción de quitar/re-agregar la app) en vez del error críptico de newfs.
+
+**Bug latente corregido de paso**: los marcadores `AURA_SAFETY_ABORT` se emitían a stdout, pero el mensaje de error de `do shell script` es el **stderr** del comando (probado en vivo: el error de newfs_msdos llegó a la UI vía stderr) — los abortos de seguridad jamás se habrían clasificado como tales, habrían llegado como error genérico. Todos los marcadores van ahora a stderr (`1>&2`) y la detección usa `contains` (pueden venir precedidos por stderr de comandos anteriores).
+
+**Tests**: los de integración de la biblioteca construían `LibraryViewModel()` sin raíz — con D-180 eso apuntaba a la carpeta real `~/Música/Aura` y el catálogo persistido contaminaba corridas siguientes ("Se copiaron 8 de 8" donde se esperaban 2). Ahora usan raíces temporales aisladas por corrida.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests (esta corrida pasaron también los de red). Prueba en hardware del camino feliz (formateo sin FDA) queda con el dueño — su iPod es exactamente el caso que ya no debería pedir nada.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
