@@ -2041,4 +2041,22 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-189 — "Algo salió mal" en dual boot: el iPod se desconectaba a mitad de la copia larga
+
+**Reporte del dueño (2026-08-13)**: instalando dual boot, "algo salió mal" tras varios minutos. Su hipótesis (formatear en FAT MS-DOS) no era la causa -- el disco ya estaba en FAT32/MBR (confirmado con `diskutil`), y el registro de operaciones privilegiadas mostraba el formateo previo exitoso. El fallo real no dejaba rastro ahí porque ocurría en la extracción de archivos, que no pasa por el ejecutor privilegiado.
+
+**Diagnóstico reproducido a mano**: se corrió el mismo `ditto -xk` que usa la app directo contra el iPod real (un iFlash-P, adaptador de disco por SD). La extracción avanza bien al principio, pero tras varios minutos empiezan errores `Permission denied` en cascada sobre archivos ya en curso, y el disco desaparece del sistema (`diskutil list` deja de encontrarlo) -- el patrón exacto de una desconexión física a mitad de una escritura sostenida, no un error de lógica ni de permisos de la app. Copiar el árbol completo (7831 archivos, ~48MB comprimidos) por USB 2.0 a almacenamiento iFlash toma varios minutos reales, y ese aparato en particular resultó más frágil bajo esa carga sostenida que un disco duro original.
+
+**Causa contribuyente encontrada de paso**: el medidor de progreso (D-179/D-180) recorría con `FileManager.enumerator` + `attributesOfItem` TODOS los archivos ya escritos, CADA SEGUNDO, mientras `ditto` seguía escribiendo al mismo disco USB lento -- tráfico de lectura compitiendo activamente con la escritura, justo en el aparato menos indicado para soportarlo. Reemplazado por una sola llamada a `volumeAvailableCapacityKey` (espacio libre restante) por medición: mismo progreso útil, cero recorridos.
+
+**Arreglos**:
+1. **Un reintento automático** de la extracción si falla: `ditto` hace merge (nunca borra lo ya escrito), así que repetirla tras una falla transitoria retoma justo donde quedó -- seguro por diseño.
+2. **Detección honesta de desconexión real**: si tras la falla el volumen ya no responde (`FileManager.fileExists` en la ruta de montaje), se reporta `InstallerError.deviceDisconnectedDuringCopy` con un mensaje que nombra la causa probable (cable, hub USB) en vez del texto crudo de `ditto`.
+3. **Medición de progreso sin tráfico competidor** (arriba).
+4. **Mensaje con expectativa de tiempo real**: "puede tardar varios minutos por USB" en vez de una frase que no preparaba al usuario para una espera larga.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests. El disco del dueño quedó con la extracción a medio terminar tras el diagnóstico (`merge`-seguro, nada se perdió) -- retomar la instalación desde la app debería completarla ahora con mejor manejo de una desconexión repetida, y en el caso feliz (sin otra desconexión) simplemente termina más rápido al no competir consigo misma por el bus USB.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
