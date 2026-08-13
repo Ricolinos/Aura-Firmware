@@ -37,10 +37,30 @@ typedef enum {
 } aura_gfx_mode_t;
 
 typedef enum {
-    AURA_EQ_FLAT = 0,
+    /* Presets del firmware original (2026-08-13), en su orden. */
+    AURA_EQ_OFF = 0,
+    AURA_EQ_ACOUSTIC,
     AURA_EQ_BASS_BOOST,
-    AURA_EQ_VOCAL,
+    AURA_EQ_BASS_RED,
+    AURA_EQ_CLASSICAL,
+    AURA_EQ_DANCE,
+    AURA_EQ_DEEP,
+    AURA_EQ_ELECTRONIC,
+    AURA_EQ_FLAT,
+    AURA_EQ_HIPHOP,
+    AURA_EQ_JAZZ,
+    AURA_EQ_LATIN,
+    AURA_EQ_LOUDNESS,
+    AURA_EQ_LOUNGE,
+    AURA_EQ_PIANO,
+    AURA_EQ_POP,
+    AURA_EQ_RNB,
+    AURA_EQ_ROCK,
+    AURA_EQ_SMALLSPK,
+    AURA_EQ_SPOKEN,
     AURA_EQ_TREBLE_BOOST,
+    AURA_EQ_TREBLE_RED,
+    AURA_EQ_VOCAL_BOOST,
     AURA_EQ_COUNT,
 } aura_eq_preset_t;
 

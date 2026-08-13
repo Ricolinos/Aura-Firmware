@@ -40,12 +40,39 @@ static const aura_settings_t aura_settings_defaults = {
  * (tipo/cutoff/q) se toma de eq_defaults[], la misma tabla que usa el
  * propio menu de EQ de Rockbox (apps/settings_list.c), para no inventar
  * valores de filtro propios. Ver D-012 en DECISIONS.md. */
-static const int aura_eq_gain_db[AURA_EQ_COUNT][EQ_NUM_BANDS] = {
-    [AURA_EQ_FLAT]         = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-    [AURA_EQ_BASS_BOOST]   = { 8, 7, 5, 2, 0, 0, 0, 0, 0, 0 },
-    [AURA_EQ_VOCAL]        = { -3, -2, 0, 2, 4, 4, 2, 0, -1, -2 },
-    [AURA_EQ_TREBLE_BOOST] = { 0, 0, 0, 0, 0, 0, 2, 4, 6, 7 },
+/* Ganancia por banda en DECIMAS de dB, tabla del ecualizador del
+ * firmware original (2026-08-13). Las 10 bandas son las de Rockbox
+ * (32/64/125/250/500/1k/2k/4k/8k/16k Hz); `precut` es la atenuacion
+ * previa que evita recorte cuando el preset sube bandas. */
+static const struct {
+    int gain[EQ_NUM_BANDS];
+    int precut;
+} aura_eq_presets[AURA_EQ_COUNT] = {
+    [AURA_EQ_OFF] = { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
+    [AURA_EQ_ACOUSTIC] = { { 45, 45, 10, 10, 15, 15, 30, 30, 20, 20 }, 45 },
+    [AURA_EQ_BASS_BOOST] = { { 50, 50, 35, 35, 15, 15, 5, 5, -5, -5 }, 50 },
+    [AURA_EQ_BASS_RED] = { { -50, -50, -35, -35, -15, -15, -5, -5, 5, 5 }, 0 },
+    [AURA_EQ_CLASSICAL] = { { 0, 0, 0, 0, 0, 0, 0, -70, -70, -70 }, 0 },
+    [AURA_EQ_DANCE] = { { 95, 70, 25, 0, 0, -55, -70, -70, 0, 0 }, 95 },
+    [AURA_EQ_DEEP] = { { 50, 45, 25, 10, 15, 10, -15, -30, -40, -45 }, 50 },
+    [AURA_EQ_ELECTRONIC] = { { 45, 45, 5, 5, 25, 25, 15, 15, 0, 55 }, 55 },
+    [AURA_EQ_FLAT] = { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
+    [AURA_EQ_HIPHOP] = { { 65, 65, 25, 25, -10, -10, 15, 15, 35, 35 }, 65 },
+    [AURA_EQ_JAZZ] = { { 40, 40, 15, 15, -25, -25, 5, 5, 60, 60 }, 60 },
+    [AURA_EQ_LATIN] = { { 50, 40, 0, 0, -20, -20, 0, 0, 40, 50 }, 50 },
+    [AURA_EQ_LOUDNESS] = { { 70, 60, 0, 0, -20, 0, -30, 0, 60, 70 }, 70 },
+    [AURA_EQ_LOUNGE] = { { -25, -25, 5, 5, 20, 20, -15, -15, 15, 15 }, 20 },
+    [AURA_EQ_PIANO] = { { 30, 20, 0, 20, 25, 15, 30, 35, 25, 20 }, 35 },
+    [AURA_EQ_POP] = { { -15, 50, 70, 80, 55, 0, -25, -25, 15, 15 }, 80 },
+    [AURA_EQ_RNB] = { { 35, 35, 45, 45, 5, 5, 25, 25, 30, 30 }, 45 },
+    [AURA_EQ_ROCK] = { { 80, 50, -55, -80, -30, 40, 90, 110, 110, 110 }, 110 },
+    [AURA_EQ_SMALLSPK] = { { 70, 60, 40, 20, 0, -10, -20, -30, -40, -50 }, 70 },
+    [AURA_EQ_SPOKEN] = { { -45, -45, 5, 5, 45, 45, 20, 20, 0, 0 }, 45 },
+    [AURA_EQ_TREBLE_BOOST] = { { 0, 0, 0, 0, 0, 0, 20, 40, 60, 70 }, 70 },
+    [AURA_EQ_TREBLE_RED] = { { 0, 0, 0, 0, 0, -10, -20, -40, -60, -70 }, 0 },
+    [AURA_EQ_VOCAL_BOOST] = { { -20, -20, -10, 20, 40, 40, 30, 10, -10, -20 }, 40 },
 };
+
 
 static int clamp_enum(int value, int count)
 {
@@ -57,14 +84,21 @@ static int clamp_enum(int value, int count)
 void aura_settings_apply_eq(void)
 {
     int i;
-    const int *gains = aura_eq_gain_db[aura_settings.eq_preset];
+    int idx = clamp_enum((int)aura_settings.eq_preset, AURA_EQ_COUNT);
+    const int *gains = aura_eq_presets[idx].gain;
 
     for (i = 0; i < EQ_NUM_BANDS; i++)
     {
         global_settings.eq_band_settings[i] = eq_defaults[i];
+        /* La tabla esta en decimas de dB, que es justo la unidad de
+         * eq_band_setting.gain -- se copia tal cual. */
         global_settings.eq_band_settings[i].gain = gains[i];
     }
-    global_settings.eq_enabled = (aura_settings.eq_preset != AURA_EQ_FLAT);
+    global_settings.eq_precut = aura_eq_presets[idx].precut;
+    /* "Desactivado" y "Flat" son la curva plana: el DSP se apaga en
+     * vez de procesar 10 filtros a 0 dB (misma regla que usa Rockbox
+     * por banda: ganancia 0 = banda apagada). */
+    global_settings.eq_enabled = (idx != AURA_EQ_OFF && idx != AURA_EQ_FLAT);
 
     sound_settings_apply();
 }

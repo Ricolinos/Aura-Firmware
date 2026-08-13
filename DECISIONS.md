@@ -1716,4 +1716,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-156 — Ecualizador: los 23 presets del firmware original
+
+**Encargo del dueño del diseño (2026-08-13, P24).** El EQ pasa de 4 presets propios a los **23 del firmware original** (Desactivado, Acústica, Amplif. graves, Reducir graves, Clásica, Dance, Deep, Electrónica, Flat, Hip Hop, Jazz, Latina, Loudness, Lounge, Piano, Pop, R&B, Rock, Minialtavoces, Voz, Amplif. agudos, Reducir agudos, Aumentar voz). La tabla de ganancias está en **décimas de dB** sobre las 10 bandas de Rockbox (32 Hz…16 kHz) — la misma unidad de `eq_band_setting.gain`, se copia tal cual — y cada preset lleva su **precut** (atenuación previa que evita recorte cuando sube bandas), que antes no se aplicaba en absoluto. "Desactivado" y "Flat" son la curva plana y apagan el DSP en vez de procesar 10 filtros a 0 dB, la misma regla que usa Rockbox por banda. Los valores se tomaron de los presets históricos de Rockbox (`lib/rbcodec/dsp/eqs`, retirados del árbol en 2013) cruzados con los nombres del original. Pendiente para otra pasada: la **pantalla gráfica de curva** por preset (investigada y documentada, ver reporte de mi-ipod-os) y el editor de bandas.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

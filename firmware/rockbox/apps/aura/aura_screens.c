@@ -254,8 +254,31 @@ static const aura_str_id_t animation_choice_labels[] = {
 static const aura_str_id_t graphics_choice_labels[] = {
     AURA_STR_GFX_NONE, AURA_STR_GFX_MINIMAL, AURA_STR_GFX_ALL,
 };
+/* Los 23 presets del firmware original, en su orden. */
 static const aura_str_id_t eq_choice_labels[] = {
-    AURA_STR_EQ_FLAT, AURA_STR_EQ_BASS_BOOST, AURA_STR_EQ_VOCAL, AURA_STR_EQ_TREBLE_BOOST,
+    AURA_STR_EQ_OFF,
+    AURA_STR_EQ_ACOUSTIC,
+    AURA_STR_EQ_BASS_BOOST,
+    AURA_STR_EQ_BASS_RED,
+    AURA_STR_EQ_CLASSICAL,
+    AURA_STR_EQ_DANCE,
+    AURA_STR_EQ_DEEP,
+    AURA_STR_EQ_ELECTRONIC,
+    AURA_STR_EQ_FLAT,
+    AURA_STR_EQ_HIPHOP,
+    AURA_STR_EQ_JAZZ,
+    AURA_STR_EQ_LATIN,
+    AURA_STR_EQ_LOUDNESS,
+    AURA_STR_EQ_LOUNGE,
+    AURA_STR_EQ_PIANO,
+    AURA_STR_EQ_POP,
+    AURA_STR_EQ_RNB,
+    AURA_STR_EQ_ROCK,
+    AURA_STR_EQ_SMALLSPK,
+    AURA_STR_EQ_SPOKEN,
+    AURA_STR_EQ_TREBLE_BOOST,
+    AURA_STR_EQ_TREBLE_RED,
+    AURA_STR_EQ_VOCAL_BOOST,
 };
 static const aura_str_id_t language_choice_labels[] = {
     AURA_STR_LANG_ES, AURA_STR_LANG_EN,
