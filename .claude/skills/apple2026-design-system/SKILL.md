@@ -5,16 +5,15 @@ description: "Consulta esta skill antes de crear, modificar o revisar cualquier 
 
 # Sistema de diseño Apple2026 — guía de consulta
 
-Aura recrea el software que Apple enviaría con un iPod Classic en 2026. Antes de escribir o modificar cualquier código que afecte a la interfaz, lee completos los documentos fuente — no confíes en la memoria de la conversación ni improvises valores nuevos:
+Aura recrea el software que Apple enviaría con un iPod Classic en 2026. Antes de escribir o modificar cualquier código que afecte a la interfaz, lee los documentos fuente relevantes — no confíes en la memoria de la conversación ni improvises valores nuevos:
 
-1. **`docs/design/Reglas de diseño Apple2026 (v2).md`** — tokens de color (`a26_palette`), tipografía, iconografía (SF Symbols), geometría (pastilla de selección, radios concéntricos, barra de deslizamiento), movimiento (resorte con sobrepaso para controles, fundido lineal para contenido), anti-patrones. Es la fuente de verdad para cualquier valor numérico o de color — nunca hardcodees uno que no esté ya aquí.
-2. **`docs/design/Reglas de comportamiento - iPod Classic original (2008).md`** — taxonomía de pantallas (`SPLIT`, `LISTA-COMPLETA`, `FULL-COLD`, `FULL-CARRY`, `FULL-COVERFLOW`, `MODAL`), catálogo de transiciones con nombre, modelo de capas. Consúltalo antes de decidir cómo debe entrar o salir cualquier pantalla nueva.
-3. **`docs/design/Reproductor - Ahora suena.md`** — especificación completa de la pantalla Ahora suena: reflejo de carátula, los 5 modos de la rueda (volumen, avance, listas, letra, estrellas), vista de letra.
+1. **`docs/aura-design-system/` — LA FUENTE DE VERDAD VIVA** (mapa en `00-INDICE.md`). Todo lo confirmado por el dueño del diseño vive aquí, actualizado con cada sesión de trabajo: `fundamentos/` (color, tipografía, espaciado, bordes), `componentes/` (status-bar, selector, left-panel, selection-summary, cover-flow, now-playing, lyrics-panel, scroll-indicator, marquee-text, dynamic-title…), `sistema/` (capas, navegación menús/contenido), `transiciones/00-vocabulario.md` (transiciones con nombre) y `efectos/` (sombras). Los valores numéricos ejecutables viven en `design-system/tokens.json` (que genera `apple2026_tokens.h`).
+2. **`docs/design/` — base histórica original** (Reglas de diseño Apple2026 v2, Reglas de comportamiento iPod 2008, Reproductor Ahora suena, AUDITORIA-01). Consúltala SOLO para lo que el sistema vivo aún no cubra (p. ej. la taxonomía completa de pantallas del original). **Ante cualquier conflicto, gana `docs/aura-design-system/`** — p. ej. la spec vieja del reproductor describe una barra de progreso que ya no existe.
 
 ## Cómo aplicar esto
 
-- Antes de dar por terminada cualquier pantalla nueva, revisa la "Lista de control para toda pantalla nueva" al final del documento 1.
 - Si la tarea no está resuelta en estos documentos, trátalo como una decisión de diseño abierta: propónla explícitamente en la respuesta en vez de inventar un valor o un patrón nuevo.
-- Nunca hardcodees RGB, tamaños de fuente, radios o cadencias de animación que no aparezcan ya en estos documentos — si hace falta un valor nuevo, derívalo del sistema de tokens existente en vez de uno suelto.
+- Nunca hardcodees RGB, tamaños de fuente, radios o cadencias de animación que no aparezcan ya en estos documentos — si hace falta un valor nuevo, derívalo del sistema de tokens existente (`design-system/tokens.json`) en vez de uno suelto.
 - Toda animación nueva reutiliza las cadencias y curvas ya definidas (fundido lineal ~330ms para contenido, resorte con sobrepaso para controles) — no introduzcas una curva de easing distinta sin dejarla documentada en el archivo correspondiente.
-- Si el cambio toca geometría, assets o el contrato de transición de una pantalla, dilo explícitamente para que se pueda actualizar el documento fuente después.
+- Si el cambio toca geometría, assets o el contrato de transición de una pantalla, actualiza el archivo correspondiente de `docs/aura-design-system/` en la misma pasada — es la fuente viva, no un espejo que se sincroniza después.
+- `DECISIONS.md` es bitácora histórica, no spec: registra la evolución (con correcciones incluidas); nunca tomes una entrada vieja como comportamiento vigente sin verificar contra el sistema vivo y el código.

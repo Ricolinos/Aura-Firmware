@@ -2,6 +2,16 @@
 
 Formato: cada decisión con contexto, alternativas consideradas y justificación. Orden cronológico.
 
+> ⚠️ **Esto es una BITÁCORA, no una spec.** Registra la evolución —
+> incluidas decisiones que después se corrigieron o revirtieron (una
+> entrada puede estar superseded por otra posterior). La única fuente
+> de verdad del diseño vigente es **`docs/aura-design-system/`**; para
+> el estado del código, el propio código y sus comentarios. No tomes
+> ninguna entrada vieja de aquí como comportamiento actual sin
+> verificarla contra esas dos fuentes. (Nota agregada 2026-08-12 al
+> retirar los planes de fase — PLAN.md, PLAN-UX.md, PLAN-APPLE2026.md,
+> RESUMEN.md, BLOCKED.md — que ya solo describían estados pasados.)
+
 ---
 
 ## D-001 — Rockbox como capa de hardware, no firmware desde cero
