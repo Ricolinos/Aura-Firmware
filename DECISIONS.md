@@ -1954,4 +1954,16 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-183 — Instalación automática a pantalla completa desde el modo bootloader
+
+**Encargo del dueño (2026-08-13)**: al detectar el iPod en modo bootloader, Aura Studio debe instalar Aura automáticamente, en pantalla completa (ocultando la barra lateral hasta terminar), como un recorrido guiado: "Encontramos tu iPod en modo bootloader, a continuación instalaremos Aura, cuando terminemos te avisaremos para que desconectes tu iPod y lo reinicies".
+
+**Diseño**: `ContentView` reemplaza la ventana ENTERA (barra lateral incluida) por `AutoInstallView` cuando el estado llega a `.diskModeNoFilesystem` — que desde D-182 significa de verdad "bootloader con disco ilegible", porque el intento de montaje ya corrió; si el disco montaba, el estado es `.diskMode` y este recorrido ni aparece (ahí aplica el flujo normal sin formateo). El recorrido: pantalla de bienvenida con el mensaje pedido y cuenta regresiva visible de 5s (botones "Comenzar ahora"/"Cancelar" — automático no significa sin salida), luego `InstallerWizardView` con `startAutoInstall()` (nuevo en el VM: salta Bienvenida/Modo de arranque/Permisos y confirma el dispositivo directo — la hoja de autorización + contraseña del formateo NUNCA se salta, esa es la puerta de consentimiento real), barra de progreso de D-179, y al terminar el aviso de desconexión (SELECT + MENU para reiniciar) con botón "Finalizar" que restaura la interfaz normal. El re-disparo se suprime solo si se canceló con el iPod aún en bootloader; desconectar o montar rearma la detección.
+
+**De paso, guardia anti-remontaje**: el intento de montaje de D-182 habría re-montado el disco recién expulsado por el instalador (o por el botón Expulsar de D-180), convirtiendo el "ya puedes desconectar" en mentira. `IPodMonitor` ahora recuerda la expulsión pedida (`ejectRequested`) y deja el disco en paz hasta que desaparece físicamente; el flag se limpia al desconectar o si un volumen vuelve a montar por otra vía.
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests. El recorrido completo (detección → cuenta regresiva → contraseña → formateo → copia con barra → aviso final) depende de hardware real — verificación con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
