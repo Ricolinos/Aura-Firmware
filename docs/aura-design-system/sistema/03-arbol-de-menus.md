@@ -99,10 +99,13 @@ agrupación, como en el original:
 | Sonido | Ecualizador ✅ (23 presets) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
 | Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
 
-Del original quedan pendientes: **Menú Música** configurable, los
-**editores de Fecha y Hora** (calendario y reloj analógico) y el **mapa
+Del original quedan pendientes: **Menú Música** configurable y el **mapa
 con pin** de Zona horaria — la lista de ciudades ya cumple su función.
-La velocidad de
+Los editores de **Fecha** (rejilla del mes con fecha en español en vivo)
+y **Hora** (reloj analógico) ya están construidos, reutilizando los
+mismos componentes ya verificados de Calendarios y Alarmas; persisten al
+RTC real en hardware (`rtc_write_datetime`, inerte en el simulador, que
+no tiene RTC propio). La velocidad de
 audiolibros y el orden por apellido se guardan pero todavía no cambian
 nada: Rockbox no tiene backend para ellos.
 

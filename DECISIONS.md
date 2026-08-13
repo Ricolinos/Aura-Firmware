@@ -1802,4 +1802,12 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-170 — Editores de Fecha y Hora del sistema
+
+**Encargo del dueño del diseño (2026-08-13).** Dos pantallas nuevas bajo "Fecha y hora": **Fecha** (rejilla del mes idéntica a Calendarios, pero como SELECTOR: el día resaltado es el borrador en edición, no una vista de solo lectura; debajo, la fecha completa en español natural — "13 de agosto de 2026" — crece/cambia en vivo con el campo que se esté ajustando, tal como pide el original) y **Hora** (mismo reloj analógico con la LUT de senos de punto fijo ya usado en Alarmas y Reloj internacional). SELECT avanza entre campos (día→mes→año / hora→minuto) y confirma al final; MENU cancela sin aplicar. Persistencia real vía `rtc_write_datetime()` bajo `#if CONFIG_RTC` — verdadero en el hardware (`ipod6g.h: CONFIG_RTC RTC_NANO2G`), cero en el simulador (que refleja el reloj del host y no tiene RTC propio que escribir: el editor funciona igual, "Aplicar" simplemente no tiene adónde persistir ahí — comportamiento honesto, no un bug).
+
+**Verificación**: la fila "Fecha y hora" en Ajustes y su submenú (Fecha/Hora/Zona horaria/Reloj 24 horas/Hora en el título) se confirmaron en vivo con captura — orden e iconos correctos. Los dos editores en sí quedan verificados por revisión de código: el harness de botones no pudo alcanzarlos en esta pasada (la ruta completa desde el arranque excede el buffer de 256 caracteres del inyector de botones del simulador, `sim_tasks.c`), pero reutilizan al carácter las primitivas de dibujo ya verificadas en vivo (rejilla de mes de `aura_calendar.c`, reloj analógico de `aura_alarms.c`). Mismo patrón de verificación que D-158/D-161/D-163 para pantallas fuera del alcance práctico del harness.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -181,6 +181,8 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_TIMEZONE]    = "Zona horaria",
     [AURA_STR_SETTINGS_CLOCK24]     = "Reloj 24 horas",
     [AURA_STR_SETTINGS_CLOCK_TITLE] = "Hora en el título",
+    [AURA_STR_SETTINGS_DATE] = "Fecha",
+    [AURA_STR_SETTINGS_TIME] = "Hora",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -362,6 +364,8 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_TIMEZONE]    = "Time Zone",
     [AURA_STR_SETTINGS_CLOCK24]     = "24 Hour Clock",
     [AURA_STR_SETTINGS_CLOCK_TITLE] = "Time in Title",
+    [AURA_STR_SETTINGS_DATE] = "Date",
+    [AURA_STR_SETTINGS_TIME] = "Time",
 };
 
 const char *aura_str(aura_str_id_t id)

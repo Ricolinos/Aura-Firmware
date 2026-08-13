@@ -27,6 +27,8 @@
 #include "aura_albumart.h"
 #include "aura_art.h"
 #include "aura_scroll_indicator.h"
+#include "aura_flow.h"
+#include "rtc.h"
 #include "aura_stopwatch.h"
 #include "aura_search.h"
 #include "aura_worldclock.h"
@@ -221,6 +223,8 @@ static const nav_entry_t settings_entries[] = {
  * booleanos, cableados a ajustes REALES: formato de 12/24 h del nucleo
  * y visibilidad del ClockIndicator de la StatusBar. */
 static const nav_entry_t datetime_entries[] = {
+    { AURA_STR_SETTINGS_DATE,        "calendar", AURA_SCREEN_SETTINGS_DATE_EDIT },
+    { AURA_STR_SETTINGS_TIME,        "clock",    AURA_SCREEN_SETTINGS_TIME_EDIT },
     { AURA_STR_SETTINGS_TIMEZONE,    "clock", AURA_SCREEN_SETTINGS_TIMEZONE },
     { AURA_STR_SETTINGS_CLOCK24,     NULL,    AURA_SCREEN_SETTINGS_CLOCK24 },
     { AURA_STR_SETTINGS_CLOCK_TITLE, NULL,    AURA_SCREEN_SETTINGS_CLOCK_TITLE },
@@ -344,6 +348,8 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_LANGUAGE:   return AURA_STR_SETTINGS_LANGUAGE;
     case AURA_SCREEN_SETTINGS_SORT_BY:    return AURA_STR_SETTINGS_SORT_BY;
     case AURA_SCREEN_SETTINGS_DATETIME:   return AURA_STR_SETTINGS_DATETIME;
+    case AURA_SCREEN_SETTINGS_DATE_EDIT:  return AURA_STR_SETTINGS_DATE;
+    case AURA_SCREEN_SETTINGS_TIME_EDIT:  return AURA_STR_SETTINGS_TIME;
     case AURA_SCREEN_SETTINGS_TIMEZONE:   return AURA_STR_SETTINGS_TIMEZONE;
     case AURA_SCREEN_SETTINGS_AUDIOBOOKS: return AURA_STR_SETTINGS_AUDIOBOOKS;
     case AURA_SCREEN_SETTINGS_ACCENT:     return AURA_STR_SETTINGS_ACCENT;
@@ -1543,6 +1549,325 @@ static void handle_games(aura_nav_t *nav, long button)
     }
 }
 
+/* -- Editores de Fecha y Hora del sistema (encargo 2026-08-13) -----------
+ *
+ * "Fecha: calendario que muestra la configuracion natural y se modifica
+ * junto con la configuracion numerica seleccionada" / "Hora: reloj
+ * analogico que mueve las manecillas junto con la configuracion" --
+ * mismo lenguaje visual que ya construimos para Calendarios (rejilla
+ * del mes) y Alarmas (reloj analogico con la LUT de senos de
+ * aura_flow), reaplicado aqui para AJUSTAR el reloj real del sistema en
+ * vez de solo mostrarlo. Persisten via rtc_write_datetime() bajo
+ * `#if CONFIG_RTC` -- real en hardware (ipod6g), 0 en el simulador (que
+ * refleja el reloj del host y no tiene RTC propio que escribir: el
+ * editor funciona igual, solo que "Aplicar" no tiene adonde persistir
+ * ahi, comportamiento honesto, no un bug). */
+
+static int s_de_day = 1, s_de_month = 0, s_de_year = 2026; /* month 0-11 */
+static int s_de_field = 0; /* 0 dia, 1 mes, 2 anio */
+static bool s_de_inited = false;
+
+static const char *const DATEEDIT_MONTHS_ES[12] = {
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+};
+static const char *const DATEEDIT_DOW_ES[7] = { "L", "M", "M", "J", "V", "S", "D" };
+
+static int dateedit_days_in_month(int year, int month)
+{
+    static const int base[12] = { 31,28,31,30,31,30,31,31,30,31,30,31 };
+    bool leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    return (month == 1 && leap) ? 29 : base[month];
+}
+
+/* Zeller adaptado a semana-desde-lunes (mismo algoritmo que Calendarios,
+ * duplicado aqui a proposito -- 10 lineas, no vale la pena acoplar dos
+ * pantallas independientes por eso). */
+static int dateedit_first_dow(int year, int month)
+{
+    int m = month + 1, y = year, k, j, h;
+    if (m < 3) { m += 12; y--; }
+    k = y % 100; j = y / 100;
+    h = (1 + (13 * (m + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
+    return (h + 5) % 7;
+}
+
+static void dateedit_ensure_init(void)
+{
+    struct tm *now;
+    if (s_de_inited)
+        return;
+    now = get_time();
+    if (now)
+    {
+        s_de_year = now->tm_year + 1900;
+        s_de_month = now->tm_mon;
+        s_de_day = now->tm_mday;
+    }
+    s_de_field = 0;
+    s_de_inited = true;
+}
+
+static void draw_date_edit(void)
+{
+    char title[32], natural[64];
+    int total = dateedit_days_in_month(s_de_year, s_de_month);
+    int start = dateedit_first_dow(s_de_year, s_de_month);
+    int cal_top = A26_LAYOUT_STATUSBAR_HEIGHT + 34;
+    int cell_w = A26_SCREEN_WIDTH / 7;
+    int cell_h = 24;
+    int i, w, h;
+
+    dateedit_ensure_init();
+    if (s_de_day > total)
+        s_de_day = total;
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_DATE));
+
+    snprintf(title, sizeof(title), "%s %d", DATEEDIT_MONTHS_ES[s_de_month], s_de_year);
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+    lcd_set_foreground(s_de_field == 1 || s_de_field == 2 ? aura_accent()
+                                                            : a26_color(A26_TEXT_PRIMARY));
+    lcd_getstringsize((const unsigned char *)title, &w, &h);
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, A26_LAYOUT_STATUSBAR_HEIGHT + 2,
+               (const unsigned char *)title);
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_8));
+    lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
+    for (i = 0; i < 7; i++)
+    {
+        lcd_getstringsize((const unsigned char *)DATEEDIT_DOW_ES[i], &w, &h);
+        lcd_putsxy(i * cell_w + (cell_w - w) / 2, cal_top - 12,
+                   (const unsigned char *)DATEEDIT_DOW_ES[i]);
+    }
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    for (i = 0; i < total; i++)
+    {
+        int cell = start + i;
+        int col = cell % 7, row = cell / 7;
+        int x = col * cell_w, y = cal_top + row * cell_h;
+        char num[4];
+        bool sel = (i + 1 == s_de_day);
+
+        if (row >= 6)
+            break;
+        if (sel)
+            a26_shell_fill_rounded_rect(x + 3, y, cell_w - 6, cell_h - 4,
+                                         A26_LAYOUT_CORNER_RADIUS_PILL,
+                                         a26_color(A26_SELECTION_FILL),
+                                         a26_color(A26_SHELL_BG));
+        snprintf(num, sizeof(num), "%d", i + 1);
+        lcd_set_foreground((sel && s_de_field == 0) ? aura_accent()
+                            : a26_color(A26_TEXT_PRIMARY));
+        lcd_getstringsize((const unsigned char *)num, &w, &h);
+        lcd_putsxy(x + (cell_w - w) / 2, y + (cell_h - 4 - h) / 2,
+                   (const unsigned char *)num);
+    }
+
+    /* Fecha en espanol natural, crece/cambia en vivo con el campo que
+     * se este ajustando. */
+    snprintf(natural, sizeof(natural), "%d de %s de %d",
+             s_de_day, DATEEDIT_MONTHS_ES[s_de_month], s_de_year);
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    lcd_getstringsize((const unsigned char *)natural, &w, &h);
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, cal_top + 6 * cell_h + A26_SPACING_SM,
+               (const unsigned char *)natural);
+}
+
+static void date_edit_commit(void)
+{
+#if CONFIG_RTC
+    struct tm tm;
+    struct tm *now = get_time();
+
+    if (now)
+        tm = *now;
+    else
+        memset(&tm, 0, sizeof(tm));
+    tm.tm_year = s_de_year - 1900;
+    tm.tm_mon  = s_de_month;
+    tm.tm_mday = s_de_day;
+    rtc_write_datetime(&tm);
+#endif
+}
+
+static void handle_date_edit(aura_nav_t *nav, long button)
+{
+    int total;
+
+    dateedit_ensure_init();
+    total = dateedit_days_in_month(s_de_year, s_de_month);
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (s_de_field == 0)
+            s_de_day = s_de_day % total + 1;
+        else if (s_de_field == 1)
+        {
+            s_de_month = (s_de_month + 1) % 12;
+            total = dateedit_days_in_month(s_de_year, s_de_month);
+            if (s_de_day > total) s_de_day = total;
+        }
+        else
+            s_de_year++;
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (s_de_field == 0)
+            s_de_day = (s_de_day - 2 + total) % total + 1;
+        else if (s_de_field == 1)
+        {
+            s_de_month = (s_de_month + 11) % 12;
+            total = dateedit_days_in_month(s_de_year, s_de_month);
+            if (s_de_day > total) s_de_day = total;
+        }
+        else if (s_de_year > 2000)
+            s_de_year--;
+        break;
+    case BUTTON_SELECT:
+        if (s_de_field < 2)
+            s_de_field++;
+        else
+        {
+            date_edit_commit();
+            s_de_inited = false;
+            aura_nav_pop(nav);
+        }
+        break;
+    case BUTTON_MENU:
+        s_de_inited = false;
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+/* -- Editor de Hora, con reloj analogico en vivo (mismo patron del
+ * editor de hora de Alarmas, D-163) -------------------------------- */
+#define DE_DIAL_R 42
+
+static int s_te_hour = 0, s_te_minute = 0, s_te_field = 0;
+static bool s_te_inited = false;
+
+static void timeedit_ensure_init(void)
+{
+    struct tm *now;
+    if (s_te_inited)
+        return;
+    now = get_time();
+    if (now)
+    {
+        s_te_hour = now->tm_hour;
+        s_te_minute = now->tm_min;
+    }
+    s_te_field = 0;
+    s_te_inited = true;
+}
+
+static void draw_time_edit(void)
+{
+    int cx = A26_SCREEN_WIDTH / 2;
+    int cy = A26_LAYOUT_STATUSBAR_HEIGHT + 14 + DE_DIAL_R;
+    char buf[16];
+    int h12, i, w, h, dx, dy;
+
+    timeedit_ensure_init();
+    h12 = s_te_hour % 12;
+    if (h12 == 0) h12 = 12;
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_TIME));
+
+    for (dy = -DE_DIAL_R; dy <= DE_DIAL_R; dy++)
+    {
+        int half = (int)a26_shell_isqrt256(
+            (unsigned)(DE_DIAL_R * DE_DIAL_R - dy * dy)) / 256;
+        lcd_set_foreground(a26_color(A26_SELECTION_FILL));
+        lcd_hline(cx - half, cx + half, cy + dy);
+    }
+    lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
+    for (i = 0; i < AURA_FLOW_IANGLE_MAX; i += 8)
+    {
+        dx = aura_flow_fsin(i) * DE_DIAL_R / AURA_FLOW_ONE;
+        dy = -aura_flow_fcos(i) * DE_DIAL_R / AURA_FLOW_ONE;
+        lcd_drawpixel(cx + dx, cy + dy);
+    }
+    lcd_set_foreground(s_te_field == 0 ? aura_accent() : a26_color(A26_TEXT_PRIMARY));
+    dx = aura_flow_fsin(((s_te_hour % 12) * 60 + s_te_minute)
+                        * AURA_FLOW_IANGLE_MAX / 720) * (DE_DIAL_R - 18) / AURA_FLOW_ONE;
+    dy = -aura_flow_fcos(((s_te_hour % 12) * 60 + s_te_minute)
+                         * AURA_FLOW_IANGLE_MAX / 720) * (DE_DIAL_R - 18) / AURA_FLOW_ONE;
+    lcd_drawline(cx, cy, cx + dx, cy + dy);
+    lcd_set_foreground(s_te_field == 1 ? aura_accent() : a26_color(A26_TEXT_SECONDARY));
+    dx = aura_flow_fsin(s_te_minute * AURA_FLOW_IANGLE_MAX / 60)
+         * (DE_DIAL_R - 9) / AURA_FLOW_ONE;
+    dy = -aura_flow_fcos(s_te_minute * AURA_FLOW_IANGLE_MAX / 60)
+         * (DE_DIAL_R - 9) / AURA_FLOW_ONE;
+    lcd_drawline(cx, cy, cx + dx, cy + dy);
+
+    snprintf(buf, sizeof(buf), "%d:%02d %s", h12, s_te_minute,
+             s_te_hour < 12 ? "AM" : "PM");
+    lcd_setfont(a26_font(A26_FONT_STYLE_TITLE));
+    lcd_set_foreground(aura_accent());
+    lcd_getstringsize((const unsigned char *)buf, &w, &h);
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, cy + DE_DIAL_R + A26_SPACING_LG,
+               (const unsigned char *)buf);
+}
+
+static void time_edit_commit(void)
+{
+#if CONFIG_RTC
+    struct tm tm;
+    struct tm *now = get_time();
+
+    if (now)
+        tm = *now;
+    else
+        memset(&tm, 0, sizeof(tm));
+    tm.tm_hour = s_te_hour;
+    tm.tm_min  = s_te_minute;
+    tm.tm_sec  = 0;
+    rtc_write_datetime(&tm);
+#endif
+}
+
+static void handle_time_edit(aura_nav_t *nav, long button)
+{
+    timeedit_ensure_init();
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        if (s_te_field == 0) s_te_hour = (s_te_hour + 1) % 24;
+        else                 s_te_minute = (s_te_minute + 1) % 60;
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (s_te_field == 0) s_te_hour = (s_te_hour + 23) % 24;
+        else                 s_te_minute = (s_te_minute + 59) % 60;
+        break;
+    case BUTTON_SELECT:
+        if (s_te_field == 0)
+            s_te_field = 1;
+        else
+        {
+            time_edit_commit();
+            s_te_inited = false;
+            aura_nav_pop(nav);
+        }
+        break;
+    case BUTTON_MENU:
+        s_te_inited = false;
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
 /* Zona horaria: la MISMA tabla de ciudades del Reloj internacional --
  * una sola fuente de husos en todo el firmware. Elegir una fija
  * `tz_local_quarters`, que es de donde salen las horas de los demas
@@ -2032,6 +2357,10 @@ void aura_screens_draw(aura_nav_t *nav)
         aura_calendar_day_draw();
     else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
         aura_screenlock_draw();
+    else if (screen == AURA_SCREEN_SETTINGS_DATE_EDIT)
+        draw_date_edit();
+    else if (screen == AURA_SCREEN_SETTINGS_TIME_EDIT)
+        draw_time_edit();
     else if (screen == AURA_SCREEN_SETTINGS_TIMEZONE)
         draw_timezone();
     else if (screen == AURA_SCREEN_EXTRAS_ALARMS)
@@ -2385,6 +2714,10 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_calendar_day_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
         aura_screenlock_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_DATE_EDIT)
+        handle_date_edit(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_TIME_EDIT)
+        handle_time_edit(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_TIMEZONE)
         handle_timezone(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_ALARMS)
