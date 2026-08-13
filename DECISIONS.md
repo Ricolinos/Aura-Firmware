@@ -1894,4 +1894,22 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-179 — Aura Studio: interfaz adaptativa según firmware y modo detectados
+
+**Encargo del dueño (2026-08-13)**: que la app detecte qué firmware tiene el iPod (original de Apple, Aura, un Rockbox ajeno, dual boot) y en qué modo está conectado (disco normal, DFU, bootloader de Aura), y que toda la interfaz se adapte sola — "que la interfaz sea muy intuitiva para el usuario".
+
+**Detección**: `AuraDeviceProbe` gana la señal que le faltaba — `iPod_Control/` (la carpeta del firmware original de Apple). Con ella: `Firmware.stock` ahora significa "firmware original REALMENTE presente" y aparece el caso nuevo `Firmware.empty` (disco recién formateado, sin nada — antes ambos se reportaban "stock" y la UI no podía distinguirlos). Dual boot se reporta como lo único observable desde el disco: ambos árboles conviven (`isDualBoot = familia Rockbox + iPod_Control`) — qué bootloader hay en la NOR no se puede leer desde un volumen montado, y no se finge saberlo. Marcador nuevo de Aura: `.rockbox/icons/aura` (viaja en el árbol desde D-178, existe desde la instalación sin esperar el primer arranque). Los modos de conexión ya existían (`DeviceState`); lo nuevo es que la UI entera los consume.
+
+**Monitor compartido**: `InstallerHomeView` creaba su propio `IPodMonitor` — dos sesiones de DiskArbitration y dos sondeos DFU (un proceso `mks5lboot --dfuscan` por segundo cada uno) corriendo en paralelo con el de la barra lateral. Ahora hay uno solo, propiedad de `ContentView`; el asistente solo lo observa (`InstallerViewModel.start()/stop()` ya no tocan su ciclo de vida).
+
+**Adaptaciones** (todas automáticas, cero elecciones manuales del usuario):
+- **Biblioteca bloqueada** cuando el iPod conectado no tiene Aura (Música/Video/Fotos/Extras atenuadas en la barra lateral; la selección salta a General si estaba en una de ellas al conectar). Sin dispositivo la biblioteca sigue abierta — armarla offline es un caso de uso real.
+- **General**: etiqueta con dual boot y disco vacío; con firmware original, botón "Administrar contenido" (abre el volumen en Finder — el contenido del firmware de Apple se administra con Finder/Música, no con Studio) y el botón Sincronizar deshabilitado.
+- **Instalador**: el selector describe lo detectado; con firmware original desaparece "Restaurar iPod original" (ya lo es) y se avisa que instalar requiere DFU; con Aura el botón dice "Reinstalar Aura"; con Aura o Rockbox se avisa que instalar **no requiere flashear** — el flujo reutiliza `bootloaderAlreadyInstalled` (D-177) para saltar el DFU y solo reemplazar la carpeta `.rockbox` (heurística documentada: árbol Rockbox en disco ⇒ bootloader de la familia en NOR; si alguien copió `.rockbox` a mano sin flashear jamás, el arreglo es correr el instalador desde cero, no un caso que se detecte desde el disco).
+- **Barra de progreso real** en la extracción (encargo del mismo mensaje): `ditto` no reporta avance, así que se mide lo ya escrito en el iPod (`directorySize`, fuera del hilo de UI) contra el tamaño descomprimido del zip (`unzip -l`), cada segundo, con tope en 99% hasta que la extracción confirma. Si la medición falla, spinner indeterminado — nunca una barra inventada.
+
+**Aceptación**: build limpio (sim y Xcode real), 103/105 tests (los 2 que fallan son los de red de Cover Art Archive, intermitentes, sin relación) — incluye 5 tests nuevos de clasificación (original solo, dual boot Aura/Rockbox, disco vacío, marcador de iconos). Verificación visual de cada combinación de firmware en hardware real queda con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
