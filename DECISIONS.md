@@ -1586,4 +1586,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-136 — Modo 4 (letras): morph real de entrada/salida, panel del color de la carátula, salida de pantalla completa
+
+**Encargo del dueño del diseño (2026-08-12).** Reemplaza el corte directo que D-101 dejó diferido. (1) **Morph de ~330ms** (síncrono y acotado, como el resto de las transiciones) parametrizado por t256 en TODO el dibujo del reproductor: la carátula pasa de 135px/7° con reflejo a un **cuadrado perfecto de 106px** sin reflejo usando el mismo proyector de columnas del morph de regreso al carrusel (el "límite de reescalado" de D-101 ya no existe: el proyector SÍ reescala); barra 300→122px; transporte completo y fila de modos viajan al centro del panel conservando sus anclas verticales; título/artista/álbum se desvanecen y renacen arriba del panel derecho; las estrellas desaparecen. (2) **Panel de 130×240 del color PROMEDIO de la carátula** (RGB565 de la imagen real) con degradado ligero (±15%) y tinta por luminancia (blanco constante o una versión al 22% del mismo color — derivado, nunca un RGB fijo); `aura_widgets_draw_icon_ink()` nuevo para tintas runtime. (3) El Modo 4 es **pantalla completa** (sin StatusBar). (4) **Salidas**: al modo siguiente = morph invertido; del reproductor (MENU) = la pantalla se desliza a la derecha hacia el **MENÚ anterior**, nunca al coverflow (si el tope de la pila es el carrusel se salta también — flag `aura_nowplaying_take_fullscreen_exit()` consumido en aura_screens; MENU ya no "cierra la letra"). (5) De paso: `mode_available()` corre por cuadro desde D-134 y escaneaba el directorio de playlists en disco — ahora cachea con TTL de 1s. Limitación conocida: las esquinas redondeadas de la carátula están horneadas contra SHELL_BG, sobre el panel de color dejan un halo mínimo de 8px de radio. Fixture de verificación: álbum "A Letras Test" (mp3 + .lrc sintéticos) dejado en el simdisk porque la biblioteca real no tiene `.lrc`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

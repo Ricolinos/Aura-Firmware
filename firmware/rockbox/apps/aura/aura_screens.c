@@ -1573,6 +1573,18 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         if (depth_after > depth_before && is_coverflow_screen(to))
             aura_transition_coverflow_enter(nav);
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
+                 && aura_nowplaying_take_fullscreen_exit())
+        {
+            /* Salida desde el Modo 4 (letras, encargo 2026-08-12): la
+             * pantalla se comporta como pantalla completa y se
+             * desplaza a la derecha dando paso al MENU anterior --
+             * nunca transiciona al coverflow: si el tope de la pila
+             * es el carrusel, se salta tambien. */
+            if (is_coverflow_screen(aura_nav_current(nav)))
+                aura_nav_pop(nav);
+            aura_transition_slide(nav, -1, A26_SCREEN_WIDTH);
+        }
+        else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
                  && is_coverflow_screen(to))
         {
             /* Regreso reproductor -> Cover Flow (encargo 2026-08-12):

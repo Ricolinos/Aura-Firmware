@@ -215,6 +215,18 @@ int aura_widgets_draw_icon_tertiary_dimmed(const char *name, int size, int x, in
     return draw_icon_mask(name, size, x, y, a26_color(A26_TEXT_TERTIARY), alpha_256);
 }
 
+/* Tinta arbitraria decidida en runtime (Modo 4 del reproductor: los
+ * iconos viven sobre un panel del color promedio de la caratula, cuya
+ * tinta legible se computa por luminancia -- no existe como variante
+ * horneada ni como token fijo). */
+int aura_widgets_draw_icon_ink(const char *name, int size, int x, int y,
+                                unsigned ink, int alpha_256)
+{
+    if (!name)
+        return 0;
+    return draw_icon_mask(name, size, x, y, ink, alpha_256);
+}
+
 /* Layout declarado por la pantalla actual (lo fija aura_screens_draw
  * desde su tabla). Por defecto SPLIT: es el layout de la mayoria de los
  * menus del firmware original. */

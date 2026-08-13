@@ -107,6 +107,8 @@ int aura_widgets_draw_icon_selected(const char *name, int size, int x, int y);
  * cubre (p. ej. el icono de Letras sin .lrc en Ahora suena, T3.1(b)). */
 int aura_widgets_draw_icon_dimmed(const char *name, int size, int x, int y, int alpha_256);
 int aura_widgets_draw_icon_tertiary_dimmed(const char *name, int size, int x, int y, int alpha_256);
+int aura_widgets_draw_icon_ink(const char *name, int size, int x, int y,
+                                unsigned ink, int alpha_256);
 
 /* Misma firma, variante TEXT_TERTIARY -- iconos en reposo/inactivos
  * fuera de una lista (p. ej. los 4 modos no activos de Ahora suena,

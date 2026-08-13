@@ -29,6 +29,12 @@ bool aura_nowplaying_active(void);
  * para el morph de entrada desde Cover Flow (aura_transitions.c). */
 int aura_nowplaying_last_mode_row_y(void);
 
+/* Consumido por aura_screens al hacer pop desde el reproductor: true
+ * (una sola vez) si la salida vino del Modo 4 (letras, pantalla
+ * completa) -- el pop usa el slide de pantalla completa hacia el menu
+ * anterior en vez del morph de regreso al coverflow. */
+bool aura_nowplaying_take_fullscreen_exit(void);
+
 void aura_nowplaying_draw(void);
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button);
 

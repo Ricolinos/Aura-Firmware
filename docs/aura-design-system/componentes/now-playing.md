@@ -223,34 +223,50 @@ interno derecho** de la pantalla.
 ### Modo 4 — Letras (mejora mayor sobre el original)
 
 Este modo **transforma el layout completo** del reproductor con una
-transición **morph fluida** (patrón `Morph Directo` — mismo componente,
-nueva geometría):
+transición **morph fluida** de ~330ms (fundido lineal de contenido),
+confirmada 2026-08-12. Es **pantalla completa**: sin StatusBar.
 
-- **Panel izquierdo delgado de 130px** — ⚠️ NO es el componente `LeftPanel`
-  (`componentes/left-panel.md`, que mide 160px y solo renderiza menús). Es
-  un **estado del propio reproductor**: la carátula del álbum, la barra de
-  avance y los íconos de modos se reacomodan/comprimen en esos 130px.
-- **Panel derecho** — componente nuevo (`LyricsPanel`, nombre provisional)
-  que carga las letras de la canción. Las letras **pueden avanzar
-  automáticamente sincronizadas con la canción**.
+- **Panel izquierdo de 130×240** — ⚠️ NO es el componente `LeftPanel`.
+  Es un **estado del propio reproductor**. Su color es el **PROMEDIO de
+  la carátula en curso con un ligero degradado** (más claro arriba, más
+  oscuro abajo), derivado en runtime de la imagen real; la tinta de los
+  elementos encima se decide por **luminancia** (blanco constante sobre
+  panel oscuro; una versión muy oscura del mismo color sobre panel
+  claro).
+- **Panel derecho** (`LyricsPanel`) — **título, artista y álbum viven en
+  la parte superior de la pantalla** y la letra corre debajo, con avance
+  automático sincronizado.
 
-**Reacomodo confirmado del panel de 130px (el morph hacia el Modo 4):**
+**El morph hacia el Modo 4 (mismo motor de proyección por columnas que
+el morph de regreso al carrusel):**
 
-- **Todos los textos se desvanecen** con un fade (título, artista, álbum,
-  contador, etc.).
-- La **barra de progreso pasa a medir 122px** de ancho.
-- De los controles solo se visualiza el **ícono de Play/Pausa**.
-- Los íconos de modos transicionan de forma que **todos los elementos del
-  panel queden centrados** en los 130px.
-- El reflejo de la carátula **se desvanece durante la transición** (no
-  existe en el Modo 4).
+- La **carátula es el mismo elemento**: pasa de 135px inclinada 7° a un
+  **cuadrado perfecto de 106px** centrado en el panel; su **reflejo se
+  desvanece** en el trayecto (no existe en el Modo 4).
+- La **barra de progreso interpola a 122px** dentro del panel.
+- El **transporte completo** (repetir + play/pausa + aleatorio) y la
+  **fila de modos** viajan al centro del panel, conservando sus anclas
+  verticales (misma línea que en el layout normal).
+- **Título/artista/álbum se desvanecen** de su posición vieja y
+  **renacen ya renderizados** en la parte superior del panel derecho
+  (desvanecimiento fluido en ambos sentidos).
+- **Las estrellas desaparecen** en este modo.
+
+**Salidas:**
+
+- **Al modo siguiente** (Select): la misma transición, invertida.
+- **Del reproductor** (Menu): la pantalla se comporta como pantalla
+  completa y **se desplaza hacia la derecha dando paso al MENÚ
+  anterior** — **nunca transiciona al coverflow** (si el tope de la
+  pila es el carrusel, se salta también).
 
 **Si la canción no tiene letras: el modo se desactiva** — su ícono sigue
 apareciendo en la fila de modos pero al **50% de opacidad** y no se puede
 seleccionar (el loop de modos lo salta, igual que el Modo 3 sin playlists).
 
 **Tipografía de `LyricsPanel`:** letras a 12px Regular; la línea activa a
-**14px Bold** (tokens en `fundamentos/02-tipografia.md`).
+**14px Bold**; cabecera con los mismos estilos del bloque de texto del
+reproductor (título Bold 12, artista/álbum Regular 12).
 
 🔴 Pendiente menor: comportamiento del scroll en este modo (¿desplaza las
 letras manualmente, o el scroll queda sin función aquí?).
