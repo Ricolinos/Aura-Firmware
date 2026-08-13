@@ -277,7 +277,19 @@ static void ensure_albums(aura_screen_id_t screen)
 
 static cf_slot_t *get_slot_for(int album_index)
 {
+    static int s_slots_theme = -1;
     int i, target, free_slot = -1, farthest = -1, farthest_dist = -1;
+
+    /* Tema nuevo = esquinas horneadas contra el fondo viejo en TODOS
+     * los slots en RAM (correccion 2026-08-12): se tiran completos y
+     * se recargan bajo demanda (el .pfraw en disco tambien se
+     * auto-invalida por tema, ver aura_albumart.c). */
+    if (s_slots_theme != (int)aura_settings.theme)
+    {
+        s_slots_theme = (int)aura_settings.theme;
+        for (i = 0; i < CF_CACHE_SLOTS; i++)
+            s_slots[i].album_index = -1;
+    }
 
     for (i = 0; i < CF_CACHE_SLOTS; i++)
         if (s_slots[i].album_index == album_index)

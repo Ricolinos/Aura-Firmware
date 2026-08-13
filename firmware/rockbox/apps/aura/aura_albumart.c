@@ -13,6 +13,7 @@
 #include "recorder/jpeg_load.h"
 #include "string-extra.h"
 
+#include "aura_settings.h"
 #include "aura_albumart.h"
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
@@ -44,6 +45,10 @@ static unsigned char s_transpose_scratch[64 * 1024];
 struct pfraw_header {
     int32_t size;
     int32_t radius;
+    /* Las esquinas van horneadas contra el fondo del TEMA vigente al
+     * escribir (correccion 2026-08-12): el tema es parte de la llave --
+     * un mismatch regenera el cache, igual que un cambio de radio. */
+    int32_t theme;
 };
 
 static void pfraw_path(int32_t album_seek, int size, char *out, size_t outsz)
@@ -62,7 +67,8 @@ static bool read_pfraw(const char *path, int size, int radius, fb_data *out)
         return false;
 
     n = read(fd, &hdr, sizeof(hdr));
-    if (n != (int)sizeof(hdr) || hdr.size != size || hdr.radius != radius)
+    if (n != (int)sizeof(hdr) || hdr.size != size || hdr.radius != radius
+        || hdr.theme != (int32_t)aura_settings.theme)
     {
         close(fd);
         return false;
@@ -80,6 +86,7 @@ static void write_pfraw(const char *path, int size, int radius, const fb_data *d
 
     hdr.size = size;
     hdr.radius = radius;
+    hdr.theme = (int32_t)aura_settings.theme;
 
     if (!dir_exists(AURA_DIR))
         mkdir(AURA_DIR);

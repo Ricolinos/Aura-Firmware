@@ -1634,4 +1634,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-144 — El tema es parte de la llave de TODOS los cachés de carátula horneados
+
+**Reporte del dueño del diseño (2026-08-12)**: "bugs visuales en las transiciones, más notorios al cambiar del tema claro al oscuro". Causa: tres cachés hornean colores del tema al momento de cargar (esquinas redondeadas contra SHELL_BG, reflejo pre-mezclado, tile default) y ninguno se invalidaba al cambiar de tema — tras el cambio quedaban halos y fantasmas del fondo anterior, evidentes en los morphs que reproyectan esos búferes. Fix en los tres niveles: (1) `reload_for_track` del reproductor agrega el tema a su llave (junto a la ruta de la pista); (2) el header del `.pfraw` en disco gana el campo `theme` — mismatch = regenerar, igual que un cambio de radio (los caches viejos con header corto se auto-invalidan); (3) los slots en RAM del CoverFlow se tiran completos al detectar tema nuevo y se recargan bajo demanda. Limitación conocida que persiste (documentada en D-136): el borde antialiasado de las esquinas siempre se hornea contra SHELL_BG, así que sobre el panel del Modo 4 (que no es SHELL_BG) el halo mínimo de esquina sigue existiendo — pero ya es del tema correcto.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

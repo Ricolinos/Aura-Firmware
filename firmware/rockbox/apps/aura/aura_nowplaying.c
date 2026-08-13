@@ -453,9 +453,19 @@ static bool load_lyrics(const char *audio_path)
 
 static void reload_for_track(const struct mp3entry *id3)
 {
-    if (!strcmp(s_loaded_path, id3->path))
+    /* El tema es parte de la llave del cache (correccion 2026-08-12,
+     * "bugs visuales al cambiar de tema"): esquinas, reflejo y tile
+     * default se HORNEAN contra el fondo del tema vigente al cargar --
+     * sin esto, tras cambiar de tema quedaban fantasmas del fondo
+     * anterior alrededor de la caratula y en el reflejo durante los
+     * morphs. */
+    static int s_loaded_theme = -1;
+
+    if (!strcmp(s_loaded_path, id3->path)
+        && s_loaded_theme == (int)aura_settings.theme)
         return;
 
+    s_loaded_theme = (int)aura_settings.theme;
     strlcpy(s_loaded_path, id3->path, sizeof(s_loaded_path));
     s_panel_colors_valid = false;
     s_art_valid = load_album_art(id3);
