@@ -1976,4 +1976,27 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-185 — Investigación de dual boot: por qué el intento falló, y los tres bugs que destapó
+
+**Incidente real (2026-08-13)**: el dueño eligió instalar en dual boot sobre un iPod recién restaurado desde Finder (firmware original funcionando). La app "detectó modo bootloader" (falso), se puso a instalar sola, y tras ~5 minutos falló con errores `ditto: ... File exists`, atribuidos por el mensaje a mks5lboot (también falso).
+
+**Investigación — la física del dual boot en el 6G** (fuentes: `bootloader/ipod-s5l87xx.c`, `utils/mks5lboot/dualboot/dualboot.c`, `firmware/common/disk.c` del propio árbol):
+- El arranque de Apple (ONB) vive en la **NOR** y el instalador dual de mks5lboot lo preserva (`launch_onb` lo carga con `im3_read(NORBOOT_OFF...)`); pero ese arranque después carga el sistema operativo de Apple desde la **partición de firmware del disco**.
+- `disk.c` **solo entiende MBR/GPT** (exige la firma `0xaa55`) — cero soporte de Apple Partition Map. Un iPod restaurado desde Finder/Mac ("macpod": APM + HFS+) es ilegible para Rockbox — es literalmente el "No partition found" que el bootloader mostró en pantalla días atrás.
+- Nuestro formateo (`diskutil eraseDisk ... MBR`) reescribe el disco ENTERO: mata la partición de firmware de Apple. Conclusión dura: **dual boot solo es posible sobre un "winpod"** (MBR + partición de firmware intacta + FAT32 — lo que crea iTunes al restaurar en Windows), y **ningún camino de nuestra app que formatee puede producirlo**. Convertir macpod→winpod conservando la partición de firmware requiere copia cruda (dd) — factible pero es un proyecto aparte (y reabre TCC).
+
+**Reconstrucción del incidente**: el volumen HFS del macpod pasó por una ventana sin montar (o no calificó), el sondeo declaró `diskModeNoFilesystem`, y el recorrido automático de D-183 tomó la pantalla ENCIMA del asistente manual que el dueño ya tenía corriendo. El formateo (autorizado con contraseña) destruyó APM y la partición de firmware — el firmware original quedó eliminado en ese momento, aunque el flujo prometía dual boot. Después, DOS ViewModels (el del asistente y el del recorrido automático) terminaron extrayendo el árbol `.rockbox` al mismo tiempo sobre el mismo volumen: dos `ditto` en carrera producen exactamente los `File exists` de directorios que abortaron todo.
+
+**Arreglos**:
+1. **Guard de dual boot**: con dual elegido, cualquier camino que requiera formatear (disco no-FAT32 o ilegible) se detiene ANTES de borrar nada, con `InstallerError.dualBootRequiresWinpod` explicando el porqué (winpod, iTunes en Windows) y las opciones. Dual solo procede sobre FAT32 ya existente (copiar + flasheo dual, que sí es correcto).
+2. **`InstallerFlowRegistry`** (nuevo): registro global entre instancias. El recorrido automático JAMÁS toma la pantalla mientras un flujo ya corre (`flowActive`, encendido por el asistente manual y por el propio recorrido), y `copyFirmwareFiles` adquiere un candado de escritura global (`beginWriting`) — aunque dos flujos coexistieran, solo uno toca el disco.
+3. **Mensaje de error genérico**: `processFailed` ya no culpa a mks5lboot de fallas ajenas (el texto viejo decía "mks5lboot terminó con código X" para errores de ditto).
+4. **Honestidad en la UI**: la intro del recorrido automático avisa que preparar el disco borra su contenido; la tarjeta de Dual boot explica el requisito winpod desde el principio.
+
+**Estado real del iPod del dueño tras el incidente** (comunicado): NOR intacta con el arranque de Apple (el flasheo dual nunca llegó a correr), disco MBR/FAT32 con un `.rockbox` parcial, partición de firmware de Apple destruida — el firmware original NO está más en el aparato pese a que la pantalla decía dual boot. Para intentar dual boot de verdad: restaurar con iTunes en una PC con Windows (produce winpod directamente) y correr la instalación dual (que ahora ya no formatea).
+
+**Aceptación**: build limpio (sim y Xcode real), 105/105 tests.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
