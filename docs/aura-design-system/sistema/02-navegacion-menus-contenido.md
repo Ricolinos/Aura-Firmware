@@ -65,6 +65,25 @@ por su cuenta.
 
 - Filas a ancho completo con el `Selector` estándar; el texto se recorta
   antes de invadir la columna del riel.
+- **La pastilla de selección respeta el mismo padding horizontal que el
+  contenido de las filas** (`A26_LAYOUT_LIST_INSET`, 16px) — corregido
+  2026-08-13: usaba un margen propio de 8px, más angosto que la sangría
+  real del texto, así que quedaba más ancha que el contenido que envuelve.
+  El `Selector` de `MenuList` (paneles) ya lo hacía bien; este era el
+  único de los dos sistemas de lista que divergía.
+
+### Excepción: lista de Álbumes, con carátulas (2026-08-13)
+
+La única lista de contenido con **miniaturas reales**: filas de **44px**
+(no las 24px estándar) para dejar sitio a la carátula de **42×42px**, con
+un padding superior de solo **2px** bajo la `StatusBar` (no el 4px
+estándar) — maximiza cuántas filas caben. El cálculo dado da 4 filas
+completas más una quinta al 95% de su alto, que se lee como **5 elementos
+visibles**. La carátula reutiliza el mismo pipeline y caché en disco
+(`.pfraw`) que CoverFlow — carátula real si existe, tile "Default" (nota
+gris) si no — sin costo de decodificación JPEG en redibujados
+posteriores. Aplica a las 3 pantallas que listan álbumes (Álbumes,
+Álbumes por artista, Álbumes por autor).
 - **Riel A-Z indexado** pegado al borde derecho (columna de 10px): las
   **iniciales presentes** en la lista (los números y símbolos se agrupan
   bajo `#`), la del elemento seleccionado en **acento** y el resto en

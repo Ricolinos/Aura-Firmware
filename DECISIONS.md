@@ -1796,4 +1796,10 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-169 — Selector: padding unificado; lista de Álbumes con carátulas reales de 42×42
+
+**Encargo del dueño del diseño (2026-08-13), marcado como urgente.** (1) **Ancho del Selector**: en las listas de contenido a pantalla completa (Canciones, Alarmas, Fotos, Búsqueda, Videos, Juegos, Zona horaria, Listas de reproducción, Reloj internacional…) la pastilla de selección usaba un margen propio de 8px (`PILL_MARGIN_X`) mientras el texto de las filas tenía una sangría real de 16px (`ROW_PAD_X`) — la pastilla quedaba más ancha que su propio contenido. El `Selector` de `MenuList` (paneles de menú) ya hacía esto bien, con un solo `PADDING` compartido entre pastilla y texto; ahora las listas de contenido siguen el mismo criterio. (2) **Lista de Álbumes**: única lista con carátulas reales. Filas de **44px** con la carátula a **42×42px** a la izquierda, padding superior de solo **2px** bajo la StatusBar (no el estándar de 4px) — el cálculo da 4 filas completas + una quinta al 95%, que se lee como 5 elementos visibles, tal como se pidió. La carátula reutiliza `aura_albumart_load_for_album()` de CoverFlow (mismo caché `.pfraw` en disco, cero decodificación JPEG repetida) y se compone columna por columna porque el bitmap que produce ese pipeline queda TRANSPUESTO (formato nativo de CoverFlow). Verificado con captura: el tile "Default" (nota gris) para álbumes sin arte y carátulas JPEG reales para los que sí tienen (`You've Come A Long Way, Baby`).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

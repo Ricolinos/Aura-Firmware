@@ -35,7 +35,14 @@
  * bordes -- margen 8px desde el borde de la columna (mas angosto que el
  * inset de 16px del texto, asi la pastilla queda mas ancha que el
  * contenido pero sin llegar al borde) y 2px arriba/abajo. */
-#define PILL_MARGIN_X A26_SPACING_MD
+/* La pastilla de seleccion respeta el MISMO padding horizontal que el
+ * contenido de las filas (ROW_PAD_X, 16px) -- correccion 2026-08-13:
+ * antes usaba un margen propio de 8px, mas angosto que la sangria real
+ * del texto, asi que la pastilla quedaba mas ANCHA que el contenido
+ * que envuelve (visible en cualquier lista de contenido: Canciones,
+ * Alarmas, Fotos...). El Selector de MenuList (aura_selector.c) ya
+ * hacia esto bien -- pastilla y texto comparten un solo PADDING -- este
+ * era el unico de los dos sistemas de lista que divergia. */
 #define PILL_MARGIN_Y 2
 #define PILL_RADIUS   A26_LAYOUT_CORNER_RADIUS_PILL
 
@@ -660,8 +667,8 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     {
         int sel_row_y = LIST_TOP + (selected - first) * ROW_HEIGHT;
         int pill_y = pill_animated_y(items, title, sel_row_y + PILL_MARGIN_Y);
-        a26_shell_fill_rounded_rect(PILL_MARGIN_X, pill_y,
-                                     width - 2 * PILL_MARGIN_X,
+        a26_shell_fill_rounded_rect(ROW_PAD_X, pill_y,
+                                     width - 2 * ROW_PAD_X,
                                      ROW_HEIGHT - 2 * PILL_MARGIN_Y,
                                      PILL_RADIUS,
                                      a26_color(A26_SELECTION_FILL),

@@ -24,6 +24,9 @@
 #include "aura_transitions.h"
 #include "aura_coverflow.h"
 #include "aura_photos.h"
+#include "aura_albumart.h"
+#include "aura_art.h"
+#include "aura_scroll_indicator.h"
 #include "aura_stopwatch.h"
 #include "aura_search.h"
 #include "aura_worldclock.h"
@@ -1732,6 +1735,128 @@ static void ensure_music_cache(aura_screen_id_t screen)
     s_music_cache_count = n + 1;
 }
 
+/* -- Lista de Albumes: caratulas 42x42 (encargo 2026-08-13) ---------------
+ *
+ * Unica lista de CONTENIDO con miniaturas reales. Filas de 44px (vs las
+ * ROW_HEIGHT estandar de aura_widgets.c) para dejar sitio a la
+ * caratula; el padding superior es de solo 2px bajo la StatusBar (no
+ * el A26_SPACING_SM=4 estandar del resto de las listas), para
+ * maximizar cuantas filas caben. El calculo da 4 filas completas mas
+ * una quinta al 95% de su alto (218/44) -- se lee como 5, como pide el
+ * encargo. Aplica a las 3 pantallas que listan albumes. */
+#define ALBUM_ROW_H     44
+#define ALBUM_ART_SIZE  42
+#define ALBUM_LIST_TOP  (A26_LAYOUT_STATUSBAR_HEIGHT + 2)
+#define ALBUM_ART_X     A26_LAYOUT_LIST_INSET
+#define ALBUM_TEXT_GAP  A26_SPACING_MD
+#define ALBUM_VISIBLE   5
+
+static bool is_album_list_screen(aura_screen_id_t screen)
+{
+    return screen == AURA_SCREEN_MUSIC_ALBUMS
+        || screen == AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST
+        || screen == AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER;
+}
+
+/* La caratula real usa el MISMO cache/pipeline que CoverFlow
+ * (aura_albumart_load_for_album -- cache .pfraw en disco, cero
+ * decodificacion JPEG en redibujados posteriores). El bitmap resultante
+ * queda TRANSPUESTO (columna contigua, formato de CoverFlow): se
+ * blitea columna por columna, mismo mecanismo que aura_nowplaying.c
+ * usa para su propia caratula. La fila sintetica "Todos"/"Canciones"
+ * (seek=-1) recibe la caratula Default, igual que un album sin arte
+ * real -- no necesita un icono aparte. */
+static void draw_album_thumb(int x, int y, int32_t seek)
+{
+    static unsigned char cover_buf[ALBUM_ART_SIZE * ALBUM_ART_SIZE * sizeof(fb_data)];
+    static unsigned char refl_buf[ALBUM_ART_SIZE *
+        (ALBUM_ART_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
+        * sizeof(fb_data)];
+    static fb_data col_buf[ALBUM_ART_SIZE];
+    aura_albumart_t art;
+    const fb_data *cover;
+    int col, row;
+
+    art.size = ALBUM_ART_SIZE;
+    art.radius = A26_LAYOUT_CORNER_RADIUS_CARD;
+    art.cover_data = cover_buf;
+    art.reflection_data = refl_buf;
+
+    if (seek < 0 || !aura_albumart_load_for_album(seek, &art))
+        aura_albumart_load_default(&art);
+
+    cover = (const fb_data *)art.cover_data;
+    for (col = 0; col < ALBUM_ART_SIZE; col++)
+    {
+        for (row = 0; row < ALBUM_ART_SIZE; row++)
+            col_buf[row] = cover[col * ALBUM_ART_SIZE + row];
+        lcd_bitmap(col_buf, x + col, y, 1, ALBUM_ART_SIZE);
+    }
+}
+
+static long s_album_activity_since = 0;
+static int  s_album_last_selected = -1;
+
+static void draw_album_list(aura_nav_t *nav, aura_screen_id_t screen)
+{
+    int selected = aura_nav_get_selection(nav);
+    int count = s_music_cache_count;
+    int visible = ALBUM_VISIBLE;
+    int first = 0;
+    int i, w, h;
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(screen_title_id(screen)));
+
+    if (count > visible)
+    {
+        first = selected - visible / 2;
+        if (first < 0) first = 0;
+        if (first > count - visible) first = count - visible;
+    }
+
+    if (selected != s_album_last_selected)
+    {
+        s_album_last_selected = selected;
+        s_album_activity_since = current_tick;
+    }
+
+    /* Pastilla de seleccion: mismo padding horizontal que el resto de
+     * las listas de contenido (correccion 2026-08-13, ver PILL_MARGIN_X
+     * en aura_widgets.c). */
+    if (selected >= first && selected < first + visible)
+    {
+        int sel_y = ALBUM_LIST_TOP + (selected - first) * ALBUM_ROW_H;
+        a26_shell_fill_rounded_rect(A26_LAYOUT_LIST_INSET, sel_y,
+                                     A26_SCREEN_WIDTH - 2 * A26_LAYOUT_LIST_INSET,
+                                     ALBUM_ROW_H, A26_LAYOUT_CORNER_RADIUS_PILL,
+                                     a26_color(A26_SELECTION_FILL),
+                                     a26_color(A26_SHELL_BG));
+    }
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    for (i = first; i < count && i < first + visible; i++)
+    {
+        int row_y = ALBUM_LIST_TOP + (i - first) * ALBUM_ROW_H;
+        int art_y = row_y + (ALBUM_ROW_H - ALBUM_ART_SIZE) / 2;
+        int text_x = ALBUM_ART_X + ALBUM_ART_SIZE + ALBUM_TEXT_GAP;
+        bool is_sel = (i == selected);
+
+        draw_album_thumb(ALBUM_ART_X, art_y, s_music_cache[i].seek);
+
+        lcd_set_foreground(is_sel ? a26_color(A26_ACCENT) : a26_color(A26_TEXT_PRIMARY));
+        lcd_getstringsize((const unsigned char *)"Ay", &w, &h);
+        aura_widgets_puts_clipped(text_x, row_y + (ALBUM_ROW_H - h) / 2,
+                                   A26_SCREEN_WIDTH - text_x - A26_LAYOUT_LIST_INSET,
+                                   s_music_cache[i].label);
+    }
+
+    aura_scroll_indicator_draw(A26_SCREEN_WIDTH, ALBUM_LIST_TOP,
+                                ALBUM_VISIBLE * ALBUM_ROW_H, first, count, visible,
+                                (current_tick - s_album_activity_since) * 1000L / HZ,
+                                a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
+}
+
 static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
 {
     int i;
@@ -1747,6 +1872,12 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
     if (s_music_cache_count == 0)
     {
         draw_message_centered(AURA_STR_EMPTY_LIST);
+        return;
+    }
+
+    if (is_album_list_screen(screen))
+    {
+        draw_album_list(nav, screen);
         return;
     }
 
