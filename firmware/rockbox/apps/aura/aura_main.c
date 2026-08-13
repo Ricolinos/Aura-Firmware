@@ -11,6 +11,7 @@
 #include "apple2026_shell.h"
 #include "aura_screens.h"
 #include "aura_nowplaying.h"
+#include "aura_stopwatch.h"
 #include "aura_music.h"
 #include "aura_widgets.h"
 #include "aura_statusbar.h"
@@ -270,6 +271,11 @@ void aura_main(void)
              * entero (no solo la entrada/salida) es la parte que se ve
              * -- 20fps durante los ~380ms completos. */
             if (aura_widgets_pill_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+
+            /* Cronometro en marcha: las centesimas exigen refresco
+             * continuo, con la misma puerta de lcd_active() del resto. */
+            if (aura_stopwatch_running() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
 
             /* ScrollIndicator de MenuList v2 (T2.4) -- mismo par

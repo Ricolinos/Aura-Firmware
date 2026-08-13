@@ -24,6 +24,7 @@
 #include "aura_transitions.h"
 #include "aura_coverflow.h"
 #include "aura_photos.h"
+#include "aura_stopwatch.h"
 #include "aura_video.h"
 #include "aura_manifest.h"
 #include "aura_main.h"
@@ -1529,11 +1530,13 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_reset_confirm();
     else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
         draw_legal_text();
+    else if (screen == AURA_SCREEN_EXTRAS_STOPWATCH)
+        aura_stopwatch_draw();
     else if (screen == AURA_SCREEN_MUSIC_AUDIOBOOKS
              || screen == AURA_SCREEN_MUSIC_SEARCH
              || screen == AURA_SCREEN_MUSIC_COMPILATIONS
              || (screen >= AURA_SCREEN_EXTRAS_CLOCKS
-                 && screen <= AURA_SCREEN_EXTRAS_STOPWATCH))
+                 && screen <= AURA_SCREEN_EXTRAS_SCREENLOCK))
     {
         /* Pantallas del arbol del original cuya interfaz propia
          * todavia no se construyo: estado vacio honesto con su titulo,
@@ -1851,6 +1854,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_about(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
         handle_legal_text(nav, button);
+    else if (screen == AURA_SCREEN_EXTRAS_STOPWATCH)
+        aura_stopwatch_handle_button(nav, button);
     else if (is_coverflow_screen(screen))
         aura_coverflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))

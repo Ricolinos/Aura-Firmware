@@ -1728,4 +1728,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-158 — Cronómetro de Extras
+
+**Encargo del dueño del diseño (2026-08-13).** Primera pantalla especial de Extras construida, replicando la del original: contador `HH:MM:SS` con las **centésimas más chicas** (alineadas por la base del contador grande, no por su tope — si no, "flotan" sobre los dos puntos), en acento mientras corre. **SELECT** arranca y, ya en marcha, guarda un registro **sin detener** el contador; se conservan hasta 32 y se muestran los **3 más recientes** bajo el contador, como el original. **PLAY** detiene conservando el tiempo y muestra el icono de pausa (señal de que es reanudable); **MENU** sale guardando el estado. La puerta de energía gana su rama: mientras corre se redibuja a 20fps (las centésimas lo exigen), con el mismo `lcd_active()` del resto. Pendiente respecto del original: la transición fluida a panel lateral con el menú Reanudar/Nuevo/Borrar registros y la pantalla de registros con fecha.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

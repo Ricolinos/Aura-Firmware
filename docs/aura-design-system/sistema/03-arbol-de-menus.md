@@ -69,7 +69,8 @@ fila más.
 
 | Fila | Estado |
 |---|---|
-| Reloj internacional · Calendarios · Alarmas · Juegos · Notas · Bloqueo pantalla · Cronómetro | ⬜ estructura navegable, interfaz propia pendiente |
+| Cronómetro | ✅ contador `HH:MM:SS` con centésimas más chicas; SELECT arranca y luego marca registros; PLAY detiene conservando el tiempo (icono de pausa = reanudable); MENU sale guardando |
+| Reloj internacional · Calendarios · Alarmas · Juegos · Notas · Bloqueo pantalla | ⬜ estructura navegable, interfaz propia pendiente |
 | Agenda | ◐ |
 
 **Juegos** (investigado 2026-08-13): los originales (iQuiz, Klondike,
