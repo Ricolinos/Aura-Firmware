@@ -1912,4 +1912,20 @@ También queda documentada, con referencia visual del aparato real, la **jerarqu
 
 ---
 
+## D-180 — Expulsar, Actualizar Aura, carpeta de biblioteca, y el bug real de la música que no sonaba
+
+**Encargo del dueño (2026-08-13), cuatro puntos.**
+
+**(1) Bug de la música — firmware, no app.** La música sincronizada por Aura Studio no aparecía/no sonaba en el aparato. Causa raíz en `aura_music.c`: el escaneo de la base de datos (tagcache) solo se disparaba cuando NO existía base previa (`tagcache_rebuild()`, D-021). Si la base se construyó en un arranque anterior (p. ej. el primer arranque con el disco recién instalado y vacío), **jamás se volvía a escanear**: Rockbox solo re-escanea cuando el usuario entra a "Base de datos > Actualizar ahora", pantalla que Aura no tiene por diseño. Arreglo: una pasada de actualización (`tagcache_start_scan()`, que sí funciona con la base ya usable porque `tc_stat.ready` es true) una vez por arranque, al entrar a Música — corre en el hilo de tagcache en fondo, y con la biblioteca sin cambios es barata. Nota: el reporte original pudo tener una segunda causa apilada (archivos sincronizados antes de D-178 = sin códecs en el disco), ya cerrada.
+
+**(2) Expulsar** (General, cualquier firmware): botón en la barra de herramientas que desmonta el disco completo (`unmountCurrentDisk`, el mismo camino ya probado del instalador) con mensaje de resultado — desconectar sin expulsar es el camino clásico a un FAT32 corrupto, así que no depende de qué firmware haya.
+
+**(3) Actualizar Aura** (General, solo con Aura detectada): compara por hash SHA-256 el `rockbox.ipod` embebido en la app contra el instalado en el iPod (`AuraUpdateChecker` — busca `/.rockbox/rockbox.ipod` y cae a la raíz). Hash y no números de versión: el binario embebido es la fuente de verdad de "lo más nuevo que esta app conoce". Si difieren, aviso con botón que lleva al Instalador (que desde D-179 reinstala sin flashear conservando ajustes); si no, "Aura está al día". **Sobre GitHub** (la idea original del dueño): el repo hoy es PRIVADO y sin releases — una consulta anónima a la API fallaría siempre; el punto único donde enchufar esa consulta cuando existan releases públicos quedó documentado en `AuraUpdateChecker`.
+
+**(4) Carpeta de biblioteca Aura** (Ajustes → Biblioteca): preferencia nueva `libraryFolderPath` (default `~/Música/Aura`), elegible con panel de carpetas. Todo lo que el usuario suelta se **copia** a `Originales/` (los archivos originales jamás se tocan — encargo textual), lo preparado vive en `Preparados/` (antes era un directorio en `/tmp` que macOS podía purgar), las portadas en `Portadas/<id>.jpg` (fuera del JSON a propósito: una imagen por pista inflaría el catálogo), y el catálogo `biblioteca.json` (rutas RELATIVAS a la carpeta: moverla entera a otro disco la conserva) hace que la biblioteca sobreviva reinicios y funcione sin iPod conectado. Estados transitorios (enriqueciendo/transcodificando) y fallidos se persisten como "en cola" — al reabrir se reintentan en vez de quedar congelados; "listo" sin su archivo preparado presente vuelve a la cola. Cambiar la carpeta en Ajustes recarga el catálogo de la carpeta nueva en vivo.
+
+**Aceptación**: 8/8 suites host del firmware, sim `make -q` limpio, ARM real reconstruido (`rockbox.ipod` y `rockbox.zip` de dist regenerados con el fix, checksums al día — esto además hace que "Actualizar Aura" tenga una actualización real que ofrecer de inmediato); app: build limpio (sim y Xcode real), 103/105 tests (los 2 de red de siempre). Confirmación en hardware (música apareciendo tras el re-escaneo) queda con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

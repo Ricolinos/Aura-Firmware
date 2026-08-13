@@ -84,11 +84,28 @@ bool aura_music_db_ready(void)
      * espera a que la determinacion este hecha antes de decidir si
      * hace falta reconstruir. Ver D-021. */
     static bool scan_triggered = false;
+    static bool update_triggered = false;
 
     if (tagcache_is_fully_initialized() && !tagcache_is_usable() && !scan_triggered)
     {
         tagcache_rebuild();
         scan_triggered = true;
+    }
+
+    /* Base YA usable: dispararle una pasada de actualizacion UNA vez
+     * por arranque (Q_START_SCAN si funciona aqui, porque tc_stat.ready
+     * es true). Sin esto, una base construida en un arranque anterior
+     * jamas se entera de la musica que Aura Studio sincronizo despues:
+     * Rockbox solo re-escanea cuando el usuario entra a "Base de datos
+     * > Actualizar ahora", pantalla que Aura no tiene por diseno --
+     * exactamente el bug reportado en hardware real (2026-08-13):
+     * archivos copiados por USB, biblioteca vacia en el aparato. La
+     * pasada corre en el hilo de tagcache, en fondo; con la biblioteca
+     * sin cambios es barata (solo recorre directorios y compara). */
+    if (tagcache_is_usable() && !update_triggered)
+    {
+        tagcache_start_scan();
+        update_triggered = true;
     }
 
     return tagcache_is_usable();
