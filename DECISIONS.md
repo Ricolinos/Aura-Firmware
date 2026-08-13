@@ -1562,4 +1562,10 @@ De paso: la verificación de rampa del pipeline eximió el caso tinta==fondo de 
 
 ---
 
+## D-132 — Mantener backward/forward conmuta aleatorio/repetir; la búsqueda vive en la rueda del modo avance
+
+**Encargo del dueño del diseño (2026-08-12), corrigiendo su propio encargo anterior.** Mantener presionado FORWARD alterna aleatorio; mantener BACKWARD cicla repetir (Repetir todo → Repetir una → desactivado) — en CUALQUIER modo de la rueda, con UNA conmutación por pulsación sostenida (latch hasta el REL). Activos se pintan en acento; repetir cambia de glifo a `repeat.1` cuando repite una sola (icono nuevo en tokens.json). Los conmutadores son los ajustes reales de Rockbox (D-021) pero con efecto inmediato sobre la reproducción en curso, como el núcleo en onplay: aleatorio re-baraja/re-ordena el playlist vivo (`playlist_randomise`/`playlist_sort` conservando la pista actual), repetir recarga la cola (`audio_flush_and_reload_tracks`). La búsqueda por botones sostenidos (D-123/126/127/129) se retiró de los botones y su comportamiento completo — acento + indicador + tiempos bajo la barra + estrangulado de audio con un solo salto en vuelo + asentamiento — pasó íntegro al scroll de rueda del modo avance ("no es trabajo perdido"). El tap corto sigue cambiando de pista al soltar. Verificado con captura del modo avance; los holds no son generables por el harness (solo postea press+release), la conmutación queda a verificación en vivo.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

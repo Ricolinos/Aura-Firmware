@@ -17,6 +17,7 @@
 #include "misc.h"
 #include "sound.h"
 #include "settings.h"
+#include "playlist.h"
 #include "status.h"
 #include "tick.h"
 #include "tagcache.h"
@@ -75,22 +76,24 @@
 #define TRANSPORT_Y        (TRANSPORT_CENTER_Y - A26_ICON_SIZE_TRANSPORT / 2)
 #define TRANSPORT_GAP      AURA_DS_METRICS_NOW_PLAYING_TRANSPORT_ICON_GAP
 
-/* Ventanas de estado de la barra (ver draw_progress): buscar con
- * botones sostenidos muestra tiempos + acento; el ajuste de volumen la
- * convierte en barra de nivel con bocinas; ambos vuelven solos al
- * reposo. El "fade muy sutil" de la bocina vive en el ultimo tramo de
- * la ventana de volumen. */
+/* Ventanas de estado de la barra (ver draw_progress): el avance con
+ * la rueda (modo 2) muestra tiempos + acento + indicador; el ajuste de
+ * volumen la convierte en barra de nivel con bocinas; ambos vuelven
+ * solos al reposo. El "fade muy sutil" de la bocina vive en el ultimo
+ * tramo de la ventana de volumen. */
 #define SEEK_SHOW_TICKS   (HZ / 2)
 #define VOLUME_FADE_TICKS (HZ / 3)
 static long s_seek_show_until = 0;
-/* Tap vs mantener en LEFT/RIGHT (encargo 2026-08-12, mismo criterio
- * del iPod original: la decision es al soltar): un tap salta de pista
- * DESPUES de una ventana corta sin repeats; si llegan repeats, es
- * busqueda dentro de la cancion y el salto pendiente se cancela. */
+/* Tap vs mantener en LEFT/RIGHT (encargo 2026-08-12, corregido el
+ * mismo dia: mantener ya NO busca dentro de la cancion -- eso vive en
+ * la rueda del modo avance). Tap = pista anterior/siguiente (decision
+ * al soltar, como el iPod original). MANTENER, en cualquier modo:
+ * FORWARD alterna aleatorio; BACKWARD cicla repetir (todo -> una ->
+ * apagado). Una sola conmutacion por pulsacion sostenida. */
 #define LR_TAP_WINDOW     (HZ * 35 / 100)
-#define SEEK_STEP_MS      3000L
 static long s_lr_pending_until = 0;
 static int  s_lr_pending_dir = 0;
+static bool s_lr_hold_fired = false;
 static long s_scrub_show_until = 0; /* ventana del indicador del modo scrub */
 /* Busqueda con audio SIMULTANEO (correccion 2026-08-12): aplicar
  * audio_ff_rewind() en CADA repeat (~10/s) reiniciaba la busqueda del
@@ -102,16 +105,37 @@ static long s_scrub_show_until = 0; /* ventana del indicador del modo scrub */
 #define AUDIO_SEEK_APPLY_TICKS (HZ / 4)
 static long s_seek_last_apply = 0;
 static long s_seek_applied_ms = -1;
-/* Paso de busqueda por TIEMPO REAL, no por evento (correccion
- * 2026-08-12: con paso fijo por repeat, la cola de botones se atrasaba
- * respecto al render y la barra seguia avanzando sola despues de
- * soltar). Cada repeat avanza (ticks transcurridos desde el repeat
- * anterior) x SEEK_RATE -- los eventos rezagados que se procesan en
- * rafaga tras soltar aportan deltas casi nulos y la barra se detiene
- * al instante. */
-#define SEEK_RATE          25  /* segundos de cancion por segundo sostenido */
-#define SEEK_FIRST_KICK_MS 1500
-static long s_seek_last_event = 0;
+/* Conmutadores de modos de reproduccion (encargo 2026-08-12: mantener
+ * FORWARD/BACKWARD). Mismos ajustes reales de Rockbox que las filas de
+ * Ajustes (D-021), pero aqui con efecto INMEDIATO sobre la
+ * reproduccion en curso, como el nucleo de Rockbox en onplay:
+ * aleatorio re-baraja (o re-ordena) el playlist vivo manteniendo la
+ * pista actual; repetir recarga la cola de pistas ya bufereadas. */
+static void np_toggle_shuffle(void)
+{
+    global_settings.playlist_shuffle = !global_settings.playlist_shuffle;
+    settings_save();
+    if (audio_status() & AUDIO_STATUS_PLAY)
+    {
+        if (global_settings.playlist_shuffle)
+            playlist_randomise(NULL, current_tick, true);
+        else
+            playlist_sort(NULL, true);
+    }
+}
+
+static void np_cycle_repeat(void)
+{
+    if (global_settings.repeat_mode == REPEAT_OFF)
+        global_settings.repeat_mode = REPEAT_ALL;
+    else if (global_settings.repeat_mode == REPEAT_ALL)
+        global_settings.repeat_mode = REPEAT_ONE;
+    else
+        global_settings.repeat_mode = REPEAT_OFF;
+    settings_save();
+    if (audio_status() & AUDIO_STATUS_PLAY)
+        audio_flush_and_reload_tracks();
+}
 
 /* Nunca mas de UN salto de audio en vuelo (correccion 2026-08-12: "el
  * audio sigue quedandose atras"): cada audio_ff_rewind() implica
@@ -818,12 +842,19 @@ static void draw_transport(bool compact)
      * eligiendo la variante -on/acento (aura_widgets_draw_icon_selected)
      * en vez de intentar recolorear -- no hay variante TEXT_TERTIARY
      * horneada, mismo limite que el resto de la pantalla (D-078). */
-    if (global_settings.repeat_mode != 0)
-        aura_widgets_draw_icon_selected("repeat", A26_ICON_SIZE_TRANSPORT_SIDE,
-                                         repeat_x, side_y);
-    else
-        aura_widgets_draw_icon("repeat", A26_ICON_SIZE_TRANSPORT_SIDE,
-                                repeat_x, side_y);
+    {
+        /* Repetir tiene VARIANTE de glifo (encargo 2026-08-12): repeat.1
+         * cuando repite una sola cancion; acento en cualquier modo
+         * activo, tinta normal apagado. */
+        const char *rep_icon = (global_settings.repeat_mode == REPEAT_ONE)
+            ? "repeat-1" : "repeat";
+        if (global_settings.repeat_mode != REPEAT_OFF)
+            aura_widgets_draw_icon_selected(rep_icon, A26_ICON_SIZE_TRANSPORT_SIDE,
+                                             repeat_x, side_y);
+        else
+            aura_widgets_draw_icon(rep_icon, A26_ICON_SIZE_TRANSPORT_SIDE,
+                                    repeat_x, side_y);
+    }
 
     if (global_settings.playlist_shuffle)
         aura_widgets_draw_icon_selected("shuffle", A26_ICON_SIZE_TRANSPORT_SIDE,
@@ -1211,11 +1242,11 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
         break;
     case BUTTON_RIGHT | BUTTON_REL:
     case BUTTON_LEFT | BUTTON_REL:
-        /* Al SOLTAR se decide todo, sin timeouts (correccion
-         * 2026-08-12): tap pendiente -> cambia de pista YA; busqueda
-         * activa -> el salto final se emite YA y la ventana visual se
-         * colapsa (la barra pasa a la fase de asentamiento, que la
-         * conserva hasta que el audio llega). */
+        /* Al SOLTAR se decide el tap, sin timeouts (correccion
+         * 2026-08-12): tap pendiente -> cambia de pista YA. Si la
+         * pulsacion fue un hold, su conmutacion ya ocurrio en el
+         * primer repeat -- aqui solo se libera el latch. */
+        s_lr_hold_fired = false;
         if (s_lr_pending_dir != 0)
         {
             int dir = s_lr_pending_dir;
@@ -1227,13 +1258,6 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
             else
                 audio_prev();
         }
-        else if (s_scrub_preview_ms >= 0 && current_tick < s_seek_show_until)
-        {
-            audio_ff_rewind(s_scrub_preview_ms);
-            s_seek_applied_ms = s_scrub_preview_ms;
-            s_seek_last_apply = current_tick;
-            s_seek_show_until = current_tick; /* fin del modo busqueda */
-        }
         break;
 
     case BUTTON_RIGHT:
@@ -1243,41 +1267,19 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
 
         if (aura_main_last_was_repeat())
         {
-            /* Mantener = adelantar/atrasar rapido dentro de la cancion
-             * (encargo 2026-08-12): cada repeat avanza SEEK_STEP_MS;
-             * la barra pasa a acento y muestra los tiempos SOLO
-             * mientras dura la busqueda. El salto de pista pendiente
-             * de este mismo press queda cancelado. */
-            if (id3 && id3->length)
+            /* Mantener = conmutar modos de reproduccion (encargo
+             * 2026-08-12, en CUALQUIER modo de la rueda): FORWARD
+             * alterna aleatorio; BACKWARD cicla repetir. UNA sola
+             * conmutacion por pulsacion sostenida (latch hasta el
+             * REL). El salto de pista pendiente de este mismo press
+             * queda cancelado. */
+            if (!s_lr_hold_fired)
             {
-                long base = (s_scrub_preview_ms >= 0) ? s_scrub_preview_ms
-                                                       : (long)id3->elapsed;
-                long delta_ticks = current_tick - s_seek_last_event;
-                long step_ms;
-                long next;
-                bool fresh_hold = (delta_ticks > HZ / 2);
-
-                /* Primer repeat de un hold nuevo: arranque con un
-                 * empujon fijo y salto de audio INMEDIATO; los
-                 * siguientes avanzan por tiempo real transcurrido. */
-                step_ms = fresh_hold ? SEEK_FIRST_KICK_MS
-                                      : delta_ticks * 1000L * SEEK_RATE / HZ;
-                s_seek_last_event = current_tick;
-
-                next = base + dir * step_ms;
-                if (next < 0) next = 0;
-                if ((unsigned long)next > id3->length) next = (long)id3->length;
-                s_scrub_preview_ms = next;
-
-                if (fresh_hold
-                    || (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS
-                        && seek_engine_ready(id3)))
-                {
-                    audio_ff_rewind(next);
-                    s_seek_last_apply = current_tick;
-                    s_seek_applied_ms = next;
-                }
-                s_seek_show_until = current_tick + SEEK_SHOW_TICKS;
+                s_lr_hold_fired = true;
+                if (dir > 0)
+                    np_toggle_shuffle();
+                else
+                    np_cycle_repeat();
             }
             s_lr_pending_dir = 0;
         }
@@ -1314,10 +1316,11 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
                 if ((unsigned long)next > id3->length) next = (long)id3->length;
 
                 s_scrub_preview_ms = next;
-                /* Mismo estrangulado de audio que los botones: primer
-                 * click aplica al instante, los siguientes cada ~250ms
-                 * -- clicks en rafaga reiniciaban la busqueda del
-                 * motor y el audio solo saltaba al parar la rueda. */
+                /* Estrangulado de audio: primer click aplica al
+                 * instante, los siguientes cuando el motor alcanzo el
+                 * salto anterior -- clicks en rafaga reiniciaban la
+                 * busqueda del motor y el audio solo saltaba al parar
+                 * la rueda. */
                 if (s_seek_applied_ms < 0
                     || (current_tick - s_seek_last_apply >= AUDIO_SEEK_APPLY_TICKS
                         && seek_engine_ready(id3)))
@@ -1326,7 +1329,11 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
                     s_seek_last_apply = current_tick;
                     s_seek_applied_ms = next;
                 }
+                /* El avance de rueda hereda el comportamiento completo
+                 * de la busqueda (encargo 2026-08-12): acento +
+                 * indicador + TIEMPOS debajo de la barra. */
                 s_scrub_show_until = current_tick + SEEK_SHOW_TICKS;
+                s_seek_show_until = current_tick + SEEK_SHOW_TICKS;
             }
             break;
 
