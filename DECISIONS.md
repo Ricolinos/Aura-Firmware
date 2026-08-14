@@ -2860,4 +2860,16 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-242 — Ahora suena: cache de la perspectiva de la carátula inclinada (seguimiento de D-229)
+
+**Contexto**: D-229 encontró y dejó explícitamente SIN tocar dos candidatos por falta de confianza suficiente en esa pasada. Esta es la vuelta dedicada a esos dos puntos.
+
+**Item 1 -- `draw_cover_tilted()` recalculaba la perspectiva cada cuadro**: confirmado con lectura completa de `aura_flow.c` (módulo puro, sin estado oculto, sin dependencia de `current_tick`, el resultado depende solo de `t256` y de la carátula/reflejo cargados) que la proyección por columna es una función pura. Fuera del morph del Modo 4, `t256` vale siempre 0 o 256 de forma constante mientras el modo no cambia -- solo el propio bucle de animación del morph lo barre cuadro a cuadro de verdad. Nuevo cache: buffers `static` (`s_cover_tilted_buf[162][216]`, ~68KB, con el mismo margen de fila que ya usaba el buffer original de una sola columna, y una columna de margen extra sobre las 135 columnas reales medidas en `t256=0`) que guardan el resultado ya proyectado; en un acierto (mismo `t256` que la última vez, sin recarga de carátula/tema de por medio) se repiten los mismos `lcd_bitmap()` ya calculados en vez de resolver la cámara de nuevo. Invalidado en `reload_for_track()` (mismo punto de disparo que `s_panel_colors_valid`) y por cualquier `t256` distinto -- durante el morph en sí, que barre `t256` de verdad, el cache simplemente nunca acierta: cero regresión ahí, misma recomputación de siempre.
+
+**Item 2 -- `load_album_art()` no usa el cache `.pfraw` compartido**: investigado a fondo, dejado sin tocar -- bloqueado por DOS razones reales, no solo "no es por cuadro": (1) esta pantalla solo tiene el `tagcache_idx` del track vía `struct mp3entry`, y no existe una API pública para convertir eso al `seek` de `tag_album` que `aura_albumart_load_for_album()` necesita (`tagcache_get_numeric()` rechaza `tag_album` por no ser numérico; `tagcache_retrieve()` da el nombre del álbum, no su seek; el mapeo real vive en funciones `static` internas de `tagcache.c`). (2) el cache `.pfraw` está TRANSPUESTO a propósito para Cover Flow, mientras esta pantalla trabaja fila-mayor -- adoptarlo exigiría además reescribir el indexado del bucle de `draw_cover_tilted()`. Ambos son cambios de arquitectura reales, fuera del alcance de un seguimiento puntual.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos. El propio fork hizo una comparación real de píxeles antes/después (misma secuencia de botones, dos procesos separados del simulador, diff con PIL/numpy): la única diferencia encontrada fue el reloj de la barra de estado y el largo de la barra de progreso (ambos esperables entre dos corridas independientes) -- **cero píxeles distintos dentro del área de la carátula y su reflejo**. Confirmado además con captura propia del estado en reposo tras fusionar.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
