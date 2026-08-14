@@ -661,7 +661,17 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     a26_shell_clear_screen();
     aura_widgets_draw_status_bar(title);
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    /* Encargo del dueno (2026-08-14), "misma indicacion de antes"
+     * (D-195): tipografia de las filas de lista mas grande y legible.
+     * A26_TYPE_BODY (13px) es el mas grande disponible en peso Regular
+     * -- MAXUSERFONTS=12 sigue al limite exacto (ver tokens.json,
+     * comment_ds), asi que no hay ningun "Regular 14/16px" para pedir
+     * prestado. DS_BOLD_14 (14px, ya cargada para lyrics_active del
+     * reproductor -- reutilizada aca, el reproductor no se toca) es la
+     * unica fuente ya cargada mas grande que 13px disponible; el peso
+     * Bold ademas ayuda a la legibilidad en una pantalla de 163ppi sin
+     * subantialiasing tanto como el pixel extra de alto. */
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_14));
 
     /* Pastilla de fila activa (doc SS5.1), dibujada ANTES que el
      * contenido de las filas -- no dentro del loop de la fila

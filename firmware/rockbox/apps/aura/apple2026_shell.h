@@ -58,13 +58,18 @@ typedef enum {
      * design-system/tokens.json -> aura_ds.type_scale_roles,
      * documentacion para humanos; el codigo C usa el estilo
      * directamente. */
-    A26_FONT_STYLE_DS_REG_8,   /* statusbar_time */
-    A26_FONT_STYLE_DS_BOLD_8,  /* statusbar_title */
-    A26_FONT_STYLE_DS_REG_10,  /* menu_item */
-    A26_FONT_STYLE_DS_BOLD_10, /* np_counter */
-    A26_FONT_STYLE_DS_REG_12,  /* np_album, np_artist, lyrics */
+    /* Los comentarios marcan el rol ORIGINAL de diseño de cada tamano
+     * (fundamentos/02-tipografia.md); varios estilos se REUTILIZAN
+     * despues en otros sitios sin agregar fuente nueva -- D-195 y el
+     * encargo de tipografia mas grande de 2026-08-14 documentan cada
+     * reutilizacion en su propio punto de uso. */
+    A26_FONT_STYLE_DS_REG_8,   /* riel A-Z, calendario, busqueda -- statusbar_time paso a DS_REG_10 */
+    A26_FONT_STYLE_DS_BOLD_8,  /* sin consumidor propio hoy -- statusbar_title paso a DS_BOLD_10 */
+    A26_FONT_STYLE_DS_REG_10,  /* statusbar_time (encargo 2026-08-14, reusa np_counter/alarmas) */
+    A26_FONT_STYLE_DS_BOLD_10, /* np_counter, statusbar_title */
+    A26_FONT_STYLE_DS_REG_12,  /* np_album, np_artist, lyrics, menu_item (D-195) */
     A26_FONT_STYLE_DS_BOLD_12, /* np_title */
-    A26_FONT_STYLE_DS_BOLD_14, /* lyrics_active */
+    A26_FONT_STYLE_DS_BOLD_14, /* lyrics_active, filas de listas de contenido (encargo 2026-08-14, reusa lyrics_active) */
     A26_FONT_STYLE_COUNT,
 } a26_font_style_t;
 
