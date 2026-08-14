@@ -125,6 +125,8 @@ int fast_readline(int fd, char *buf, int buf_size, void *parameters,
 bool settings_parseline(char* line, char** name, char** value);
 long default_event_handler_ex(long event, void (*callback)(void *), void *parameter);
 long default_event_handler(long event);
+/* D-238 (aura): ver el comentario grande en misc.c. */
+long default_event_handler_deferred_usb(intptr_t seqnum);
 bool list_stop_handler(void);
 void car_adapter_mode_init(void) INIT_ATTR;
 void validate_start_directory_init(void) INIT_ATTR;

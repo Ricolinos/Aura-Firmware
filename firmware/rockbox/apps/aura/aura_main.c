@@ -41,6 +41,18 @@
  * asi que degrada bien sin dato real. */
 static long s_wheel_velocity;
 
+/* D-238 (encargo del dueno: "que se bloquee tambien el usb"): mientras
+ * el candado esta activo, una conexion USB se DIFIERE en vez de
+ * atenderse -- ver el bloque `screen_lock_active` mas abajo. `seqnum`
+ * hay que capturarlo con button_get_data() en el momento MISMO en que
+ * SYS_USB_CONNECTED se recibe (es una variable global de "el ultimo
+ * dato crudo", no una cola -- se pisa con cada button_get() que venga
+ * despues, y la pantalla de PIN va a pedir varios mientras el usuario
+ * escribe) para poder reproducir la conexion real, intacta, si el
+ * usuario efectivamente desbloquea. */
+static bool s_usb_pending;
+static intptr_t s_usb_pending_seqnum;
+
 long aura_main_wheel_velocity(void)
 {
     return s_wheel_velocity;
@@ -318,6 +330,32 @@ void aura_main(void)
             lcd_update();
 
             button = next_button(-1);
+
+            /* D-238: SYS_USB_CONNECTED es justo lo que
+             * default_event_handler() usaba para montar el disco sin
+             * pedir PIN (gui_usb_screen_run() dentro de esa rama, ver
+             * misc.c) -- el reporte original de esta funcion decia
+             * "NADA de la app es alcanzable salvo la propia pantalla
+             * de desbloqueo", pero el USB conectado se colaba por este
+             * costado. Ahora se difiere: NO se llama a
+             * default_event_handler() para este evento en particular
+             * (el resto -- SYS_POWEROFF, SYS_BATTERY_UPDATE, etc. --
+             * se siguen atendiendo igual que siempre, cargar sigue
+             * funcionando: eso lo decide el driver de energia por su
+             * cuenta, INDEPENDIENTE de este ack de mas alto nivel). Se
+             * guarda el seqnum y se sigue mostrando el candado; recien
+             * se atiende de verdad si el usuario desbloquea (mas
+             * abajo). Si el usuario nunca desbloquea, el iPod se queda
+             * cargando sin exponer el disco -- nunca "colgado" para el
+             * host, simplemente el volumen de almacenamiento no
+             * aparece hasta entonces, igual que un telefono bloqueado. */
+            if (button == SYS_USB_CONNECTED)
+            {
+                s_usb_pending = true;
+                s_usb_pending_seqnum = button_get_data();
+                continue;
+            }
+
             if (default_event_handler(button) != 0)
                 continue;
 
@@ -328,6 +366,35 @@ void aura_main(void)
                 aura_main_play_keyclick();
 
             aura_screenlock_handle_button(&nav, button);
+
+            /* Se acaba de desbloquear (screen_lock_active paso a false
+             * dentro de aura_screenlock_handle_button()) y habia una
+             * conexion USB en espera: atenderla de verdad recien
+             * ahora, con el seqnum real que se guardo en el momento de
+             * la conexion -- default_event_handler_deferred_usb()
+             * hace exactamente lo mismo que hubiera hecho
+             * default_event_handler() en ese momento (misc.c, D-238),
+             * solo que con el seqnum correcto en vez de pedirselo de
+             * nuevo a button_get_data() (que ya esta pisado por los
+             * digitos del PIN que el usuario acaba de escribir).
+             *
+             * usb_inserted() (estado EN VIVO del driver, no un evento)
+             * se revisa antes de reproducir la conexion diferida: el
+             * cable pudo haberse desconectado mientras el candado
+             * seguia activo -- SYS_USB_DISCONNECTED no pasa por
+             * default_event_handler_ex()/esta cola de botones (lo
+             * espera gui_usb_screen_run() por su cuenta, que en este
+             * escenario nunca llego a correr), asi que este es el
+             * unico chequeo real disponible. Sin el, desbloquear mucho
+             * despues de desconectar el cable dejaria la pantalla de
+             * USB esperando un desenchufe que ya paso -- Aura
+             * congelada ahi hasta el proximo enchufado real. */
+            if (s_usb_pending && !aura_settings.screen_lock_active)
+            {
+                s_usb_pending = false;
+                if (usb_inserted())
+                    default_event_handler_deferred_usb(s_usb_pending_seqnum);
+            }
             continue;
         }
 

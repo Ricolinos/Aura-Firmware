@@ -831,6 +831,35 @@ long default_event_handler(long event)
     return default_event_handler_ex(event, NULL, NULL);
 }
 
+/* D-238 (aura, encargo del dueno): variante de la rama SYS_USB_CONNECTED
+ * de default_event_handler_ex() de arriba, para cuando ese evento no se
+ * puede atender apenas se recibe -- Aura difiere el montaje mientras el
+ * candado de pantalla esta activo (aura_main.c) y necesita repetir
+ * exactamente esta secuencia una vez que el usuario desbloquea, pero con
+ * el `seqnum` que ya capturo en el momento real de la conexion (no se
+ * puede volver a pedir con button_get_data(): esa es una variable
+ * global de "el ultimo dato crudo", no una cola -- para cuando el
+ * usuario termina de escribir el PIN ya se sobrescribio muchas veces
+ * con los digitos). MISMOS pasos, mismo orden, que la rama
+ * SYS_USB_CONNECTED de arriba -- solo el origen del seqnum cambia. */
+long default_event_handler_deferred_usb(intptr_t seqnum)
+{
+    system_flush();
+#ifdef BOOTFILE
+#if !defined(USB_NONE) && !defined(USB_HANDLED_BY_OF)
+    check_bootfile(false);
+#endif
+#endif
+    gui_usb_screen_run(false, seqnum);
+#ifdef BOOTFILE
+#if !defined(USB_NONE) && !defined(USB_HANDLED_BY_OF)
+    check_bootfile(true);
+#endif
+#endif
+    system_restore();
+    return SYS_USB_CONNECTED;
+}
+
 #ifdef BOOTFILE
 #if !defined(USB_NONE) && !defined(USB_HANDLED_BY_OF) || defined(HAVE_HOTSWAP_STORAGE_AS_MAIN)
 /*
