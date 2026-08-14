@@ -2761,4 +2761,22 @@ Estas rutas se disparan al abrir el panel de listas de reproducción desde Ahora
 
 ---
 
+## D-235 — Barra de estado: el icono de batería ya no se ve chico (lienzo no cuadrado)
+
+**Encargo del dueño (2026-08-14)**: "auditar el centro horizontal de todos los elementos, deben estar alineados. Los iconos deben tener el mismo alto, esto implicaría agrandar la pila que se ve muy pequeña actualmente. Esto aplica tanto para el modo split, como el Full."
+
+**Auditoría de centrado**: el centrado vertical en `aura_status_bar_v2.c` YA era correcto y uniforme -- todos los iconos comparten `icon_y = (STATUSBAR_HEIGHT - icon_h) / 2`, calculado una sola vez, usado igual en split y full. No había bug de alineación ahí.
+
+**Causa real de la pila chica**: está en el pipeline de generación de iconos (`design-system/generate.py`), no en el dibujo. `battery.100`/`.50`/`.25`/`.100.bolt` (SF Symbols) tienen una proporción natural ~2:1 ancho:alto -- forzados al lienzo CUADRADO de 12×12 que comparten candado/play-pausa, `contain` quedaba limitado por el ANCHO, y el alto real de tinta resultante era de solo 6px (la mitad de los 10px de candado/play-pausa en ese mismo lienzo). `docs/aura-design-system/componentes/status-bar.md` ya especificaba "alto fijo de 12px para los tres, independientemente de su ancho" -- el alto YA era la regla decidida, esto era un bug contra una intención de diseño ya tomada, no una decisión nueva.
+
+**Arreglo**: lienzo NO cuadrado solo para la batería (21×12 en vez de 12×12) -- nuevo campo `py` (alto de lienzo, independiente del ancho `px`) en `apple2026_sf_render.swift`, y `icon_canvas_dims()` en `generate.py` que lo activa solo para `icon.battery_icon` (nuevo bloque en `tokens.json`). Con el lienzo más ancho, `contain` queda limitado por el ALTO -- la batería llena/media/baja quedan a 10px de tinta, igual que candado/play-pausa. `aura_status_bar_v2.c` ya no puede asumir "ancho == alto" solo para la batería al reservar espacio; usa el nuevo `AURA_DS_METRICS_STATUSBAR_ICON_WIDTH_BATTERY`.
+
+**21px no es redondeo, es el máximo real por dos lados**: por abajo, el salto de 8px a 10px de tinta ocurre exactamente entre 20 y 21px de ancho de lienzo (verificado con render real, no interpolado); por arriba, en modo split (barra de 160px) 22px+ ya choca contra la zona reservada de ClockIndicator (46px) en el peor caso real (candado + reproduciendo + reloj persistente) -- la "regla dura" que `status-bar.md` ya documentaba. 21 es exactamente adyacente al borde del reloj, sin superposición.
+
+**Documentación actualizada**: `docs/aura-design-system/componentes/status-bar.md` -- aclarado que el "12px" es alto de LIENZO, no alto de tinta garantizado, y marcado el ancho de la batería (21px) como ya confirmado en la lista de pendientes.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos. Capturas reales en el simulador, split (menú principal) y full (Cover Flow) -- la batería pasó de una línea plana de 2px a un contorno con muesca visible, igual de alta que candado/play-pausa en ambos modos.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
