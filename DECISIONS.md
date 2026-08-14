@@ -2192,4 +2192,22 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-198 — Biblioteca: tabla de verdad (columnas ajustables, checkboxes, menú contextual)
+
+**Encargo del dueño (2026-08-13), con una captura de referencia (una lista de Música.app con columnas Título/Duración/Artista/Álbum/Género/★/Reproducciones)**: la lista simple de D-193 no alcanza -- hace falta ver los atributos de cada elemento, poder ajustar el ancho de las columnas, clic derecho para acciones sobre el medio, y casillas de verificación para editar varios a la vez (buscar información del álbum, buscar letra, eliminar carátula, seleccionar canciones del mismo álbum/artista, eliminar, cambiar nombre).
+
+**Se dejó afuera, a propósito**: la columna "Reproducciones" y la calificación con estrella de la captura de referencia -- Aura Studio no reproduce nada (no hay conteo real de reproducciones que llevar; eso lo sabe el iPod, no la app) y una calificación nueva hubiera sido un campo puramente decorativo sin ningún dato real detrás. Se tomó la captura como referencia de FORMA (tabla con columnas ajustables), no como lista literal de columnas a copiar.
+
+**`MediaSectionView` pasa de `List` a `Table`** (macOS 13+, ya disponible desde que D-193 subió el mínimo a macOS 14): ancho de columna ajustable arrastrando el borde del encabezado y orden por columna (`sortOrder`/`KeyPathComparator`) salen gratis del componente nativo -- no hubo que construir nada de eso a mano. `MediaTableRow` envuelve cada `LibraryItem` con campos NO opcionales (vacío/0 en vez de nil), porque `KeyPathComparator` necesita `Comparable` real para ordenar, y `Optional` no lo es. Columnas por tipo: música (Título/Artista/Álbum/Género/Duración/Estado), video y fotos (Título/Categoría/Duración/Estado).
+
+**Casillas de verificación**: columna propia con `Toggle` atado al mismo `Set<UUID>` que ya usa la selección nativa de `Table` -- conviven sin pisarse, cualquiera de las dos formas de seleccionar sirve para las acciones en conjunto.
+
+**Menú contextual** (`.contextMenu(forSelectionType:)`, clic derecho sobre cualquier fila -- si la fila no estaba en la selección actual, macOS la reemplaza sola antes de abrir el menú, comportamiento nativo): Buscar información en línea / Buscar letra (nuevo `LibraryEnricher.reenrich`, que a diferencia de `enrich()` parte de la metadata YA resuelta del item en vez de releer las tags crudas del archivo -- así no pisa una corrección manual que el usuario ya hizo), Eliminar carátula, Seleccionar canciones del mismo álbum/artista (usa el álbum/artista del primer item del grupo como referencia), Cambiar categoría (fotos/video), Cambiar nombre... (hoja simple, nueva), Eliminar (borra también lo que Aura Studio escribió para el item -- preparado, carátula, y el original si estaba copiado dentro de la biblioteca -- y lo saca de cualquier playlist que lo referenciara).
+
+**Duración real** (nueva columna, y campo nuevo `TrackMetadata.durationSeconds`): medida con `ffmpeg -i` al procesar -- para música es la primera vez que algo pide ffmpeg (antes solo video/fotos lo necesitaban), así que es siempre best-effort (`try?`, nunca bloquea el pipeline si no está instalado; sin ffmpeg la columna muestra "--"). Video reutiliza la misma medición para la categoría automática (Caseros/Videos/Películas) y para la columna, en vez de invocar ffmpeg dos veces.
+
+**Aceptación**: `swift build`/`swift test` (140/140) y `xcodebuild -project AuraStudio.xcodeproj ... BUILD SUCCEEDED`. Verificación visual queda con el dueño -- la build de Xcode que tenía abierta seguía usándose para instalar en el iPod real al momento de este cambio, así que no se relanzó para no interrumpir esa instalación en curso.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
