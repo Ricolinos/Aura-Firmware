@@ -159,6 +159,14 @@ void aura_settings_apply_core_defaults(void)
      * memoria pero JAMAS se escriben a disco -- se pierden en cuanto
      * se reinicia el aparato. */
     global_settings.runtimedb = true;
+    /* D-209 (encargo del dueno: pantalla de apagado propia, icono
+     * centrado en negro). `show_shutdown_message` (default true de
+     * fabrica, settings_list.c) es lo que hace que clean_shutdown()
+     * (apps/misc.c) dibuje su splash de texto "Shutting down..." con
+     * cromo de Rockbox -- se apaga aca para que la UNICA pantalla que
+     * se vea al apagar sea la de aura_shutdown_screen_draw() (aura_main.c,
+     * dibujada antes de que clean_shutdown() corra). */
+    global_settings.show_shutdown_message = false;
     backlight_set_timeout(global_settings.backlight_timeout);
     backlight_set_timeout_plugged(global_settings.backlight_timeout_plugged);
     settings_save();

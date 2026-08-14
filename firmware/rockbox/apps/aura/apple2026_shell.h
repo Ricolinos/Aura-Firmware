@@ -59,7 +59,7 @@ typedef enum {
      * documentacion para humanos; el codigo C usa el estilo
      * directamente. */
     /* Los comentarios marcan los consumidores REALES de cada estilo,
-     * confirmados por grep contra apps/aura/*.c (no por suposicion --
+     * confirmados por grep contra los .c de apps/aura/ (no por suposicion --
      * un comentario viejo aca decia que DS_BOLD_8 "paso a" otro estilo
      * cuando en realidad nunca tuvo consumidor propio; el encargo de
      * tipografia de 2026-08-14 lo destapo auditando de verdad antes de

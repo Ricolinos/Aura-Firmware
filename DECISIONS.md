@@ -2352,4 +2352,50 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-208 — Investigación: ¿se puede quitar "Rockbox" de la pantalla del bootloader?
+
+**Pregunta del dueño (2026-08-14)**: "¿Hay forma de modificar la pantalla del bootloader que no diga nada de Rockbox? Si sí solo dime cómo, pero lo implementamos después con mis indicaciones de diseño." -- solo investigación, sin implementar, por instrucción explícita.
+
+**Respuesta: sí, es editable.** El bootloader del iPod 6G es un binario COMPLETAMENTE SEPARADO del firmware de Aura (`bootloader-ipod6g.ipod`/`mks5lboot` en `firmware/dist/`), fuente en `firmware/rockbox/bootloader/ipod-s5l87xx.c`. Todo el texto que menciona "Rockbox" son literales de C en llamadas `printf()`/`lcd_puts()` normales (p. ej. `"Hold MENU+SELECT to reboot and enter Rockbox firmware"`) -- no hay ningún binario ni recurso bloqueado, cambiar las palabras es trivial.
+
+**Dos cosas que el dueño necesita saber antes de decidir cuánto invertir en esto**:
+1. **Ya casi nunca se ve.** Una fase anterior (comentario en el propio código, "Fase 22/D-06x") ya puso el arranque en modo silencioso para IPOD_6G específicamente (`verbose = false`) -- en un arranque normal, este texto NUNCA llega a `lcd_update()`, quede o no en el framebuffer. Solo se hace visible en: un error real (firmware corrupto, disco no legible), batería crítica, o combinaciones de botones de diagnóstico que un usuario normal no presiona por accidente (MENU, SELECT+IZQUIERDA, SELECT+PLAY, todas para entrar a modos de fábrica/diagnóstico). El pedido real, si el objetivo es "que nunca se vea Rockbox", puede que ya esté prácticamente resuelto salvo esos casos de error/diagnóstico.
+2. **Es un entorno gráfico distinto y mucho más limitado**, no una pantalla más del sistema de diseño Apple2026 -- corre ANTES de que exista `apple2026_shell`/paleta/temas/fuentes custom: usa `FONT_SYSFIXED` (fuente de sistema fija) y blanco/negro puro (`LCD_WHITE`/`LCD_BLACK`), sin acceso a `a26_palette` ni a los `.fnt` de Aura. Un reskin visual completo (iconos, tipografía Aura, colores de tema) sería un trabajo bastante más grande que cambiar palabras -- portar una porción del sistema gráfico a un entorno con recursos de arranque muy acotados (antes de que DRAM/NOR estén completamente listos). Un cambio mínimo y de bajo riesgo (solo reemplazar "Rockbox" por "Aura" en los literales, conservando el estilo de texto monocromo actual) es factible sin ese costo.
+
+**Sin cambios de código** -- esta entrada documenta la investigación, la implementación queda pendiente de las indicaciones de diseño del dueño.
+
+---
+
+## D-209 — Pantalla de apagado: icono centrado en negro, sin importar el tema
+
+**Encargo del dueño (2026-08-14)**: "al apagar el dispositivo, debería mostrarse al centro el icono de apagado, en una pantalla negra (icono blanco) independientemente del tema claro u oscuro." No existía ninguna pantalla propia de Aura para esto -- `clean_shutdown()` (`apps/misc.c`, código genérico de Rockbox compartido por todos los targets) solo dibujaba un `splash()` de texto ("Shutting down...") con el cromo por defecto de Rockbox.
+
+**Arreglo**: `aura_shutdown_screen.c` (nuevo, mismo patrón de archivo por pantalla que `aura_screenlock.c`) -- pantalla negra/icono blanco con `LCD_BLACK`/`LCD_WHITE` **crudos**, a propósito NO `a26_color()` (única pantalla del sistema con esta excepción deliberada, documentada en el header del archivo): el pedido es explícitamente independiente del tema. Ícono nuevo `poweroff` (SF Symbol `power`, agregado a `design-system/tokens.json`), tamaño dedicado `shutdown_icon` (64px). `aura_main.c` intercepta `SYS_POWEROFF` en el loop principal, dibuja esta pantalla UNA vez, y deja que `default_event_handler()` siga con el apagado real -- `global_settings.show_shutdown_message` se apaga por default (`aura_settings_apply_core_defaults()`, mismo mecanismo que D-196/D-200/D-209) para que el splash de texto de fábrica no se dibuje encima.
+
+**Verificación limitada**: build de simulador y ARM (ver nota de entorno en D-207) limpios, `make test` 8/8. **No se pudo confirmar visualmente con captura** -- `SYS_POWEROFF` es un evento de sistema, no un botón físico que el arnés de automatización del simulador (`apple2026_sim_shot.sh`) pueda inyectar; la verificación real queda en manos del dueño en hardware.
+
+---
+
+## D-210 — Splash de arranque: el logo de Aura no estaba centrado verticalmente
+
+**Encargo del dueño (2026-08-14)**: "el splash screen del inicio, está bien el que tenemos, pero debería estar al centro el texto Aura (tanto vertical como horizontalmente)."
+
+**Causa encontrada por lectura directa del código** (`apps/main.c:show_logo_boot()`, la función que dibuja el logo de Aura al arrancar -- ya reskineado de "ROCKbox" a Aura en una fase anterior, D-051): `lcd_bmp(&bm_rockboxlogo, (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2, 10)` -- el eje X SÍ se centraba matemáticamente, pero el eje Y estaba fijo en `10` (pegado arriba de la pantalla), un valor heredado de Rockbox genérico pensado para pantallas/logos más chicos, nunca actualizado a centrado real al adoptar el logo de Aura (320x98px en el iPod 6G).
+
+**Arreglo**: rama nueva `#elif defined(IPOD_6G)` (no se toca el resto de targets Rockbox que comparten este archivo) con `(LCD_HEIGHT - BMPHEIGHT_rockboxlogo) / 2` para el eje Y -- mismo criterio matemático que ya usaba el eje X, ahora aplicado a ambos.
+
+**Verificación limitada**: build limpio (simulador + ARM). **No se pudo confirmar con captura** -- el logo se dibuja en `show_logo_boot()`, antes de que el mecanismo de auto-captura del simulador (que engancha sobre el loop principal de `aura_main()`) esté activo; para cuando la primera captura es posible, el logo ya desapareció. Corrección matemática simple y de bajo riesgo, pero la confirmación visual real queda con el dueño.
+
+---
+
+## D-211 — Esquinas de los iconos del panel izquierdo, más redondeadas (estilo iOS actual)
+
+**Encargo del dueño (2026-08-14)**: "los iconos que aparecen en el panel izquierdo (selection-summary) deben tener una estética similar a las aplicaciones del iPhone actual (es decir con las esquinas mucho más redondeadas)."
+
+**Arreglo**: `aura_ds.metrics.selection_summary.tile_corner_radius` (`design-system/tokens.json`) subió de 8px (10% de los 90px del tile -- el radio genérico de tarjeta reutilizado, prácticamente sin curva visible) a 20px (~22% del tile), la proporción real que usan los iconos de apps de iOS actual (el "squircle" de Apple mide ~22.37% del lado; Rockbox solo dibuja esquinas circulares simples, no la curva continua real de Apple, pero a esta proporción se lee como el mismo estilo). Cambio de un solo token -- `aura_selection_summary.c` ya leía el radio vía la macro generada (`AURA_DS_METRICS_SELECTION_SUMMARY_TILE_CORNER_RADIUS`), sin ningún valor hardcodeado que tocar.
+
+**Aceptación**: pipeline de iconos regenerado, simulador reconstruido limpio, `make test` 8/8, captura real confirmando el tile del panel derecho con esquinas visiblemente más redondeadas.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
