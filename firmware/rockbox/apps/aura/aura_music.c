@@ -958,7 +958,10 @@ void aura_music_playlist_display_name(const char *filename, char *out, size_t ou
 bool aura_music_play_playlist(int index)
 {
     char dir[MAX_PATH];
-    char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+    /* static: 300*64 = 18.75KB, muy por encima del stack de 8KB del hilo
+     * de UI (mismo patron de bug que D-226 -- apps/aura/aura_transitions.c,
+     * ver app.lds .stack = 0x2000). */
+    static char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
     int n;
 
     catalog_get_directory(dir, sizeof(dir));
@@ -977,7 +980,8 @@ bool aura_music_add_track_to_playlist(int index, const char *track_path)
 {
     char dir[MAX_PATH];
     char full_path[MAX_PATH + AURA_MUSIC_ITEM_LEN + 1];
-    char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+    /* static: mismo motivo que aura_music_play_playlist() arriba (D-226). */
+    static char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
     int n;
 
     catalog_get_directory(dir, sizeof(dir));
