@@ -5,27 +5,41 @@ int aura_flow_fmul(int a, int b)
     return (int)(((long long)a * (long long)b) >> AURA_FLOW_SHIFT);
 }
 
-/* Division en punto fijo por desplazamiento adaptativo (pictureflow.c
- * fdiv()/allowed_shift()/clz()): preserva la mayor precision posible sin
- * desbordar un entero de 32 bits. La version original usa un conteo de
- * ceros a la izquierda por CPU (clz) para elegir el corrimiento maximo
- * seguro; aca se usa un bucle simple -- este modulo no corre en tiempo
- * real todavia (SS31.1: nucleo matematico puro, sin conectar a pantalla,
- * D-079), asi que la version portable importa mas que la mas rapida. */
+/* D-219 (encargo del dueno, 2026-08-14: "analiza el plugin de
+ * pictureflow... compara como lo tenemos configurado nosotros"):
+ * cuando este modulo se escribio (D-079), todavia no estaba conectado
+ * a pantalla ("este modulo no corre en tiempo real todavia... la
+ * version portable importa mas que la mas rapida", comentario
+ * original) -- pero aura_coverflow_draw() SI lo llama en tiempo real
+ * hoy, una vez por columna de pantalla de CADA tapa visible (hasta
+ * ~9), en CADA cuadro mientras el carrusel se desliza. El bucle de
+ * hasta 30 iteraciones de corrimiento+comparacion que habia aca es
+ * exactamente lo que pictureflow.c evita con su propio allowed_shift()
+ * (linea 803 de pictureflow.c): un solo conteo de ceros a la izquierda
+ * (clz), que en ARMv5+ es la instruccion CLZ nativa -- UNA instruccion
+ * en vez de hasta 30 corrimientos con rama. Portado ahora que el
+ * "tiempo real" que el comentario original anticipaba ya llego. */
+static int clz32(unsigned v)
+{
+    return __builtin_clz(v);
+}
+
+/* IMPORTANTE: NO es clz(uval)-1 como en pictureflow.c -- esta funcion
+ * preserva a proposito el resultado EXACTO del bucle que reemplaza
+ * (una unidad de corrimiento menos que la formula de pictureflow, un
+ * desvio preexistente de Aura sin relacion con el rendimiento) para
+ * que el cambio sea una optimizacion de VELOCIDAD pura, cero cambio de
+ * comportamiento numerico -- verificado a mano contra el bucle
+ * original para varios valores de `uval` antes de portar esto, y
+ * `make -C apps/aura/test test` (test_flow.c) sigue pasando identico. */
 static int allowed_shift(int val)
 {
     unsigned uval = (unsigned)(val ^ (val >> 31));
-    int shift = 0;
 
     if (uval == 0)
         return 30;
 
-    while (!(uval & 0x40000000u) && shift < 30)
-    {
-        uval <<= 1;
-        shift++;
-    }
-    return shift - 1;
+    return clz32(uval) - 2;
 }
 
 int aura_flow_fdiv(int num, int den)
