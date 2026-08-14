@@ -5,6 +5,7 @@
 #include "misc.h"
 #include "usb.h"
 #include "dir.h"
+#include "settings.h"
 
 #include "aura_main.h"
 #include "aura_nav.h"
@@ -24,6 +25,9 @@
 #include "aura_coverflow.h"
 #include "aura_status_bar_v2.h"
 #include "aura_screenlock.h"
+#ifdef HAVE_HARDWARE_CLICK
+#include "piezo.h"
+#endif
 
 /* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
  * calculada y suavizada por el driver real del clickwheel
@@ -83,6 +87,41 @@ bool aura_main_last_was_repeat(void)
 void aura_main_swallow_repeats(long raw)
 {
     s_swallow_btn = raw & ~(BUTTON_REPEAT | BUTTON_REL);
+}
+
+/* D-201: reporte del dueno -- "el clicker que suena [en el iPod
+ * original] no viene de la bocina, es un efecto realizado con el
+ * hardware". Tenia razon: el iPod Classic no tiene bocina (no hay
+ * HAVE_SPEAKER en ipod6g.h) -- el clic del original SIEMPRE fue el
+ * piezo electrico interno (GPIO/timer por PWM, piezo-6g.c), NUNCA
+ * paso por el DAC/audifonos. `system_sound_play(SOUND_KEYCLICK)`
+ * (D-196) SI necesita audifonos porque suena por el mismo camino que
+ * la musica -- suficiente para el simulador (audio del Mac via SDL,
+ * sin concepto de audifonos) pero inaudible en el aparato real sin
+ * nada conectado al jack, que es como el dueno lo estaba probando.
+ *
+ * `keyclick_click()` (apps/misc.c) SI dispara el piezo via
+ * `piezo_button_beep()` si `global_settings.keyclick_hardware` esta
+ * prendido -- pero Aura nunca llama a esa funcion (D-022, tiene su
+ * propio manejo de botones) y ese segundo ajuste nunca se expuso en
+ * Ajustes. En vez de agregar un toggle mas para algo que en un iPod
+ * real siempre sonaba solo, el piezo suena SIEMPRE que el Clicker de
+ * Ajustes este encendido -- mismo criterio de "un solo interruptor,
+ * como el original" que ya uso D-196 para el default del beep de
+ * software. */
+static void aura_main_play_keyclick(void)
+{
+    system_sound_play(SOUND_KEYCLICK);
+#ifdef HAVE_HARDWARE_CLICK
+    /* El driver del piezo (piezo-6g.c) es especifico del target ARM
+     * real -- no se compila para el simulador (mismo guard anidado que
+     * ya usa apps/misc.c:keyclick_click() para esto exacto), aunque
+     * HAVE_HARDWARE_CLICK si este definido ahi. */
+#if !defined(SIMULATOR)
+    if (global_settings.keyclick)
+        piezo_button_beep(false, false);
+#endif
+#endif
 }
 
 static long next_button(int timeout_ticks)
@@ -253,7 +292,7 @@ void aura_main(void)
                 && !(button & BUTTON_REL)
                 && (button == BUTTON_SCROLL_FWD || button == BUTTON_SCROLL_BACK
                     || !aura_main_last_was_repeat()))
-                system_sound_play(SOUND_KEYCLICK);
+                aura_main_play_keyclick();
 
             aura_screenlock_handle_button(&nav, button);
             continue;
@@ -423,8 +462,11 @@ void aura_main(void)
 
         /* Clicker (Fase 18, PLAN-UX.md): Aura no usa apps/action.c (D-022),
          * asi que keyclick_click() -- su unico llamador real -- nunca
-         * corre; hay que pedir el beep directamente aca. system_sound_play()
-         * ya no hace nada si global_settings.keyclick esta en 0.
+         * corre; hay que pedir el beep directamente aca via
+         * aura_main_play_keyclick() (D-201: beep de software por el DAC
+         * -- necesita audifonos, D-196 -- MAS el piezo interno del
+         * aparato, el mismo mecanismo del clicker del iPod original,
+         * audible sin nada conectado).
          *
          * Suena SOLO en pulsaciones frescas y en cada paso de rueda
          * (correccion 2026-08-12): los repeats de un boton sostenido
@@ -435,7 +477,7 @@ void aura_main(void)
             && !(button & BUTTON_REL)
             && (button == BUTTON_SCROLL_FWD || button == BUTTON_SCROLL_BACK
                 || !aura_main_last_was_repeat()))
-            system_sound_play(SOUND_KEYCLICK);
+            aura_main_play_keyclick();
 
         aura_screens_handle_button(&nav, button);
     }

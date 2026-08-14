@@ -2243,4 +2243,18 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-201 — El clicker real del iPod es el piezo interno, no el DAC
+
+**Reporte del dueño (2026-08-13)**: el clicker seguía sin sonar en el iPod real después de D-196. Diagnóstico inicial (mío): el iPod Classic 6G no tiene bocina, así que sin audífonos conectados no se puede escuchar nada -- confirmé con el dueño que efectivamente estaba probando sin audífonos. **Corrección del dueño**: "yo sé que el iPod no tiene bocina, pero el clicker que suena no viene de la bocina, es un efecto realizado con el hardware" -- tenía razón, y cambió el diagnóstico por completo.
+
+**Investigación**: el iPod Classic (y los demás iPod con rueda clickeable) nunca reprodujeron el clic por el DAC/audífonos -- lo genera un **piezoeléctrico interno**, manejado directo por GPIO/timer en PWM (`firmware/target/arm/s5l8702/ipod6g/piezo-6g.c`, `piezo_button_beep()`), completamente al margen del camino de audio normal. Confirmado que el hardware y su driver YA estaban listos (`piezo_init()` se llama desde `apps/main.c` en el arranque de Rockbox, `HAVE_HARDWARE_CLICK` definido en `ipod6g.h`) -- lo que faltaba era que Aura lo disparara. `apps/misc.c:keyclick_click()` (el único llamador real de `piezo_button_beep()` en Rockbox de fábrica) nunca corre en Aura porque Aura no usa `apps/action.c` (D-022, tiene su propio manejo de botones) y reimplementa el disparo del clic a mano en `aura_main.c` -- pero esa reimplementación (D-196) solo llamaba a `system_sound_play(SOUND_KEYCLICK)`, el beep de software por el DAC, que sí necesita audífonos para escucharse (y por eso "funcionaba" en el simulador, que usa el audio del propio Mac vía SDL sin ningún concepto de audífonos ni de piezo).
+
+**Arreglo**: `aura_main_play_keyclick()`, una función compartida que reemplaza las dos copias sueltas de `system_sound_play(SOUND_KEYCLICK)` que ya existían (el loop principal y la pantalla de bloqueo de D-197) -- ahora dispara AMBOS caminos: el beep de software (audible con audífonos) y `piezo_button_beep()` (audible sin nada conectado, el mecanismo real del iPod original). Sin ajuste nuevo: el piezo suena siempre que el Clicker de Ajustes esté encendido -- mismo criterio de "un solo interruptor, como el original" que D-196 ya estableció para el default. `keyclick_hardware` (el ajuste nativo de Rockbox que normalmente gatea esto) se queda sin exponer a propósito -- agregar un segundo interruptor para algo que en un iPod real siempre sonaba solo habría sido peor UX, no mejor.
+
+**Detalle real encontrado compilando para el simulador**: `piezo_button_beep()` no existe en absoluto para el build de sim (el driver es específico del ARM real) aunque `HAVE_HARDWARE_CLICK` sí esté definido ahí -- mismo patrón exacto que ya usa `apps/misc.c` (`#if !defined(SIMULATOR)` anidado DENTRO del `#ifdef HAVE_HARDWARE_CLICK`), replicado aquí.
+
+**Aceptación**: `make -C firmware/rockbox/apps/aura/test test` (8/8 suites), build ARM real y build de simulador ambos limpios, `firmware/dist/` regenerado. No hay forma de verificar un efecto piezoeléctrico por captura de pantalla -- confirmación en hardware real queda con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
