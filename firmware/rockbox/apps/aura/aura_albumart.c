@@ -189,14 +189,51 @@ static void mask_corners_transposed(fb_data *buf, int size, int radius, unsigned
     }
 }
 
+/* D-231 (reporte del dueno, 2026-08-14: "la version por default [en
+ * la lista de albumes] se ve muy mal, con un icono que no cabe
+ * completamente en ese pequeno cuadro"). Causa real: esta funcion
+ * siempre pedia la mascara "music" de A26_ICON_SIZE_SELECTION_SUMMARY_
+ * SYMBOL (60px, generate.py), sin importar el `size` del tile que la
+ * va a mostrar -- correcto para Cover Flow/transiciones (130-135px,
+ * 60px cabe con margen) pero la lista de albumes usa ALBUM_ART_SIZE=48,
+ * MENOR que el propio icono: `ox`/`oy` (mas abajo) daban negativo y la
+ * nota se recortaba contra los cuatro bordes del tile.
+ *
+ * Fix: elegir la mascara horneada mas grande que siga respetando la
+ * MISMA proporcion icono/tile que ya se veia bien en Cover Flow
+ * (60/130 =~ 46%), en vez de un tamano fijo -- design-system/generate.py
+ * hornea "music" en un conjunto fijo de tamanos (ver icons/masks/
+ * music-*.bmp): 12/16/20/24/28/36/48/60/64px. Para 130/135px esto
+ * sigue devolviendo 60 (identico a antes, cero cambio visual ahi); para
+ * 48px (lista de albumes) devuelve 20, que cabe con el mismo margen
+ * proporcional que el resto del sistema. */
+static int default_tile_icon_size(int size)
+{
+    static const int available[] = { 12, 16, 20, 24, 28, 36, 48, 60, 64 };
+    int target = size * A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL
+                 / AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE;
+    int best = available[0];
+    size_t i;
+
+    for (i = 0; i < sizeof(available) / sizeof(available[0]); i++)
+    {
+        if (available[i] > size)
+            break;
+        if (available[i] <= target)
+            best = available[i];
+    }
+    return best;
+}
+
 /* Caratula "Default" (imagen de referencia del dueno del diseno,
  * 2026-08-12): nota musical gris sobre un tile gris claro plano --
  * reemplaza al degradado de acento de la primera version de D-109. Los
  * grises salen de tokens existentes (SELECTION_FILL de fondo,
  * SHELL_RAIL de tinta), asi el default respeta ambos temas sin colores
- * nuevos. La nota es la MISMA mascara de cobertura del icono "music"
- * (60px) que ya genera design-system/generate.py -- se compone contra
- * el tile con la rampa de antialias real, ningun bitmap nuevo. */
+ * nuevos. La nota es la mascara de cobertura del icono "music" que ya
+ * genera design-system/generate.py, elegida por tamano segun el tile
+ * (D-231, ver default_tile_icon_size arriba) -- se compone contra el
+ * tile con la rampa de antialias real, ningun bitmap nuevo. */
 void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
 {
     unsigned tile = a26_color(A26_SELECTION_FILL);
@@ -216,7 +253,7 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
         buf[i] = tile;
 
     snprintf(path, sizeof(path), "%s/aura/masks/music-%d.bmp",
-              ICON_DIR, A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL);
+              ICON_DIR, default_tile_icon_size(size));
     bm.data = (char *)s_decode_scratch;
     ret = read_bmp_file(path, &bm, sizeof(s_decode_scratch), FORMAT_NATIVE, NULL);
     if (ret <= 0)

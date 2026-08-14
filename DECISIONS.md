@@ -2707,4 +2707,16 @@ Estas rutas se disparan al abrir el panel de listas de reproducción desde Ahora
 
 ---
 
+## D-231 — Carátula Default de la lista de álbumes: el icono ya no se recorta contra el tile
+
+**Reporte del dueño (2026-08-14)**: "hay que corregir la visualización de los albums en la lista de albums, ya que aquí la versión por default se ve muy mal, con un icono que no cabe completamente en ese pequeño cuadro."
+
+**Causa**: `aura_albumart_default_tile()` (`aura_albumart.c`) siempre pedía la máscara "music" horneada a `A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL` (60px, `design-system/generate.py`), sin importar el `size` real del tile donde se va a componer. Correcto para Cover Flow y las transiciones al reproductor (130-135px, 60px cabe con margen de sobra) pero la lista de álbumes (`aura_screens.c:draw_album_list()`) usa `ALBUM_ART_SIZE`=48 -- MENOR que el propio icono. `ox`/`oy` (el centrado del icono dentro del tile) daban negativo, así que la nota se recortaba contra los cuatro bordes.
+
+**Arreglo**: nueva `default_tile_icon_size(int size)` que elige, del conjunto fijo de tamaños que `generate.py` ya hornea para "music" (12/16/20/24/28/36/48/60/64px, confirmado en `icons/masks/`), el más grande que conserve la MISMA proporción icono/tile que ya se veía bien en Cover Flow (60/130 ≈ 46%) sin pasarse del tile. Para 130/135px esto sigue devolviendo 60 -- cero cambio visual en Cover Flow/transiciones, confirmado por lectura del cálculo. Para 48px (lista de álbumes) devuelve 20, que cabe con el mismo margen proporcional que el resto del sistema.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos. Captura real en el simulador de la lista de Álbumes -- el ícono de nota musical cabe completo dentro de cada tile de 48px, sin recorte en ningún borde, en las cuatro filas visibles.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
