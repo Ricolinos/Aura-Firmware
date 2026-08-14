@@ -2602,4 +2602,16 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-225 — Pantalla de USB conectado: el FONDO también respeta el tema (continuación de D-223)
+
+**Encargo del dueño (2026-08-14)**: "ayudame a agregar la pantalla de conexión usb (aún aparece la pantalla negra con el texto usb rojo sobre un rectangulo aún mas negro) que el fondo" -- el "USB rojo sobre rectángulo negro" descrito es el logo genérico de Rockbox, ya reemplazado por el de Aura en D-223 (build aún no instalada del lado del dueño al momento del encargo); lo que quedaba realmente sin resolver de esa misma pantalla era el color de FONDO, que D-223 dejó explícitamente fuera de alcance.
+
+**Por qué esto SÍ es seguro, a diferencia de fuentes/iconos**: `a26_color()` (`apple2026_shell.c`) es una función pura sobre `aura_settings.theme` (enum ya cargado en memoria al arrancar, desde `aura.cfg`) y constantes de color fijadas en compilación -- no lee nada del disco, así que no choca con la razón real por la que D-223 descartó el resto del reskin (`font_disable_all()` protegiendo el disco montado por el host durante USB). `struct screen` (`screen_access.h`) expone `set_background()`/`set_foreground()` justamente para fijar el color que `clear_viewport()` va a usar.
+
+**Implementación**: en `usb_screens_draw()` (`apps/gui/usb_screen.c`), antes de `screen->clear_viewport()`, se agrega (`#ifdef IPOD_6G`) `screen->set_background(a26_color(A26_SHELL_BG))` -- el mismo token de fondo que usa el resto del shell de Aura (`A26_SHELL_BG`). El logo (`bm_rockboxlogo`, D-223) se sigue dibujando encima sin cambios; no se tocó `set_foreground()` porque el logo es un bitmap, no texto dibujado con la fuente del sistema. El `#include "aura/apple2026_shell.h"` usa ruta relativa a `apps/` (no `-Iapps/aura` directo) porque `APPEXTRA` para este target es `recorder:gui:radio` -- `apps/aura` NO está en el include path global; se confirmó el patrón correcto leyendo `apps/gui/splash.c`, que ya incluye `"aura/aura_splash_lang.h"` de la misma manera.
+
+**Aceptación**: build ARM real (`firmware/build-ipod6g`) y de simulador (`firmware/tools/build_sim.sh`) limpios -- mismo warning preexistente de `apple2026_shell.c` (`-Wtype-limits`, no relacionado). `make -C firmware/rockbox/apps/aura/test test` 8/8 sin cambios (174/174 `test_flow`, 20/20 `test_color`, etc. -- ningún archivo tocado por esta suite). Sin verificación visual, misma limitación que D-223: el harness headless del simulador no tiene forma de simular una conexión USB real. Cambio acotado a fijar un color antes de una llamada que ya existía, revisado por lectura de código y por el mecanismo `set_background`/`clear_viewport` ya usado en el resto de Rockbox.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -66,6 +66,13 @@
  * IMX31L/IMX233/RK27XX/MIPS/COLDFIRE) -- el bitmap sigue siendo valido
  * en cualquier momento de la sesion, no solo durante el arranque. */
 #include "bitmaps/rockboxlogo.h"
+/* D-225: a26_color() (apple2026_shell.h/.c) SI es seguro llamarlo aca --
+ * a diferencia de a26_font()/los iconos SF (que leen .fnt/.bmp de
+ * disco), es una funcion pura sobre aura_settings.theme (enum ya en
+ * memoria) y constantes de color fijadas en compilacion. Se usa mas
+ * abajo para que el FONDO de esta pantalla tambien respete el tema
+ * claro/oscuro del usuario, no solo el logo. */
+#include "aura/apple2026_shell.h"
 #endif
 
 #if (CONFIG_STORAGE & STORAGE_MMC)
@@ -249,6 +256,22 @@ static void usb_screens_draw(struct usb_screen_vps_t *usb_screen_vps_ar)
         struct viewport *logo = &usb_screen_vps->logo;
 
         last_vp = screen->set_viewport(parent);
+#ifdef IPOD_6G
+        /* D-225 (encargo del dueno, 2026-08-14: "aun aparece la pantalla
+         * negra con el texto usb rojo sobre un rectangulo aun mas negro
+         * que el fondo" -- el logo ya se arreglo en D-223, pero el color
+         * de FONDO seguia siendo el que Rockbox de fabrica deja para
+         * esta pantalla, no el del tema de Aura). A diferencia de las
+         * fuentes/iconos (font_disable_all() los descarga a proposito
+         * mientras el disco esta montado por USB, D-223), a26_color()
+         * es una funcion PURA sobre aura_settings.theme (ya en memoria,
+         * cargado de aura.cfg al arrancar) y constantes generadas en
+         * compilacion -- no lee nada del disco, asi que es seguro usarla
+         * aca. Respeta el tema claro/oscuro real del usuario, aunque el
+         * resto de la pantalla (tipografia, iconos SF) siga sin poder
+         * usar el sistema completo por la misma razon de D-223. */
+        screen->set_background(a26_color(A26_SHELL_BG));
+#endif
         screen->clear_viewport();
         screen->backlight_on();
         screen->set_viewport(logo);
