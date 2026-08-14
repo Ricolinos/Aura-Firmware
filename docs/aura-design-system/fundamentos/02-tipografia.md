@@ -4,16 +4,19 @@
 
 ## Tokens definidos
 
-**Actualizado 2026-08-14** (encargo del dueño: tipografía de listas y barra de
-estado más grande y legible, mismo alcance de D-195 pero sin tocar
-CoverFlow/NowPlaying): `StatusBar` subió de 8px a 10px, mismo peso relativo
-cada uno -- reutiliza estilos `ds_*` ya cargados (`DS_REG_10`/`DS_BOLD_10`,
-compartidos con `np_counter`/alarmas), sin fuente nueva.
+**Actualizado 2026-08-14, dos pasadas el mismo día** (D-205: tipografía de
+listas y barra de estado más grande y legible, mismo alcance de D-195 pero
+sin tocar CoverFlow/NowPlaying → `StatusBar` 8px a 10px. D-207: "el texto
+casi no se nota, 2px más grande" → `StatusBar` 10px a 12px): reutiliza
+estilos `ds_*` ya cargados en cada pasada (D-205: `DS_REG_10`/`DS_BOLD_10`,
+compartidos con `np_counter`/alarmas; D-207: `DS_REG_12`/`DS_BOLD_12`,
+compartidos con `np_album`/`np_title` sin alterar su apariencia ahí), cero
+fuentes nuevas en ninguna de las dos.
 
 | Token | Tamaño | Peso | Familia | Opacidad | Uso |
 |---|---|---|---|---|---|
-| `--font-statusbar-title` | 10px (subido de 8px) | Bold | SF Pro | 60% | `DynamicTitle` en `StatusBar` |
-| `--font-statusbar-time` | 10px (subido de 8px) | Regular | SF Pro | 80% | `ClockIndicator` en `StatusBar` |
+| `--font-statusbar-title` | 12px (D-207, subido de 10px, antes 8px) | Bold | SF Pro | 60% | `DynamicTitle` en `StatusBar` |
+| `--font-statusbar-time` | 12px (D-207, subido de 10px, antes 8px) | Regular | SF Pro | 80% | `ClockIndicator` en `StatusBar` |
 
 **Nota:** originalmente esto vivía como un solo token (`--font-statusbar`)
 con el título y la hora compartiendo estilo — se separó porque tienen peso
@@ -50,9 +53,17 @@ Familia SF Pro en todos:
 
 ## Tokens de LeftPanel (confirmados)
 
+**D-207 (2026-08-14):** `menu_item` subió de Regular a **Semibold** además de
++2px -- único estilo Semibold del sistema (`A26_FONT_STYLE_DS_SEMIBOLD_14`,
+`SF-Pro-Text-Semibold.otf`), ocupando el único hueco de `MAXUSERFONTS=12`
+que quedaba realmente libre (`A26_FONT_STYLE_DS_BOLD_8`, sin consumidor
+real, confirmado por grep). Estilo EXCLUSIVO de `MenuList` -- no comparte
+slot con `np_album`/`np_artist`/`lyrics` (que se quedan en `DS_REG_12`), así
+que NowPlaying no cambia con esto.
+
 | Token | Tamaño | Peso | Uso |
 |---|---|---|---|
-| `--font-menu-item` | 12px (D-195, subido de 10px) | Regular | Texto de ítems en `MenuList` (SF Pro) |
+| `--font-menu-item` | 14px (D-207, subido de 12px; 10px originalmente) | **Semibold** (D-207, antes Regular) | Texto de ítems en `MenuList` (SF Pro), incluye Ajustes y todos los submenús |
 
 ## Listas de contenido completo (Música/Video/Fotos/Alarmas, `aura_widgets_draw_list`)
 

@@ -223,14 +223,15 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
      * cableada). */
     if (title && title[0])
     {
-        /* Encargo del dueno (2026-08-14): tipografia de la barra de
-         * estado mas legible -- DS_BOLD_10 (10px) en vez de DS_BOLD_8
-         * (8px), mismo peso Bold, ya cargada (np_counter del
-         * reproductor la usa tambien -- el reproductor en si no se
-         * toca, solo se reutiliza su fuente aca). Sin cambiar
-         * AURA_DS_METRICS_STATUSBAR_HEIGHT ni ningun otro token de
-         * geometria de la barra. */
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
+        /* Encargo del dueno (2026-08-14, primera pasada): DS_BOLD_8
+         * (8px) a DS_BOLD_10 (10px). Encargo del dueno (2026-08-14,
+         * segunda pasada, "el texto casi no se nota, 2px mas grande"):
+         * DS_BOLD_10 -> DS_BOLD_12 -- reusa el estilo ya cargado por
+         * np_title, cero costo de fuente nueva (el reproductor no se
+         * toca, solo se reutiliza su fuente aca). text_y se calcula
+         * dinamicamente de lcd_getstringsize(), asi que centra solo con
+         * el tamano nuevo sin tocar AURA_DS_METRICS_STATUSBAR_HEIGHT. */
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
         ink = a26_shell_blend(bg, a26_color(A26_TEXT_PRIMARY),
                                AURA_DS_OPACITY_STATUSBAR_TITLE_PCT * 256 / 100);
         lcd_set_foreground(ink);
