@@ -235,6 +235,36 @@ static char s_loaded_path[MAX_PATH];
 static bool s_panel_colors_valid = false;
 static unsigned s_panel_top = 0, s_panel_bot = 0, s_panel_ink = 0;
 
+/* Cache de draw_cover_tilted() (seguimiento de D-229, item 1: el
+ * candidato de "recompute per-frame" que D-229 dejo sin tocar por falta
+ * de confianza). La proyeccion de perspectiva por columna (aura_flow.c)
+ * es una funcion PURA de (t256, caratula/reflejo cargados) -- verificado
+ * leyendo aura_flow.c completo (sin estado oculto, sin current_tick, sin
+ * dependencia de nada mas que `slide`) y aura_pattern_lerp() (lerp
+ * puro). En reposo (fuera del morph de Modo 4) t256 vale SIEMPRE 0 o
+ * 256 de forma constante mientras el modo no cambia (aura_nowplaying_draw,
+ * linea ~1739) -- solo durante el morph en si (el bucle de animacion,
+ * linea ~1583) t256 barre de verdad cuadro a cuadro, y ahi esta cache
+ * simplemente no acierta nunca (misma recomputacion de siempre, cero
+ * regresion). Se invalida por dos vias, igual que s_panel_colors_valid
+ * arriba: (1) `t256` distinto al del ultimo acierto (comparacion aca
+ * abajo) y (2) recarga real de caratula/tema (reload_for_track() la
+ * apaga, mismo punto de disparo que s_panel_colors_valid). Buffers
+ * `static`: 2D de hasta COVER_CACHE_MAX_COLS columnas x
+ * COVER_CACHE_MAX_ROWS filas (margenes holgados sobre el maximo real
+ * medido, 135 columnas x ~169 filas a t256=0) -- muy por debajo de lo
+ * que ya reserva aura_coverflow.c para su propio cache de caratulas
+ * (~42KB por slot, decenas de slots). */
+#define COVER_CACHE_MAX_COLS (ART_SIZE + ART_SIZE / 5)              /* 162 */
+#define COVER_CACHE_MAX_ROWS (ART_SIZE + (ART_SIZE * 60 / 100))     /* 216, mismo margen que col_buf */
+static bool s_cover_tilted_valid = false;
+static int s_cover_tilted_t256 = -1;
+static int s_cover_tilted_ncols = 0;
+static fb_data s_cover_tilted_buf[COVER_CACHE_MAX_COLS][COVER_CACHE_MAX_ROWS];
+static int s_cover_tilted_x[COVER_CACHE_MAX_COLS];
+static int s_cover_tilted_y[COVER_CACHE_MAX_COLS];
+static int s_cover_tilted_n[COVER_CACHE_MAX_COLS];
+
 /* Salida de pantalla completa desde el Modo 4 (ver BUTTON_MENU):
  * aura_screens la consume para elegir el slide en vez del morph al
  * carrusel. */
@@ -472,6 +502,7 @@ static void reload_for_track(const struct mp3entry *id3)
     s_loaded_theme = (int)aura_settings.theme;
     strlcpy(s_loaded_path, id3->path, sizeof(s_loaded_path));
     s_panel_colors_valid = false;
+    s_cover_tilted_valid = false; /* caratula/reflejo van a cambiar */
     s_art_valid = load_album_art(id3);
     if (!s_art_valid)
     {
@@ -740,7 +771,7 @@ static void draw_cover_tilted(int t256)
                                 M4_ART_Y + M4_ART_SIZE / 2, t256);
     int refl_alpha = 256 - t256;
     unsigned shell = a26_color(A26_SHELL_BG);
-    static fb_data col_buf[ART_SIZE + (ART_SIZE * 60 / 100)]; /* margen holgado sobre refl_h real */
+    int i;
 
     if (!s_art_valid)
     {
@@ -758,6 +789,25 @@ static void draw_cover_tilted(int t256)
         draw_art_soft_shadow(aura_pattern_lerp(ART_X, M4_ART_X, t256),
                               cy - size_vis / 2, size_vis,
                               M4_ART_SHADOW_ALPHA * t256 / 256);
+    }
+
+    /* Cache de perspectiva (ver comentario junto a s_cover_tilted_valid,
+     * arriba): la proyeccion de abajo es una funcion pura
+     * de (t256, caratula/reflejo cargados) -- si el ultimo acierto de
+     * cache fue exactamente con este `t256` y nadie invalido la
+     * caratula desde entonces (reload_for_track()), el resultado es
+     * BYTE-IDENTICO: repetir los mismos blits ya guardados en vez de
+     * volver a resolver la formula de camara por columna. Durante el
+     * morph en si `t256` cambia en cada cuadro (barrido real, no
+     * repeticion) asi que esta rama simplemente no acierta ahi -- misma
+     * recomputacion de siempre, sin regresion. */
+    if (s_cover_tilted_valid && s_cover_tilted_t256 == t256)
+    {
+        for (i = 0; i < s_cover_tilted_ncols; i++)
+            if (s_cover_tilted_n[i] > 0)
+                lcd_bitmap(s_cover_tilted_buf[i], s_cover_tilted_x[i],
+                           s_cover_tilted_y[i], 1, s_cover_tilted_n[i]);
+        return;
     }
 
     /* Signo positivo (no `-NP_TILT_IANGLE`): con el signo negativo
@@ -784,13 +834,15 @@ static void draw_cover_tilted(int t256)
 
     aura_flow_begin_projection(&proj, &slide, ART_SIZE);
 
-    while (proj.screen_x < max_screen_x)
+    i = 0;
+    while (proj.screen_x < max_screen_x && i < COVER_CACHE_MAX_COLS)
     {
         int col = aura_flow_source_column(&proj);
         int dy = aura_flow_vertical_scale(&proj);
         int p = 0, dest_row, n_rows = 0;
         const fb_data *cover = (const fb_data *)s_art_bm.data;
         const fb_data *refl = (const fb_data *)s_reflection_buf;
+        fb_data *dst = s_cover_tilted_buf[i];
         /* Centrado vertical por columna (mismo criterio que el
          * carrusel, 2026-08-12): la caratula gira sobre su eje central
          * y ambos bordes convergen -- con el tilt de 7 grados es sutil
@@ -799,27 +851,34 @@ static void draw_cover_tilted(int t256)
         int cover_disp = (ART_SIZE << AURA_FLOW_SHIFT) / dy;
         int y_col = cy - cover_disp / 2;
 
-        for (dest_row = 0; dest_row < total_h; dest_row++)
+        for (dest_row = 0; dest_row < total_h && dest_row < COVER_CACHE_MAX_ROWS; dest_row++)
         {
             int source_row = p >> AURA_FLOW_SHIFT;
 
             if (source_row >= total_h)
                 break;
             if (source_row < ART_SIZE)
-                col_buf[dest_row] = cover[source_row * ART_SIZE + col];
+                dst[dest_row] = cover[source_row * ART_SIZE + col];
             else
                 /* El reflejo se desvanece con el morph (t=256: fuera). */
-                col_buf[dest_row] = a26_shell_blend(shell,
+                dst[dest_row] = a26_shell_blend(shell,
                     refl[(source_row - ART_SIZE) * ART_SIZE + col], refl_alpha);
             p += dy;
             n_rows++;
         }
+        s_cover_tilted_x[i] = proj.screen_x;
+        s_cover_tilted_y[i] = y_col;
+        s_cover_tilted_n[i] = n_rows;
         if (n_rows > 0)
-            lcd_bitmap(col_buf, proj.screen_x, y_col, 1, n_rows);
+            lcd_bitmap(dst, proj.screen_x, y_col, 1, n_rows);
+        i++;
 
         if (!aura_flow_advance_column(&proj))
             break;
     }
+    s_cover_tilted_ncols = i;
+    s_cover_tilted_t256 = t256;
+    s_cover_tilted_valid = true;
 }
 
 /* -- Rating / estrellas (doc SS4) ---------------------------------------- */
