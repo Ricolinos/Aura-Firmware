@@ -3064,6 +3064,17 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     {
         aura_screen_id_t to = aura_nav_current(nav);
 
+        /* Fix 3 (encargo 2026-08-14): la busqueda de Musica persiste su
+         * texto mientras el regreso se quede dentro de la app (p.ej.
+         * Busqueda -> submenu Musica -> Busqueda), pero se reinicia al
+         * desandar toda la pila hasta la raiz/menu principal. Este es
+         * el UNICO lugar donde la profundidad de toda la navegacion se
+         * conoce de forma centralizada (ver comentario D-024 abajo),
+         * asi que es el gancho natural -- ninguna pantalla individual
+         * sabe cuando la pila entera llego a la raiz. */
+        if (depth_after < depth_before && to == AURA_SCREEN_ROOT)
+            aura_search_reset();
+
         /* Una pulsacion = una navegacion, aunque el boton se sostenga
          * durante la transicion (los repeats acumulados/venideros de
          * ESTE boton se ignoran hasta su REL -- ver

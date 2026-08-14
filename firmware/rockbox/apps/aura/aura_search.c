@@ -52,12 +52,21 @@ static const char KB_CHARS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
 /* Lo escrito, la posicion en la tira y los resultados: TODO estatico,
  * asi salir con MENU y volver reanuda la busqueda intacta (encargo:
- * "si nos salimos sin querer... al regresar se conserva lo escrito",
- * sin importar cuantos niveles se hayan salido). */
+ * "si nos salimos sin querer... al regresar se conserva lo escrito").
+ * Solo aura_search_reset() (mas abajo) lo vacia, y solo se llama al
+ * volver a la raiz de la navegacion -- ver el gancho en
+ * aura_screens_handle_button() (aura_screens.c, Fix 3 2026-08-14). */
 #define KB_TEXT_MAX 64
 static char s_text[KB_TEXT_MAX];
 static int  s_sel = 0;
 static int  s_result_sel = 0;
+
+/* MENU con texto escrito ya no sale de una vez (Fix 2, encargo
+ * 2026-08-14): la primera pulsada "navega dentro" de la busqueda
+ * (regresa el cursor de la tira al inicio) y arma esta bandera; solo
+ * la SIGUIENTE pulsada de MENU sale de verdad. Cualquier otro boton
+ * la desarma (ver aura_search_handle_button). */
+static bool s_menu_pending_exit = false;
 
 /* Resultados en vivo: se recalculan solo cuando el texto cambia. */
 #define KB_MAX_RESULTS 64
@@ -69,6 +78,34 @@ static bool s_results_valid = false;
 bool aura_search_needs_tick(void)
 {
     return true; /* el cursor parpadea mientras la pantalla este activa */
+}
+
+/* Como aura_wheel_advance() (aura_screens.c) pero CIRCULAR: la tira es
+ * un ciclo cerrado, no una lista con extremos, asi que envolver es lo
+ * esperado (encargo 2026-08-14) en vez de detenerse en 'A' o en '_'.
+ * No se reutiliza aura_wheel_advance() -- ese la comparten listas
+ * reales (menus, listas de musica) donde SI tiene sentido detenerse en
+ * los extremos; cambiar su clamp por wrap ahi afectaria a toda la app. */
+static int kb_advance(int sel, int direction)
+{
+    int step = aura_wheel_step((int)aura_main_wheel_velocity());
+    int next = (sel + direction * step) % KB_COUNT;
+
+    if (next < 0)
+        next += KB_COUNT;
+    return next;
+}
+
+/* Reinicia texto, cursor de la tira y resultados -- ver aura_search.h:
+ * solo debe llamarse al volver a la raiz de la navegacion (Fix 3). */
+void aura_search_reset(void)
+{
+    s_text[0] = '\0';
+    s_sel = 0;
+    s_result_sel = 0;
+    s_result_count = 0;
+    s_results_valid = false;
+    s_menu_pending_exit = false;
 }
 
 /* -- Resultados ----------------------------------------------------------- */
@@ -284,13 +321,26 @@ void aura_search_handle_button(aura_nav_t *nav, long button)
 {
     size_t len = strlen(s_text);
 
+    /* Cualquier boton REAL que no sea MENU desarma la "salida
+     * pendiente" (ver BUTTON_MENU mas abajo): volver a escribir o
+     * mover la tira despues de un MENU consumido pide pasar otra vez
+     * por el mismo paso antes de poder salir. BUTTON_NONE NO cuenta
+     * como "otro boton" -- el bucle principal llama aca en cada tic de
+     * reloj aunque no se haya pulsado nada (el cursor parpadeante
+     * necesita repintar, aura_search_needs_tick()); tratarlo como
+     * "boton distinto" desarmaba la bandera antes de que la SEGUNDA
+     * pulsada de MENU llegara, y esta jamas salia (bug real encontrado
+     * al verificar con el simulador, 2026-08-14). */
+    if (button != BUTTON_MENU && button != BUTTON_NONE)
+        s_menu_pending_exit = false;
+
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        s_sel = aura_wheel_advance(s_sel, KB_COUNT, 1);
+        s_sel = kb_advance(s_sel, 1);
         break;
     case BUTTON_SCROLL_BACK:
-        s_sel = aura_wheel_advance(s_sel, KB_COUNT, -1);
+        s_sel = kb_advance(s_sel, -1);
         break;
 
     case BUTTON_SELECT:
@@ -335,8 +385,24 @@ void aura_search_handle_button(aura_nav_t *nav, long button)
         break;
 
     case BUTTON_MENU:
-        /* Sale CONSERVANDO lo escrito -- volver a entrar reanuda. */
-        aura_nav_pop(nav);
+        /* Con texto escrito, MENU NO sale de una vez -- la primera
+         * pulsada "navega dentro" de la busqueda (regresa el cursor de
+         * la tira al inicio, por si se hojeo lejos buscando una letra)
+         * y arma la salida real para la SIGUIENTE pulsada; lo escrito
+         * NUNCA se toca aca, asi que esa segunda pulsada sale con el
+         * texto intacto (encargo: "si nos salimos... se conserva lo
+         * escrito"). Sin texto, MENU sale de inmediato como siempre --
+         * ahi no hay nada que "navegar dentro" (encargo 2026-08-14). */
+        if (s_text[0] && !s_menu_pending_exit)
+        {
+            s_sel = 0;
+            s_menu_pending_exit = true;
+        }
+        else
+        {
+            aura_nav_pop(nav);
+            s_menu_pending_exit = false;
+        }
         break;
 
     default:
