@@ -49,7 +49,24 @@
 #define CF_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
 #define CF_TOP_Y          30 /* borde superior del central, medido de la referencia de Apple */
 #define CF_VISIBLE_RADIUS AURA_DS_METRICS_COVER_FLOW_SIDE_SLIDES_PER_SIDE
-#define CF_CACHE_SLOTS    (2 * CF_VISIBLE_RADIUS + 3) /* visibles + margen para scroll suave */
+/* D-224 (encargo del dueno, 2026-08-13: "preparar los siguientes 15 a
+ * menos que haya memoria suficiente"): visibles + 15 de margen por
+ * lado, no solo 3 -- el iPod 6G del proyecto (MEMORYSIZE=64, ver
+ * firmware/export/config.h) sobra para esto. Costo por slot: cover_buf
+ * (CF_COVER_SIZE^2 * 2B = 130*130*2 = 33800B) + reflection_buf
+ * (CF_COVER_SIZE*CF_REFLECTION_H*2B = 130*32*2 = 8320B) = 42120B; con
+ * el CF_VISIBLE_RADIUS=3 vigente hoy, 2*(3+15)+3 = 39 slots =~1.60MB
+ * (~2.5% de los 64MB) -- s_slots es estatico (BSS), no vive en el
+ * stack, ver su declaracion mas abajo. get_slot_for() ya evita relleno
+ * inutil de esos slots extra: solo carga bajo demanda cuando el
+ * carrusel realmente visita ese indice (nunca precarga el vecindario
+ * el solo), y la precarga en disco (aura_music_precache_album_art(),
+ * aura_music.c) es la que de verdad llena el cache de TODOS los
+ * albumes -- este numero mas grande es para que, al desplazarse rapido
+ * por una biblioteca grande, la ventana de RAM cubra un tramo mas largo
+ * antes de tener que re-leer el .pfraw de un album ya visitado
+ * recientemente. */
+#define CF_CACHE_SLOTS    (2 * (CF_VISIBLE_RADIUS + 15) + 3)
 #define CF_SIDE_FADE      165 /* de 255 -- laterales visibles como en la referencia, no apagadas */
 
 /* Reverso crecido (encargo del dueno del diseno, 2026-08-12): al

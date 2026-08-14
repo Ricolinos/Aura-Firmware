@@ -56,9 +56,17 @@ static void pfraw_path(int32_t album_seek, int size, char *out, size_t outsz)
     snprintf(out, outsz, "%s/%ld-%d.pfraw", CF_CACHE_DIR, (long)album_seek, size);
 }
 
-static bool read_pfraw(const char *path, int size, int radius, fb_data *out)
+static bool pfraw_header_valid(int fd, int size, int radius)
 {
     struct pfraw_header hdr;
+    int n = read(fd, &hdr, sizeof(hdr));
+
+    return n == (int)sizeof(hdr) && hdr.size == size && hdr.radius == radius
+           && hdr.theme == (int32_t)aura_settings.theme;
+}
+
+static bool read_pfraw(const char *path, int size, int radius, fb_data *out)
+{
     size_t px_bytes = (size_t)size * size * sizeof(fb_data);
     int fd, n;
 
@@ -66,9 +74,7 @@ static bool read_pfraw(const char *path, int size, int radius, fb_data *out)
     if (fd < 0)
         return false;
 
-    n = read(fd, &hdr, sizeof(hdr));
-    if (n != (int)sizeof(hdr) || hdr.size != size || hdr.radius != radius
-        || hdr.theme != (int32_t)aura_settings.theme)
+    if (!pfraw_header_valid(fd, size, radius))
     {
         close(fd);
         return false;
@@ -77,6 +83,24 @@ static bool read_pfraw(const char *path, int size, int radius, fb_data *out)
     n = read(fd, out, px_bytes);
     close(fd);
     return n == (int)px_bytes;
+}
+
+/* D-224: ver comentario en aura_albumart.h -- mismo chequeo de header
+ * que read_pfraw(), sin el read() del payload de pixeles. */
+bool aura_albumart_is_cached(int32_t album_seek, int size, int radius)
+{
+    char path[MAX_PATH];
+    int fd;
+    bool ok;
+
+    pfraw_path(album_seek, size, path, sizeof(path));
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return false;
+
+    ok = pfraw_header_valid(fd, size, radius);
+    close(fd);
+    return ok;
 }
 
 static void write_pfraw(const char *path, int size, int radius, const fb_data *data)
