@@ -372,6 +372,47 @@ static fb_data lut_pixel(unsigned px, const unsigned char *lut_r,
                         lut_b[RGB_UNPACK_BLUE(px)]);
 }
 
+/* D-241 (sesion 2026-08-14, "todavia se puede optimizar mas"):
+ * `fade` (ver draw_slide_perspective) solo es CONTINUO mientras una
+ * tapa esta a menos de un paso de indice del centro animado
+ * (t_center<256) -- aura_pattern_lerp() satura a CF_SIDE_FADE exacto
+ * en cuanto t_center llega a 256 (progress_256>=256 => return b, ver
+ * aura_patterns.c). Con CF_VISIBLE_RADIUS=3 se dibujan hasta 8
+ * laterales por cuadro; EN REPOSO las 8 estan en fade==CF_SIDE_FADE
+ * fijo (ninguna esta "a medio paso" del centro), y DURANTE el scroll
+ * a lo sumo 2 (las vecinas inmediatas del indice animado) tienen un
+ * fade realmente en transicion -- las otras 6+ siguen fijas en
+ * CF_SIDE_FADE. build_fade_lut() (256*3 divisiones enteras, sin
+ * divisor de hardware en el ARM926EJ-S) se reconstruia identica para
+ * cada una de esas tapas "lejanas", cada cuadro: una sola tabla
+ * compartida, invalidada solo cuando cambia el color de fondo (tema),
+ * cubre todos esos casos sin alterar un solo pixel de salida (mismo
+ * build_fade_lut(), mismo fade). Las tapas realmente en transicion
+ * siguen construyendo su propia tabla en draw_slide_perspective(): su
+ * valor de fade es distinto cuadro a cuadro, no se puede compartir. */
+static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
+                              const unsigned char **out_r,
+                              const unsigned char **out_g,
+                              const unsigned char **out_b)
+{
+    static unsigned char lut_r[256], lut_g[256], lut_b[256];
+    static int cached_bg_r = -1, cached_bg_g = -1, cached_bg_b = -1;
+
+    if (bg_r != cached_bg_r || bg_g != cached_bg_g || bg_b != cached_bg_b)
+    {
+        build_fade_lut(lut_r, CF_SIDE_FADE, bg_r);
+        build_fade_lut(lut_g, CF_SIDE_FADE, bg_g);
+        build_fade_lut(lut_b, CF_SIDE_FADE, bg_b);
+        cached_bg_r = bg_r;
+        cached_bg_g = bg_g;
+        cached_bg_b = bg_b;
+    }
+
+    *out_r = lut_r;
+    *out_g = lut_g;
+    *out_b = lut_b;
+}
+
 /* -- Perspectiva real (Fase 31.1/31.2, D-079/D-080; T3.2(a) extiende a
  * datos transpuestos; T3.2(b) generaliza a offset CONTINUO) -------------
  *
@@ -408,7 +449,14 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
     int fade;
     const fb_data *cover = (const fb_data *)slot->art.cover_data;   /* transpuesto: cover[col*size+row] */
     const fb_data *refl = (const fb_data *)slot->art.reflection_data; /* transpuesto: refl[col*refl_h+row] */
-    int refl_h = aura_art_reflection_height(CF_COVER_SIZE, CF_REFLECTION_PCT);
+    /* D-241: CF_COVER_SIZE/CF_REFLECTION_PCT son macros (constantes de
+     * compilacion) -- aura_art_reflection_height(CF_COVER_SIZE,
+     * CF_REFLECTION_PCT) siempre devolvia el mismo valor que
+     * CF_REFLECTION_H (definido arriba con la MISMA formula, para
+     * dimensionar cover_buf/reflection_buf) pero via una llamada real a
+     * otra unidad de compilacion, una vez por tapa visible por cuadro.
+     * Usar la macro ya existente evita esa llamada+division redundante. */
+    int refl_h = CF_REFLECTION_H;
     int total_h = CF_COVER_SIZE + refl_h;
     unsigned bg = a26_color(A26_SHELL_BG);
     int bg_r = RGB_UNPACK_RED(bg);
@@ -416,8 +464,11 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
     int bg_b = RGB_UNPACK_BLUE(bg);
     static fb_data col_buf[CF_COVER_SIZE + CF_REFLECTION_H];
     /* D-219: tablas de blend, ver build_fade_lut() -- una sola vez por
-     * tapa, no una vez por pixel. */
+     * tapa, no una vez por pixel. D-241: usadas solo para el fade EN
+     * TRANSICION (ver get_far_fade_lut() arriba); use_lut_* apunta a
+     * estas o a la tabla compartida segun el caso. */
     static unsigned char lut_r[256], lut_g[256], lut_b[256];
+    const unsigned char *use_lut_r = NULL, *use_lut_g = NULL, *use_lut_b = NULL;
 
     if (extra_x256 < 0)
         extra_x256 = 0;
@@ -435,9 +486,23 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
     fade = aura_pattern_lerp(255, CF_SIDE_FADE, t_center);
     if (fade < 255)
     {
-        build_fade_lut(lut_r, fade, bg_r);
-        build_fade_lut(lut_g, fade, bg_g);
-        build_fade_lut(lut_b, fade, bg_b);
+        if (fade == CF_SIDE_FADE)
+        {
+            /* Caso comun (ver comentario de get_far_fade_lut()): tabla
+             * compartida, sin reconstruir. */
+            get_far_fade_lut(bg_r, bg_g, bg_b, &use_lut_r, &use_lut_g, &use_lut_b);
+        }
+        else
+        {
+            /* Tapa realmente en transicion (t_center<256): su fade es
+             * unico para este cuadro, no se puede compartir. */
+            build_fade_lut(lut_r, fade, bg_r);
+            build_fade_lut(lut_g, fade, bg_g);
+            build_fade_lut(lut_b, fade, bg_b);
+            use_lut_r = lut_r;
+            use_lut_g = lut_g;
+            use_lut_b = lut_b;
+        }
     }
 
     aura_flow_begin_projection(&proj, &slide, CF_COVER_SIZE);
@@ -470,7 +535,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
             px = (source_row < CF_COVER_SIZE)
                 ? cover_col[source_row]
                 : refl_col[source_row - CF_COVER_SIZE];
-            col_buf[dest_row] = (fade < 255) ? lut_pixel(px, lut_r, lut_g, lut_b) : px;
+            col_buf[dest_row] = (fade < 255) ? lut_pixel(px, use_lut_r, use_lut_g, use_lut_b) : px;
             p += dy;
             n_rows++;
         }
@@ -641,7 +706,17 @@ static void draw_tracklist_panel(void)
      * fondo" sin inventar un segundo valor. Ningun RGB suelto en C
      * (regla dura del proyecto). */
     unsigned panel_bg = a26_shell_blend(bg, a26_color(A26_TEXT_PRIMARY), 11);
-    char header[160];
+    /* D-241: "Album - Artista" solo cambia de CONTENIDO cuando cambia
+     * el album objetivo -- antes se reformateaba con snprintf() en
+     * CADA cuadro que este panel estaba visible (hasta HZ/20 = 20
+     * veces por segundo mientras el marquee desborda o el
+     * ScrollIndicator sigue en su ventana de Fade-on-Idle, ver
+     * aura_coverflow_pending()), aunque el texto resultante fuera
+     * BYTE POR BYTE identico cuadro a cuadro. static + gate detras del
+     * mismo chequeo `s_header_for_index != s_target_index` que ya
+     * existia para resetear el reloj del marquee -- se reformatea una
+     * sola vez por cambio de album, se reusa el resto de los cuadros. */
+    static char s_header_cache[160];
     const char *artist = target_artist();
     long header_elapsed_ms;
 
@@ -651,34 +726,35 @@ static void draw_tracklist_panel(void)
     /* Cabecera "Album - Artista" con Marquee Loop cuando no cabe
      * (marquee-text.md: 2s estatico + 5s de loop continuo) -- mismo
      * componente que StatusBar/SelectionSummary, nunca un corte seco. */
-    if (artist[0])
-        snprintf(header, sizeof(header), "%s - %s",
-                  s_albums[s_target_index].label, artist);
-    else
-        snprintf(header, sizeof(header), "%s", s_albums[s_target_index].label);
-
     if (s_header_for_index != s_target_index)
     {
         s_header_for_index = s_target_index;
         s_header_since = current_tick;
+
+        if (artist[0])
+            snprintf(s_header_cache, sizeof(s_header_cache), "%s - %s",
+                      s_albums[s_target_index].label, artist);
+        else
+            snprintf(s_header_cache, sizeof(s_header_cache), "%s",
+                      s_albums[s_target_index].label);
     }
     header_elapsed_ms = (current_tick - s_header_since) * 1000L / HZ;
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
-    lcd_getstringsize((const unsigned char *)header, &w, &h);
+    lcd_getstringsize((const unsigned char *)s_header_cache, &w, &h);
     if (w <= CF_BACK_SIZE - 2 * pad)
     {
         lcd_putsxy(panel_x + (CF_BACK_SIZE - w) / 2,
                    panel_y + (CF_BACK_HEADER_H - h) / 2,
-                   (const unsigned char *)header);
+                   (const unsigned char *)s_header_cache);
         s_header_overflowing = 0;
     }
     else
         s_header_overflowing = aura_marquee_draw(panel_x + pad,
                                                   panel_y + (CF_BACK_HEADER_H - h) / 2,
                                                   CF_BACK_SIZE - 2 * pad,
-                                                  header, header_elapsed_ms);
+                                                  s_header_cache, header_elapsed_ms);
 
     /* Separador cabecera/lista: barra de 1px al ancho del contenido
      * (respeta el padding interno de 4px, misma regla que el divisor
