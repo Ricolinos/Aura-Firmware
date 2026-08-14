@@ -2075,4 +2075,22 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-191 — "Aura instalado" con el iPod atascado en DFU; barra de progreso que parecía colgada
+
+**Reporte del dueño (2026-08-13), instalación en hardware real**: tras un primer intento colgado ~4 minutos en la copia de archivos, cerrar y reabrir Aura Studio, y un segundo intento -- la barra de "Instalando Aura" llegó al final en 10 segundos y se quedó quieta 5 minutos más ("debemos corregir esto... para que el usuario no piense que se trabo el programa, y demostrarle un progreso real"). Al terminar, pidió la contraseña, guió al DFU, y **apareció un segundo diálogo de contraseña encima de la pantalla "Aura instalado" ya renderizada** -- señal de que el flujo se dio por terminado antes de que el trabajo real (reactivar los agentes AMP) ocurriera. El iPod quedó en pantalla negra, con Finder mostrando "Modo DFU del iPod / Restaurar iPod...", sin arrancar.
+
+**Causa raíz de la falsa confirmación de éxito**: se leyó directamente `firmware/rockbox/utils/mks5lboot/main.c` -- el camino de envío por DFU llama a `ipoddfu_send()` y sale con éxito (`exit(0)`) apenas el envío por USB termina. Eso **solo confirma que los bytes llegaron**, no que el iPod los aplicó ni que reinició. La confirmación real es un tono audible del propio aparato (documentado en el README de la herramienta), que nadie escuchaba. Aura Studio heredaba ese "éxito" tal cual y declaraba `.done`.
+
+**Causa contribuyente encontrada por investigación externa**: el demonio de macOS `deviceinterfaced` reclama acceso exclusivo al USB en el instante en que un aparato entra a modo DFU -- es lo que dispara la apertura automática de Finder con "Modo DFU del iPod" a mitad de un envío en curso, exactamente lo que se vio en vivo. Este nombre ya estaba mencionado, sin acción, en un comentario viejo de D-041 -- nunca se había agregado a la lista de servicios que la app pausa.
+
+**Arreglos**:
+1. `PrivilegedExecutor.ampAgentNames` ahora incluye `"deviceinterfaced"` junto a los dos agentes AMP ya pausados durante la instalación.
+2. `runInstallOrRestore()` ya no declara éxito con solo el código de salida de `mks5lboot`: tras el envío, `waitForDeviceToLeaveDFU(timeoutSeconds: 45)` sondea `scanDFU()` cada segundo (con un respiro inicial de 2s) hasta que el aparato deja de verse en DFU -- señal real de que empezó a aplicar el flasheo y reiniciar. Si a los 45s sigue en DFU, se reporta `InstallerError.deviceStuckInDFU` con instrucciones concretas (cerrar Finder sin tocar Restaurar, reintentar -- el DFU ya queda armado, así que el reintento llega rápido a este mismo paso) en vez de un falso "listo".
+
+**Arreglo de la barra de progreso** (mismo reporte, causa distinta): el medidor de la copia de archivos usaba espacio libre del volumen contra el tamaño total del árbol `.rockbox` -- con archivos grandes copiándose primero, el espacio liberado se acerca al 99% en los primeros segundos, y después quedan miles de archivos chicos por escribir (cada uno cuesta casi lo mismo en tiempo por la ida y vuelta USB, casi nada en bytes) sin que la barra se mueva -- exactamente la sensación de "se colgó" que reportó el dueño. Se cambió `ditto -xk` por `ditto -xkV`: imprime una línea por archivo copiado a stderr EN VIVO, que un contador (`DittoProgressCounter`, con candado porque llega desde una cola en segundo plano) va sumando en tiempo real; la barra ahora mide archivos copiados contra el total del zip (mismo "N files" que ya se leía de `unzip -l`), que sigue el ritmo real del trabajo restante en vez de adelantarse.
+
+**Aceptación**: build limpio (`swift build`, `xcodebuild ... BUILD SUCCEEDED`), 105/105 tests (los 2 de red pasan en re-corrida). El iPod del dueño queda en DFU tras el diagnóstico -- retomar la instalación con la app reconstruida debería confirmar de verdad la salida de DFU o, si `deviceinterfaced` sigue interfiriendo por algún otro camino, fallar con un mensaje honesto en vez de un falso "instalado". Confirmación final en hardware real queda con el dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
