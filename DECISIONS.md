@@ -2565,4 +2565,21 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-223 — Pantalla de USB conectado: logo de Aura sí, tema completo no (investigación + cambio parcial seguro)
+
+**Encargo del dueño (2026-08-14)**: pantallas propias para "cuando el iPod está conectado" y "cuando se está sincronizando", con íconos dinámicos (uno de sincronización que dé vueltas), barra de progreso de la sincronización, e icono de "expulsado, listo para desconectar" -- todas respetando el tema.
+
+**Investigación primero, como con D-208 (bootloader)** -- esta pantalla tiene una restricción de arquitectura real, no solo de esfuerzo:
+
+- **`gui_usb_screen_run()`** (`apps/gui/usb_screen.c`, código genérico de Rockbox) es lo que Aura YA dispara al conectar USB -- `default_event_handler()` (`apps/misc.c`) la llama directo apenas ve `SYS_USB_CONNECTED`, ANTES de que el loop de Aura tenga oportunidad de dibujar nada propio, y es bloqueante hasta la desconexión.
+- **Las fuentes y los iconos de Aura viven en el DISCO** (`.rockbox/fonts/`, `.rockbox/icons/`) -- exactamente el volumen que el HOST (Mac/PC) tiene control exclusivo mientras USB está montado. `gui_usb_screen_run()` llama `font_disable_all()` a propósito ANTES de dibujar esta pantalla, precisamente para no arriesgar leer (o el firmware escribiendo) ese disco mientras el host también lo toca -- un riesgo real de corrupción de datos, no una limitación arbitraria. Reskinear con la tipografía SF/iconos SF Symbol completos de Aura significaría tocar esa salvaguarda, que existe por una razón de integridad de datos genuina.
+- **No hay ninguna señal real de "progreso de sincronización" que el firmware pueda leer**: Aura Studio copia archivos al iPod por el protocolo de disco USB estándar de macOS -- el firmware, con el disco montado exclusivamente por el host, no tiene ningún canal para enterarse de cuántos archivos van ni cuánto falta. Una barra de progreso ahí sería necesariamente inventada, no real -- contrario al criterio que toda esta sesión mantuvo (D-217 en Aura Studio SÍ mide progreso real porque ahí el proceso de copia lo controla la propia app).
+- **El icono de "expulsado" ya existe, del lado correcto**: en cuanto el usuario expulsa (desde Finder o el botón "Expulsar" de Aura Studio), el disco se desmonta y `gui_usb_screen_run()` retorna solo -- Aura vuelve a dibujar su UI normal de inmediato, sin pantalla intermedia que mostrar. `DeviceGeneralView` (Aura Studio) ya confirma la expulsión con un mensaje ("Disco expulsado. Ya puedes desconectar el cable.") -- el pedido está mejor resuelto ahí, que es donde de verdad hay algo que confirmar.
+
+**Lo que SÍ se hizo, de bajo riesgo y confirmado seguro**: el logo genérico "USB" de Rockbox (`bm_usblogo`) se reemplaza por el logo de Aura (`bm_rockboxlogo`, el mismo del splash de arranque, D-051) -- solo para `IPOD_6G`, sin tocar ningún otro target Rockbox que comparte este archivo. Antes de hacerlo se confirmó que era seguro: `bm_rockboxlogo` está marcado `INITDATA_ATTR` (memoria "de arranque, reciclable después"), pero `firmware/export/config.h` solo activa esa reciclación real para `CPU_PP/AS3525/AS3525v2/IMX31L/IMX233/RK27XX/MIPS/COLDFIRE` -- el S5L8702 del iPod 6G no está en esa lista, así que para este target el atributo es un no-op y el bitmap sigue siendo válido en cualquier momento de la sesión, no solo durante el arranque. El resto de la pantalla (fuente de sistema, sin tema, sin barra de progreso) se queda igual, por las razones de arriba.
+
+**Aceptación**: build ARM real y de simulador limpios, `make test` 8/8. Sin verificación visual (el harness headless del simulador no tiene forma de simular una conexión USB real) -- cambio acotado a un `#ifdef IPOD_6G` que sustituye un bitmap por otro con el mismo mecanismo de dibujo ya usado, revisado por lectura de código.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

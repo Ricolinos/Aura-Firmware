@@ -48,6 +48,26 @@
 #include "bitmaps/remote_usblogo.h"
 #endif
 
+#ifdef IPOD_6G
+/* D-223 (encargo del dueno, 2026-08-14: "pantalla cuando el iPod esta
+ * conectado... deberian respetar el tema"). El tema completo de Aura
+ * (paleta dinamica, iconos SF Symbol, tipografia SF) no es viable aca
+ * de forma segura: font_disable_all() (mas abajo, gui_usb_screen_run())
+ * descarga las fuentes ANTES de dibujar esta pantalla a proposito --
+ * mientras el disco esta montado por USB, el host tiene control
+ * exclusivo sobre el, y leer archivos .fnt/.bmp desde ahi arriesgaria
+ * corrupcion real. Lo que SI es seguro y de bajo riesgo: el logo en si
+ * -- bm_rockboxlogo (apps/bitmaps/native/rockboxlogo.320x98x16.bmp, ya
+ * reskineado a Aura en D-051) vive EMBEBIDO en el binario, igual que
+ * bm_usblogo, asi que no depende del disco. Confirmado en
+ * firmware/export/config.h que INITDATA_ATTR (la seccion "memoria de
+ * arranque reciclable" que marca este bitmap) es un no-op para el CPU
+ * S5L8702 del iPod 6G (esa reciclacion solo aplica a CPU_PP/AS3525/
+ * IMX31L/IMX233/RK27XX/MIPS/COLDFIRE) -- el bitmap sigue siendo valido
+ * en cualquier momento de la sesion, no solo durante el arranque. */
+#include "bitmaps/rockboxlogo.h"
+#endif
+
 #if (CONFIG_STORAGE & STORAGE_MMC)
 #include "ata_mmc.h"
 #endif
@@ -136,8 +156,16 @@ static void usb_screen_fix_viewports(struct screen *screen,
     else
 #endif
     {
+#ifdef IPOD_6G
+        /* D-223: logo de Aura en vez del logo generico "USB" de
+         * Rockbox -- ver el comentario grande junto al include de
+         * bitmaps/rockboxlogo.h arriba. */
+        logo_width = BMPWIDTH_rockboxlogo;
+        logo_height = BMPHEIGHT_rockboxlogo;
+#else
         logo_width = BMPWIDTH_usblogo;
         logo_height = BMPHEIGHT_usblogo;
+#endif
     }
 
     viewportmanager_theme_enable(screen->screen_type, true, parent);
@@ -204,7 +232,11 @@ static void usb_screens_draw(struct usb_screen_vps_t *usb_screen_vps_ar)
 {
     struct viewport *last_vp;
     static const struct bitmap* logos[NB_SCREENS] = {
+#ifdef IPOD_6G
+        &bm_rockboxlogo, /* D-223 */
+#else
         &bm_usblogo,
+#endif
 #ifdef HAVE_REMOTE_LCD
         &bm_remote_usblogo,
 #endif
