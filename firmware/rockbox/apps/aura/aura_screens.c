@@ -202,6 +202,15 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_CLICKER,    "tap",               AURA_SCREEN_SETTINGS_CLICKER },
     /* -- sistema -- */
     { AURA_STR_SETTINGS_SLEEPTIMER, "sleep",             AURA_SCREEN_SETTINGS_SLEEPTIMER },
+    /* Apagado del iPod (Task A, encargo del dueno): antes esto "solo
+     * pasaba solo", sin ninguna pantalla que lo explicara ni permitiera
+     * cambiarlo -- envuelve global_settings.poweroff (nucleo de
+     * Rockbox, timeout de apagado por inactividad). */
+    { AURA_STR_SETTINGS_POWEROFF,   "poweroff",          AURA_SCREEN_SETTINGS_POWEROFF },
+    /* Bloqueo de pantalla (Task B, encargo del dueno): reubicado de
+     * Extras -- es un ajuste GLOBAL (se arma aca, se activa solo con el
+     * aparato apagado/prendido), no una utilidad de Extras. */
+    { AURA_STR_SETTINGS_SCREENLOCK, "lock",              AURA_SCREEN_SETTINGS_SCREENLOCK },
     { AURA_STR_SETTINGS_DATETIME,   "calendar",          AURA_SCREEN_SETTINGS_DATETIME },
     { AURA_STR_SETTINGS_SORT_BY,    "sort",              AURA_SCREEN_SETTINGS_SORT_BY },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
@@ -237,7 +246,6 @@ static const nav_entry_t extras_entries[] = {
     { AURA_STR_EXTRAS_ALARMS,     "alarm",      AURA_SCREEN_EXTRAS_ALARMS },
     { AURA_STR_EXTRAS_GAMES,      "games",      AURA_SCREEN_EXTRAS_GAMES },
     { AURA_STR_EXTRAS_NOTES,      "notes",      AURA_SCREEN_EXTRAS_NOTES },
-    { AURA_STR_EXTRAS_SCREENLOCK, "lock",       AURA_SCREEN_EXTRAS_SCREENLOCK },
     { AURA_STR_EXTRAS_STOPWATCH,  "stopwatch",  AURA_SCREEN_EXTRAS_STOPWATCH },
 };
 
@@ -316,7 +324,6 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_EXTRAS_ALARM_CHOICE: return AURA_STR_EXTRAS_ALARMS;
     case AURA_SCREEN_EXTRAS_GAMES:        return AURA_STR_EXTRAS_GAMES;
     case AURA_SCREEN_EXTRAS_NOTES:        return AURA_STR_EXTRAS_NOTES;
-    case AURA_SCREEN_EXTRAS_SCREENLOCK:   return AURA_STR_EXTRAS_SCREENLOCK;
     case AURA_SCREEN_EXTRAS_STOPWATCH:    return AURA_STR_EXTRAS_STOPWATCH;
     case AURA_SCREEN_VIDEOS_MOVIES:       return AURA_STR_VIDEOS_MOVIES;
     case AURA_SCREEN_VIDEOS_TVSHOWS:      return AURA_STR_VIDEOS_TVSHOWS;
@@ -358,6 +365,8 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_REPEAT:     return AURA_STR_SETTINGS_REPEAT;
     case AURA_SCREEN_SETTINGS_BACKLIGHT:    return AURA_STR_SETTINGS_BACKLIGHT;
     case AURA_SCREEN_SETTINGS_SLEEPTIMER:   return AURA_STR_SETTINGS_SLEEPTIMER;
+    case AURA_SCREEN_SETTINGS_POWEROFF:     return AURA_STR_SETTINGS_POWEROFF;
+    case AURA_SCREEN_SETTINGS_SCREENLOCK:   return AURA_STR_SETTINGS_SCREENLOCK;
     case AURA_SCREEN_SETTINGS_VOLUME_LIMIT: return AURA_STR_SETTINGS_VOLUME_LIMIT;
     case AURA_SCREEN_SETTINGS_CLICKER:      return AURA_STR_SETTINGS_CLICKER;
     case AURA_SCREEN_SETTINGS_MAINMENU:     return AURA_STR_SETTINGS_MAINMENU;
@@ -430,6 +439,23 @@ static const aura_str_id_t repeat_choice_labels[] = {
     AURA_STR_REPEAT_OFF, AURA_STR_REPEAT_ALL, AURA_STR_REPEAT_ONE,
 };
 
+/* Apagado del iPod (Task A, encargo del dueno): mismo patron que
+ * REPEAT arriba -- ajuste REAL de Rockbox (global_settings.poweroff,
+ * apps/settings_list.c: INT_SETTING en minutos, 0-60, 0 = "Desactivado"
+ * via formatter_time_unit_0_is_off), envuelto con 4 frases fijas en vez
+ * de las etiquetas numericas genericas que ya usan Temporiz. luz/reposo
+ * (draw_backlight/draw_sleeptimer) porque el dueno pidio texto exacto
+ * ("Desactivado, despues de 10min, despues de 20min, despues de 1hra"),
+ * no "10 min" a secas. AURA_STR_TIMEOUT_OFF ya existe (lo usan Temporiz.
+ * luz/reposo) -- se reutiliza en vez de duplicar "Desactivado". Mismo
+ * orden que poweroff_choice_minutes[] (get_choice_current/apply_choice,
+ * mas abajo). */
+static const aura_str_id_t poweroff_choice_labels[] = {
+    AURA_STR_TIMEOUT_OFF, AURA_STR_POWEROFF_10MIN,
+    AURA_STR_POWEROFF_20MIN, AURA_STR_POWEROFF_1HOUR,
+};
+static const int poweroff_choice_minutes[] = { 0, 10, 20, 60 };
+
 /* Acento configurable (PLAN.md T0.3, fundamentos/01-color.md): la doc
  * confirma "configurable por el usuario" pero no dice COMO -- lista
  * provisional de 6 presets con nombre (// TODO(pendiente-doc): un
@@ -456,7 +482,8 @@ static int is_choice_screen(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS_LANGUAGE
         || screen == AURA_SCREEN_SETTINGS_REPEAT
         || screen == AURA_SCREEN_SETTINGS_SORT_BY
-        || screen == AURA_SCREEN_SETTINGS_ACCENT;
+        || screen == AURA_SCREEN_SETTINGS_ACCENT
+        || screen == AURA_SCREEN_SETTINGS_POWEROFF;
 }
 
 static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
@@ -487,6 +514,9 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
     case AURA_SCREEN_SETTINGS_ACCENT:
         *out = accent_choice_labels;
         return sizeof(accent_choice_labels) / sizeof(accent_choice_labels[0]);
+    case AURA_SCREEN_SETTINGS_POWEROFF:
+        *out = poweroff_choice_labels;
+        return sizeof(poweroff_choice_labels) / sizeof(poweroff_choice_labels[0]);
     default:
         *out = NULL;
         return 0;
@@ -504,6 +534,14 @@ static int get_choice_current(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_LANGUAGE: return (int)aura_settings.language;
     case AURA_SCREEN_SETTINGS_SORT_BY:  return aura_settings.sort_by_lastname;
     case AURA_SCREEN_SETTINGS_REPEAT:   return global_settings.repeat_mode;
+    case AURA_SCREEN_SETTINGS_POWEROFF:
+    {
+        size_t i, n = sizeof(poweroff_choice_minutes) / sizeof(poweroff_choice_minutes[0]);
+        for (i = 0; i < n; i++)
+            if (poweroff_choice_minutes[i] == global_settings.poweroff)
+                return (int)i;
+        return 0;
+    }
     case AURA_SCREEN_SETTINGS_ACCENT:
     {
         /* El acento vigente puede no coincidir con ningun preset (el
@@ -530,6 +568,22 @@ static void apply_choice(aura_screen_id_t screen, int index)
     if (screen == AURA_SCREEN_SETTINGS_REPEAT)
     {
         global_settings.repeat_mode = index;
+        settings_save();
+        return;
+    }
+
+    /* Apagado del iPod (Task A): igual que REPEAT arriba, un ajuste
+     * REAL de Rockbox -- set_poweroff_timeout() (firmware/powermgmt.c)
+     * es el mismo setter que usa la propia settings_list.c de Rockbox,
+     * necesario para que el cambio surta efecto sin reiniciar (no basta
+     * con escribir global_settings.poweroff a secas). */
+    if (screen == AURA_SCREEN_SETTINGS_POWEROFF)
+    {
+        int n = (int)(sizeof(poweroff_choice_minutes) / sizeof(poweroff_choice_minutes[0]));
+        if (index < 0 || index >= n)
+            index = 0;
+        global_settings.poweroff = poweroff_choice_minutes[index];
+        set_poweroff_timeout(global_settings.poweroff);
         settings_save();
         return;
     }
@@ -2657,7 +2711,7 @@ void aura_screens_draw(aura_nav_t *nav)
         aura_calendar_draw();
     else if (screen == AURA_SCREEN_EXTRAS_CALENDAR_DAY)
         aura_calendar_day_draw();
-    else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
+    else if (screen == AURA_SCREEN_SETTINGS_SCREENLOCK)
         aura_screenlock_draw();
     else if (screen == AURA_SCREEN_SETTINGS_DATE_EDIT)
         draw_date_edit();
@@ -3014,7 +3068,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_calendar_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_CALENDAR_DAY)
         aura_calendar_day_handle_button(nav, button);
-    else if (screen == AURA_SCREEN_EXTRAS_SCREENLOCK)
+    else if (screen == AURA_SCREEN_SETTINGS_SCREENLOCK)
         aura_screenlock_handle_button(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_DATE_EDIT)
         handle_date_edit(nav, button);

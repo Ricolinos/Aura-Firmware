@@ -6,6 +6,7 @@
 #include "usb.h"
 #include "dir.h"
 #include "settings.h"
+#include "powermgmt.h"
 
 #include "aura_main.h"
 #include "aura_nav.h"
@@ -47,11 +48,12 @@ long aura_main_wheel_velocity(void)
 
 /* Botones que soportan el gesto de "mantener presionado"
  * (AURA_BUTTON_HOLD, aura_main.h -- B-02 en BLOCKED.md, pieza de
- * infraestructura general). Hoy solo SELECT (ClockIndicator, B-01):
+ * infraestructura general). SELECT (ClockIndicator, B-01) y PLAY
+ * (apagado manual desde el menu principal, Task A, ver mas abajo):
  * agregar otro boton es sumarlo aca, next_button() no cambia. */
 static bool is_hold_button(long raw)
 {
-    return raw == BUTTON_SELECT;
+    return raw == BUTTON_SELECT || raw == BUTTON_PLAY;
 }
 
 /* Boton crudo normalizado. timeout_ticks < 0 = bloquear
@@ -256,6 +258,28 @@ void aura_main(void)
          * "primer arranque ya hecho" no dependa de que pantallas
          * visito el usuario. */
         aura_settings_save();
+
+    /* Bloqueo de pantalla GLOBAL (Task B, encargo del dueno): arma el
+     * candado EN VIVO (screen_lock_active) en CADA arranque si el
+     * usuario lo dejo armado (screen_lock_enabled) -- este es el UNICO
+     * lugar que pone screen_lock_active en true; aura_screenlock.c ya
+     * no lo hace al terminar de configurar una clave (eso solo arma
+     * screen_lock_enabled, ver D-2xx).
+     *
+     * Por que aca y no "al apagarse" o "al dormir": este firmware no
+     * tiene un estado de suspension del que se despierte solo -- TODO
+     * apagado real (SYS_POWEROFF, sea por Apagado del iPod/Task A,
+     * mantener Play/Pause, bateria critica en firmware/powermgmt.c, o
+     * cualquier otro disparador que exista o se agregue despues) termina
+     * en power_off() sin retorno (firmware/powermgmt.c); la UNICA forma
+     * de volver a correr este codigo es un arranque nuevo desde cero.
+     * Forzar la condicion ACA, incondicionalmente, cierra todo camino de
+     * apagado de una vez -- no hace falta enumerar ni interceptar cada
+     * uno por separado (y no hay riesgo de que un camino nuevo se
+     * olvide de rearmar el candado). */
+    if (aura_settings.screen_lock_enabled)
+        aura_settings.screen_lock_active = true;
+
     aura_main_ensure_media_dirs();
     a26_shell_init();
     aura_nav_init(&nav, AURA_SCREEN_ROOT);
@@ -476,6 +500,36 @@ void aura_main(void)
         if (button == (BUTTON_SELECT | AURA_BUTTON_HOLD))
         {
             aura_status_bar_v2_reveal_clock();
+            continue;
+        }
+
+        /* Mantener Play/Pause en el menu principal = apagado manual
+         * (Task A, encargo del dueno): "si Apagado del iPod es
+         * Desactivado, el iPod se puede seguir apagando, pero solo
+         * manteniendo Play/Pause desde el menu principal". No existia
+         * ningun camino de apagado manual en este codigo (Aura no usa
+         * apps/action.c/apps/keymaps -- D-022 -- asi que el
+         * ACTION_STD_POWEROFF que otros targets de Rockbox atan a este
+         * mismo gesto nunca corria aca), asi que se agrega aca con el
+         * mismo mecanismo de hold que SELECT arriba. Gateado a
+         * AURA_SCREEN_ROOT (el propio "menu principal") -- en cualquier
+         * otra pantalla, PLAY sostenido simplemente no hace nada nuevo
+         * (antes tampoco tenia un significado de "hold" propio en
+         * ningun lado: cada BUTTON_REPEAT volvia a alternar play/pausa
+         * en bucle mientras se sostuviera, un efecto no documentado que
+         * este gesto reemplaza).
+         *
+         * sys_poweroff() (firmware/powermgmt.c) solo ENCOLA el evento
+         * SYS_POWEROFF -- el apagado real ocurre en la vuelta siguiente
+         * del bucle, cuando next_button() lo entrega y el bloque de
+         * arriba (`if (button == SYS_POWEROFF) aura_shutdown_screen_draw();`
+         * + default_event_handler()) corre exactamente igual que para
+         * el apagado por inactividad (Task A) o cualquier otro camino
+         * de apagado -- ninguna logica nueva que duplique esa pantalla. */
+        if (button == (BUTTON_PLAY | AURA_BUTTON_HOLD))
+        {
+            if (aura_nav_current(&nav) == AURA_SCREEN_ROOT)
+                sys_poweroff();
             continue;
         }
 

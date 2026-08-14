@@ -25,6 +25,12 @@ static int  s_first[SL_DIGITS];
 static int  s_focus = 0;
 static bool s_confirming = false;
 
+/* "Desactivar bloqueo" (Task B, encargo del dueno): confirmacion antes
+ * de borrar la clave guardada -- mismo patron que "Restablecer ajustes"
+ * (s_reset_confirm_yes en aura_screens.c). Arranca en No (seguro por
+ * defecto, nunca se desactiva sin querer). */
+static bool s_disable_confirm_yes = false;
+
 static void reset_all(void)
 {
     memset(s_digits, 0, sizeof(s_digits));
@@ -33,7 +39,7 @@ static void reset_all(void)
     s_confirming = false;
 }
 
-void aura_screenlock_draw(void)
+static void draw_pin_entry(void)
 {
     int total_w = SL_DIGITS * SL_BOX_W + (SL_DIGITS - 1) * SL_GAP;
     int x0 = (A26_SCREEN_WIDTH - total_w) / 2;
@@ -47,7 +53,7 @@ void aura_screenlock_draw(void)
     int i, w, h;
 
     a26_shell_clear_screen();
-    aura_widgets_draw_status_bar(aura_str(AURA_STR_EXTRAS_SCREENLOCK));
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_SCREENLOCK));
 
     /* Candado grande arriba, el mismo simbolo del sistema. */
     aura_widgets_draw_icon("lock", A26_ICON_SIZE_PREVIEW,
@@ -76,6 +82,31 @@ void aura_screenlock_draw(void)
         lcd_putsxy(x + (SL_BOX_W - w) / 2, y + (SL_BOX_H - h) / 2,
                    (const unsigned char *)d);
     }
+}
+
+void aura_screenlock_draw(void)
+{
+    /* Tres estados posibles (Task B, encargo del dueno):
+     *  1) screen_lock_active: candado EN VIVO -- pantalla de desbloqueo
+     *     (unico paso alcanzable cuando aura_main.c intercepta el loop
+     *     entero; nunca se llega aca navegando desde Ajustes, pero el
+     *     mismo dibujo sirve por si alguna vez se redibuja en ese
+     *     instante).
+     *  2) screen_lock_enabled (sin estar activo ahora mismo): el
+     *     usuario entro a "Bloqueo de pantalla" desde Ajustes con el
+     *     bloqueo ya armado -- la unica accion posible aca es
+     *     "Desactivar" (armar de nuevo exige clave nueva, no tiene
+     *     sentido "reconfigurar" una que ya funciona).
+     *  3) ninguno de los dos: flujo de "Activar" -- configurar una
+     *     clave nueva (dos pasadas). */
+    if (!aura_settings.screen_lock_active && aura_settings.screen_lock_enabled)
+    {
+        aura_widgets_draw_confirm(aura_str(AURA_STR_SCREENLOCK_DISABLE_TITLE),
+                                   aura_str(AURA_STR_SCREENLOCK_DISABLE_BODY),
+                                   s_disable_confirm_yes);
+        return;
+    }
+    draw_pin_entry();
 }
 
 /* Empaqueta los 4 digitos en un numero 0-9999 para compararlos/guardarlos
@@ -133,12 +164,15 @@ static void handle_unlock_button(long button)
     }
 }
 
-/* Configurar una clave nueva (flujo original, sin cambios de
- * comportamiento): dos pasadas, MENU cancela sin guardar. Unica
- * diferencia con antes (D-197): al coincidir, la clave se GUARDA de
- * verdad y el candado se enciende ya mismo -- antes esto se
- * descartaba en silencio, que es exactamente el reporte del dueno
- * ("configura la clave, pero de nada sirve"). */
+/* Configurar una clave nueva ("Activar", Task B): dos pasadas, MENU
+ * cancela sin guardar. D-197 la hacia guardar YA con el candado
+ * encendido de inmediato -- el reporte original del dueno era que
+ * configurar una clave "no servia de nada" (nunca se guardaba); ahora
+ * el problema es el opuesto (bloqueaba el aparato al instante, sin que
+ * el dueno pudiera elegir CUANDO se arma). Task B lo decouple: aca solo
+ * se ARMA el bloqueo (`screen_lock_enabled`) -- `screen_lock_active` (el
+ * candado EN VIVO) lo prende exclusivamente aura_main() en cada
+ * arranque, nunca esta pantalla. */
 static void handle_configure_button(aura_nav_t *nav, long button)
 {
     switch (button)
@@ -166,13 +200,12 @@ static void handle_configure_button(aura_nav_t *nav, long button)
         }
         else if (memcmp(s_first, s_digits, sizeof(s_first)) == 0)
         {
-            /* Coincide: se guarda de verdad y el candado queda
-             * ENCENDIDO ya -- la proxima vuelta del loop en
-             * aura_main.c ya va a mostrar esta misma pantalla en modo
-             * desbloqueo, confirmando que el bloqueo es real. */
+            /* Coincide: se guarda la clave y el bloqueo queda ARMADO
+             * (screen_lock_enabled) -- se activara de verdad (candado
+             * EN VIVO) recien en el proximo arranque, no ahora mismo. */
             aura_settings.screen_lock_pin = (unsigned short)digits_to_pin(s_first);
             aura_settings.screen_lock_configured = true;
-            aura_settings.screen_lock_active = true;
+            aura_settings.screen_lock_enabled = true;
             aura_settings_save();
             reset_all();
             aura_nav_pop(nav);
@@ -195,10 +228,47 @@ static void handle_configure_button(aura_nav_t *nav, long button)
     }
 }
 
+/* "Desactivar bloqueo" (Task B): confirmar borra la clave guardada Y el
+ * armado -- reactivar mas adelante exige volver a pasar por
+ * handle_configure_button() desde cero, nunca reusa la clave vieja
+ * (encargo explicito del dueno: "hay que volver a configurar el pin si
+ * se quiere reactivar"). Mismo patron que handle_reset_confirm() en
+ * aura_screens.c. */
+static void handle_disable_confirm(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+    case BUTTON_SCROLL_BACK:
+        s_disable_confirm_yes = !s_disable_confirm_yes;
+        break;
+    case BUTTON_SELECT:
+        if (s_disable_confirm_yes)
+        {
+            aura_settings.screen_lock_enabled = false;
+            aura_settings.screen_lock_configured = false;
+            aura_settings.screen_lock_active = false;
+            aura_settings.screen_lock_pin = 0;
+            aura_settings_save();
+        }
+        s_disable_confirm_yes = false;
+        aura_nav_pop(nav);
+        break;
+    case BUTTON_MENU:
+        s_disable_confirm_yes = false;
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
 void aura_screenlock_handle_button(aura_nav_t *nav, long button)
 {
     if (aura_settings.screen_lock_active)
         handle_unlock_button(button);
+    else if (aura_settings.screen_lock_enabled)
+        handle_disable_confirm(nav, button);
     else
         handle_configure_button(nav, button);
 }

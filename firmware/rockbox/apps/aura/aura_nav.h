@@ -51,7 +51,12 @@ typedef enum {
     AURA_SCREEN_EXTRAS_ALARM_CHOICE,
     AURA_SCREEN_EXTRAS_GAMES,
     AURA_SCREEN_EXTRAS_NOTES,
-    AURA_SCREEN_EXTRAS_SCREENLOCK,
+    /* Reubicado de Extras a Ajustes (encargo del dueno, bloqueo de PIN
+     * global): renombrado para reflejarlo, pero se conserva en su
+     * posicion del enum -- ningun valor de aura_screen_id_t se persiste
+     * a disco, asi que reordenar seria seguro igual, pero renombrar en
+     * el lugar deja un diff mas chico. */
+    AURA_SCREEN_SETTINGS_SCREENLOCK,
     AURA_SCREEN_EXTRAS_STOPWATCH,
     /* Submenus de Videos y Fotos del original (2026-08-13) */
     AURA_SCREEN_VIDEOS_MOVIES,
@@ -114,6 +119,11 @@ typedef enum {
      * final del enum, mismo criterio "solo-anadir-al-final" que el resto
      * de este archivo. */
     AURA_SCREEN_MUSIC_COVERFLOW,
+    /* Apagado por inactividad (Task A, encargo del dueno): pantalla de
+     * eleccion en Ajustes que envuelve global_settings.poweroff (nucleo
+     * de Rockbox) -- ver aura_screens.c. Agregada al final del enum,
+     * mismo criterio "solo-anadir-al-final". */
+    AURA_SCREEN_SETTINGS_POWEROFF,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 
