@@ -2630,4 +2630,22 @@ El hilo que ejecuta TODO el bucle de botones/UI de Aura (`aura_main_run()`, y co
 
 ---
 
+## D-227 — Cuatro desbordes de pila más del mismo patrón que D-226, en código de listas de reproducción
+
+**Contexto**: al pedir una auditoría de rendimiento del reproductor musical (encargo del dueño, 2026-08-14, junto con el reporte que llevó a D-226), se aprovechó para repetir el barrido de D-226 -- buscar OTROS buffers locales de pila de tamaño peligroso en `apps/aura/*.c` -- ya que D-226 solo había mirado variables `unsigned char`/`fb_data` (el patrón de las transiciones de carátula) y no cubría otras formas de declaración.
+
+**Encontrado**: cuatro instancias más, todas `char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN]` (300×64 = 18750 bytes, ~18.75KB) declaradas como variables LOCALES DE PILA -- el mismo patrón exacto de D-226 (contra un stack de hilo "main" de solo 8KB, `firmware/target/arm/s5l8702/app.lds`), solo que en código de listas de reproducción en vez de transiciones de carátula:
+- `aura_music.c`: `aura_music_play_playlist()`, `aura_music_add_track_to_playlist()`.
+- `aura_nowplaying.c`: `draw_playlist_panel()`, `playlist_count()`, y el caso `NP_MODE_PLAYLIST` de `aura_nowplaying_handle_button()`.
+
+Estas rutas se disparan al abrir el panel de listas de reproducción desde Ahora suena (modo 4 de la rueda) o al agregar una pista a una lista -- una superficie de uso real y frecuente, así que es plausible que explicara freezes adicionales que el dueño todavía no había reportado como distintos del de Cover Flow.
+
+**Arreglo**: mismo criterio que D-226 -- `static` en las cinco declaraciones (cada función tiene la suya propia, mismo nombre `labels` mismo archivo pero storage independiente por función, sin colisión). Ninguna es reentrante (hilo de UI único, disparadas por botones). Costo: ~18.75KB × 5 sobre BSS, irrelevante contra los 64MB de `MEMORYSIZE`.
+
+**Barrido de cierre**: tras este arreglo se hizo un grep exhaustivo de TODAS las declaraciones de arreglo local (no solo `unsigned char`/`fb_data`, cualquier tipo) en `apps/aura/*.c` sin `static`/`const` -- el resto son `char buf[16..260]`/`MAX_PATH` (260 bytes)/`TAGCACHE_BUFSZ` (552 bytes)/estructuras chicas × conteos chicos (p.ej. `aura_menu_item_v2_t items[MAX_MENU_ENTRIES]` = 28 bytes × 32 = 896 bytes) -- nada más se acerca al presupuesto de 8KB. No quedan más instancias conocidas de este patrón.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos que siempre. Captura real en el simulador llegando hasta el Modo 4 (Playlist) de Ahora suena (`SELECT,WAIT` ×6 desde Cover Flow -- 4 para llegar a Ahora suena, 2 más para ciclar Volumen→Búsqueda→Playlist vía `cycle_mode()`) -- panel "Gira la rueda para elegir" renderizado correcto, sin caída, ejercitando exactamente `draw_playlist_panel()`/`playlist_count()`/el caso `NP_MODE_PLAYLIST`, las tres funciones arregladas en `aura_nowplaying.c`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
