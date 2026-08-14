@@ -1232,7 +1232,10 @@ static void draw_transport(int t256)
 
 static void draw_playlist_panel(void)
 {
-    char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+    /* static: 300*64 = 18.75KB, muy por encima del stack de 8KB del hilo
+     * de UI (mismo patron de bug que D-226 -- apps/aura/aura_transitions.c,
+     * ver app.lds .stack = 0x2000). */
+    static char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
     int n, i;
     int box_h = 28;
     /* En el ESPACIO entre las estrellas y la fila de modos (encargo
@@ -1740,7 +1743,8 @@ bool aura_nowplaying_sheet_active(void)
 
 static int playlist_count(void)
 {
-    char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+    /* static: mismo motivo que draw_playlist_panel() arriba (D-226). */
+    static char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
     return aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
 }
 
@@ -1974,7 +1978,8 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
 
         case NP_MODE_PLAYLIST:
         {
-            char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+            /* static: mismo motivo que draw_playlist_panel() (D-226). */
+            static char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
             int n = aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
             if (n > 0)
             {
