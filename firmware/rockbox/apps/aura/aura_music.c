@@ -16,6 +16,7 @@
 #include "string-extra.h"
 #include "lcd.h"
 #include "font.h"
+#include "kernel.h" /* yield(), D-224: precarga de caratulas */
 
 #include "aura_music.h"
 #include "aura_lang.h"
@@ -23,6 +24,10 @@
 #include "misc.h"
 #include "appevents.h"
 #include "playback.h"
+#include "apple2026_shell.h"
+#include "apple2026_tokens.h"
+#include "aura_albumart.h"
+#include "aura_widgets.h"
 
 /* D-200: sidecar de texto plano que Aura Studio deja al sincronizar
  * (LibrarySync.swift) con la calificacion (0-10, escala nativa de
@@ -224,6 +229,154 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
     aura_music_debug_mark("B5 buffer_event fin");
 }
 
+/* D-224 (encargo del dueno, 2026-08-13: coverflow "muy lento", pidiendo
+ * cotejar contra el funcionamiento real de pictureflow.c). Investigacion
+ * previa a este commit: pictureflow.c nunca decodifica JPEG durante el
+ * render -- la PRIMERA vez que arranca sobre una biblioteca nueva hace
+ * una pasada completa de decodificacion a un cache en disco
+ * (pfraw_header, mismo formato conceptual que aura_albumart.c), con una
+ * pantalla de espera visible que obliga a esperar, y de ahi en mas SOLO
+ * lee ese cache -- ese es el truco real de su fluidez, no el tamano de
+ * caratula (130px de Aura ya es casi identico a los ~128px de
+ * pictureflow, eso no era el problema).
+ *
+ * Aura YA tenia el cache .pfraw en disco (aura_albumart.c, inspirado en
+ * el mismo mecanismo, regla dura 7: extender, no reimplementar) pero
+ * NUNCA la pasada previa: decodificaba en el momento del primer
+ * cache-miss, DENTRO del cuadro de render del carrusel
+ * (aura_coverflow.c:get_slot_for()) -- eso se siente como una traba
+ * cada vez que aparece en pantalla un album que nunca se vio antes.
+ * Esta funcion es esa pasada previa que faltaba, con el mismo patron de
+ * Aura (nada de hilos nuevos, ver mas abajo): recorre TODOS los albumes
+ * (aura_music_browse(), la misma enumeracion que ya usa Cover Flow) y
+ * llama aura_albumart_load_for_album() por cada uno -- la MISMA funcion
+ * que get_slot_for() ya usa, asi que el resultado en disco es identico
+ * bit a bit, ningun camino nuevo. aura_albumart_is_cached() (header-only,
+ * sin leer pixeles) deja saltar rapido, en cualquier arranque
+ * SIGUIENTE con la biblioteca sin cambios, los albumes que YA
+ * escribieron su .pfraw -- para esos, esta pantalla no vuelve a
+ * aparecer. Ojo: un album sin caratula resoluble (ni cover.jpg, ni arte
+ * embebido) nunca escribe .pfraw (aura_albumart_load_for_album()
+ * devuelve false, no hay nada que cachear -- mismo criterio que
+ * get_slot_for(), ningun camino nuevo) y por lo tanto vuelve a figurar
+ * "pendiente" en cada arranque; NO se agrega un cache negativo a
+ * proposito (invalidarlo cuando Aura Studio sincroniza arte nuevo sobre
+ * ese mismo album exigiria un enganche extra fuera de alcance de este
+ * encargo, y el costo real de un reintento es chico: una busqueda en
+ * tagcache + un chequeo de archivo, nunca una decodificacion JPEG de
+ * verdad). En la practica esto es una pantalla breve en cada arranque
+ * SOLO para bibliotecas con algun album realmente sin arte -- para el
+ * resto, una unica vez.
+ *
+ * Deliberadamente SINCRONA, sin `create_thread()`: encargo explicito
+ * del dueno ("full stop: NO implementes ningun hilo de fondo... todo
+ * el trabajo de esta tarea es sincrono, con progreso visible"), dado el
+ * historial de esta sesion con freezes reales de hilo de audio
+ * (D-204/D-206, ver aura_music_buffer_event() arriba, y D-214 aun
+ * abierto). Es segura precisamente PORQUE esta funcion solo se llama
+ * desde aura_music_db_ready(), que a su vez solo se llama desde el loop
+ * PRINCIPAL/UI en aura_main.c -- jamas desde el hilo de audio
+ * (PRIORITY_PLAYBACK) ni desde ningun callback registrado con
+ * add_event(). Bloquear el hilo de UI aca, con una pantalla de progreso
+ * visible, es exactamente lo que hace pictureflow.c real (obliga a
+ * esperar) y lo que goto el propio encargo ("crea la pantalla de
+ * espera"). yield() tras cada album, mismo patron que el escaneo real
+ * de tagcache (apps/tagcache.c, ver sus propios yield()/do_timed_yield()
+ * en su bucle de escaneo), para no acaparar el CPU frente al hilo de
+ * audio durante los varios segundos que puede tardar en una biblioteca
+ * grande -- un yield() del hilo de UI nunca repite el livelock de
+ * D-204 (ese bloqueaba DENTRO del hilo de audio esperando a un hilo de
+ * MENOR prioridad; esto es lo opuesto: el hilo de UI cediendole tiempo
+ * a los demas, incluido el de audio, que tiene prioridad MAYOR y puede
+ * interrumpir cuando lo necesite). */
+#define AURA_PRECACHE_COVER_SIZE     AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE
+#define AURA_PRECACHE_CORNER_RADIUS  AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
+#define AURA_PRECACHE_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
+#define AURA_PRECACHE_REFLECTION_H   (AURA_PRECACHE_COVER_SIZE * AURA_PRECACHE_REFLECTION_PCT / 100)
+
+/* Scratch estatico (no en el stack del hilo de UI) para la caratula y
+ * el reflejo que aura_albumart_load_for_album() va a llenar en cada
+ * vuelta -- el reflejo se descarta despues de cada album (esta pasada
+ * solo necesita que el .pfraw de la TAPA quede escrito en disco, ver
+ * aura_albumart.c: el reflejo nunca se cachea, se recalcula siempre,
+ * asi que precalcularlo aca no ahorraria nada mas adelante). */
+static unsigned char s_precache_cover[AURA_PRECACHE_COVER_SIZE * AURA_PRECACHE_COVER_SIZE * sizeof(fb_data)];
+static unsigned char s_precache_reflection[AURA_PRECACHE_COVER_SIZE * AURA_PRECACHE_REFLECTION_H * sizeof(fb_data)];
+
+/* Progreso ("Preparando caratulas 42/187") con el mismo lenguaje visual
+ * que draw_waiting_state() (aura_screens.c, privada a ese archivo --
+ * se replica aca en 3 lineas en vez de exportarla): capsula flotante,
+ * SS5.2 Principio 3. A diferencia de draw_waiting_state(), esta pasada
+ * corre FUERA del ciclo normal de aura_screens_draw() (se llama desde
+ * aura_music_db_ready(), en medio del loop principal de aura_main.c),
+ * asi que hace falta estampar esquinas y volcar a LCD aca mismo -- eso
+ * lo hace el wrapper de aura_main.c para cualquier otra pantalla, pero
+ * esta pasada no pasa por ahi. */
+static void draw_precache_progress(int done, int total)
+{
+    char line[48];
+
+    snprintf(line, sizeof(line), "%s %d/%d", aura_str(AURA_STR_PRECACHE_ART), done, total);
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(NULL);
+    aura_widgets_draw_wait_capsule(line);
+    a26_shell_stamp_corners();
+    lcd_update();
+}
+
+/* Pasada de precarga -- ver el comentario grande arriba (incluye por
+ * que un album sin arte real vuelve a contar como "pendiente" en cada
+ * arranque). Barata de llamar en CADA arranque aunque no haga falta
+ * trabajo real: el primer recorrido (solo aura_albumart_is_cached(),
+ * sin decodificar nada) es lo unico que corre si la biblioteca ya esta
+ * completa, y en ese caso ni siquiera se dibuja la pantalla de
+ * progreso. */
+static void aura_music_precache_album_art(void)
+{
+    static aura_music_item_t s_precache_albums[AURA_MUSIC_MAX_ITEMS];
+    aura_albumart_t art;
+    int count, i, pending, done;
+
+    count = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_precache_albums, AURA_MUSIC_MAX_ITEMS);
+    if (count <= 0)
+        return;
+
+    pending = 0;
+    for (i = 0; i < count; i++)
+        if (!aura_albumart_is_cached(s_precache_albums[i].seek,
+                                      AURA_PRECACHE_COVER_SIZE, AURA_PRECACHE_CORNER_RADIUS))
+            pending++;
+
+    if (pending == 0)
+        return; /* biblioteca sin cambios desde el ultimo arranque -- nada que hacer */
+
+    art.size = AURA_PRECACHE_COVER_SIZE;
+    art.radius = AURA_PRECACHE_CORNER_RADIUS;
+    art.cover_data = s_precache_cover;
+    art.reflection_data = s_precache_reflection;
+
+    done = 0;
+    draw_precache_progress(done, pending);
+
+    for (i = 0; i < count; i++)
+    {
+        if (aura_albumart_is_cached(s_precache_albums[i].seek, art.size, art.radius))
+            continue; /* ya en disco -- ni open+read del cache-hit completo */
+
+        aura_albumart_load_for_album(s_precache_albums[i].seek, &art);
+        done++;
+
+        /* Redibujar cada pocos albumes, no en cada uno -- lcd_update()
+         * cuesta mas que decodificar una caratula chica, no tiene
+         * sentido pagarlo `pending` veces. */
+        if ((done & 3) == 0 || done == pending)
+            draw_precache_progress(done, pending);
+
+        yield();
+    }
+}
+
 bool aura_music_db_ready(void)
 {
     /* Rockbox no escanea la biblioteca solo con tagcache_init(): en el
@@ -286,6 +439,11 @@ bool aura_music_db_ready(void)
         tagcache_start_scan();
         import_ratings_from_studio();
         add_event(PLAYBACK_EVENT_TRACK_BUFFER, aura_music_buffer_event);
+        /* D-224: misma puerta que lo de arriba, mismo motivo (tagcache
+         * recien confirmado listo) -- ver el comentario grande junto a
+         * la definicion. Una sola vez por arranque, igual que el resto
+         * de este bloque. */
+        aura_music_precache_album_art();
         update_triggered = true;
     }
 

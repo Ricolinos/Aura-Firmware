@@ -184,6 +184,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_CLOCK_TITLE] = "Hora en el título",
     [AURA_STR_SETTINGS_DATE] = "Fecha",
     [AURA_STR_SETTINGS_TIME] = "Hora",
+    [AURA_STR_PRECACHE_ART]  = "Preparando carátulas",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -368,6 +369,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_CLOCK_TITLE] = "Time in Title",
     [AURA_STR_SETTINGS_DATE] = "Date",
     [AURA_STR_SETTINGS_TIME] = "Time",
+    [AURA_STR_PRECACHE_ART]  = "Preparing artwork",
 };
 
 const char *aura_str(aura_str_id_t id)

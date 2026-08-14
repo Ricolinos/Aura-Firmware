@@ -60,4 +60,15 @@ void aura_albumart_load_default(aura_albumart_t *out);
  * (Ahora suena usa layout fila-contigua, `transposed`=false). */
 void aura_albumart_default_tile(fb_data *buf, int size, bool transposed);
 
+/* D-224: chequeo liviano de cache en disco para `album_seek` a
+ * `size`/`radius` -- valida el header .pfraw (mismo criterio que el
+ * primer paso de aura_albumart_load_for_album()) SIN leer el payload de
+ * pixeles ni generar reflejo. Usado por el paso de precarga
+ * (aura_music.c) para saltar rapido, en un arranque posterior, los
+ * albumes que ya pasaron por aqui -- aura_albumart_load_for_album()
+ * seguiria siendo correcto sin este chequeo (el acierto de cache ya es
+ * su camino rapido), esto solo evita tambien el open+read+reflejo de
+ * cada uno cuando la precarga entera ya esta al dia. */
+bool aura_albumart_is_cached(int32_t album_seek, int size, int radius);
+
 #endif /* AURA_ALBUMART_H */
