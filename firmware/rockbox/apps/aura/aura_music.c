@@ -88,6 +88,14 @@ static void import_ratings_from_studio(void)
     int fd;
     char line[MAX_PATH + 16];
 
+    /* D-204: mismo motivo que la espera en aura_music_buffer_event()
+     * mas abajo -- tagcache_is_usable() (lo que ya garantiza el
+     * llamador, aura_music_db_ready()) NO implica que el ramcache este
+     * completamente cargado todavia. Tocar tagcache antes de eso es
+     * indefinido. */
+    while (!tagcache_is_fully_initialized())
+        yield();
+
     fd = open(AURA_RATINGS_PATH, O_RDONLY);
     if (fd < 0)
         return;
@@ -136,6 +144,31 @@ static void import_ratings_from_studio(void)
  * import_ratings_from_studio() (tagcache recien usable). Solo trae
  * tag_rating -- Aura no usa tag_playcount/tag_lastplayed en ningun
  * lado todavia, no hace falta traerlos "por si acaso". */
+/* D-204: reporte del dueno -- el iPod real se congelaba por completo
+ * (pantalla y botones sin responder) justo AL INICIAR una cancion,
+ * hasta forzar el reinicio. Causa raiz: `send_track_event()`
+ * (apps/playback.c:audio_start_codec(), el hilo de audio) invoca esta
+ * funcion de forma SINCRONA en cada arranque de pista -- y a diferencia
+ * de la version stock de Rockbox (apps/tagtree.c:tagtree_buffer_event,
+ * linea 949-950), la version original de D-200 tocaba tagcache sin
+ * esperar primero a que estuviera COMPLETAMENTE listo.
+ * `aura_music_db_ready()` solo garantiza `tagcache_is_usable()` antes
+ * de registrar este evento -- eso NO implica que el ramcache
+ * (`tc_stat.ramcache`, poblado en un hilo de fondo aparte) ya este
+ * cargado. Si el dueno entra a Musica y empieza a reproducir apenas la
+ * base queda usable, el hilo de audio caia a `find_entry_disk()` (I/O
+ * de disco sincrono, apps/tagcache.c) exactamente mientras el hilo de
+ * tagcache seguia trabajando (aura_music_db_ready() dispara
+ * tagcache_start_scan() en esa misma pasada) -- tagcache en un estado
+ * a medio cargar desde el hilo de audio en tiempo real es
+ * comportamiento indefinido, no solo lento.
+ *
+ * El fix es exactamente la salvaguarda que stock SI tiene y D-200
+ * omitio: esperar (cediendo el CPU, sin tomar ningun lock) a que
+ * tagcache este completamente inicializado antes de tocarlo. Tambien
+ * se alinea el chequeo `if (!id3->rating)` de stock -- sin el, cada
+ * pista se rebuffer pisaba con el valor de tagcache un rating recien
+ * puesto en memoria por commit_rating() en Ahora suena. */
 static void aura_music_buffer_event(unsigned short id, void *ev_data)
 {
     struct mp3entry *id3 = ((struct track_event *)ev_data)->id3;
@@ -146,10 +179,14 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
     if (!global_settings.runtimedb || !id3)
         return;
 
+    while (!tagcache_is_fully_initialized())
+        yield();
+
     if (!tagcache_find_index(&tcs, id3->path))
         return;
 
-    id3->rating = tagcache_get_numeric(&tcs, tag_rating);
+    if (!id3->rating)
+        id3->rating = tagcache_get_numeric(&tcs, tag_rating);
     tagcache_search_finish(&tcs);
 }
 
