@@ -71,4 +71,24 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed);
  * cada uno cuando la precarga entera ya esta al dia. */
 bool aura_albumart_is_cached(int32_t album_seek, int size, int radius);
 
+/* Portada de PLAYLIST (encargo del dueno, 2026-08-14: "quiero que las
+ * playlists tengan una imagen... la lista deberia verse como la lista
+ * de albumes"). A diferencia de aura_albumart_load_for_album(), no hay
+ * ningun seek de tagcache -- las playlists son archivos `.m3u8` en el
+ * directorio de catalogo (catalog_get_directory(), playlist_catalog.h),
+ * no entradas de la base de datos. `playlist_filename` es el nombre de
+ * archivo CRUDO con extension tal cual lo devuelve
+ * aura_music_list_playlists() (p.ej. "Roadtrip 2026.m3u8"); esta
+ * funcion busca el sidecar "<mismo nombre sin extension>.jpg" en ese
+ * mismo directorio -- Aura Studio siempre lo deja ahi (imagen elegida
+ * por el usuario, o un colage/tile default generado si no eligio
+ * ninguna, LibrarySync.swift). Mismo cache `.pfraw` en disco que
+ * aura_albumart_load_for_album() (clave: el nombre de playlist en vez
+ * de un album_seek), mismo formato de salida (transpuesto, esquinas
+ * horneadas, reflejo) -- el llamador no necesita distinguir entre los
+ * dos casos. Devuelve false (out->valid en false) si no hay sidecar;
+ * el llamador cae a aura_albumart_load_default() como con cualquier
+ * album sin caratula. */
+bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out);
+
 #endif /* AURA_ALBUMART_H */

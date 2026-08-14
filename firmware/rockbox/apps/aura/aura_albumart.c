@@ -12,12 +12,14 @@
 #include "recorder/bmp.h"
 #include "recorder/jpeg_load.h"
 #include "string-extra.h"
+#include "playlist_catalog.h"
 
 #include "aura_settings.h"
 #include "aura_albumart.h"
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
 #include "aura_art.h"
+#include "aura_music.h" /* AURA_MUSIC_ITEM_LEN, mismo tope que aura_music_list_playlists() */
 
 /* Buffer de trabajo para decodificar+remuestrear (FORMAT_RESIZE
  * necesita bastante mas espacio que el bitmap final, ver
@@ -417,6 +419,123 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
            (size_t)out->size * out->size * sizeof(fb_data));
 
     write_pfraw(path, out->size, out->radius, (const fb_data *)out->cover_data);
+
+    aura_art_generate_reflection((const fb_data *)out->cover_data,
+                                  (fb_data *)out->reflection_data,
+                                  out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
+    out->valid = true;
+    return true;
+}
+
+/* -- Portada de playlist (encargo del dueno, 2026-08-14) ------------------
+ *
+ * Mismo mecanismo que arriba (cache .pfraw en disco, decodificar JPEG
+ * solo en un fallo de cache) pero SIN tagcache de por medio: la llave
+ * es el nombre de archivo de la playlist en vez de un album_seek, y el
+ * origen es directo -- "<directorio de catalogo>/<nombre sin
+ * extension>.jpg" -- en vez de find_albumart(). */
+
+/* MAX_PATH (260) + AURA_MUSIC_ITEM_LEN (64) + separador/extension --
+ * mismo margen que full_path[] en aura_music_add_track_to_playlist(),
+ * para que el snprintf() de playlist_art_source_path() no pueda
+ * truncar nunca (evita el -Wformat-truncation que sale si el destino
+ * es un MAX_PATH "justo" combinado con otro %s de tamano variable). */
+#define AURA_PLAYLIST_ART_PATH_LEN (MAX_PATH + AURA_MUSIC_ITEM_LEN + 8)
+
+/* Nombre base del cache .pfraw: quitar la extension (.m3u/.m3u8) del
+ * nombre de playlist alcanza para tener una llave unica por playlist,
+ * los mismos caracteres que ya son validos en el nombre del .m3u8
+ * (PathSanitizer del lado de Aura Studio) tambien lo son en un nombre
+ * de archivo de cache. */
+static void playlist_art_base_name(const char *playlist_filename, char *out, size_t outsz)
+{
+    char *dot;
+
+    strlcpy(out, playlist_filename, outsz);
+    dot = strrchr(out, '.');
+    if (dot)
+        *dot = '\0';
+}
+
+static void playlist_pfraw_path(const char *playlist_filename, int size, char *out, size_t outsz)
+{
+    /* static: por encima de los ~200 bytes de buffer local que este
+     * proyecto evita en el hilo de UI (D-226/D-227). */
+    static char base[AURA_MUSIC_ITEM_LEN];
+
+    playlist_art_base_name(playlist_filename, base, sizeof(base));
+    snprintf(out, outsz, "%s/pl-%s-%d.pfraw", CF_CACHE_DIR, base, size);
+}
+
+/* Sidecar que Aura Studio deja junto al .m3u8 (LibrarySync.swift,
+ * PlaylistExporter.imageFileName): mismo directorio que
+ * catalog_get_directory() (donde aura_music_list_playlists() ya busca
+ * los .m3u/.m3u8), mismo nombre base con ".jpg" en vez de la extension
+ * de playlist. */
+static void playlist_art_source_path(const char *playlist_filename, char *out, size_t outsz)
+{
+    /* static: mismo motivo que playlist_pfraw_path() arriba -- dir+base
+     * combinados pasan largo los ~200 bytes. */
+    static char dir[MAX_PATH];
+    static char base[AURA_MUSIC_ITEM_LEN];
+
+    catalog_get_directory(dir, sizeof(dir));
+    playlist_art_base_name(playlist_filename, base, sizeof(base));
+    snprintf(out, outsz, "%s/%s.jpg", dir, base);
+}
+
+/* Decodifica el sidecar a `s_decode_scratch` -- mismo scratch buffer y
+ * mismo formato (FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT)
+ * que decode_album_art(); el sidecar siempre es JPEG (Aura Studio nunca
+ * escribe otra cosa), asi que a diferencia de decode_album_art() no
+ * hace falta la rama .bmp. */
+static bool decode_playlist_art(const char *playlist_filename, int size)
+{
+    static char path[AURA_PLAYLIST_ART_PATH_LEN]; /* static: D-226/D-227 */
+    int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
+    struct bitmap bm;
+
+    playlist_art_source_path(playlist_filename, path, sizeof(path));
+
+    bm.width = size;
+    bm.height = size;
+    bm.data = (char *)s_decode_scratch;
+#if (LCD_DEPTH > 1)
+    bm.maskdata = NULL;
+#endif
+
+    return read_jpeg_file(path, &bm, sizeof(s_decode_scratch), format, NULL) > 0;
+}
+
+bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
+{
+    static char cache_path[AURA_PLAYLIST_ART_PATH_LEN]; /* static: D-226/D-227 */
+    unsigned bg = a26_color(A26_SHELL_BG);
+
+    out->valid = false;
+    if (!playlist_filename || !*playlist_filename)
+        return false;
+
+    playlist_pfraw_path(playlist_filename, out->size, cache_path, sizeof(cache_path));
+
+    if (read_pfraw(cache_path, out->size, out->radius, (fb_data *)out->cover_data))
+    {
+        aura_art_generate_reflection((const fb_data *)out->cover_data,
+                                      (fb_data *)out->reflection_data,
+                                      out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
+        out->valid = true;
+        return true;
+    }
+
+    if (!decode_playlist_art(playlist_filename, out->size))
+        return false;
+
+    transpose((const fb_data *)s_decode_scratch, (fb_data *)s_transpose_scratch, out->size);
+    mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);
+    memcpy(out->cover_data, s_transpose_scratch,
+           (size_t)out->size * out->size * sizeof(fb_data));
+
+    write_pfraw(cache_path, out->size, out->radius, (const fb_data *)out->cover_data);
 
     aura_art_generate_reflection((const fb_data *)out->cover_data,
                                   (fb_data *)out->reflection_data,
