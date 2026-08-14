@@ -2548,4 +2548,21 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-222 — "Actualizar Aura" ya no manda al asistente completo -- barra de progreso automática
+
+**Encargo del dueño (2026-08-14)**: "cuando haya una nueva actualización y el firmware en el iPod ya esté instalado, al darle al botón de 'actualizar', en lugar de mandarnos a la sección de instalación > reinstalar aura > seleccionar el modo (dual o solo) > continuar, etc... solo deberá aparecer una barra de progreso (la misma que he planeado para cuando sincronizamos el iPod), pero mostrando la instalación de Aura en el iPod -- es decir, deberá ser automática la instalación."
+
+**Ya existía casi todo lo necesario, sin usarse desde "Actualizar"**: con Aura ya instalado y arrancado al menos una vez, reinstalar NUNCA necesitó DFU -- `InstallerViewModel.acknowledgeDeviceReady()` ya detecta esa evidencia (`firmware == .aura(hasBooted: true)`) y copia los archivos directo, terminando en `.done` sin pasar por flashear. El botón "Actualizar" (`DeviceGeneralView`) simplemente nunca usaba ese camino corto -- solo navegaba a la sección Instalador (`selection = .installer`), que mostraba el selector Instalar/Restaurar de siempre, obligando a elegir modo de arranque de nuevo aunque el dispositivo ya tuviera uno.
+
+**Arreglo, tres piezas**:
+1. **`InstallerViewModel.startAutomaticUpdate()`** (nuevo): fija `destroyOriginalFirmware = !device.isDualBoot` (preserva el modo que el dispositivo YA tiene, no lo vuelve a preguntar), salta directo a `.detectDevice` y llama `acknowledgeDeviceReady()` -- mismo patrón que `startAutoInstall()` (D-183) ya usaba para el salto automático desde modo bootloader. Nuevo flag `isAutomaticUpdate` para que la vista sepa qué dibujar.
+2. **`AutomaticUpdateView`** (nueva): a diferencia de `InstallerWizardView` (que dibuja `StepProgressBar` y deja navegar paso a paso con botones "Atrás"), esto solo muestra el contenido del paso ACTUAL -- sin barra de pasos, sin navegación manual. Reutiliza los mismos componentes visuales ya existentes (`SimpleProgressView` -- se le quitó `private` para esto --, `DoneView`, `FailedView`) para que se vea consistente con el resto de la app, en vez de inventar una UI nueva.
+3. **`ContentView`**: `onUpdateAura` ahora llama `installer.startAutomaticUpdate()` antes de navegar a la sección Instalador -- `InstallerHomeView` consulta `viewModel.isAutomaticUpdate` para mostrar `AutomaticUpdateView` en vez del selector normal.
+
+**Caso de borde reconocido, no forzado**: si por alguna razón el dispositivo tuviera Aura instalado pero NUNCA arrancado (`hasBooted: false`) -- técnicamente posible pero muy improbable, ya que el botón "Actualizar" solo aparece con Aura ya funcionando --, `acknowledgeDeviceReady()` seguiría pidiendo DFU real. `AutomaticUpdateView` cubre ese caso mostrando la guía real de DFU (`EnterDFUView`) en vez de quedarse mostrando un progreso que nunca avanza, con la salida por `dismissAutomaticUpdate()`.
+
+**Aceptación**: `swift build`, `swift test` (151/151), `xcodegen generate` + `xcodebuild -scheme AuraStudio -configuration Debug build` → `BUILD SUCCEEDED`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
