@@ -120,7 +120,15 @@ static void aura_main_play_keyclick(void)
      * HAVE_HARDWARE_CLICK si este definido ahi. */
 #if !defined(SIMULATOR)
     if (global_settings.keyclick)
+    {
+        /* D-214 (temporal, diagnostico del freeze): confirma si el
+         * piezo se dispara justo antes de un cuelgue -- ver el
+         * comentario grande de aura_music_debug_mark() en
+         * aura_music.c. */
+        aura_music_debug_mark("K1 piezo...");
         piezo_button_beep(false, false);
+        aura_music_debug_mark("K2 piezo OK");
+    }
 #endif
 #endif
 }
@@ -368,11 +376,6 @@ void aura_main(void)
              * entero (no solo la entrada/salida) es la parte que se ve
              * -- 20fps durante los ~380ms completos. */
             if (aura_widgets_pill_animating() && timeout_ticks < 0)
-                timeout_ticks = HZ / 20;
-
-            /* D-212: mismo resorte, ahora tambien en MenuList (modo
-             * split) -- antes su pastilla saltaba sin animar. */
-            if (aura_menu_list_pill_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
 
             /* Cursor parpadeante del teclado de Busqueda: medio

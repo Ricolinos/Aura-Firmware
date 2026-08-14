@@ -56,10 +56,4 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
 int aura_menu_list_scroll_indicator_pending(void);
 int aura_menu_list_scroll_indicator_animating(void);
 
-/* D-212: true mientras la pastilla de seleccion de MenuList todavia
- * esta en pleno resorte -- aura_main.c pide 20fps mientras dure, mismo
- * criterio que aura_widgets_pill_animating() para la lista de pantalla
- * completa. */
-int aura_menu_list_pill_animating(void);
-
 #endif /* AURA_MENU_LIST_H */

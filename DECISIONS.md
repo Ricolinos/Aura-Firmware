@@ -2466,6 +2466,42 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 **Aceptación**: build de simulador y ARM limpios (ver nota de entorno en D-207), `make test` 8/8, captura real a 2 ticks de un `SCROLL_FWD` mostrando la pastilla todavía sobre la fila anterior mientras el texto de la nueva selección ya cambió a acento -- confirma el resorte en vuelo, no solo el estado final.
 
+**Revertido en D-214** tras probarse en hardware real: el dueño no quería el resorte en el menú principal, lo quería instantáneo.
+
+---
+
+## D-213 — Splash de arranque: franja negra de Rockbox detrás del logo centrado
+
+**Reporte del dueño (2026-08-14), tras instalar en hardware real**: "el splash de inicio se ve bien, solo al principio, porque después se ve una franja negra a mitad de la pantalla, detrás del texto Aura."
+
+**Causa real**: `init_tagcache()` (`apps/main.c`, código genérico de Rockbox, no de Aura) dibuja `splash_progress()` -- un mensaje de cromo puro de Rockbox ("Actualizando base de datos... [n/m]") -- centrado en la pantalla, pero SOLO cuando el arranque encuentra un commit de tagcache pendiente (no en todos los arranques, lo que explica por qué "se ve bien al principio" en la mayoría de los casos y la franja solo aparece a veces). Antes de D-210, el logo de arranque vivía pegado arriba (`Y=10`) y este splash centrado nunca se cruzaba con él. Al centrar el logo verticalmente (D-210, pedido explícito del dueño), pasó a solaparse exactamente con esa franja de texto de Rockbox -- que se dibuja con su propio fondo, sin limpiar toda la pantalla, dejando la "franja negra a mitad de pantalla, detrás del texto Aura" que describe el reporte.
+
+**Arreglo**: `apps/main.c`, `init_tagcache()` -- las dos llamadas a `splash_progress()` quedan detrás de `#ifndef IPOD_6G` (no se toca el comportamiento de ningún otro target Rockbox). El commit real de tagcache sigue corriendo exactamente igual; solo se deja de dibujar su mensaje, consistente con la regla del proyecto de cero cromo de Rockbox visible en cualquier estado -- este era, hasta ahora, el único vestigio que quedaba colándose durante el arranque.
+
+**Aceptación**: build de simulador y ARM real limpios, `make test` 8/8. No se pudo forzar la condición exacta (commit de tagcache pendiente al arrancar) en el simulador para una captura -- el cambio es la eliminación directa de dos llamadas ya existentes detrás de un guard de compilación, bajo riesgo. Confirmación visual final queda con el dueño.
+
+---
+
+## D-214 — Pastilla del menú principal: vuelta a instantánea; instrumentación de diagnóstico para el freeze de audio
+
+**Reporte del dueño (2026-08-14), tras instalar en hardware real**:
+1. "El seleccionador en los menús principales se ve raro, quita el efecto/comportamiento que le da un ligero rebote y que hace que tenga un delay sobre la selección. debe ser instantáneo el movimiento."
+2. "El coverflow se renderiza demasiado lento, debería ser mucho más fluida la experiencia."
+3. "con cualquier canción, de cualquier formato se sigue trabando al intentar reproducirla, a tal punto de que solo reiniciando el ipod puede volver a servir... esta vez ya no abrió tampoco archivos m4a ni siquiera desde la lista de canciones, mismo problema con el resto de archivo (mp3, flac, aiff). Es necesario corregir esto a la brevedad, audita la configuración del firmware."
+
+**(1) Pastilla instantánea**: D-212 (mismo día, unas horas antes) le había agregado a la pastilla de `MenuList`/`LeftPanel` el mismo resorte con sobrepaso que ya tenía la lista de pantalla completa, pensando que el "delay" que el dueño describía originalmente era falta de ese resorte en el lado equivocado. Al probarlo en hardware real, el dueño confirmó que no lo quería ahí. Revertido -- `menu_pill_animated_y()` eliminado de `aura_menu_list.c`/`.h`, `aura_selector_draw()` vuelve a recibir la Y de destino directa (sin animar), y se quitó el gate de 20fps correspondiente en `aura_main.c`. El resorte de la lista de pantalla completa (`aura_widgets.c`, decisión de diseño preexistente y documentada, SS9.2/Fase 28) NO se tocó -- el dueño señaló específicamente "los menús principales".
+
+**(3) El freeze sigue sin resolverse -- honesto sobre el estado real**: D-206 (mismo día) identificó y corrigió con evidencia sólida un livelock real del hilo de audio esperando al hilo de tagcache. El dueño instaló esa build (empaquetada junto con D-207 a D-212) y el freeze **no solo persiste, empeoró**: antes al menos el .m4a sonaba unos segundos antes de fallar; ahora ningún formato llega a reproducirse. Se investigó en profundidad sin poder reproducir el bug:
+- Se generaron fixtures de audio reales (`firmware/tools/gen_test_media.sh`) y se intentó reproducir música (incluida la biblioteca real del dueño, ya presente en `simdisk`) en el simulador con captura de pantalla en cada paso -- **la reproducción funcionó sin ningún síntoma de cuelgue** en el simulador, consistente con que la causa sea específica de timing/hardware real (el simulador corre cada "hilo" de Rockbox como un hilo nativo preemptivo del sistema operativo, no reproduce el scheduler cooperativo por prioridades del ARM real donde sí se confirmó el mecanismo de D-206).
+- Se auditó memoria (`MEMORYSIZE=64` para ipod6g -- 64MB, descarta que las fuentes nuevas de D-207 agoten RAM de forma significativa), registros de hardware compartidos entre el piezo (Timer A, `TACON`/`TAPRE`/`TADATA`/`TACMD`) y el códec de audio real (bus I2C, `PCON2`/`PCON3`/`PCON6` -- registros GPIO completamente distintos, sin solapamiento con el `PCON0` que usa el piezo), el manejo de excepciones ARM (`crt0.S`, sin ningún vínculo con el piezo), y no se encontró ningún otro `while`+`yield()` bloqueante ni registro de evento adicional en todo `apps/aura/` aparte del ya corregido en D-206.
+- Ninguna pista concluyente. **Se optó por instrumentación en vez de un tercer intento especulativo**: `aura_music_debug_mark()` (nueva, `aura_music.c`/`.h`, temporal) dibuja una línea de texto en una franja al pie de la pantalla y actualiza el LCD de inmediato, fuera del sistema de viewports de Aura -- si el sistema se cuelga justo después de una marca, esa marca ya llegó al framebuffer físico antes del cuelgue y queda visible. Marcada en los puntos clave del flujo real de reproducción: construcción de playlist y `playlist_start()` (`aura_music_play_songs`, lista de canciones), `playlist_start()` desde reproducción de una pista individual (`aura_music_play_track`, coverflow/búsqueda), entrada/salida de `aura_music_buffer_event()` (el callback del hilo de audio ya corregido en D-206), y el disparo del piezo (`aura_main_play_keyclick()`, para confirmar o descartar si el clic coincide con el cuelgue).
+
+**Pendiente real**: la próxima vez que el dueño reproduzca y el sistema se trabe, la ÚLTIMA marca visible en la franja inferior de la pantalla (antes de que se congele) va a decir en qué paso exacto se quedó -- ese dato es indispensable para progresar de verdad en vez de seguir adivinando sin acceso al hardware. Esta instrumentación es temporal y debe retirarse en cuanto el freeze quede confirmado resuelto.
+
+**(2) Coverflow lento**: reportado, no auditado todavía en esta pasada -- se prioriza el freeze (bloqueante, "a la brevedad") sobre la fluidez (molesto, no bloqueante). Queda como trabajo pendiente inmediato siguiente.
+
+**Aceptación**: build de simulador y ARM real limpios, `make test` 8/8, captura confirmando la pastilla de MenuList instantánea (sin quedar atrás del destino ni a 2 ticks de un `SCROLL_FWD`). La instrumentación de diagnóstico no se pudo verificar "en el momento del cuelgue" porque el cuelgue no es reproducible en el simulador -- se confirmó que dibuja correctamente en un caso exitoso (se ve momentáneamente y la UI real la sobreescribe en el siguiente frame, sin dejar artefactos).
+
 ---
 
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

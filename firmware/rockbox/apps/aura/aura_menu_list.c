@@ -10,7 +10,6 @@
 #include "aura_settings.h"
 #include "aura_selector.h"
 #include "aura_scroll_indicator.h"
-#include "aura_motion.h"
 #include "aura_menu_list.h"
 
 #define PADDING  AURA_DS_METRICS_LEFT_PANEL_PADDING
@@ -61,75 +60,19 @@ static void truncate_to_fit(const char *label, char *out, size_t outsz, int max_
 static int s_last_selected = -1;
 static long s_activity_since = 0;
 
-/* D-212 (encargo del dueno, 2026-08-14): "la barra de seleccion tiene
- * un delay [en la lista de elementos]... mantener los mismos estilos y
- * efectos en todas las listas ya sean en modo split o full". Causa
- * real: `aura_selector_draw()` (D-081, comentario propio: "si algo lo
- * anima en el futuro") nunca tuvo animacion -- salta directo al
- * destino, sin el resorte con sobrepaso (SS9.2) que si tiene la
- * pastilla de `aura_widgets_draw_list()` (listas de pantalla completa,
- * `s_pill_anim_*` mas abajo en aura_widgets.c). No eran inconsistentes
- * por exceso de delay en un lado -- era la falta total de resorte en
- * el otro. Mismo patron exacto copiado de aura_widgets.c:
- * pill_animated_y(), con `items`/`count` como identidad de lista (en
- * vez de `items`/`title`, MenuList no tiene un `title` propio en esta
- * firma). */
-#define MENU_PILL_SPRING_TICKS (HZ * AURA_MOTION_SPRING_MS / 1000)
-
-static const aura_menu_item_v2_t *s_pill_items;
-static int s_pill_count;
-static int s_pill_drawn_y = -1;
-static int s_pill_anim_from_y;
-static int s_pill_anim_to_y;
-static long s_pill_anim_since;
-
-static int menu_pill_animated_y(const aura_menu_item_v2_t *items, int count, int target_y)
-{
-    long elapsed;
-    int eased;
-
-    if (items != s_pill_items || count != s_pill_count)
-    {
-        s_pill_items = items;
-        s_pill_count = count;
-        s_pill_anim_from_y = target_y;
-        s_pill_anim_to_y = target_y;
-        s_pill_anim_since = current_tick - MENU_PILL_SPRING_TICKS;
-    }
-    else if (target_y != s_pill_anim_to_y)
-    {
-        s_pill_anim_from_y = s_pill_drawn_y;
-        s_pill_anim_to_y = target_y;
-        s_pill_anim_since = current_tick;
-    }
-
-    if (s_pill_anim_from_y == s_pill_anim_to_y)
-    {
-        s_pill_drawn_y = target_y;
-        return target_y;
-    }
-
-    elapsed = current_tick - s_pill_anim_since;
-    if (elapsed >= MENU_PILL_SPRING_TICKS)
-    {
-        s_pill_drawn_y = s_pill_anim_to_y;
-        return s_pill_drawn_y;
-    }
-
-    eased = aura_motion_spring(elapsed, MENU_PILL_SPRING_TICKS);
-    s_pill_drawn_y = s_pill_anim_from_y
-        + (s_pill_anim_to_y - s_pill_anim_from_y) * eased / 256;
-    return s_pill_drawn_y;
-}
-
-/* Mismo par pending()/animating() que ya usa aura_widgets_pill_animating()
- * -- aura_main.c pide 20fps mientras dure el resorte. */
-int aura_menu_list_pill_animating(void)
-{
-    long elapsed = current_tick - s_pill_anim_since;
-    return s_pill_anim_from_y != s_pill_anim_to_y
-        && elapsed >= 0 && elapsed < MENU_PILL_SPRING_TICKS;
-}
+/* D-212/D-214: D-212 le agrego a la pastilla de MenuList el mismo
+ * resorte con sobrepaso que ya tenia `aura_widgets_draw_list()`
+ * (listas de pantalla completa), pensando que la "delay" que el dueno
+ * describia en "la lista de elementos" era falta de resorte en este
+ * lado. Encargo del dueno, 2026-08-14, tras probarlo en hardware real:
+ * "el seleccionador en los menus principales se ve raro, quita el
+ * efecto/comportamiento que le da un ligero rebote... debe ser
+ * instantaneo el movimiento". Revertido -- MenuList vuelve a saltar
+ * directo al destino (mismo comportamiento que tenia antes de D-212).
+ * El resorte de `aura_widgets_draw_list()` (listas de pantalla
+ * completa) NO se toca aca: el dueno solo senalo "los menus
+ * principales", y ese resorte es una decision de diseno preexistente y
+ * documentada (SS9.2, Fase 28), no algo que este encargo haya tocado. */
 
 /* Switch inline v2 (left-panel.md, "Switch -- valores booleanos"):
  * dimensiones derivadas del indicador del Selector (alto max 12px,
@@ -248,12 +191,7 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
             (sel_item->full_screen_target && sel_item->toggle < 0 && !sel_item->checked)
                 ? AURA_SELECTOR_INDICATOR_CHEVRON
                 : AURA_SELECTOR_INDICATOR_NONE;
-        /* D-212: resorte con sobrepaso (SS9.2), mismo efecto que ya
-         * tenia la lista de pantalla completa -- ver menu_pill_animated_y()
-         * arriba. */
-        int anim_y = menu_pill_animated_y(items, count, sel_y);
-
-        aura_selector_draw(x + PADDING, anim_y, panel_w - 2 * PADDING, ROW_H, ind);
+        aura_selector_draw(x + PADDING, sel_y, panel_w - 2 * PADDING, ROW_H, ind);
     }
 
     for (i = first; i < count && i < first + visible; i++)

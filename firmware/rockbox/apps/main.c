@@ -377,6 +377,7 @@ static void init_tagcache(void)
                 talk_number(tagcache_get_max_commit_step(), true);
             }
 #endif
+#ifndef IPOD_6G
             if (lang_is_rtl())
             {
                 splash_progress(ret, tagcache_get_max_commit_step(),
@@ -390,6 +391,27 @@ static void init_tagcache(void)
                                 tagcache_get_max_commit_step());
             }
             clear = true;
+#else
+            /* D-213 (encargo del dueno, 2026-08-14: "se ve una franja
+             * negra a mitad de la pantalla, detras del texto Aura" en
+             * el splash de arranque). Causa real: `splash_progress()`
+             * (cromo de Rockbox, texto "Actualizando base de datos...
+             * [n/m]" centrado en la pantalla) SOLO se dibuja cuando el
+             * arranque tiene un commit de tagcache pendiente -- antes
+             * era inofensivo porque el logo vivia pegado arriba (Y=10,
+             * pre-D-210) y nunca se cruzaba con el centro de la
+             * pantalla. Al centrar el logo verticalmente (D-210, pedido
+             * explicito del dueno) paso a solaparse exactamente con esa
+             * franja de texto de Rockbox -- visible solo quando hay
+             * trabajo de tagcache pendiente al arrancar, lo que explica
+             * por que "se ve bien al principio" (arranques normales,
+             * sin commit pendiente) y solo a veces aparece la franja.
+             * Aura ya oculta todo el cromo de Rockbox (CLAUDE.md) -- en
+             * vez de mover el logo (pedido explicito de centrarlo), se
+             * suprime este splash puntual para IPOD_6G; el commit de
+             * tagcache en si sigue corriendo igual, solo deja de
+             * dibujar su mensaje. */
+#endif
         }
         sleep(HZ/4);
     }
