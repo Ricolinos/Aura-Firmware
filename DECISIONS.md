@@ -2210,4 +2210,37 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-199 — "Más información...", columnas configurables y calificación de estrellas (lado Aura Studio)
+
+**Encargo del dueño (2026-08-13)**: al clic derecho sobre un elemento, agregar "Más información..." -- una ventana con TODOS los atributos del elemento, incluida una calificación de estrellas que se sincronice con el iPod (el mismo control que ya existe en Ahora suena). Además, poder agregar columnas a la tabla eligiendo qué atributo mostrar, con un botón "+" (clic derecho sobre los encabezados no es viable: `Table` de SwiftUI no expone esa superficie).
+
+**`MediaInfoView`** (nuevo, reemplaza a `MetadataReviewView`): superconjunto de lo que ya existía -- misma edición de título/artista/álbum/artista del álbum/año/género/letra -- más número de pista, una sección "Archivo" de solo lectura (ubicación, formato, tamaño, duración, estado) y, solo para música, la calificación de 0 a 5 estrellas (`StarRatingView`, tocar la estrella ya activa la borra). Accesible desde "Más información..." del menú contextual (cualquier item, un solo elemento seleccionado) y desde "Editar" de la barra de herramientas (música).
+
+**Columnas configurables**: botón "+" en la barra de herramientas abre un menú con los atributos disponibles (con check si ya están visibles). `ExtraColumn` (`trackNumber`/`year`/`rating` para música, `fileFormat`/`fileSize` para video/fotos) persiste por tipo de medio en `UserDefaults`. **Límite real descubierto implementando esto**: `TableColumnBuilder` de SwiftUI no admite más de 10 columnas declaradas en el código (`buildBlock` no tiene overload más allá de `C0...C9`) -- ni `ForEach` ni `if` lo esquivan (cada uno ocupa un slot fijo del builder, se muestre o no). Música ya usa 7 slots fijos (checkbox/título/artista/álbum/género/duración/estado), así que solo quedan 3 para el menú "+" -- se priorizaron Calificación, N.º de pista y Año; "Artista del álbum" y "Letra" quedaron fuera del menú por falta de espacio (el dato sigue disponible en "Más información...").
+
+**Deployment target subió a macOS 14.4** (de 14.0, D-193): tanto `if` dentro de `TableColumnBuilder` (`buildIf`) como `.onKeyPress` de macOS 14.0 puro tienen huecos de disponibilidad hasta 14.4 en este SDK -- cambio de bajo riesgo para una app personal en un Mac muy por delante de esa versión.
+
+**Aceptación**: `swift build`/`swift test` y `xcodebuild ... BUILD SUCCEEDED` (ver D-200 para el conteo final de tests, que incluye ambos cambios).
+
+---
+
+## D-200 — Calificación de estrellas: sincronización real con el iPod (y un bug preexistente que se encontró en el camino)
+
+**Contexto (D-199)**: la calificación de música en Aura Studio debía "sincronizarse con el iPod... en el reproductor tenemos oportunidad de elegir cuántas estrellas".
+
+**Investigación previa** (agente de research dedicado, antes de tocar código): la calificación de Rockbox NO vive en el archivo de audio -- no hay ningún tag POPM/popularímetro en todo este árbol, para ningún formato. Vive en `tag_rating`, un campo NUMÉRICO del runtime database de tagcache (`.rockbox/database_idx.tcd`, formato binario propio de Rockbox), indexado posicionalmente y emparejado a un archivo por **ruta absoluta exacta** al momento de la búsqueda (`tagcache_find_index()`). Parsear o escribir ese binario directo desde Swift fue descartado por riesgo real de corromper la base de datos completa del dispositivo -- exactamente el tipo de "no lo intentes a mano" que ya se había evitado en D-021/D-023 (reconstruir el índice en vez de hablar su formato). Hallazgo crítico adicional: `LibrarySync.triggerFirmwareDBRebuild()` (ya existente, D-021) **borra ese mismo archivo en cada sync** para forzar una reconstrucción -- sin nada más, cualquier calificación (puesta en Studio o en el propio iPod) se pierde en el siguiente sync.
+
+**Diseño resultante: sincronización de UNA VÍA (Aura Studio → iPod)**, aceptado explícitamente como límite conocido -- leer de vuelta una calificación puesta en el aparato requeriría el mismo parseo binario riesgoso ya descartado:
+- **`LibrarySync.writeRatings()`** (Aura Studio): sidecar de texto plano `.rockbox/aura/ratings.cfg`, `<ruta absoluta>: <calificación 0-10>` por línea -- mismo formato `key: value` que `sync_summary.cfg`, la escala nativa de Rockbox (0-10) se obtiene multiplicando por 2 la estrella de Aura Studio (1-5), mismo mapeo que ya usaba `aura_nowplaying.c` en el propio aparato. Se borra solo si ya no queda ninguna canción calificada.
+- **`import_ratings_from_studio()`** (firmware, `apps/aura/aura_music.c`): lee ese sidecar una vez por arranque, apenas tagcache queda usable (mismo punto donde ya se disparaba `tagcache_start_scan()`), y aplica cada línea con `tagcache_find_index()` + `tagcache_update_numeric()` -- la misma API que ya usa `onplay.c`/`aura_nowplaying.c` de Rockbox, no una nueva.
+- **`global_settings.runtimedb` pasa a `true` por default** (`aura_settings_apply_core_defaults()`, mismo mecanismo que D-196 para el Clicker): sin este ajuste (apagado de fábrica en Rockbox), ni `tagcache_update_numeric()` persiste nada a disco ni la UI de estrellas lee nada de vuelta.
+
+**Bug preexistente encontrado depurando esto en el simulador** (no introducido por este cambio, pero bloqueaba verificarlo): con el sidecar escribiendo bien confirmado (`tagcache_find_index` encontraba el archivo y `tagcache_update_numeric` corría), las estrellas en pantalla seguían en 0. La causa: **Aura nunca registra el manejador de eventos que rellena `mp3entry.rating` al bufferear una pista** (`PLAYBACK_EVENT_TRACK_BUFFER` → `tagtree_buffer_event()`) -- ese registro vive en `tagtree_load()`, función exclusiva del navegador de archivos original de Rockbox (`apps/tagtree.c`), que Aura jamás llama porque tiene su propia navegación (D-022). Sin ese registro, el campo `id3->rating` simplemente nunca se llena al cargar una pista -- **ni siquiera una calificación puesta a mano en el propio iPod sobrevivía a cambiar de canción o reiniciar**, un gap que ya existía antes de este trabajo y que solo se hizo visible al intentar verificar la sincronización con Aura Studio. Arreglo: `aura_music_buffer_event()`, una versión mínima (solo `tag_rating`, Aura no usa playcount/lastplayed) registrada una sola vez en el mismo punto que `import_ratings_from_studio()`.
+
+**Verificación real en el simulador** (no solo lectura de código): fixture de audio con un `ratings.cfg` apuntando a su ruta exacta -- capturas confirman `★★★★☆` (4 de 5) en la pantalla de Ahora suena tras un arranque limpio, coincidiendo exactamente con la calificación importada. Se depuró con impresiones de diagnóstico temporales (ya retiradas) que confirmaron cada paso: sidecar encontrado, ruta emparejada, valor escrito, evento de buffer disparado, calificación leída de vuelta.
+
+**Aceptación**: `swift build`/`swift test` (143/143), `xcodebuild -project AuraStudio.xcodeproj ... BUILD SUCCEEDED`, `make -C firmware/rockbox/apps/aura/test test` (8/8 suites), build ARM real limpio, ciclo completo verificado con capturas del simulador. `firmware/dist/` regenerado. Confirmación en hardware del dueño, en curso.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

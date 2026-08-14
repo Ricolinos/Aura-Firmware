@@ -148,6 +148,17 @@ void aura_settings_apply_core_defaults(void)
      * usa la fila "Clicker" de Ajustes al encenderlo, aura_screens.c).
      */
     global_settings.keyclick = 2;
+    /* D-200 (encargo del dueno: la calificacion de estrellas de Ahora
+     * suena "se sincronizaria con el iPod"): `runtimedb` es el ajuste
+     * de Rockbox que le permite a tagcache guardar datos de runtime
+     * (calificacion, contador de reproducciones) en disco -- apagado
+     * de fabrica (settings_list.c). Sin esto, tanto las estrellas
+     * puestas en el propio iPod (aura_nowplaying.c commit_rating())
+     * como las que llegan importadas desde Aura Studio
+     * (aura_music.c import_ratings_from_studio()) se calculan en
+     * memoria pero JAMAS se escriben a disco -- se pierden en cuanto
+     * se reinicia el aparato. */
+    global_settings.runtimedb = true;
     backlight_set_timeout(global_settings.backlight_timeout);
     backlight_set_timeout_plugged(global_settings.backlight_timeout_plugged);
     settings_save();

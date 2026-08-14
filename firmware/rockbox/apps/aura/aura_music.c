@@ -17,6 +17,23 @@
 
 #include "aura_music.h"
 #include "aura_lang.h"
+#include "rbpaths.h"
+#include "misc.h"
+#include "appevents.h"
+#include "playback.h"
+
+/* D-200: sidecar de texto plano que Aura Studio deja al sincronizar
+ * (LibrarySync.swift) con la calificacion (0-10, escala nativa de
+ * Rockbox) de cada cancion -- "<ruta absoluta>: <calificacion>" por
+ * linea, mismo formato "name: value" que aura.cfg (settings_parseline
+ * ya lo entiende). Hace falta porque la calificacion NO vive en el
+ * archivo de audio (no hay tag POPM en ningun lado de este arbol): es
+ * un dato de runtime de tagcache (tag_rating), y
+ * LibrarySync.triggerFirmwareDBRebuild() borra ese indice en CADA
+ * sync para forzar una reconstruccion -- sin este import, cualquier
+ * calificacion (puesta en Aura Studio o en el propio iPod) se perderia
+ * en el siguiente sync. */
+#define AURA_RATINGS_PATH ROCKBOX_DIR "/aura/ratings.cfg"
 
 /* Contexto de filtro para las pantallas "hijas" de una eleccion previa
  * (p.ej. AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST filtra por el artista
@@ -56,6 +73,84 @@ void aura_music_reset_filters(void)
 int aura_music_filter_generation(void)
 {
     return s_filter_generation;
+}
+
+/* Aplica las calificaciones del sidecar de Aura Studio contra el
+ * tagcache YA usable -- una linea por cancion que emparejar por ruta
+ * absoluta exacta (tagcache_find_index() busca por tag_filename).
+ * Requiere global_settings.runtimedb encendido (D-196/D-200:
+ * aura_settings_apply_core_defaults() ya lo prende por default) --
+ * sin eso tagcache_update_numeric() no persiste nada a disco aunque
+ * esta funcion la llame igual. Si Aura Studio nunca sincronizo ninguna
+ * calificacion, el archivo no existe y esto es un no-op barato. */
+static void import_ratings_from_studio(void)
+{
+    int fd;
+    char line[MAX_PATH + 16];
+
+    fd = open(AURA_RATINGS_PATH, O_RDONLY);
+    if (fd < 0)
+        return;
+
+    while (read_line(fd, line, sizeof(line)) > 0)
+    {
+        char *path, *value;
+        struct tagcache_search tcs;
+        int rating;
+
+        if (!settings_parseline(line, &path, &value))
+            continue;
+
+        rating = atoi(value);
+        if (rating < 0)
+            rating = 0;
+        if (rating > 10)
+            rating = 10;
+
+        if (tagcache_find_index(&tcs, path))
+        {
+            tagcache_update_numeric(tcs.idx_id, tag_rating, rating);
+            tagcache_search_finish(&tcs);
+        }
+    }
+
+    close(fd);
+}
+
+/* D-200: gap real preexistente encontrado depurando esta funcionalidad
+ * en hardware simulado -- Aura nunca usa apps/tagtree.c (D-022, tiene
+ * su propia navegacion), y es TAGTREE_LOAD() quien registra
+ * PLAYBACK_EVENT_TRACK_BUFFER -> tagtree_buffer_event() (la funcion
+ * stock de Rockbox que lee tag_rating/tag_playcount de tagcache hacia
+ * mp3entry.rating al bufferear cada pista). Sin ese registro, NINGUNA
+ * calificacion (ni la que pone el propio usuario en Ahora suena via
+ * commit_rating(), que solo queda en memoria hasta que cambia de
+ * pista o reinicia -- ni la que importa import_ratings_from_studio())
+ * se refleja jamas en pantalla para una pista recien bufferada: el
+ * campo `id3->rating` sencillamente nunca se llena. commit_rating()
+ * no lo notaba porque escribe id3->rating DIRECTO en memoria antes de
+ * llegar aca -- se ve bien en el momento, pero se pierde en cuanto
+ * cambia de pista.
+ *
+ * Se registra una sola vez, en el mismo punto que ya dispara
+ * import_ratings_from_studio() (tagcache recien usable). Solo trae
+ * tag_rating -- Aura no usa tag_playcount/tag_lastplayed en ningun
+ * lado todavia, no hace falta traerlos "por si acaso". */
+static void aura_music_buffer_event(unsigned short id, void *ev_data)
+{
+    struct mp3entry *id3 = ((struct track_event *)ev_data)->id3;
+    struct tagcache_search tcs;
+
+    (void)id;
+
+    if (!global_settings.runtimedb || !id3)
+        return;
+
+    if (!tagcache_find_index(&tcs, id3->path))
+        return;
+
+    id3->rating = tagcache_get_numeric(&tcs, tag_rating);
+    tagcache_search_finish(&tcs);
 }
 
 bool aura_music_db_ready(void)
@@ -105,6 +200,8 @@ bool aura_music_db_ready(void)
     if (tagcache_is_usable() && !update_triggered)
     {
         tagcache_start_scan();
+        import_ratings_from_studio();
+        add_event(PLAYBACK_EVENT_TRACK_BUFFER, aura_music_buffer_event);
         update_triggered = true;
     }
 
