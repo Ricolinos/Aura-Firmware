@@ -2731,4 +2731,20 @@ Estas rutas se disparan al abrir el panel de listas de reproducción desde Ahora
 
 ---
 
+## D-233 — Búsqueda: teclado en loop, MENU no sale de inmediato con texto escrito, reset solo al llegar a la raíz
+
+**Encargo del dueño (2026-08-14)**: tres correcciones a Música → Búsqueda: (1) el "teclado" (tira de caracteres) debe envolver en los extremos en vez de detenerse; (2) MENU con algo escrito no debería salir de inmediato, debería poder "desplazarnos entre la búsqueda"; (3) la búsqueda debe conservar lo escrito al reentrar, y solo resetearse al volver hasta el menú principal.
+
+**Fix 1 (loop del teclado)**: nueva `kb_advance()` en `aura_search.c`, circular (`(sel + dir*step) % KB_COUNT`, con corrección de negativos), en vez del `aura_wheel_advance()` compartido -- ese helper lo usan TODAS las listas reales de la app (menús, alarmas, reloj mundial, listas), donde SÍ tiene sentido detenerse en los extremos; cambiar su recorte por envolvimiento ahí habría envuelto TODA esa navegación por accidente. La tira de caracteres es un caso genuinamente distinto (un ciclo cerrado, no una lista con extremos reales), así que se le dio su propia función en vez de tocar la compartida.
+
+**Fix 2 (MENU con texto)**: investigado primero -- esta pantalla tiene UNA sola zona de foco interactiva real (la tira de caracteres); la vista previa de resultados que se ve debajo mientras se escribe no es navegable aquí (siempre resalta la fila 0; la lista de resultados de verdad, navegable, es otra pantalla completa, `AURA_SCREEN_MUSIC_SEARCH_RESULTS`, alcanzada con PLAY). Dado ese único foco real, la interpretación implementada -- deliberadamente mínima, no la única lectura posible del pedido -- es: con texto escrito, la primera pulsación de MENU regresa el cursor de la tira al inicio ('A') y arma la salida real para la SIGUIENTE pulsación; cualquier otro botón desarma esa espera (hay que "tocar MENU de nuevo sin distracciones" para salir). Sin texto, MENU sigue saliendo de inmediato como siempre. Esto cumple la letra del pedido ("no salir de una vez") pero es un gesto de protección contra salida accidental más que una verdadera navegación DENTRO de la búsqueda -- si el dueño tenía en mente algo más rico (por ejemplo moverse por los resultados en vivo sin salir a la pantalla completa), esto queda pendiente de una vuelta con más detalle.
+
+**Fix 3 (persistencia solo hasta la raíz)**: el texto/cursor/resultados ya eran `static` de archivo y nada los vaciaba -- la persistencia al reentrar YA funcionaba de hecho. Lo que faltaba era el reset al llegar a la raíz: `aura_nav_reset_to_root()` existía en `aura_nav.c` pero sin ningún llamador. Nueva `aura_search_reset()` (pública) llamada desde el único punto centralizado que ya conoce la profundidad completa de la navegación (`aura_screens_handle_button()`, patrón D-024 existente) cuando `depth_after < depth_before && to == AURA_SCREEN_ROOT` -- Búsqueda → submenú Música → Búsqueda conserva lo escrito; Búsqueda → ... → menú principal lo resetea.
+
+**Bug real encontrado verificando en el simulador**: la condición inicial de "cualquier botón desarma la espera de MENU" incluía `BUTTON_NONE` -- el loop principal llama al manejador con `BUTTON_NONE` en cada tic de reloj (para el parpadeo del cursor), así que la bandera se desarmaba antes de que la segunda pulsación de MENU real llegara, y MENU nunca lograba salir. Corregido excluyendo `BUTTON_NONE` de la condición de desarme.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos. Capturas reales en el simulador: envolvimiento confirmado en ambas direcciones (de 'A' con SCROLL_BACK se salta directo a '_', el último carácter); MENU con texto escrito mantiene la pantalla abierta con el texto intacto en la primera pulsación; segunda pulsación sale con el texto conservado; reentrar a Búsqueda desde el submenú Música muestra el mismo texto; volver hasta el menú principal y reentrar muestra el campo vacío.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
