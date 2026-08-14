@@ -2293,4 +2293,35 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-204 — El iPod se congelaba al iniciar una canción: tagcache a medio cargar tocado desde el hilo de audio
+
+**Reporte del dueño (2026-08-14)**: "hay un bug importante con el firmware en el iPod real, no se están reproduciendo las canciones... se traba y no se apaga ni la pantalla ni permite manipularlo más, y así se queda hasta que lo reinicio forzadamente." Confirmado que pasa justo **al iniciar** la reproducción, no a mitad de canción ni al cambiar de pista.
+
+**Causa raíz** (comparación directa con el código stock de Rockbox, no una hipótesis): `send_track_event(PLAYBACK_EVENT_TRACK_BUFFER, ...)` (`apps/playback.c`, dentro de `audio_start_codec()`) dispara sus callbacks de forma **síncrona en el hilo de audio** (`firmware/events.c:send_event()` -- sin cola de mensajes, ejecución directa, nada de encolar y seguir). `aura_music_buffer_event()`, el callback que D-200 agregó para poblar la calificación al bufferear una pista, tocaba tagcache (`tagcache_find_index`/`tagcache_get_numeric`) sin ninguna espera antes. El equivalente de Rockbox de fábrica, `tagtree_buffer_event()` (`apps/tagtree.c`), SÍ tiene una salvaguarda que D-200 omitió por completo: `while (!tagcache_is_fully_initialized()) yield();`. `aura_music_db_ready()` (quien registra el evento) solo garantiza `tagcache_is_usable()` -- eso NO implica que el ramcache ya esté cargado, que ocurre en un hilo de fondo aparte. Si el dueño entraba a Música y arrancaba a reproducir apenas la base quedaba usable, el hilo de audio caía a I/O de disco síncrono de tagcache (`find_entry_disk()`) exactamente mientras el hilo de tagcache todavía estaba trabajando -- tocar tagcache a medio cargar desde el hilo de audio en tiempo real es comportamiento indefinido, no solo lento, y coincide exacto con "se traba al iniciar, hasta reinicio forzado" (un hilo de audio colgado ahí bloquea en cascada todo lo que depende de él, incluida la pantalla).
+
+**Arreglo**: la misma espera cooperativa que stock ya tenía y D-200 no copió, agregada en `aura_music_buffer_event()` y, por la misma clase de riesgo, en `import_ratings_from_studio()` (corre en el hilo de UI al arrancar, así que no causaba el hang, pero tocaba tagcache con la misma garantía insuficiente). De paso se alineó un chequeo de stock que también faltaba: `if (!id3->rating)` antes de sobreescribir, para que un rating recién puesto a mano en Ahora Suena no se pise solo con recargar la pista.
+
+**Aceptación**: build ARM real limpio (recompilado a propósito tras los cambios de tipografía de D-205 para confirmar que ambos conviven), `make -C firmware/rockbox/apps/aura/test test` (8/8 suites), simulador reconstruido y arranca sin colgarse. `firmware/dist/` regenerado. El deadlock real de hilos ARM no es reproducible 1:1 en el simulador (single-thread cooperativo) -- confirmación final en hardware real queda con el dueño.
+
+---
+
+## D-205 — Tipografía más grande en listas de contenido y barra de estado
+
+**Encargo del dueño (2026-08-14)**: "hacer más grandes solo las tipografías de las listas de menús y elementos (misma indicación de antes, no temas ni con el coverflow ni con el reproductor) esta vez sí afectaría también a la barra de estado, pero solo las tipografías, deben ser más legibles." "Misma indicación de antes" remite a D-195 (agosto 2026), que agrandó filas/iconos de listas pero excluyó explícitamente coverflow, reproductor Y barra de estado -- esta vez el pedido es específicamente tipografía (no alto de fila ni iconos, eso ya quedó resuelto en D-195), con la barra de estado ahora sí incluida.
+
+**Restricción heredada de D-195, reconfirmada**: `MAXUSERFONTS=12` (`firmware/export/font.h`) sigue exacto en su límite, sin ningún hueco para una fuente nueva -- cualquier tamaño más grande tenía que salir de REUTILIZAR una fuente `ds_*` ya cargada para otra cosa, igual que D-195 hizo con `MenuList`.
+
+**Tres sitios, cero fuentes nuevas**:
+- `aura_widgets_draw_list()` (`aura_widgets.c`, listas de pantalla completa: Música/Video/Fotos/Alarmas) -- no hay ningún Regular más grande que `A26_TYPE_BODY` (13px, compartido con CoverFlow/Now Playing/Fotos/Video, que no se debían tocar). Pasó a reutilizar `A26_FONT_STYLE_DS_BOLD_14` (14px Bold), la misma fuente ya cargada para `lyrics_active` del reproductor -- el reproductor en sí no se toca, solo se reutiliza su `.fnt`.
+- `ClockIndicator` de la barra de estado (`aura_clock_indicator.c`): `DS_REG_8` (8px) → `DS_REG_10` (10px), reutilizando la fuente de `np_counter`/alarmas.
+- `DynamicTitle` de la barra de estado (`aura_status_bar_v2.c`): `DS_BOLD_8` → `DS_BOLD_10`, mismo criterio.
+
+`MenuList`/`LeftPanel` (`aura_menu_list.c`) ya estaba en `DS_REG_12` desde D-195 -- es el Regular más grande disponible, no había margen para subirlo más sin repetir el mismo problema de presupuesto de fuentes.
+
+**Doc actualizada**: `docs/aura-design-system/fundamentos/02-tipografia.md` (tamaños nuevos de `--font-statusbar-title`/`--font-statusbar-time`, y una sección nueva para las listas de contenido completo, que no tenía doc propia todavía en el sistema vivo).
+
+**Aceptación**: build ARM real limpio, `make -C firmware/rockbox/apps/aura/test test` (8/8 suites), capturas del simulador headless confirmando texto más grande y legible en menú/listas/barra de estado sin recortes ni solapamientos, y Now Playing/CoverFlow verificados sin cambios. `firmware/dist/` regenerado (junto con D-204, mismo paquete).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
