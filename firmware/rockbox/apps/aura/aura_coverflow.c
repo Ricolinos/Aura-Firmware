@@ -323,22 +323,36 @@ static cf_slot_t *get_slot_for(int album_index)
     return &s_slots[target];
 }
 
-/* Atenua un pixel hacia el color de fondo del tema segun `fade` (255 =
- * sin atenuar) -- mismo blend que aura_albumart.c usa para el reflejo,
- * factorizado para que tambien lo use el renderizador de perspectiva. */
-static fb_data fade_pixel(unsigned px, int fade, int bg_r, int bg_g, int bg_b)
+/* D-219 (encargo del dueno, 2026-08-14: coverflow "deberia ser mas
+ * rapido y fluido"): `draw_slide_perspective()` llama esto una vez POR
+ * PIXEL de CADA columna de CADA tapa lateral visible -- con
+ * CF_COVER_SIZE=130 y hasta ~8 laterales en pantalla, son decenas de
+ * miles de llamadas por cuadro mientras el carrusel se desliza, y cada
+ * una hacia TRES divisiones enteras de 8 bits (una por canal) -- el
+ * ARM926EJ-S del iPod no tiene divisor de hardware, cada division
+ * entera cuesta una rutina de biblioteca de docenas de ciclos.
+ * `fade`/`bg_r`/`bg_g`/`bg_b` son CONSTANTES durante todo el dibujo de
+ * una tapa (se calculan una sola vez en draw_slide_perspective(), no
+ * cambian columna a columna) -- eso significa que "blend hacia bg" es
+ * una funcion PURA de un solo byte de entrada (el canal 0-255), la
+ * misma para los ~16000 pixeles de la tapa. Precalcularla una vez por
+ * tapa (256 divisiones) y volverla una lectura de tabla por pixel es
+ * la misma idea que ya usa aura_art.c para el reflejo ("atenuacion
+ * precalculada por fila, sin gradiente en tiempo real", ver
+ * aura_flow.h) -- aca se aplica al blend de perspectiva. */
+static void build_fade_lut(unsigned char *lut, int fade, int bg_channel)
 {
-    int r = RGB_UNPACK_RED(px);
-    int g = RGB_UNPACK_GREEN(px);
-    int b = RGB_UNPACK_BLUE(px);
+    int v;
+    for (v = 0; v < 256; v++)
+        lut[v] = bg_channel + ((v - bg_channel) * fade) / 255;
+}
 
-    if (fade < 255)
-    {
-        r = bg_r + ((r - bg_r) * fade) / 255;
-        g = bg_g + ((g - bg_g) * fade) / 255;
-        b = bg_b + ((b - bg_b) * fade) / 255;
-    }
-    return LCD_RGBPACK(r, g, b);
+static fb_data lut_pixel(unsigned px, const unsigned char *lut_r,
+                          const unsigned char *lut_g, const unsigned char *lut_b)
+{
+    return LCD_RGBPACK(lut_r[RGB_UNPACK_RED(px)],
+                        lut_g[RGB_UNPACK_GREEN(px)],
+                        lut_b[RGB_UNPACK_BLUE(px)]);
 }
 
 /* -- Perspectiva real (Fase 31.1/31.2, D-079/D-080; T3.2(a) extiende a
@@ -384,6 +398,9 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
     int bg_g = RGB_UNPACK_GREEN(bg);
     int bg_b = RGB_UNPACK_BLUE(bg);
     static fb_data col_buf[CF_COVER_SIZE + CF_REFLECTION_H];
+    /* D-219: tablas de blend, ver build_fade_lut() -- una sola vez por
+     * tapa, no una vez por pixel. */
+    static unsigned char lut_r[256], lut_g[256], lut_b[256];
 
     if (extra_x256 < 0)
         extra_x256 = 0;
@@ -399,6 +416,12 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
                         + (int)((long)CF_SLIDE_SPACING_R * extra_x256 / 256));
 
     fade = aura_pattern_lerp(255, CF_SIDE_FADE, t_center);
+    if (fade < 255)
+    {
+        build_fade_lut(lut_r, fade, bg_r);
+        build_fade_lut(lut_g, fade, bg_g);
+        build_fade_lut(lut_b, fade, bg_b);
+    }
 
     aura_flow_begin_projection(&proj, &slide, CF_COVER_SIZE);
 
@@ -430,7 +453,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
             px = (source_row < CF_COVER_SIZE)
                 ? cover_col[source_row]
                 : refl_col[source_row - CF_COVER_SIZE];
-            col_buf[dest_row] = fade_pixel(px, fade, bg_r, bg_g, bg_b);
+            col_buf[dest_row] = (fade < 255) ? lut_pixel(px, lut_r, lut_g, lut_b) : px;
             p += dy;
             n_rows++;
         }
