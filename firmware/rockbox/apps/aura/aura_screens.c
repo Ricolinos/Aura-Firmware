@@ -2576,32 +2576,126 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
 }
 
 static aura_screen_id_t s_playlist_cache_screen = AURA_SCREEN_COUNT;
+/* Nombres CRUDOS de archivo (con extension .m3u/.m3u8) -- a diferencia
+ * de antes (encargo del dueno, 2026-08-14), ya NO se pelan en el
+ * momento de cachear: la
+ * extension hace falta para encontrar el sidecar de portada
+ * ("<mismo nombre sin extension>.jpg", aura_playlist_art_load()). El
+ * nombre de exhibicion se resuelve al vuelo por fila en
+ * draw_playlist_list() via aura_music_playlist_display_name(). */
 static char s_playlist_cache[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
 static int s_playlist_cache_count = 0;
 
 static void ensure_playlist_cache(aura_screen_id_t screen)
 {
-    int i;
-
     if (s_playlist_cache_screen == screen)
         return;
 
     s_playlist_cache_screen = screen;
     s_playlist_cache_count = aura_music_list_playlists(s_playlist_cache, AURA_MUSIC_MAX_ITEMS);
+}
 
-    /* Este cache es solo para mostrar (aura_music_play_playlist() vuelve
-     * a resolver el archivo real por su cuenta) -- se puede pelar la
-     * extension in situ sin romper nada mas (Fase 32, D-081: ".m3u8" a
-     * la vista del usuario es jerga tecnica de archivo, doc Principio 7). */
-    for (i = 0; i < s_playlist_cache_count; i++)
-        aura_music_playlist_display_name(s_playlist_cache[i], s_playlist_cache[i],
-                                          AURA_MUSIC_ITEM_LEN);
+/* (encargo del dueno, 2026-08-14): "quiero que las playlists
+ * tengan una imagen... la lista de playlists deberia verse como la
+ * lista de albumes (4 elementos por pantalla, con la caratula a la
+ * derecha)". Re-skin exacto de draw_album_thumb()/draw_album_list() de
+ * arriba -- mismas macros de layout (ALBUM_ROW_H/ALBUM_ART_SIZE/
+ * ALBUM_ART_X/ALBUM_TEXT_GAP/ALBUM_VISIBLE/ALBUM_LIST_TOP), unica
+ * diferencia real es la fuente del bitmap (aura_playlist_art_load() en
+ * vez de aura_albumart_load_for_album(), sin tagcache de por medio). */
+static void draw_playlist_thumb(int x, int y, const char *raw_filename)
+{
+    static unsigned char cover_buf[ALBUM_ART_SIZE * ALBUM_ART_SIZE * sizeof(fb_data)];
+    static unsigned char refl_buf[ALBUM_ART_SIZE *
+        (ALBUM_ART_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
+        * sizeof(fb_data)];
+    static fb_data col_buf[ALBUM_ART_SIZE];
+    aura_albumart_t art;
+    const fb_data *cover;
+    int col, row;
+
+    art.size = ALBUM_ART_SIZE;
+    art.radius = A26_LAYOUT_CORNER_RADIUS_CARD;
+    art.cover_data = cover_buf;
+    art.reflection_data = refl_buf;
+
+    if (!aura_playlist_art_load(raw_filename, &art))
+        aura_albumart_load_default(&art);
+
+    cover = (const fb_data *)art.cover_data;
+    for (col = 0; col < ALBUM_ART_SIZE; col++)
+    {
+        for (row = 0; row < ALBUM_ART_SIZE; row++)
+            col_buf[row] = cover[col * ALBUM_ART_SIZE + row];
+        lcd_bitmap(col_buf, x + col, y, 1, ALBUM_ART_SIZE);
+    }
+}
+
+static long s_playlist_activity_since = 0;
+static int  s_playlist_last_selected = -1;
+
+static void draw_playlist_list(aura_nav_t *nav)
+{
+    int selected = aura_nav_get_selection(nav);
+    int count = s_playlist_cache_count;
+    int visible = ALBUM_VISIBLE;
+    int first = 0;
+    int i, w, h;
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_MUSIC_PLAYLISTS));
+
+    if (count > visible)
+    {
+        first = selected - visible / 2;
+        if (first < 0) first = 0;
+        if (first > count - visible) first = count - visible;
+    }
+
+    if (selected != s_playlist_last_selected)
+    {
+        s_playlist_last_selected = selected;
+        s_playlist_activity_since = current_tick;
+    }
+
+    if (selected >= first && selected < first + visible)
+    {
+        int sel_y = ALBUM_LIST_TOP + (selected - first) * ALBUM_ROW_H;
+        a26_shell_fill_rounded_rect(A26_LAYOUT_LIST_INSET, sel_y,
+                                     A26_SCREEN_WIDTH - 2 * A26_LAYOUT_LIST_INSET,
+                                     ALBUM_ROW_H, A26_LAYOUT_CORNER_RADIUS_PILL,
+                                     a26_color(A26_SELECTION_FILL),
+                                     a26_color(A26_SHELL_BG));
+    }
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    for (i = first; i < count && i < first + visible; i++)
+    {
+        char display[AURA_MUSIC_ITEM_LEN];
+        int row_y = ALBUM_LIST_TOP + (i - first) * ALBUM_ROW_H;
+        int art_y = row_y + (ALBUM_ROW_H - ALBUM_ART_SIZE) / 2;
+        int text_x = ALBUM_ART_X + ALBUM_ART_SIZE + ALBUM_TEXT_GAP;
+        bool is_sel = (i == selected);
+
+        draw_playlist_thumb(ALBUM_ART_X, art_y, s_playlist_cache[i]);
+
+        aura_music_playlist_display_name(s_playlist_cache[i], display, sizeof(display));
+
+        lcd_set_foreground(is_sel ? a26_color(A26_ACCENT) : a26_color(A26_TEXT_PRIMARY));
+        lcd_getstringsize((const unsigned char *)"Ay", &w, &h);
+        aura_widgets_puts_clipped(text_x, row_y + (ALBUM_ROW_H - h) / 2,
+                                   A26_SCREEN_WIDTH - text_x - A26_LAYOUT_LIST_INSET,
+                                   display);
+    }
+
+    aura_scroll_indicator_draw(A26_SCREEN_WIDTH, ALBUM_LIST_TOP,
+                                ALBUM_VISIBLE * ALBUM_ROW_H, first, count, visible,
+                                (current_tick - s_playlist_activity_since) * 1000L / HZ,
+                                a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
 }
 
 static void draw_playlists(aura_nav_t *nav)
 {
-    int i;
-
     ensure_playlist_cache(AURA_SCREEN_MUSIC_PLAYLISTS);
 
     if (s_playlist_cache_count == 0)
@@ -2610,16 +2704,7 @@ static void draw_playlists(aura_nav_t *nav)
         return;
     }
 
-    for (i = 0; i < s_playlist_cache_count; i++)
-    {
-        s_music_items_buf[i].label = s_playlist_cache[i];
-        s_music_items_buf[i].icon_name = NULL;
-        s_music_items_buf[i].checked = 0;
-        s_music_items_buf[i].toggle = -1;
-    }
-
-    aura_widgets_draw_list(aura_str(AURA_STR_MUSIC_PLAYLISTS), s_music_items_buf,
-                            s_playlist_cache_count, aura_nav_get_selection(nav));
+    draw_playlist_list(nav);
 }
 
 /* Tabla de layout: UNICA fuente de verdad de que pantalla se dibuja
