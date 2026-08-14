@@ -125,7 +125,9 @@ typedef enum {
     AURA_STR_EXTRAS_ALARMS,
     AURA_STR_EXTRAS_GAMES,
     AURA_STR_EXTRAS_NOTES,
-    AURA_STR_EXTRAS_SCREENLOCK,
+    /* Reubicado de Extras a Ajustes -- ver AURA_SCREEN_SETTINGS_SCREENLOCK
+     * en aura_nav.h. */
+    AURA_STR_SETTINGS_SCREENLOCK,
     AURA_STR_EXTRAS_STOPWATCH,
     AURA_STR_EMPTY_GENERIC,
 
@@ -226,6 +228,22 @@ typedef enum {
      * aura_music.c, mismo patron que AURA_STR_ABOUT_MUSIC en
      * aura_screens.c. */
     AURA_STR_PRECACHE_ART,
+
+    /* Apagado del iPod (Task A, encargo del dueno): eleccion del
+     * temporizador de apagado por inactividad, envuelve
+     * global_settings.poweroff. AURA_STR_TIMEOUT_OFF (ya existe) cubre
+     * "Desactivado" -- solo hacen falta las 3 opciones con tiempo. */
+    AURA_STR_SETTINGS_POWEROFF,
+    AURA_STR_POWEROFF_10MIN,
+    AURA_STR_POWEROFF_20MIN,
+    AURA_STR_POWEROFF_1HOUR,
+
+    /* Bloqueo de pantalla global (Task B): pantalla de confirmacion
+     * para "Desactivar" -- borra la clave guardada, distinta del flujo
+     * de "Activar" (configurar clave, AURA_STR_LOCK_SET/CONFIRM ya
+     * existentes). */
+    AURA_STR_SCREENLOCK_DISABLE_TITLE,
+    AURA_STR_SCREENLOCK_DISABLE_BODY,
 
     AURA_STR_COUNT,
 } aura_str_id_t;

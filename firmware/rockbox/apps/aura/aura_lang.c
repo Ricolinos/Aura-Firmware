@@ -107,7 +107,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_EXTRAS_ALARMS]      = "Alarmas",
     [AURA_STR_EXTRAS_GAMES]       = "Juegos",
     [AURA_STR_EXTRAS_NOTES]       = "Notas",
-    [AURA_STR_EXTRAS_SCREENLOCK]  = "Bloqueo pantalla",
+    [AURA_STR_SETTINGS_SCREENLOCK] = "Bloqueo de pantalla",
     [AURA_STR_EXTRAS_STOPWATCH]   = "Cronómetro",
     [AURA_STR_EMPTY_GENERIC]      = "No hay nada aquí todavía",
     [AURA_STR_SETTINGS_SHOW_ICONS] = "Mostrar iconos",
@@ -185,6 +185,12 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_DATE] = "Fecha",
     [AURA_STR_SETTINGS_TIME] = "Hora",
     [AURA_STR_PRECACHE_ART]  = "Preparando carátulas",
+    [AURA_STR_SETTINGS_POWEROFF]   = "Apagado del iPod",
+    [AURA_STR_POWEROFF_10MIN]      = "Después de 10 min.",
+    [AURA_STR_POWEROFF_20MIN]      = "Después de 20 min.",
+    [AURA_STR_POWEROFF_1HOUR]      = "Después de 1 hora",
+    [AURA_STR_SCREENLOCK_DISABLE_TITLE] = "Desactivar bloqueo",
+    [AURA_STR_SCREENLOCK_DISABLE_BODY]  = "Se borrará la clave guardada. Para volver a activar el bloqueo habrá que configurar una clave nueva.",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -292,7 +298,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_EXTRAS_ALARMS]      = "Alarms",
     [AURA_STR_EXTRAS_GAMES]       = "Games",
     [AURA_STR_EXTRAS_NOTES]       = "Notes",
-    [AURA_STR_EXTRAS_SCREENLOCK]  = "Screen Lock",
+    [AURA_STR_SETTINGS_SCREENLOCK] = "Screen Lock",
     [AURA_STR_EXTRAS_STOPWATCH]   = "Stopwatch",
     [AURA_STR_EMPTY_GENERIC]      = "Nothing here yet",
     [AURA_STR_SETTINGS_SHOW_ICONS] = "Show icons",
@@ -370,6 +376,12 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_DATE] = "Date",
     [AURA_STR_SETTINGS_TIME] = "Time",
     [AURA_STR_PRECACHE_ART]  = "Preparing artwork",
+    [AURA_STR_SETTINGS_POWEROFF]   = "iPod Auto-Off",
+    [AURA_STR_POWEROFF_10MIN]      = "After 10 min.",
+    [AURA_STR_POWEROFF_20MIN]      = "After 20 min.",
+    [AURA_STR_POWEROFF_1HOUR]      = "After 1 hour",
+    [AURA_STR_SCREENLOCK_DISABLE_TITLE] = "Turn Off Screen Lock",
+    [AURA_STR_SCREENLOCK_DISABLE_BODY]  = "The saved passcode will be deleted. To turn the lock back on you'll need to set a new passcode.",
 };
 
 const char *aura_str(aura_str_id_t id)

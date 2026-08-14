@@ -131,6 +131,19 @@ typedef struct {
      * apagado/encendido, forzar un reinicio bastaria para saltarselo. */
     unsigned short screen_lock_pin;
     bool screen_lock_configured;
+    /* Bloqueo GLOBAL armado (encargo del dueno, reubicacion a Ajustes):
+     * distinto de `screen_lock_active` -- `screen_lock_enabled` es la
+     * eleccion del usuario ("activado" en Ajustes, sobrevive apagados),
+     * `screen_lock_active` es el candado EN VIVO ahora mismo. Antes de
+     * esto ambos eran el mismo booleano (`screen_lock_active` se prendia
+     * al terminar de configurar la clave), asi que "configurar una vez"
+     * bloqueaba de inmediato en vez de armarse para la PROXIMA vez que
+     * el aparato se apague/prenda (aura_main() es quien pone `active` en
+     * true a partir de `enabled`, en cada arranque -- ver D-2xx). Se
+     * apaga junto con `screen_lock_configured` y se borra el PIN al
+     * elegir "Desactivar": la unica forma de reactivar es configurar una
+     * clave nueva, nunca reusar la vieja en silencio. */
+    bool screen_lock_enabled;
     bool screen_lock_active;
 } aura_settings_t;
 

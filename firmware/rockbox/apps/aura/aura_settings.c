@@ -42,6 +42,7 @@ static const aura_settings_t aura_settings_defaults = {
      * salido de la caja (D-197). */
     .screen_lock_pin = 0,
     .screen_lock_configured = false,
+    .screen_lock_enabled = false,
     .screen_lock_active = false,
 };
 
@@ -132,7 +133,16 @@ void aura_settings_reset_to_defaults(void)
 void aura_settings_apply_core_defaults(void)
 {
     global_settings.volume_limit = -6;
-    global_settings.poweroff = 30;
+    /* Apagado del iPod (Task A, encargo del dueno): las 4 opciones de
+     * Ajustes son Desactivado/10/20/60 minutos (aura_screens.c,
+     * poweroff_choice_minutes[]) -- 30 (el default original de esta
+     * funcion) no es ninguna de las 4, asi que el picker lo mostraria
+     * como "Desactivado" (get_choice_current() cae al indice 0 cuando
+     * el valor guardado no coincide con ninguna opcion) mientras el
+     * aparato en realidad se siguiera apagando solo a los 30 min -- un
+     * ajuste mostrando un valor que no es el real. Se elige 20 min, la
+     * opcion mas cercana al default original. */
+    global_settings.poweroff = 20;
     global_settings.backlight_timeout = 10;
     global_settings.backlight_timeout_plugged = 30;
     global_settings.sleeptimer_duration = 0;
@@ -233,6 +243,8 @@ void aura_settings_load(void)
                 aura_settings.screen_lock_pin = (unsigned short)(v < 0 ? 0 : v > 9999 ? 9999 : v);
             else if (!strcmp(name, "screen_lock_configured"))
                 aura_settings.screen_lock_configured = (v != 0);
+            else if (!strcmp(name, "screen_lock_enabled"))
+                aura_settings.screen_lock_enabled = (v != 0);
             else if (!strcmp(name, "screen_lock_active"))
                 aura_settings.screen_lock_active = (v != 0);
         }
@@ -280,6 +292,7 @@ void aura_settings_save(void)
     fdprintf(fd, "clock_visible: %d\n", (int)aura_settings.clock_visible);
     fdprintf(fd, "screen_lock_pin: %d\n", (int)aura_settings.screen_lock_pin);
     fdprintf(fd, "screen_lock_configured: %d\n", (int)aura_settings.screen_lock_configured);
+    fdprintf(fd, "screen_lock_enabled: %d\n", (int)aura_settings.screen_lock_enabled);
     fdprintf(fd, "screen_lock_active: %d\n", (int)aura_settings.screen_lock_active);
 
     close(fd);
