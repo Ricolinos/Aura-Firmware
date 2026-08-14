@@ -321,6 +321,21 @@ da un canal alfa de cobertura fiel a la forma real del glifo."""
 SUPERSAMPLE = 16
 
 
+def icon_canvas_dims(icon_cfg, icon_key, size_name, size_px):
+    """Ancho/alto final (sin supersampleo) del lienzo de un icono.
+    Cuadrado (size_px, size_px) por defecto -- 'battery_icon' (tokens.json)
+    es la unica excepcion hoy: alto fijo = size_px (igual al resto de los
+    iconos de esa categoria), ancho mayor, para que un simbolo de aspecto
+    natural muy distinto de 1:1 (bateria, ~2:1 ancho:alto) no se aplaste
+    verticalmente al forzarlo en un cuadrado -- 'contain' (render_symbol_shapes)
+    queda limitado por el ANCHO en un cuadrado y el alto real encoge con el
+    (ver comment de 'battery_icon' en tokens.json)."""
+    bat = icon_cfg.get("battery_icon")
+    if bat and icon_key in bat["icons"] and size_name == bat["size"]:
+        return bat["width"], size_px
+    return size_px, size_px
+
+
 def render_symbol_shapes(tokens, shapes_dir):
     """Renderiza cada (simbolo, tamano) una sola vez a SUPERSAMPLE x el
     tamano final, negro sobre alfa 0 -- generate_icons() reduce con
@@ -343,10 +358,11 @@ def render_symbol_shapes(tokens, shapes_dir):
     jobs = []
     for icon_key, symbol_name in icon_cfg["names"].items():
         for size_name, size_px in icon_cfg["sizes"].items():
-            render_px = size_px * SUPERSAMPLE
+            w_px, h_px = icon_canvas_dims(icon_cfg, icon_key, size_name, size_px)
             job = {
                 "symbol": symbol_name,
-                "px": render_px,
+                "px": w_px * SUPERSAMPLE,
+                "py": h_px * SUPERSAMPLE,
                 "weight": icon_cfg["weight_by_size"][size_name],
                 "out": str(shapes_dir / f"{icon_key}-{size_px}.png"),
             }
@@ -446,14 +462,15 @@ def generate_icons(tokens):
             bg_rgb = hex_to_rgb(colors[bg_token])
 
             for icon_key in icon_cfg["names"]:
-                for size_px in icon_cfg["sizes"].values():
+                for size_name, size_px in icon_cfg["sizes"].items():
+                    w_px, h_px = icon_canvas_dims(icon_cfg, icon_key, size_name, size_px)
                     src = Image.open(shapes_dir / f"{icon_key}-{size_px}.png").convert("RGBA")
                     # Reducir DESPUES de renderizar a SUPERSAMPLE x el
                     # tamano final (ver nota de modulo mas arriba): el
                     # filtro de caja promedia la cobertura real de los
                     # subpixeles del render en alta resolucion, asi el
                     # canal alfa describe la curva real del glifo.
-                    src = src.resize((size_px, size_px), Image.BOX)
+                    src = src.resize((w_px, h_px), Image.BOX)
                     coverage = src.getchannel("A")
 
                     # Composicion por cobertura: donde coverage=255,
@@ -504,9 +521,10 @@ def generate_icons(tokens):
     masks_out.mkdir(parents=True, exist_ok=True)
     n_masks = 0
     for icon_key in icon_cfg["names"]:
-        for size_px in icon_cfg["sizes"].values():
+        for size_name, size_px in icon_cfg["sizes"].items():
+            w_px, h_px = icon_canvas_dims(icon_cfg, icon_key, size_name, size_px)
             src = Image.open(shapes_dir / f"{icon_key}-{size_px}.png").convert("RGBA")
-            src = src.resize((size_px, size_px), Image.BOX)
+            src = src.resize((w_px, h_px), Image.BOX)
             coverage = src.getchannel("A")
             Image.merge("RGB", (coverage, coverage, coverage)).save(
                 masks_out / f"{icon_key}-{size_px}.bmp", format="BMP")

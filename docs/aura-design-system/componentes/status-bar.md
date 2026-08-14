@@ -68,6 +68,24 @@ ancho** (el ancho varía según el ícono). Regla dura: los íconos **nunca
 deben chocar con `ClockIndicator`** — el layout tiene que respetar esto
 sobre cualquier otra cosa.
 
+**Corrección 2026-08-14 (auditoría del dueño del diseño, "los íconos deben
+tener el mismo alto, esto implicaría agrandar la pila que se ve muy
+pequeña"):** el "12px de alto" de arriba es el lienzo, no la tinta real —
+`battery.100`/`.50`/`.25`/`.100.bolt` (SF Symbols) tienen un aspecto natural
+~2:1 ancho:alto, así que forzados al mismo lienzo CUADRADO que candado/
+play-pausa, `contain` quedaba limitado por el ANCHO y la tinta real de la
+batería resultaba de solo 6px — la mitad de los 10px que candado y
+play-pausa sí alcanzan en ese mismo lienzo cuadrado. La batería (las 4
+variantes) ahora se renderiza en un lienzo de **21×12px** (ancho propio,
+alto sin cambios) en vez de 12×12 — su tinta real sube a 10px, igual que
+los otros dos, salvo `battery-charging` (el rayo superpuesto tiene un
+aspecto distinto) que queda en 8px, variación menor y aceptable. 21 es a
+la vez el mínimo que logra los 10px de tinta (el salto ocurre entre 20 y
+21) y el máximo que en `(split)` no choca contra `ClockIndicator` en el
+peor caso real (candado + play/pausa + reloj persistente) — a 22px ya la
+cruza. Ver `icon.battery_icon` en `design-system/tokens.json` y
+`AURA_DS_METRICS_STATUSBAR_ICON_WIDTH_BATTERY` en `aura_status_bar_v2.c`.
+
 - **Batería es el único ícono persistente** — siempre visible, pegada al
   borde derecho de la barra.
 - Candado y play/pause son condicionales y se renderizan **a la izquierda**
@@ -138,8 +156,10 @@ su cuenta.
 
 ## Pendiente de definir
 
-- [ ] **Ancho en px de cada ícono** (el alto ya está confirmado en 12px
-      para los tres — falta el ancho para calcular el espacio total)
+- [x] **Ancho en px del ícono de batería**: 21px (confirmado 2026-08-14,
+      ver corrección arriba) — candado y play/pausa siguen pendientes
+      (se asumen cuadrados = 12px por ahora, sin confirmar en el
+      documento).
 - [ ] Espaciado exacto entre las zonas `DynamicTitle`/`ClockIndicator`/
       íconos (el 4px confirmado es solo entre íconos; la regla de "nunca
       chocar con la hora" ya está confirmada como restricción dura, pero

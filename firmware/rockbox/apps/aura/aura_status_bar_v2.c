@@ -138,10 +138,21 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
     /* Iconos: bateria siempre en el extremo derecho; candado/play-pausa
      * condicionales a su izquierda, misma regla en (split) y (full)
      * (doc no distingue por estado para esta seccion). Ancho asumido
-     * cuadrado (= icon_h) para el espaciado, mismo criterio ya usado
-     * por el sistema viejo (aura_statusbar.c) -- el ancho exacto por
-     * icono tambien esta pendiente en el documento. */
-    right -= icon_h;
+     * cuadrado (= icon_h) para el espaciado de candado/play-pausa,
+     * mismo criterio ya usado por el sistema viejo (aura_statusbar.c) --
+     * el ancho exacto de esos dos tambien esta pendiente en el
+     * documento. La bateria YA NO es cuadrada (auditoria de status-bar
+     * del dueno, 2026-08-14: su alto real se igualo al de los otros dos
+     * iconos -- 10px de tinta en vez de 6px -- ensanchando su lienzo,
+     * ver comment de icon.battery_icon en tokens.json); su ancho real
+     * es AURA_DS_METRICS_STATUSBAR_ICON_WIDTH_BATTERY (21, no icon_h) --
+     * reservarle solo icon_h de espacio volvia a chocarla contra el
+     * icono de play/pausa a su izquierda. 21 (no mas) tambien es a
+     * proposito: es el ancho maximo que en (split) no choca contra
+     * ClockIndicator en el peor caso real (candado + play/pausa +
+     * reloj persistente, "Regla dura" de status-bar.md) -- ver el
+     * comment completo en icon.battery_icon de tokens.json. */
+    right -= AURA_DS_METRICS_STATUSBAR_ICON_WIDTH_BATTERY;
     aura_widgets_draw_icon(aura_battery_icon_name(), icon_h, right, icon_y);
 
     if (is_playing)

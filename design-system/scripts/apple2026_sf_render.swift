@@ -29,6 +29,17 @@ struct Job: Decodable {
     // lienzo, sin contain -- para familias cuyo cuerpo debe medir igual
     // entre variantes de distinto ancho (bocina dinamica, 2026-08-12).
     let pt: Double?
+    // Alto de lienzo opcional, independiente del ancho (`px`): por
+    // defecto el lienzo es cuadrado (py = px), pero un simbolo de
+    // aspecto natural muy distinto de 1:1 (bateria, 2:1 ancho:alto) se
+    // aplasta verticalmente si se le fuerza a un cuadrado -- 'contain'
+    // queda limitado por el ancho y el alto resultante encoge con el
+    // (bateria en 12px cuadrados: solo 6px de alto real -- auditoria
+    // de status-bar del dueno del diseno, 2026-08-14). Un
+    // lienzo explicito ancho != alto deja que 'contain' quede limitado
+    // por el alto real cuando corresponde, igual que ya haria un
+    // lienzo cuadrado para un simbolo mas cuadrado.
+    let py: Int?
 }
 
 let weights: [String: NSFont.Weight] = [
@@ -63,13 +74,15 @@ for job in jobs {
         fail("no se pudo configurar \(job.symbol)")
     }
 
+    let canvasH = job.py ?? job.px
+
     guard let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: job.px, pixelsHigh: job.px,
+        bitmapDataPlanes: nil, pixelsWide: job.px, pixelsHigh: canvasH,
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else {
         fail("no se pudo crear el bitmap para \(job.symbol)")
     }
-    rep.size = NSSize(width: job.px, height: job.px)
+    rep.size = NSSize(width: job.px, height: canvasH)
 
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
@@ -79,17 +92,17 @@ for job in jobs {
     // nativas de cada simbolo, que es lo que los hace ver opticamente
     // consistentes entre si dentro de un mismo tamano.
     let natural = configured.size
-    var scale = min(Double(job.px) / natural.width, Double(job.px) / natural.height)
+    var scale = min(Double(job.px) / natural.width, Double(canvasH) / natural.height)
     if job.pt != nil {
-        if natural.width > Double(job.px) || natural.height > Double(job.px) {
-            fail("\(job.symbol) a pointSize fijo no cabe en el lienzo de \(job.px)px "
+        if natural.width > Double(job.px) || natural.height > Double(canvasH) {
+            fail("\(job.symbol) a pointSize fijo no cabe en el lienzo de \(job.px)x\(canvasH)px "
                  + "(natural \(natural)) -- agranda el lienzo en tokens.json")
         }
         scale = 1.0 // tamano natural: el cuerpo mide igual en toda la familia
     }
     let drawn = NSSize(width: natural.width * scale, height: natural.height * scale)
     let origin = NSPoint(x: (Double(job.px) - drawn.width) / 2.0,
-                         y: (Double(job.px) - drawn.height) / 2.0)
+                         y: (Double(canvasH) - drawn.height) / 2.0)
 
     NSColor.black.set()
     configured.draw(in: NSRect(origin: origin, size: drawn),
