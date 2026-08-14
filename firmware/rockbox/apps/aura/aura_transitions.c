@@ -459,8 +459,31 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
 {
     int size = AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE;
     int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
-    unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
-    unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
+    /* D-226 (encargo del dueno, 2026-08-14: freeze real al reproducir
+     * desde Cover Flow, sospecha propia del dueno de que era la
+     * transicion coverflow->reproductor -- confirmado). Estos dos
+     * buffers eran locales de PILA: 135*135*2 (cover_buf) +
+     * 135*33*2 (refl_buf) = 45360 bytes, ~44KB, en una sola llamada.
+     * El hilo que corre esta funcion (el hilo "main" de Rockbox --
+     * arranca en crt0.S y jamas pasa por create_thread() con un stack
+     * propio, ver firmware/target/arm/s5l8702/app.lds) tiene una
+     * region `.stack` de exactamente 0x2000 = 8192 bytes en IRAM,
+     * INMEDIATAMENTE seguida por los stacks de IRQ y FIQ en el mismo
+     * mapa de memoria. Una sola llamada a esta funcion desbordaba ese
+     * stack casi 6 veces sobre su tamano, pisando IRQ/FIQ y lo que
+     * sea que venga despues en IRAM -- corrupcion de memoria real, no
+     * un bug logico, consistente con un freeze que exige apagar y
+     * prender el iPod para recuperarse (nunca un panic legible: la
+     * corrupcion pasa antes de que cualquier codigo pueda detectarla).
+     * `static` (mismo patron que col_buf/rcol_buf, dos lineas mas
+     * abajo, y que aura_screens.c:draw_album_list ya usaba a proposito
+     * para esto mismo) los saca de la pila -- pasan a vivir en BSS,
+     * ~44KB sobre los 64MB (MEMORYSIZE) del iPod 6G. Seguro reutilizar
+     * la misma memoria en cada llamada: la funcion llena el buffer y
+     * lo consume por completo antes de retornar, nunca reentrante (un
+     * solo hilo de UI, disparada por botones, sin recursion). */
+    static unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
+    static unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
                             * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
                             * sizeof(fb_data)];
     static fb_data col_buf[AURA_COVERFLOW_BACK_SIZE + 8];
@@ -725,8 +748,11 @@ void aura_transition_flow_return(aura_nav_t *nav)
     int size = AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE;
     int carousel = AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE;
     int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
-    unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
-    unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
+    /* D-226: mismo desborde de pila que aura_transition_flip_and_flow()
+     * de arriba (~44KB de cover_buf/refl_buf contra un stack de hilo
+     * "main" de solo 8KB) -- static por la misma razon. */
+    static unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
+    static unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
                             * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
                             * sizeof(fb_data)];
     static fb_data col_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE + 8];
