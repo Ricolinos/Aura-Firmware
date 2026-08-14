@@ -331,6 +331,7 @@ aura/aura_motion.c
 aura/aura_wheel.c
 aura/aura_music.c
 aura/aura_nav.c
+aura/aura_category.c
 aura/aura_nowplaying.c
 aura/aura_photos.c
 aura/aura_stopwatch.c

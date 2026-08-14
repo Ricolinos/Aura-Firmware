@@ -43,6 +43,7 @@
 #include "aura_menu_list.h"
 #include "aura_status_bar_v2.h"
 #include "aura_selection_summary.h"
+#include "aura_category.h"
 
 /* Cota de los buffers locales de items de menu. El arbol del original
  * (2026-08-13) llevo Ajustes a 18 filas: con la cota vieja de 16, los
@@ -2611,9 +2612,39 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
         || screen == AURA_SCREEN_PHOTOS;
 }
 
+/* Categoria de la seccion activa para TODO el cuadro (encargo del dueno
+ * 2026-08-14, "cascading a color hierarchy" -- aura_category.h): en la
+ * raiz del Menu principal no hay una seccion propia todavia, la
+ * categoria real es la del item resaltado (root_entries[sel].target,
+ * MISMO dato que ya resuelve panel_icon en draw_nav_list mas abajo);
+ * fuera de la raiz, la pantalla actual YA vive dentro de una seccion
+ * (aura_category_for_screen cubre todo el arbol, sin importar la
+ * profundidad -- Ajustes -> Pantalla -> Brillo sigue siendo Ajustes). */
+static void update_active_category(aura_nav_t *nav, aura_screen_id_t screen)
+{
+    aura_category_t cat;
+
+    if (screen == AURA_SCREEN_ROOT)
+    {
+        int sel = aura_nav_get_selection(nav);
+
+        rebuild_root_entries();
+        cat = (sel >= 0 && sel < root_entries_count)
+            ? aura_category_for_screen(root_entries[sel].target)
+            : AURA_CATEGORY_NONE;
+    }
+    else
+    {
+        cat = aura_category_for_screen(screen);
+    }
+    aura_category_set_current(cat);
+}
+
 void aura_screens_draw(aura_nav_t *nav)
 {
     aura_screen_id_t screen = aura_nav_current(nav);
+
+    update_active_category(nav, screen);
 
     aura_widgets_set_list_layout(screen_uses_split_layout(screen)
                                   ? AURA_LIST_SPLIT : AURA_LIST_FULL);

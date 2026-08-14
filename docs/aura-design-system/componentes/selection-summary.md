@@ -15,18 +15,47 @@ un texto que describen la selección actual de `LeftPanel`.
 ## Diseño
 
 **Ícono sobre tile (confirmado 2026-08, según mockups):** el ícono no se
-renderiza "suelto" — va sobre un **tile de 90×90px con esquinas redondeadas
-visibles de 8px**, con el **símbolo interno de ~60×60px** (o ligeramente
-más grande). Estilo app icon de iOS: símbolo claro sobre tile de color
-pleno. El conjunto va centrado horizontal y verticalmente en el espacio
-disponible del lado derecho.
+renderiza "suelto" — va sobre un **tile de 90×90px con esquinas muy
+redondeadas, 28px de radio (~31% del lado)**, con el **símbolo interno de
+~60×60px** (o ligeramente más grande). Estilo app icon de iOS: símbolo
+claro sobre tile de color pleno. El conjunto va centrado horizontal y
+verticalmente en el espacio disponible del lado derecho.
+
+**Por qué 28px y no el 22.37% literal de Apple (D-211 → corrección
+2026-08-14):** el radio de esquina de este tile pasó por dos ajustes el
+mismo día. D-211 lo subió de 8px (10%, el radio genérico de tarjeta) a
+20px, igualando el 22.37% real que usan los íconos de iOS — pero
+`a26_shell_round_bitmap_corners()` (`apple2026_shell.c`, función
+`stamp_corner()`) dibuja un **cuarto de círculo simple** contra la máscara
+del bitmap, no la curva de continuidad G2 real del squircle de Apple. Un
+arco circular al mismo porcentaje que un squircle se **percibe menos
+redondeado**: la curvatura del squircle es continua a lo largo de todo el
+borde, mientras que un arco circular solo curva la región inmediata de la
+esquina — igualar el porcentaje literal subestima el efecto visual en un
+renderer circular. Confirmado con capturas reales del simulador
+comparando 20/24/28/32px: 24px casi no se distingue de 20px; 32px empieza
+a leerse como un blob/círculo (el tramo recto entre esquinas se vuelve
+demasiado corto para leerse como "cuadrado"); **28px (~31% del tile)** es
+el punto donde se lee como "claramente muy redondeado, estilo iOS" sin
+perder la silueta de cuadrado. **Regla para el futuro:** en este
+renderer (esquinas circulares, no squircle), el radio visualmente
+equivalente a un squircle está por encima del porcentaje literal de
+Apple — no "corregir" este valor de vuelta a ~22% asumiendo que ese es el
+número correcto solo porque coincide con la cifra que usa iOS.
 
 *(Nota: la medida original de 40×40px quedó obsoleta con este rediseño.)*
 
-**Color del tile:** por ahora, `--color-accent`
-(`fundamentos/01-color.md`). Más adelante se definirá un mapeo de color por
-selección (Música, Videos, Fotos, etc., como sugieren los mockups con rojo
-y verde) — el dueño del diseño avisará cuándo; no es un pendiente activo.
+**Color del tile (confirmado 2026-08-14 — ya no es un pendiente):** ya
+no es siempre `--color-accent`. Sigue la jerarquía de color por
+categoría del Menú principal, en cascada a toda pantalla descendiente
+sin importar la profundidad de navegación — Música usa `--color-accent`
+(sin cambios), Ajustes/Video/Fotos tienen su propio color FIJO, y
+Extras es un degradado de dos tonos (amarillo → acento). Mecanismo
+completo, resolución de color y el mapeo pantalla→categoría:
+`sistema/04-color-por-categoria.md` y `fundamentos/01-color.md`. El
+glifo/símbolo sobre el tile sigue siendo blanco constante (variante
+`-selector`) — no cambia, es lo que mantiene el símbolo legible sobre
+cualquier color de tile.
 
 ## Fondo del panel derecho (confirmado)
 

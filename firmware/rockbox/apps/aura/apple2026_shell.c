@@ -109,6 +109,63 @@ unsigned aura_accent_dark(void)
     return aura_accent_toward(0x000000u, AURA_DS_COLOR_ACCENT_DERIVED_DARKEN_PCT);
 }
 
+/* Version de aura_accent_toward() para un rgb24 FIJO en vez del acento
+ * configurable -- mismo blend entero (aura_color_blend_pct(), aura_color.c),
+ * reusado para los colores fijos de categoria (Ajustes/Video/Fotos). */
+static unsigned fixed_toward(unsigned base_rgb24, unsigned toward_rgb24, int pct)
+{
+    aura_rgb_t base = aura_color_from_rgb24(base_rgb24);
+    aura_rgb_t toward = aura_color_from_rgb24(toward_rgb24);
+    aura_rgb_t out = aura_color_blend_pct(base, toward, pct);
+    return LCD_RGBPACK(out.r, out.g, out.b);
+}
+
+void aura_category_gradient(aura_category_t cat,
+                             unsigned *color_a, unsigned *color_center,
+                             unsigned *color_b)
+{
+    unsigned base_rgb24;
+
+    switch (cat)
+    {
+    case AURA_CATEGORY_SETTINGS:
+        base_rgb24 = AURA_DS_COLOR_CATEGORY_SETTINGS_GRAY_RGB24;
+        break;
+    case AURA_CATEGORY_VIDEO:
+        base_rgb24 = AURA_DS_COLOR_CATEGORY_VIDEO_RGB24;
+        break;
+    case AURA_CATEGORY_PHOTOS:
+        base_rgb24 = AURA_DS_COLOR_CATEGORY_PHOTOS_RGB24;
+        break;
+    case AURA_CATEGORY_EXTRAS:
+        /* Unico caso de degradado entre DOS TONOS (amarillo -> acento),
+         * no luz/sombra de un solo color -- el "centro" es el punto
+         * medio real entre ambos, no un tercer tono independiente. */
+        *color_a = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
+        *color_b = aura_accent();
+        *color_center = fixed_toward(AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW_RGB24,
+                                      aura_settings.accent_rgb24, 50);
+        return;
+    case AURA_CATEGORY_MUSIC:
+    case AURA_CATEGORY_NONE:
+    default:
+        /* Fallback seguro: identico al comportamiento de siempre
+         * (degradado del acento configurable) para Musica y para
+         * cualquier categoria sin resolver. */
+        *color_a = aura_accent_light();
+        *color_center = aura_accent();
+        *color_b = aura_accent_dark();
+        return;
+    }
+
+    {
+        aura_rgb_t base = aura_color_from_rgb24(base_rgb24);
+        *color_center = LCD_RGBPACK(base.r, base.g, base.b);
+    }
+    *color_a = fixed_toward(base_rgb24, 0xFFFFFFu, AURA_DS_COLOR_ACCENT_DERIVED_LIGHTEN_PCT);
+    *color_b = fixed_toward(base_rgb24, 0x000000u, AURA_DS_COLOR_ACCENT_DERIVED_DARKEN_PCT);
+}
+
 bool aura_shadows_enabled(void)
 {
     return aura_settings.left_panel_shadow;

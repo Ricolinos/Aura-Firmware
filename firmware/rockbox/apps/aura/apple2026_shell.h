@@ -8,6 +8,8 @@
 
 #include <stdbool.h>
 
+#include "aura_category.h"
+
 typedef enum {
     /* Fondo de toda pantalla. */
     A26_SHELL_BG = 0,
@@ -102,6 +104,23 @@ unsigned aura_accent(void);
  * el usuario lo haya cambiado sin reiniciar. */
 unsigned aura_accent_light(void);
 unsigned aura_accent_dark(void);
+
+/* Jerarquia de color por categoria del Menu principal (encargo del dueno
+ * 2026-08-14, design-system/tokens.json -> aura_ds.color.category):
+ * Musica sigue el acento configurable (identico a aura_accent_light/
+ * _dark de arriba); Ajustes/Video/Fotos son colores FIJOS (no siguen
+ * tema ni acento, a proposito); Extras es el unico caso de degradado
+ * entre DOS TONOS (amarillo -> acento) en vez de luz/sombra de un solo
+ * tono. Los 3 colores que devuelve son los mismos 3 puntos que ya usaba
+ * el degradado diagonal del tile de SelectionSummary (esquina clara,
+ * centro, esquina oscura) -- `color_center` es el color "real" de la
+ * categoria (para consumidores de un solo tono, p. ej. el degradado de
+ * icono de 2 puntos en aura_widgets.c, que usa `color_a`/`color_b` y
+ * descarta el centro). AURA_CATEGORY_NONE se resuelve igual que
+ * AURA_CATEGORY_MUSIC (fallback seguro al comportamiento de siempre). */
+void aura_category_gradient(aura_category_t cat,
+                             unsigned *color_a, unsigned *color_center,
+                             unsigned *color_b);
 
 /* Sombra de LeftPanel sobre el contenido a su derecha (PLAN.md T0.4,
  * efectos/01-sombras.md: "SelectionSummary y CoverDrift SIEMPRE
