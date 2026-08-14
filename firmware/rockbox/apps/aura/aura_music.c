@@ -88,14 +88,6 @@ static void import_ratings_from_studio(void)
     int fd;
     char line[MAX_PATH + 16];
 
-    /* D-204: mismo motivo que la espera en aura_music_buffer_event()
-     * mas abajo -- tagcache_is_usable() (lo que ya garantiza el
-     * llamador, aura_music_db_ready()) NO implica que el ramcache este
-     * completamente cargado todavia. Tocar tagcache antes de eso es
-     * indefinido. */
-    while (!tagcache_is_fully_initialized())
-        yield();
-
     fd = open(AURA_RATINGS_PATH, O_RDONLY);
     if (fd < 0)
         return;
@@ -144,31 +136,37 @@ static void import_ratings_from_studio(void)
  * import_ratings_from_studio() (tagcache recien usable). Solo trae
  * tag_rating -- Aura no usa tag_playcount/tag_lastplayed en ningun
  * lado todavia, no hace falta traerlos "por si acaso". */
-/* D-204: reporte del dueno -- el iPod real se congelaba por completo
- * (pantalla y botones sin responder) justo AL INICIAR una cancion,
- * hasta forzar el reinicio. Causa raiz: `send_track_event()`
- * (apps/playback.c:audio_start_codec(), el hilo de audio) invoca esta
- * funcion de forma SINCRONA en cada arranque de pista -- y a diferencia
- * de la version stock de Rockbox (apps/tagtree.c:tagtree_buffer_event,
- * linea 949-950), la version original de D-200 tocaba tagcache sin
- * esperar primero a que estuviera COMPLETAMENTE listo.
- * `aura_music_db_ready()` solo garantiza `tagcache_is_usable()` antes
- * de registrar este evento -- eso NO implica que el ramcache
- * (`tc_stat.ramcache`, poblado en un hilo de fondo aparte) ya este
- * cargado. Si el dueno entra a Musica y empieza a reproducir apenas la
- * base queda usable, el hilo de audio caia a `find_entry_disk()` (I/O
- * de disco sincrono, apps/tagcache.c) exactamente mientras el hilo de
- * tagcache seguia trabajando (aura_music_db_ready() dispara
- * tagcache_start_scan() en esa misma pasada) -- tagcache en un estado
- * a medio cargar desde el hilo de audio en tiempo real es
- * comportamiento indefinido, no solo lento.
+/* D-204/D-206: reporte del dueno -- el iPod real se congelaba por
+ * completo (pantalla y botones sin responder) justo AL INICIAR una
+ * cancion, hasta forzar el reinicio; ademas, un pitido agudo constante
+ * del piezo (audible sin audifonos) quedaba sonando sin apagarse.
+ * Causa raiz real: `send_track_event()`
+ * (apps/playback.c:audio_start_codec()) invoca esta funcion de forma
+ * SINCRONA en el HILO DE AUDIO (`PRIORITY_PLAYBACK`=16, con boost hasta
+ * 5) -- un intento previo (D-204) copio la espera cooperativa de stock
+ * (apps/tagtree.c:tagtree_buffer_event, `while (!is_fully_initialized)
+ * yield();`), pero esa espera bloqueaba el hilo de audio esperando al
+ * hilo de tagcache, que corre en `PRIORITY_BACKGROUND`=20 (MENOR
+ * prioridad, numero mas alto) -- el scheduler de Rockbox no le da
+ * tiempo real a un hilo de background mientras uno de mayor prioridad
+ * sigue "listo" en su propio `yield()`, asi que el hilo de audio quedaba
+ * en un livelock real (nunca cede lo suficiente para que tagcache
+ * termine su `sleep(HZ)` inicial) -- eso explica tanto el freeze total
+ * (el hilo de audio nunca vuelve) como el pitido: un click de piezo que
+ * ya habia arrancado (`piezo_start()`, temporizador con interrupcion
+ * `INT_TIMERA` que lo apaga solo) quedaba sonando indefinidamente
+ * porque el sistema nunca volvia a un estado normal para que esa
+ * interrupcion se resolviera limpio.
  *
- * El fix es exactamente la salvaguarda que stock SI tiene y D-200
- * omitio: esperar (cediendo el CPU, sin tomar ningun lock) a que
- * tagcache este completamente inicializado antes de tocarlo. Tambien
- * se alinea el chequeo `if (!id3->rating)` de stock -- sin el, cada
- * pista se rebuffer pisaba con el valor de tagcache un rating recien
- * puesto en memoria por commit_rating() en Ahora suena. */
+ * El fix real NO es esperar mejor -- es no esperar nunca en el hilo de
+ * audio. `aura_music_db_ready()` ahora solo registra este evento
+ * despues de confirmar `tagcache_is_fully_initialized()` (ver mas
+ * abajo), asi que para cuando este callback puede dispararse, tagcache
+ * YA esta listo -- el chequeo aca es defensivo y NO bloqueante (un
+ * simple `return`, nunca un `yield()` en este hilo). Se mantiene el
+ * chequeo `if (!id3->rating)` de stock -- sin el, cada pista se
+ * rebuffer pisaba con el valor de tagcache un rating recien puesto en
+ * memoria por commit_rating() en Ahora suena. */
 static void aura_music_buffer_event(unsigned short id, void *ev_data)
 {
     struct mp3entry *id3 = ((struct track_event *)ev_data)->id3;
@@ -176,11 +174,8 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
 
     (void)id;
 
-    if (!global_settings.runtimedb || !id3)
+    if (!global_settings.runtimedb || !id3 || !tagcache_is_fully_initialized())
         return;
-
-    while (!tagcache_is_fully_initialized())
-        yield();
 
     if (!tagcache_find_index(&tcs, id3->path))
         return;
@@ -233,8 +228,21 @@ bool aura_music_db_ready(void)
      * exactamente el bug reportado en hardware real (2026-08-13):
      * archivos copiados por USB, biblioteca vacia en el aparato. La
      * pasada corre en el hilo de tagcache, en fondo; con la biblioteca
-     * sin cambios es barata (solo recorre directorios y compara). */
-    if (tagcache_is_usable() && !update_triggered)
+     * sin cambios es barata (solo recorre directorios y compara).
+     *
+     * D-206: `tagcache_is_fully_initialized()` se suma aca a proposito
+     * -- `is_usable()` (initialized && ready) puede volverse verdadero
+     * ANTES que la determinacion de fondo termine (mismo orden que ya
+     * cuido el bloque de arriba para el rebuild). Si esto se disparara
+     * antes de tiempo, `import_ratings_from_studio()`/
+     * `aura_music_buffer_event()` (registrado aca abajo) tocarian
+     * tagcache sin garantia de que este listo. En vez de esperar
+     * DENTRO de esas funciones (el bug real de D-204/D-206, ver el
+     * comentario de aura_music_buffer_event), simplemente se pospone
+     * este bloque entero a la siguiente pasada del loop principal
+     * (medio segundo despues, sin bloquear nada) hasta que la
+     * determinacion ya este hecha. */
+    if (tagcache_is_usable() && tagcache_is_fully_initialized() && !update_triggered)
     {
         tagcache_start_scan();
         import_ratings_from_studio();
