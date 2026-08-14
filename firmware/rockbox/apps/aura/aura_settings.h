@@ -117,6 +117,21 @@ typedef struct {
      * Musica marcado aparece ADEMAS en el menu de inicio, sin dejar de
      * vivir dentro de su padre. */
     unsigned root_shortcuts;
+    /* Bloqueo de pantalla (D-197): antes de esto se podia CONFIGURAR
+     * una clave (aura_screenlock.c) pero nunca se guardaba ni se
+     * aplicaba -- entrar cualquier clave simplemente volvia a Extras
+     * sin bloquear nada de verdad (reporte del dueno en hardware
+     * real). `screen_lock_pin` son los 4 digitos empaquetados como
+     * numero (0-9999, ej. "0427" -> 427); `screen_lock_configured` es
+     * true una vez que el usuario establecio una clave alguna vez;
+     * `screen_lock_active` es el candado EN VIVO -- true bloquea todo
+     * el aparato (aura_main.c intercepta el loop entero antes de
+     * llegar a aura_screens_*) hasta que se ingresa la clave correcta.
+     * Persiste en aura.cfg a proposito: si no sobreviviera un
+     * apagado/encendido, forzar un reinicio bastaria para saltarselo. */
+    unsigned short screen_lock_pin;
+    bool screen_lock_configured;
+    bool screen_lock_active;
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

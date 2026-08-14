@@ -55,10 +55,13 @@ padding horizontal (152px) sí aplica normalmente al contenido de cada ítem.
 
 `Selector` es el único elemento que puede rebasar el padding interno — pero
 solo el margen de **arriba y abajo**, nunca el de los costados (su ancho
-sigue siendo 152px, respetando el padding horizontal). Esto es lo que
-permite que 10 ítems de 22px de alto llenen exactamente los 220px sin
-dejar espacio muerto arriba o abajo: 22px × 10 = 220px, sin gap entre
-ítems por defecto.
+sigue siendo 152px, respetando el padding horizontal).
+
+**D-195 (encargo del dueño, 2026-08-13):** filas más altas para que se lean
+menos apretadas — de 10 ítems visibles a 7, cada uno de 31px de alto en vez
+de 22px (≈140% del tamaño anterior). 7 × 31px = 217px de los 220px útiles:
+ya no calza exacto como con 22×10 = 220px — quedan 3px sin usar al fondo
+del panel, aceptado a cambio de legibilidad.
 
 ## Composición interna
 
@@ -72,23 +75,25 @@ La lista de opciones en sí (ej. Música, Videos, Fotos, Podcasts, Extras,
 Ajustes, Canciones aleatorias en el menú principal). Es el contenido que
 cambia entre menú y submenú sin remontar `LeftPanel`.
 
-**Capacidad:** máximo **10 ítems visibles**, cada uno de **22px de alto**,
-sin espaciado entre ellos por defecto (22×10 = 220px exactos).
+**Capacidad:** máximo **7 ítems visibles** (D-195, antes 10), cada uno de
+**31px de alto** (antes 22px), sin espaciado entre ellos por defecto
+(7×31 = 217px de los 220px útiles del panel).
 
 **Divisor de sección:** cuando hay un cambio de sección dentro de la lista
 (ver `sistema/02-navegacion-menus-contenido.md` y el concepto de secciones
 ya usado en `componentes/dynamic-title.md`), se muestra una línea de **1px
 de alto, 152px de largo** (respeta el padding horizontal de 4px por lado).
 
-**Confirmado: se dibuja superpuesta, sin restar espacio** — los 10 ítems
-visibles se mantienen sin importar cuántos divisores de sección haya.
+**Confirmado: se dibuja superpuesta, sin restar espacio** — los 7 ítems
+visibles (D-195) se mantienen sin importar cuántos divisores de sección
+haya.
 
 #### Anatomía de un ítem
 
 | Elemento | Posición | Tamaño |
 |---|---|---|
-| Ícono | 14px desde el borde izquierdo del panel (= 10px desde el borde del padding interno) | Máximo 14×14px (puede ser 12×14 o 14×12, nunca mayor a ese cuadro) |
-| Texto | 4px después del ícono | SF Pro Regular, 10px, alineado a la izquierda |
+| Ícono | 14px desde el borde izquierdo del panel (= 10px desde el borde del padding interno) | Máximo 20×20px (D-195, antes 14×14px — escalado en la misma proporción que la fila) |
+| Texto | 4px después del ícono | SF Pro Regular, 12px (D-195, antes 10px), alineado a la izquierda |
 | Elemento opcional derecho | Lado derecho del ítem | Ver tabla abajo — dimensiones individuales pendientes |
 
 **Elementos opcionales del lado derecho** (según la naturaleza de cada

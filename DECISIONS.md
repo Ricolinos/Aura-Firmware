@@ -2131,4 +2131,65 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-194 — Carpetas de medios creadas de antemano en el iPod
+
+**Encargo del dueño (2026-08-13, Fase 2 de la misma mejora sin supervisión en vivo)**: podía copiar música, fotos y video al iPod en modo de almacenamiento masivo (Finder los ve bien), pero el firmware no los reconocía. Pedido explícito: crear las carpetas para que el usuario intuya dónde poner sus archivos.
+
+**Diagnóstico**: la convención de carpetas YA era real en ambos lados -- `aura_photos.c`/`aura_video.c` hacen `opendir()` sobre `PHOTOS_DIR "/Photos"`/`VIDEOS_DIR "/Videos"` exactos, `aura_music.c` usa el tagcache real de Rockbox (escanea el volumen completo), y `LibrarySync` (Aura Studio) ya escribe `Music/`, `Photos/`, `Videos/`, `Playlists/` al sincronizar. El problema: **ninguno de los dos lados creaba esas carpetas de antemano**. Si el usuario arrastraba archivos sueltos a la raíz del disco (sin adivinar el nombre exacto de una carpeta que ni existía todavía), el firmware nunca los encontraba.
+
+**Arreglo**: `aura_main_ensure_media_dirs()`, nueva función en `aura_main.c`, crea `/Music`, `/Photos`, `/Videos`, `/Playlists` en cada arranque (idempotente vía `dir_exists()` + `mkdir()`, sin costo real si ya existen) -- cubre tanto instalaciones nuevas (la próxima vez que el firmware arranca) como iPods que ya tenían Aura instalado antes de este cambio (se crean solas en el primer arranque con el firmware actualizado, sin depender de reinstalar).
+
+**Aceptación**: build ARM real limpio (`make` en `firmware/build-ipod6g`), sim limpio. `firmware/dist/rockbox.ipod`/`rockbox.zip` regenerados (junto con D-195/D-196/D-197 de esta misma sesión), `checksums.txt` al día. Confirmación en hardware del dueño, en curso.
+
+---
+
+## D-195 — Filas de listas ~140% más grandes (10→7 visibles)
+
+**Encargo del dueño (2026-08-13)**: "me equivoqué al decidir esos píxeles" -- las listas (menú principal, menús de Música/Ajustes/Video, etc.) se leen muy apretadas. Pedido: agrandar los elementos a ~150%, de 10 elementos visibles a 7, incluyendo iconos y un poco más de texto. Explícitamente **sin tocar** coverflow, reproductor, barra de estado, ni pantallas sin listas.
+
+**Dos sistemas de lista distintos, cada uno con su propio ajuste** (confirmado leyendo el código, no asumido):
+- **`LeftPanel`/`MenuList`** (panel dividido -- menú principal, submenús): ya migrado al sistema `aura_ds` nuevo (`docs/aura-design-system/componentes/left-panel.md`, fuente de verdad viva). `row_height` 22→31px, `max_visible_rows` 10→7 (`AURA_DS_METRICS_MENU_LIST_MAX_VISIBLE_ROWS` es un token FIJO, no derivado -- hay que subir los dos juntos o las filas se salen de los 220px del panel). Icono 14→20px (`list_v2` en `design-system/tokens.json`). Texto: `A26_FONT_STYLE_DS_REG_10` (10px) → `A26_FONT_STYLE_DS_REG_12` (12px) -- reutiliza una fuente YA cargada (la usa Now Playing para álbum/artista), cero fuentes nuevas.
+- **`aura_widgets_draw_list()`** (listas de contenido de pantalla completa -- Música/Video/Fotos/Alarmas/settings full lists): todavía en el sistema Apple2026 viejo, sin doc propia en `docs/aura-design-system/`. `ROW_HEIGHT` pasó de `A26_TYPE_BODY + 2*A26_SPACING_SM` (21px) a `A26_TYPE_BODY + 2*A26_SPACING_MD` (29px, ~138%) -- **sin subir `A26_TYPE_BODY`** (13px): ese tamaño de fuente lo comparten CoverFlow/Now Playing/Fotos/Video, que el encargo dice explícitamente no tocar, y agregar un tamaño de fuente nuevo habría excedido `MAXUSERFONTS=12` (`firmware/export/font.h`), ya en su límite exacto con las 12 fuentes existentes (5 viejas + 7 `ds_*`). Icono: nuevo token `A26_ICON_SIZE_CONTENT_LIST` (28px, antes usaba `A26_ICON_SIZE_MENU`=20px) -- separado a propósito porque ese otro token también lo usa la fila de iconos de modo de Ahora Suena, que no se debía tocar.
+
+**Doc fuente actualizada**: `docs/aura-design-system/componentes/left-panel.md` (capacidad, anatomía del ítem) refleja los nuevos 31px/7 ítems/20px icono/12px texto -- ya no calza "exacto" como el 22×10=220px original (7×31=217px, 3px sin usar al fondo del panel), aceptado a cambio de legibilidad. La lista de contenido no tiene doc propia en el sistema nuevo (no migrada todavía), así que no había nada que actualizar ahí más allá del código y su comentario.
+
+**Verificación visual real** (no solo matemática): capturas del simulador (`firmware/tools/apple2026_sim_shot.sh`) contra el menú principal, Ajustes (confirma exactamente 7 filas visibles) y Alarmas (lista de contenido, icono/texto proporcionados sin recortes ni solapamientos).
+
+**Aceptación**: `make -C firmware/rockbox/apps/aura/test test` (8/8 suites), build ARM real y sim limpios, capturas de pantalla verificadas.
+
+---
+
+## D-196 — Clicker apagado de fábrica, no roto
+
+**Encargo del dueño (2026-08-13)**: "el sonido del clicker tampoco está funcionando en el hardware."
+
+**Diagnóstico**: el disparo (`aura_main.c`, filtra repeticiones y `BUTTON_REL` antes de sonar), el mixer de audio (`pcm_mixer.c`/`beep.c`, mecanismo genérico de Rockbox probado en decenas de targets) y la fila "Clicker" de Ajustes (togglea `global_settings.keyclick` entre 0 y 2) están todos bien -- no hay ningún bug de lógica ahí. La causa real: `keyclick` es un `CHOICE_SETTING` de Rockbox con **default de fábrica 0 (apagado)** (`settings_list.c`), y `aura_settings_apply_core_defaults()` -- la función que YA existe para forzar los valores que Aura quiere distinto del default de Rockbox de fábrica (volumen, apagado automático, luz de fondo) -- nunca tocaba `keyclick`. Resultado: cualquier instalación nueva de Aura sale con el Clicker apagado hasta que el usuario encuentra el ajuste a mano y lo prende -- a diferencia del iPod original, que hace clic desde que sale de la caja.
+
+**Arreglo**: una línea en `aura_settings_apply_core_defaults()`, `global_settings.keyclick = 2` (el mismo valor "moderado" que usa la fila de Ajustes al encenderlo). Mismo patrón que los defaults ya forzados ahí.
+
+**Verificado en el simulador** (no solo leído): con `aura.cfg` borrado (primer arranque real), la fila "Clicker" de Ajustes aparece ENCENDIDA sin tocar nada -- antes del arreglo, aparecía apagada.
+
+**Aceptación**: build ARM real y sim limpios, verificación visual en el simulador.
+
+---
+
+## D-197 — Bloqueo de pantalla: de "se puede configurar" a "bloquea de verdad"
+
+**Encargo del dueño (2026-08-13)**: "sí nos permite configurar el PIN, pero de nada sirve, al desbloquear el iPod se puede seguir usando sin problema."
+
+**Diagnóstico (no era un bug puntual, era una funcionalidad a medio construir)**: `aura_screenlock.c` sólo implementaba la pantalla de **configurar** una clave de 4 dígitos (dos pasadas, confirmar) -- pero al coincidir, `reset_all()` **descartaba los dígitos** y volvía a Extras sin guardar nada en ningún lado. No existía ningún campo persistido para la clave, ningún estado "bloqueado", ninguna pantalla de desbloqueo, y `aura_main()` siempre arrancaba directo en `AURA_SCREEN_ROOT` sin ningún chequeo de por medio. Literalmente no había mecanismo de bloqueo, sólo la mitad de su pantalla de configuración.
+
+**Arreglo, tres piezas**:
+1. **Persistencia**: tres campos nuevos en `aura_settings_t`/`aura.cfg` -- `screen_lock_pin` (los 4 dígitos empaquetados 0-9999), `screen_lock_configured`, y `screen_lock_active` (el candado EN VIVO). Persiste a propósito: si no sobreviviera un apagado/encendido, forzar un reinicio bastaría para saltárselo.
+2. **`aura_screenlock.c` con dos modos** según `screen_lock_active`: **configurar** (el flujo de siempre, sin cambios de comportamiento -- salvo que ahora, al coincidir, la clave se GUARDA de verdad y el candado se enciende ya mismo, en vez de descartarse) y **desbloquear** (nuevo: un solo paso, compara contra la clave guardada; MENU no hace nada -- a diferencia de configurar, acá no hay "cancelar" legítimo).
+3. **La puerta real, en `aura_main.c`**: el loop principal intercepta TODO -- dibujo, botones, el beep del clicker -- antes de llegar a `aura_screens_draw()`/`aura_screens_handle_button()` o cualquiera de la lógica de animación/tagcache existente, mientras `aura_settings.screen_lock_active` sea verdadero. Es el mismo patrón ya usado para el gesto de mantener SELECT y `default_event_handler()` -- un único punto de intercepción, no un chequeo repartido por cada pantalla.
+
+**Verificado en el simulador, ciclo completo** (capturas reales, no sólo lectura de código): configurar 1234 → el aparato queda bloqueado de inmediato ("iPod bloqueado. Introduce tu clave", dígitos en 0000). Reiniciar el proceso del simulador (equivalente a apagar/prender) → arranca DIRECTO en la pantalla de bloqueo, sin pasar por el menú -- confirma que persiste de verdad. MENU repetido → sin ningún efecto, sigue bloqueado. Clave correcta (1234) → desbloquea y vuelve al menú principal, totalmente usable.
+
+**Alcance no cubierto, a propósito**: no hay un atajo para "volver a bloquear ahora" reutilizando la clave ya guardada -- entrar a Extras › Bloqueo pantalla mientras el candado está apagado siempre pide una clave nueva (con doble confirmación). No fue parte del reporte del dueño (que era específicamente "el PIN no bloquea nada"), y agregarlo son más pantallas/estados sin pedido explícito.
+
+**Aceptación**: `make -C firmware/rockbox/apps/aura/test test` (8/8 suites), build ARM real y sim limpios, ciclo completo configurar→bloquear→persistir→desbloquear verificado con capturas del simulador. Confirmación en hardware del dueño, en curso.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

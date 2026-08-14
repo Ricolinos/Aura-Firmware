@@ -4,6 +4,7 @@
 #include "tick.h"
 #include "misc.h"
 #include "usb.h"
+#include "dir.h"
 
 #include "aura_main.h"
 #include "aura_nav.h"
@@ -22,6 +23,7 @@
 #include "aura_coverdrift.h"
 #include "aura_coverflow.h"
 #include "aura_status_bar_v2.h"
+#include "aura_screenlock.h"
 
 /* Velocidad angular del ultimo SCROLL_FWD/BACK, en grados/seg -- ya
  * calculada y suavizada por el driver real del clickwheel
@@ -156,6 +158,30 @@ static long next_button(int timeout_ticks)
     }
 }
 
+/* Reporte del dueño en hardware real (D-194): podia copiar musica,
+ * fotos y video al iPod en modo disco (Finder los ve bien), pero el
+ * firmware no los reconocia. La carpeta correcta ya era una convencion
+ * real -- PHOTOS_DIR "/Photos" y VIDEOS_DIR "/Videos" en
+ * aura_photos.c/aura_video.c hacen opendir() sobre esos nombres
+ * exactos, y "/Music" ya es donde tagcache_rebuild() escanea, y
+ * LibrarySync (Aura Studio) ya escribe estos cuatro nombres al
+ * sincronizar -- pero NINGUN lado los creaba de antemano. Si el
+ * usuario arrastraba archivos sueltos a la raiz del disco (o adivinaba
+ * mal el nombre de una carpeta que ni existia), el firmware nunca los
+ * encontraba. Se crean aca, en cada arranque (mkdir es barato y
+ * idempotente -- dir_exists() evita el intento si ya estan), para que
+ * el destino sea obvio en Finder desde la primera conexion, sin
+ * depender de que Aura Studio haya sincronizado ya. */
+static void aura_main_ensure_media_dirs(void)
+{
+    static const char* const dirs[] = { "/Music", "/Photos", "/Videos", "/Playlists" };
+    for (unsigned i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++)
+    {
+        if (!dir_exists(dirs[i]))
+            mkdir(dirs[i]);
+    }
+}
+
 void aura_main(void)
 {
     aura_nav_t nav;
@@ -182,6 +208,7 @@ void aura_main(void)
          * "primer arranque ya hecho" no dependa de que pantallas
          * visito el usuario. */
         aura_settings_save();
+    aura_main_ensure_media_dirs();
     a26_shell_init();
     aura_nav_init(&nav, AURA_SCREEN_ROOT);
 
@@ -203,6 +230,34 @@ void aura_main(void)
     {
         long button;
         int timeout_ticks = -1;
+
+        /* D-197: candado EN VIVO -- se intercepta el loop entero ANTES
+         * de tocar aura_screens_draw()/aura_screens_handle_button() o
+         * cualquiera de la logica de animacion/tagcache de abajo, para
+         * que bloquear de verdad signifique que NADA de la app es
+         * alcanzable salvo la propia pantalla de desbloqueo. Reporte
+         * del dueno en hardware real: se podia configurar una clave,
+         * pero nada la aplicaba de verdad -- el aparato seguia usandose
+         * sin problema. */
+        if (aura_settings.screen_lock_active)
+        {
+            aura_screenlock_draw();
+            a26_shell_stamp_corners();
+            lcd_update();
+
+            button = next_button(-1);
+            if (default_event_handler(button) != 0)
+                continue;
+
+            if (button != BUTTON_NONE
+                && !(button & BUTTON_REL)
+                && (button == BUTTON_SCROLL_FWD || button == BUTTON_SCROLL_BACK
+                    || !aura_main_last_was_repeat()))
+                system_sound_play(SOUND_KEYCLICK);
+
+            aura_screenlock_handle_button(&nav, button);
+            continue;
+        }
 
         aura_screens_draw(&nav);
         /* La hoja de vidrio del Modo 4 es CUADRADA: sobre ella no se

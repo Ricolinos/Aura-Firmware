@@ -115,6 +115,7 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
                     - AURA_DS_METRICS_SELECTOR_INDICATOR_GAP_FROM_EDGE;
     int first = 0;
     int i, has_any_icon = 0;
+    int font_w, font_h;
 
     if (count > visible)
     {
@@ -145,7 +146,17 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         if (items[i].icon_name && aura_settings.show_icons)
             has_any_icon = 1;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    /* D-195 (encargo del dueno, 2026-08-13): filas de MenuList ~140%
+     * mas altas para que se lean menos apretadas -- DS_REG_12 en vez de
+     * DS_REG_10 (fuente ya cargada por Now Playing, cero fuentes
+     * nuevas: MAXUSERFONTS=12 ya esta en su limite exacto). */
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    /* Alto real de la fuente activa para centrar verticalmente el texto
+     * de cada fila -- ya no un "10" hardcodeado que asumia DS_REG_10
+     * (D-195: el tamano de fuente ahora es una eleccion de diseno que
+     * puede volver a cambiar, este calculo ya no depende de acordarse
+     * de actualizar un numero suelto en otro lado del archivo). */
+    lcd_getstringsize((const unsigned char *)"Ay", &font_w, &font_h);
 
     /* Selector primero (D-081): si algo lo anima en el futuro, dibujarlo
      * antes del texto evita que tape el contenido de otra fila mientras
@@ -228,7 +239,7 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         lcd_set_foreground(items[i].dimmed
             ? a26_shell_blend(a26_color(A26_SHELL_BG), a26_color(A26_TEXT_PRIMARY), 128)
             : (is_selected ? aura_accent() : a26_color(A26_TEXT_PRIMARY)));
-        lcd_putsxy(text_x, row_y + (ROW_H - 10) / 2, (const unsigned char *)truncated);
+        lcd_putsxy(text_x, row_y + (ROW_H - font_h) / 2, (const unsigned char *)truncated);
     }
 
     {

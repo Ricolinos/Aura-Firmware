@@ -38,6 +38,11 @@ static const aura_settings_t aura_settings_defaults = {
     .sort_by_lastname = 0,
     .root_shortcuts = 0,
     .clock_visible = true,
+    /* Sin clave configurada ni bloqueo activo -- estado del iPod recien
+     * salido de la caja (D-197). */
+    .screen_lock_pin = 0,
+    .screen_lock_configured = false,
+    .screen_lock_active = false,
 };
 
 /* Ganancia (dB) por banda para cada preset; el resto de cada banda
@@ -131,6 +136,18 @@ void aura_settings_apply_core_defaults(void)
     global_settings.backlight_timeout = 10;
     global_settings.backlight_timeout_plugged = 30;
     global_settings.sleeptimer_duration = 0;
+    /* D-196: reporte del dueno en hardware real -- "el sonido del
+     * clicker tampoco esta funcionando". El disparo (aura_main.c) y el
+     * mixer de audio (pcm_mixer.c/beep.c) estan bien -- la causa real
+     * es que `keyclick` es un CHOICE_SETTING de Rockbox con default
+     * de fabrica 0 (apagado, settings_list.c), y esta funcion nunca lo
+     * tocaba. El resultado: en cualquier instalacion nueva de Aura, el
+     * Clicker esta apagado hasta que el usuario encuentra el ajuste y
+     * lo prende a mano -- distinto al iPod original, que hace clic
+     * desde que sale de la caja. 2 = "moderate" (el mismo valor que
+     * usa la fila "Clicker" de Ajustes al encenderlo, aura_screens.c).
+     */
+    global_settings.keyclick = 2;
     backlight_set_timeout(global_settings.backlight_timeout);
     backlight_set_timeout_plugged(global_settings.backlight_timeout_plugged);
     settings_save();
@@ -193,6 +210,12 @@ void aura_settings_load(void)
                 aura_settings.root_shortcuts = (unsigned)v;
             else if (!strcmp(name, "clock_visible"))
                 aura_settings.clock_visible = (v != 0);
+            else if (!strcmp(name, "screen_lock_pin"))
+                aura_settings.screen_lock_pin = (unsigned short)(v < 0 ? 0 : v > 9999 ? 9999 : v);
+            else if (!strcmp(name, "screen_lock_configured"))
+                aura_settings.screen_lock_configured = (v != 0);
+            else if (!strcmp(name, "screen_lock_active"))
+                aura_settings.screen_lock_active = (v != 0);
         }
         close(fd);
 
@@ -236,6 +259,9 @@ void aura_settings_save(void)
     fdprintf(fd, "sort_by_lastname: %d\n", aura_settings.sort_by_lastname);
     fdprintf(fd, "root_shortcuts: %d\n", (int)aura_settings.root_shortcuts);
     fdprintf(fd, "clock_visible: %d\n", (int)aura_settings.clock_visible);
+    fdprintf(fd, "screen_lock_pin: %d\n", (int)aura_settings.screen_lock_pin);
+    fdprintf(fd, "screen_lock_configured: %d\n", (int)aura_settings.screen_lock_configured);
+    fdprintf(fd, "screen_lock_active: %d\n", (int)aura_settings.screen_lock_active);
 
     close(fd);
 }

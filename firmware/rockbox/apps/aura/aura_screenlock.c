@@ -10,6 +10,7 @@
 #include "aura_widgets.h"
 #include "aura_lang.h"
 #include "aura_screens.h"
+#include "aura_settings.h"
 
 #define SL_DIGITS   4
 #define SL_BOX_W    34
@@ -37,8 +38,12 @@ void aura_screenlock_draw(void)
     int total_w = SL_DIGITS * SL_BOX_W + (SL_DIGITS - 1) * SL_GAP;
     int x0 = (A26_SCREEN_WIDTH - total_w) / 2;
     int y = A26_SCREEN_HEIGHT / 2 - SL_BOX_H / 2 + 10;
-    const char *hint = aura_str(s_confirming ? AURA_STR_LOCK_CONFIRM
-                                              : AURA_STR_LOCK_SET);
+    /* D-197: candado EN VIVO (screen_lock_active) -- pantalla de
+     * desbloqueo, un solo paso, texto distinto del flujo de
+     * configuracion (que sigue usando LOCK_SET/LOCK_CONFIRM). */
+    const char *hint = aura_settings.screen_lock_active
+        ? aura_str(AURA_STR_LOCK_ENTER)
+        : aura_str(s_confirming ? AURA_STR_LOCK_CONFIRM : AURA_STR_LOCK_SET);
     int i, w, h;
 
     a26_shell_clear_screen();
@@ -73,11 +78,71 @@ void aura_screenlock_draw(void)
     }
 }
 
-void aura_screenlock_handle_button(aura_nav_t *nav, long button)
+/* Empaqueta los 4 digitos en un numero 0-9999 para compararlos/guardarlos
+ * como un solo entero (mismo formato que aura_settings.screen_lock_pin). */
+static unsigned digits_to_pin(const int digits[SL_DIGITS])
+{
+    return (unsigned)(digits[0] * 1000 + digits[1] * 100 + digits[2] * 10 + digits[3]);
+}
+
+/* D-197: desbloqueo -- UN solo paso (sin confirmar dos veces, la clave
+ * ya existe), compara contra aura_settings.screen_lock_pin. MENU no
+ * hace nada: a diferencia de configurar una clave nueva, aca no hay
+ * "cancelar" legitimo -- la unica salida es acertar la clave. */
+static void handle_unlock_button(long button)
 {
     switch (button)
     {
-    /* La rueda cambia el DIGITO enfocado (0-9, con vuelta). */
+    case BUTTON_SCROLL_FWD:
+        s_digits[s_focus] = (s_digits[s_focus] + 1) % 10;
+        break;
+    case BUTTON_SCROLL_BACK:
+        s_digits[s_focus] = (s_digits[s_focus] + 9) % 10;
+        break;
+
+    case BUTTON_SELECT:
+        if (s_focus < SL_DIGITS - 1)
+        {
+            s_focus++;
+            break;
+        }
+        if (digits_to_pin(s_digits) == aura_settings.screen_lock_pin)
+        {
+            /* Clave correcta: se apaga el candado y se guarda de
+             * inmediato -- si el usuario apaga el aparato en este
+             * instante, debe volver a arrancar YA desbloqueado. */
+            aura_settings.screen_lock_active = false;
+            aura_settings_save();
+            reset_all();
+        }
+        else
+        {
+            /* Incorrecta: mismo lenguaje que el flujo de configurar
+             * (reiniciar los digitos es la senal, sin texto de error) --
+             * se queda en esta pantalla, nunca se sale sola. */
+            reset_all();
+        }
+        break;
+
+    default:
+        /* MENU y cualquier otro boton: sin efecto. Ningun otro camino
+         * de esta pantalla llama a aura_nav_push/pop en modo
+         * desbloqueo -- el aparato entero queda atrapado aca hasta
+         * acertar (aura_main.c intercepta el loop principal). */
+        break;
+    }
+}
+
+/* Configurar una clave nueva (flujo original, sin cambios de
+ * comportamiento): dos pasadas, MENU cancela sin guardar. Unica
+ * diferencia con antes (D-197): al coincidir, la clave se GUARDA de
+ * verdad y el candado se enciende ya mismo -- antes esto se
+ * descartaba en silencio, que es exactamente el reporte del dueno
+ * ("configura la clave, pero de nada sirve"). */
+static void handle_configure_button(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
     case BUTTON_SCROLL_FWD:
         s_digits[s_focus] = (s_digits[s_focus] + 1) % 10;
         break;
@@ -101,7 +166,14 @@ void aura_screenlock_handle_button(aura_nav_t *nav, long button)
         }
         else if (memcmp(s_first, s_digits, sizeof(s_first)) == 0)
         {
-            /* Coincide: queda establecida y se sale. */
+            /* Coincide: se guarda de verdad y el candado queda
+             * ENCENDIDO ya -- la proxima vuelta del loop en
+             * aura_main.c ya va a mostrar esta misma pantalla en modo
+             * desbloqueo, confirmando que el bloqueo es real. */
+            aura_settings.screen_lock_pin = (unsigned short)digits_to_pin(s_first);
+            aura_settings.screen_lock_configured = true;
+            aura_settings.screen_lock_active = true;
+            aura_settings_save();
             reset_all();
             aura_nav_pop(nav);
         }
@@ -121,4 +193,12 @@ void aura_screenlock_handle_button(aura_nav_t *nav, long button)
     default:
         break;
     }
+}
+
+void aura_screenlock_handle_button(aura_nav_t *nav, long button)
+{
+    if (aura_settings.screen_lock_active)
+        handle_unlock_button(button);
+    else
+        handle_configure_button(nav, button);
 }

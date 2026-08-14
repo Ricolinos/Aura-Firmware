@@ -202,6 +202,11 @@ typedef enum {
 
     AURA_STR_LOCK_SET,
     AURA_STR_LOCK_CONFIRM,
+    /* D-197: pantalla de DESBLOQUEO (distinta de configurar una clave
+     * nueva) -- se muestra cuando aura_settings.screen_lock_active es
+     * verdadero, en cualquier arranque o si se vuelve a esta pantalla
+     * ya bloqueada. */
+    AURA_STR_LOCK_ENTER,
 
     AURA_STR_ALARM_NEW,
     AURA_STR_ALARM_HOUR,

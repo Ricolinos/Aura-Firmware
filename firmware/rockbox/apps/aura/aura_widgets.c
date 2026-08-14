@@ -26,7 +26,16 @@
  * actualizarse. En Ultra, sigue siendo la lista de ancho completo de
  * siempre -- "sin panel derecho", L4. */
 #define LIST_TOP      (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_SM)
-#define ROW_HEIGHT    (A26_TYPE_BODY + 2 * A26_SPACING_SM)
+/* D-195 (encargo del dueno, 2026-08-13): filas de listas de contenido
+ * (Musica/Video/Fotos/Alarmas/etc.) mas altas para que se lean menos
+ * apretadas -- de ~10 filas visibles a 7 (visible_rows() se recalcula
+ * solo, ver abajo). SPACING_MD en vez de SPACING_SM (21->29px) en vez
+ * de subir A26_TYPE_BODY: ese tamano de fuente lo comparten CoverFlow/
+ * Now Playing/Fotos/Video (aura_coverflow.c, aura_nowplaying.c, etc.),
+ * que el encargo dice explicitamente NO tocar -- y agregar un tamano
+ * de fuente nuevo excederia MAXUSERFONTS=12 (firmware/export/font.h),
+ * ya al limite exacto con las 12 fuentes existentes. */
+#define ROW_HEIGHT    (A26_TYPE_BODY + 2 * A26_SPACING_MD)
 #define ROW_PAD_X     A26_LAYOUT_LIST_INSET
 #define ICON_TEXT_GAP A26_SPACING_MD
 #define PANEL_RETARDO_TICKS HZ
@@ -681,14 +690,19 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         int is_selected = (i == selected);
         int text_x = ROW_PAD_X;
 
+        /* D-195: A26_ICON_SIZE_CONTENT_LIST (28px) en vez de
+         * A26_ICON_SIZE_MENU (20px, sin tocar) -- ese otro token
+         * tambien lo usa la fila de iconos de modo de Ahora suena
+         * (aura_nowplaying.c), que el encargo dice explicitamente NO
+         * agrandar; compartirlo habria crecido esos iconos tambien. */
         if (items[i].icon_name)
         {
-            int icon_y = row_y + (ROW_HEIGHT - A26_ICON_SIZE_MENU) / 2;
+            int icon_y = row_y + (ROW_HEIGHT - A26_ICON_SIZE_CONTENT_LIST) / 2;
             int w = is_selected
                 ? aura_widgets_draw_icon_selected(items[i].icon_name,
-                                                   A26_ICON_SIZE_MENU, text_x, icon_y)
+                                                   A26_ICON_SIZE_CONTENT_LIST, text_x, icon_y)
                 : aura_widgets_draw_icon(items[i].icon_name,
-                                          A26_ICON_SIZE_MENU, text_x, icon_y);
+                                          A26_ICON_SIZE_CONTENT_LIST, text_x, icon_y);
             if (w > 0)
                 text_x += w + ICON_TEXT_GAP;
         }
@@ -721,12 +735,12 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         }
         else if (items[i].checked)
         {
-            int check_x = width - ROW_PAD_X - A26_ICON_SIZE_MENU;
-            int check_y = row_y + (ROW_HEIGHT - A26_ICON_SIZE_MENU) / 2;
+            int check_x = width - ROW_PAD_X - A26_ICON_SIZE_CONTENT_LIST;
+            int check_y = row_y + (ROW_HEIGHT - A26_ICON_SIZE_CONTENT_LIST) / 2;
             if (is_selected)
-                aura_widgets_draw_icon_selected("check", A26_ICON_SIZE_MENU, check_x, check_y);
+                aura_widgets_draw_icon_selected("check", A26_ICON_SIZE_CONTENT_LIST, check_x, check_y);
             else
-                aura_widgets_draw_icon("check", A26_ICON_SIZE_MENU, check_x, check_y);
+                aura_widgets_draw_icon("check", A26_ICON_SIZE_CONTENT_LIST, check_x, check_y);
         }
     }
 
