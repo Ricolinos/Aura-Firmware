@@ -370,6 +370,11 @@ void aura_main(void)
             if (aura_widgets_pill_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
 
+            /* D-212: mismo resorte, ahora tambien en MenuList (modo
+             * split) -- antes su pastilla saltaba sin animar. */
+            if (aura_menu_list_pill_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+
             /* Cursor parpadeante del teclado de Busqueda: medio
              * segundo encendido, medio apagado -- misma puerta de
              * lcd_active() que el resto. */

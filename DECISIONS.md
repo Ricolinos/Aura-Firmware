@@ -2398,4 +2398,16 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-212 — La pastilla de MenuList no tenía resorte (no era un delay, era la falta total de animación en el otro lado)
+
+**Encargo del dueño (2026-08-14)**: "en el caso de la lista de elementos, noto que la barra de selección tiene un delay y se tarda en alcanzar al elemento seleccionado, ayúdame a mantener los mismos estilos y efectos en todas las listas ya sean en modo split o full."
+
+**Causa real, encontrada comparando los dos sistemas de pastilla que conviven en Aura**: la lista de pantalla completa (`aura_widgets_draw_list()`, sistema viejo) SÍ tiene un resorte con sobrepaso real (`s_pill_anim_from_y/to_y`, `PILL_SPRING_TICKS` = 380ms, doc SS9.2) -- eso es lo que el dueño percibe como "delay", pero es el comportamiento DE DISEÑO, no un bug. El problema real estaba en el otro lado: `aura_selector_draw()` (la pastilla de `MenuList`/`LeftPanel`, modo split) nunca tuvo ninguna animación -- saltaba directo al destino en cada frame. El propio código ya lo anticipaba: un comentario de D-081 decía literalmente "si algo lo anima en el futuro, dibujarlo antes del texto evita que tape...". No eran inconsistentes por exceso de delay en un lado -- era la falta total de resorte en el otro.
+
+**Arreglo**: `menu_pill_animated_y()` en `aura_menu_list.c`, copia fiel del mismo patrón ya probado en `aura_widgets.c` (mismo `PILL_SPRING_TICKS`, misma `aura_motion_spring()`, misma protección contra "pastilla fantasma" al cambiar de lista -- acá con `items`/`count` como identidad en vez de `items`/`title`, únicos parámetros disponibles en esta firma). `aura_selector_draw()` en sí no se tocó -- solo su llamador le pasa ahora una Y animada en vez de la Y de destino directa. Nuevo `aura_menu_list_pill_animating()` conectado al mismo gate de 20fps del loop principal que ya usa `aura_widgets_pill_animating()`.
+
+**Aceptación**: build de simulador y ARM limpios (ver nota de entorno en D-207), `make test` 8/8, captura real a 2 ticks de un `SCROLL_FWD` mostrando la pastilla todavía sobre la fila anterior mientras el texto de la nueva selección ya cambió a acento -- confirma el resorte en vuelo, no solo el estado final.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
