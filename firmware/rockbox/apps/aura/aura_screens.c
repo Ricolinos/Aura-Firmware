@@ -2356,12 +2356,27 @@ static void ensure_music_cache(aura_screen_id_t screen)
  * maximizar cuantas filas caben. El calculo da 4 filas completas mas
  * una quinta al 95% de su alto (218/44) -- se lee como 5, como pide el
  * encargo. Aplica a las 3 pantallas que listan albumes. */
-#define ALBUM_ROW_H     44
-#define ALBUM_ART_SIZE  42
+/* D-221 (encargo del dueno, 2026-08-14): "en el caso de la lista de
+ * albumes, ayudame a hacerlos mas grandes, que nomas quepan 4
+ * elementos en la pantalla". Esta pantalla NO comparte
+ * aura_widgets_draw_list() con el resto de listas de contenido -- ya
+ * tiene su propio renderizador dedicado (draw_album_list(), con
+ * caratula real via draw_album_thumb()), asi que agrandarla es un
+ * cambio local a estas macros, sin tocar el componente compartido ni
+ * ninguna otra pantalla. Area util = 240 - ALBUM_LIST_TOP(22) = 218px;
+ * 218/4 = 54px por fila (2px de sobra al fondo, antes del riel del
+ * scroll indicator). La caratula crece de 42 a 48px (proporcional al
+ * alto de fila nuevo, mismo margen relativo ~3px arriba/abajo que ya
+ * tenia) -- el cache de caratulas usa el tamano en el NOMBRE del
+ * archivo (aura_albumart.c: "<seek>-<size>.pfraw"), asi que el tamano
+ * nuevo genera su propio cache aparte sin invalidar el de 42px que
+ * pueda seguir usando otra pantalla. */
+#define ALBUM_ROW_H     54
+#define ALBUM_ART_SIZE  48
 #define ALBUM_LIST_TOP  (A26_LAYOUT_STATUSBAR_HEIGHT + 2)
 #define ALBUM_ART_X     A26_LAYOUT_LIST_INSET
 #define ALBUM_TEXT_GAP  A26_SPACING_MD
-#define ALBUM_VISIBLE   5
+#define ALBUM_VISIBLE   4
 
 static bool is_album_list_screen(aura_screen_id_t screen)
 {

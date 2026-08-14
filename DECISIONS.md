@@ -2536,4 +2536,16 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-221 — Lista de álbumes: 4 elementos por pantalla, carátula más grande
+
+**Encargo del dueño (2026-08-14)**: "en el caso de la lista de álbumes, ayúdame a hacerlos más grandes, que nomás quepan 4 elementos en la pantalla."
+
+**Más simple de lo que parecía**: la pantalla de Álbumes NO comparte `aura_widgets_draw_list()` (el renderizador genérico de listas de contenido, usado por Canciones/Artistas/Fotos/Video/Alarmas/etc.) -- ya tiene su propio renderizador dedicado, `draw_album_list()` (`aura_screens.c`), con carátula real por fila (`draw_album_thumb()`, mismo pipeline de cache que CoverFlow). Un intento inicial de resolver esto agrandando el componente compartido con un parámetro de altura de fila (para no afectar a los otros ~10 llamadores) quedó descartado apenas se confirmó que Álbumes ni siquiera pasa por ahí -- revertido antes de compilar nada, cero costo.
+
+**Arreglo, local a las macros de `draw_album_list()`**: `ALBUM_VISIBLE` 5→4, `ALBUM_ROW_H` 44→54px (área útil 218px / 4 = 54px exacto, sin una 5ª fila asomando), `ALBUM_ART_SIZE` 42→48px (carátula más grande, proporcional al alto de fila nuevo). El cache de carátulas en disco usa el tamaño en el propio nombre del archivo (`aura_albumart.c`: `<seek>-<size>.pfraw`) -- el tamaño nuevo genera su propio cache aparte, sin invalidar ni interferir con el de 42px que pueda seguir usando otra pantalla.
+
+**Aceptación**: build de simulador y ARM real limpios, `make test` 8/8, captura real confirmando exactamente 4 álbumes visibles con carátula más grande, sin recortes ni una fila parcial asomando.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
