@@ -2670,4 +2670,23 @@ Estas rutas se disparan al abrir el panel de listas de reproducción desde Ahora
 
 ---
 
+## D-229 — Ahora suena: cache de 1s para el listado del panel de listas
+
+**Encargo del dueño (2026-08-14)**: "audita el reproductor musical en busca de implementar mejoras de rendimiento y optimización... soy consiente que aquí trabajamos mucho la parte de diseño, pero muy poco la optimización para el hardware" -- continuación directa de D-226/D-227 (que arreglaron corrupción de memoria real), esta vez buscando trabajo genuino de rendimiento en la ruta de dibujo de Ahora suena, no más bugs de pila.
+
+**Encontrado**: `draw_playlist_panel()` (`aura_nowplaying.c`) llamaba `aura_music_list_playlists()` -- un `opendir()`/`readdir()` real del directorio de listas en disco, más `aura_music_playlist_display_name()` por cada resultado -- en CADA CUADRO mientras el Modo Playlist de la rueda está activo (el panel se redibuja en cada vuelta de `aura_nowplaying_draw()`, que corre a `HZ/2` mientras suena música y en cada evento de botón/rueda). El mismo archivo ya tenía resuelto este exacto problema para el chequeo de disponibilidad del modo (`playlists_exist_cached()`, con un comentario propio explicando por qué: "`mode_available()` ahora corre por CUADRO... se cachea con un TTL de 1s") -- pero ese cacheo nunca se extendió al LISTADO real que este panel muestra.
+
+**Arreglo**: mismo patrón exacto, copiado del `playlists_exist_cached()` de la misma función -- `static long s_checked_tick` + TTL de `HZ` (1 segundo). El escaneo a disco (y el formateo de nombres) solo corre si pasó más de un segundo desde la última vez; el resto de los cuadros reutiliza `labels[]`/`s_cached_n` ya resueltos. 1 segundo de posible desactualización (el usuario edita listas en disco mientras este panel flotante específico está abierto) es imperceptible y coherente con el resto del sistema.
+
+**Investigado pero NO tocado** (candidatos de menor confianza, reportados para una decisión humana):
+- `draw_cover_tilted()`: recalcula la proyección completa de la carátula inclinada+reflejo (bucle por columna, ~135×189) en cada cuadro aunque el resultado es idéntico mientras no cambie la pista/tema -- cachearlo correctamente exige preservar el desplazamiento/escala vertical por columna del proyector de `aura_flow` (varían por columna), un cambio con riesgo real de introducir una regresión geométrica sutil, contra un costo que ya está limitado a ~2Hz por la cadencia de refresco existente. Se dejó en paz por falta de confianza suficiente, no por evaluarlo y descartarlo.
+- `load_album_art()` decodifica JPEG/BMP directo de disco en vez de pasar por el cache `.pfraw` de `aura_albumart.c` que otras pantallas usan -- pero solo se invoca al cambiar de pista (`reload_for_track()`), no por cuadro, así que no es una violación del patrón "nada de disco en el render"; queda como pregunta de arquitectura abierta, no como bug de rendimiento.
+- Título/artista/álbum (`snprintf`/`lcd_getstringsize()`) se recalculan cada cuadro en vez de cachearse por cambio de pista -- costo despreciable a ~2Hz, no se tocó por ser optimización especulativa sin beneficio medible.
+- Sin texto tipo marquee en esta pantalla (título/artista/álbum son estáticos aquí, a diferencia de otras pantallas) -- no aplica.
+- `ensure_panel_colors()` (promedio de color de la carátula, 135×135) ya estaba correctamente cacheado, invalidado solo por cambio de pista/tema -- confirmado por lectura, sin cambios.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos de siempre. Captura real en el simulador llegando al Modo Playlist (misma secuencia que D-227) -- panel "Gira la rueda para elegir" idéntico en apariencia al de antes del cambio, confirmando que el camino cacheado produce el mismo resultado visual que el escaneo directo de siempre.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
