@@ -2797,4 +2797,20 @@ Dos consumidores reales, gradiente de verdad (no un color plano de respaldo): el
 
 ---
 
+## D-237 — Portadas de playlist, de punta a punta (Aura Studio + firmware)
+
+**Encargo del dueño (2026-08-14)**: "quiero implementar que las playlist tengan imagen (que el usuario podrá personalizar desde aura studio) y la lista de playlist se deberá ver como la lista de albums (4 elementos por pantalla, con la imagen del playlist a la derecha [en la práctica, a la izquierda -- ver nota]). Para esto hay que preparar también Aura Studio para que genere una imagen por default."
+
+**Convención de archivo**: `Playlists/<mismo nombre que el .m3u8>.jpg` -- mismo directorio, mismo nombre base, mismo sanitizado (`PathSanitizer`) que ya usa el `.m3u8` en ambos lados. El firmware no necesita tagcache para encontrarla: pela la extensión del nombre de archivo de la playlist y prueba ese mismo nombre con `.jpg`.
+
+**Aura Studio**: `Playlist.imageRelativePath` (nuevo, opcional) -- el usuario elige una imagen a mano desde `PlaylistsView` ("Elegir imagen.../Quitar imagen", mismo patrón de `NSOpenPanel` que ya usa "Importar"), cacheada en `.portadas/playlist-<id>.jpg` igual que la carátula de una pista. Sin imagen propia, `LibrarySync` genera un default al sincronizar: **colage 2×2** de hasta 4 carátulas de álbum de las pistas que ya estén en la playlist (con aspect-fill, reciclando carátulas si hay menos de 4 para no dejar cuadrantes vacíos), o un tile placeholder plano (mismos grises que la carátula Default del firmware, D-231, para que ambos casos no desentonen) si ninguna pista tiene carátula conocida. Se descartó el tile plano simple como estrategia principal -- un colage da variedad visual real entre playlists, un tile fijo sería indistinguible del propio respaldo genérico del firmware.
+
+**Firmware**: nueva `aura_playlist_art_load()` (`aura_albumart.c`) -- reusa el MISMO mecanismo de cache `.pfraw` en disco que las carátulas de álbum (`read_pfraw`/`write_pfraw`, esquinas horneadas, reflejo), pero sin tagcache de por medio: la llave es el nombre de la playlist, el origen el sidecar que Aura Studio ya dejó. `aura_screens.c` reskinea la lista de playlists exactamente como `draw_album_list()` -- mismas macros de layout (`ALBUM_ROW_H`/`ALBUM_ART_SIZE`/`ALBUM_ART_X`/`ALBUM_VISIBLE`=4), única diferencia real es la fuente del bitmap. Sin sidecar (playlist agregada a mano fuera de Aura Studio), cae al mismo tile Default que cualquier álbum sin carátula -- ya corregido para caber bien en el cuadro chico (D-231).
+
+**Nota sobre "a la derecha"**: el pedido original decía carátula a la derecha, pero el layout real de la lista de álbumes (la referencia explícita del encargo, "debería verse como la lista de albums") pone la carátula a la IZQUIERDA -- se siguió el layout real de la referencia, no la descripción textual, para que ambas listas se vean consistentes entre sí (que era el punto del pedido).
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos. `swift build`/`xcodebuild` limpios, `** BUILD SUCCEEDED **`. `swift test`: 171 pruebas (7 nuevas de este cambio), 169 pasan -- las 2 que fallan son la misma prueba de red real conocida y no relacionada. Captura real en el simulador de la lista de Listas: mismo layout de 4 por pantalla que Álbumes, carátula a la izquierda, con el tile Default correctamente ajustado (D-231) para la playlist de prueba sin sidecar propio.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
