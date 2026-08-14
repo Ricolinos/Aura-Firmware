@@ -372,7 +372,7 @@ static fb_data lut_pixel(unsigned px, const unsigned char *lut_r,
                         lut_b[RGB_UNPACK_BLUE(px)]);
 }
 
-/* D-241 (sesion 2026-08-14, "todavia se puede optimizar mas"):
+/* D-240 (sesion 2026-08-14, "todavia se puede optimizar mas"):
  * `fade` (ver draw_slide_perspective) solo es CONTINUO mientras una
  * tapa esta a menos de un paso de indice del centro animado
  * (t_center<256) -- aura_pattern_lerp() satura a CF_SIDE_FADE exacto
@@ -449,7 +449,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
     int fade;
     const fb_data *cover = (const fb_data *)slot->art.cover_data;   /* transpuesto: cover[col*size+row] */
     const fb_data *refl = (const fb_data *)slot->art.reflection_data; /* transpuesto: refl[col*refl_h+row] */
-    /* D-241: CF_COVER_SIZE/CF_REFLECTION_PCT son macros (constantes de
+    /* D-240: CF_COVER_SIZE/CF_REFLECTION_PCT son macros (constantes de
      * compilacion) -- aura_art_reflection_height(CF_COVER_SIZE,
      * CF_REFLECTION_PCT) siempre devolvia el mismo valor que
      * CF_REFLECTION_H (definido arriba con la MISMA formula, para
@@ -464,7 +464,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
     int bg_b = RGB_UNPACK_BLUE(bg);
     static fb_data col_buf[CF_COVER_SIZE + CF_REFLECTION_H];
     /* D-219: tablas de blend, ver build_fade_lut() -- una sola vez por
-     * tapa, no una vez por pixel. D-241: usadas solo para el fade EN
+     * tapa, no una vez por pixel. D-240: usadas solo para el fade EN
      * TRANSICION (ver get_far_fade_lut() arriba); use_lut_* apunta a
      * estas o a la tabla compartida segun el caso. */
     static unsigned char lut_r[256], lut_g[256], lut_b[256];
@@ -706,7 +706,7 @@ static void draw_tracklist_panel(void)
      * fondo" sin inventar un segundo valor. Ningun RGB suelto en C
      * (regla dura del proyecto). */
     unsigned panel_bg = a26_shell_blend(bg, a26_color(A26_TEXT_PRIMARY), 11);
-    /* D-241: "Album - Artista" solo cambia de CONTENIDO cuando cambia
+    /* D-240: "Album - Artista" solo cambia de CONTENIDO cuando cambia
      * el album objetivo -- antes se reformateaba con snprintf() en
      * CADA cuadro que este panel estaba visible (hasta HZ/20 = 20
      * veces por segundo mientras el marquee desborda o el

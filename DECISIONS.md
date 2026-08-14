@@ -2846,4 +2846,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-240 — Cover Flow: LUT compartida para el fade lateral fijo + caches menores
+
+**Encargo del dueño (2026-08-14)**: al probar el build con los ajustes previos de Cover Flow, "vamos mejorando, esta mucho más fluido, aún siento que lo podemos optimizar mucho más" -- pedido abierto de seguir auditando rendimiento, no un bug puntual.
+
+**Hallazgo principal**: `fade` (la intensidad de mezcla hacia el fondo de una tapa lateral, `draw_slide_perspective()`) solo es CONTINUO mientras una tapa está a menos de un paso de índice del centro animado -- `aura_pattern_lerp()` satura exacto a `CF_SIDE_FADE` (165, constante de compilación) en cuanto se aleja más. Con `CF_VISIBLE_RADIUS`=3 se dibujan hasta 8 laterales por cuadro: EN REPOSO las 8 están fijas en ese mismo valor (ninguna "a medio paso" del centro), y DURANTE el scroll a lo sumo 2 (las vecinas inmediatas del índice en movimiento) tienen un fade genuinamente en transición -- las otras 6+ siguen fijas. `build_fade_lut()` (256×3 divisiones enteras, sin divisor de hardware en el ARM926EJ-S de este target) reconstruía una tabla IDÉNTICA para cada una de esas tapas "lejanas", en cada cuadro. Nueva `get_far_fade_lut()`: una sola tabla compartida, invalidada solo cuando cambia el color de fondo (cambio de tema) -- mismo `build_fade_lut()`, mismo `fade`, ningún píxel de salida cambia. Las tapas genuinamente en transición siguen construyendo su propia tabla, sin tocar.
+
+**Dos hallazgos menores, mismo criterio de "mismo resultado, menos trabajo"**: `aura_art_reflection_height(CF_COVER_SIZE, CF_REFLECTION_PCT)` se llamaba una vez por tapa visible por cuadro pese a que `CF_REFLECTION_H` (macro ya existente, misma fórmula, ya usada dos líneas más abajo para dimensionar los buffers) da el mismo valor -- reemplazado por la macro, cero llamada+división redundante. El encabezado "Álbum - Artista" del panel de canciones se reformateaba con `snprintf()` en CADA cuadro visible (hasta 20/s mientras el marquee desborda o el ScrollIndicator sigue en su ventana de auto-ocultado) aunque el texto solo cambia cuando cambia el álbum objetivo -- movido detrás del mismo chequeo `s_header_for_index != s_target_index` que ya existía para el reloj del marquee, con buffer `static`.
+
+**Encontrado pero NO tocado**: una división duplicada en `aura_flow_advance_column()`/`aura_flow_source_column()` (`aura_flow.c`) -- real, pero ese archivo es un módulo compartido también usado por `aura_nowplaying.c`/`aura_transitions.c` con su propia batería de 174 pruebas, y las semánticas de recorte difieren sutilmente entre los dos sitios de llamada; se dejó para una auditoría dedicada de ese archivo, no forzado dentro de una pasada de un solo archivo. El `lcd_update()` de pantalla completa en cada cuadro (`aura_main.c`) también quedó identificado pero es arquitectura compartida por TODAS las pantallas, no algo local de Cover Flow -- arreglarlo exigiría un contrato de "rectángulo sucio" across-the-board, fuera de alcance de esta pasada.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos. Capturas reales en el simulador -- reposo y a mitad de scroll -- confirmando que el carrusel se ve exactamente igual que antes (mismo desvanecido lateral, misma perspectiva), solo con menos trabajo repetido por cuadro.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
