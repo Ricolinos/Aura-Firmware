@@ -25,6 +25,7 @@
 #include "aura_coverflow.h"
 #include "aura_status_bar_v2.h"
 #include "aura_screenlock.h"
+#include "aura_shutdown_screen.h"
 #ifdef HAVE_HARDWARE_CLICK
 #include "piezo.h"
 #endif
@@ -369,6 +370,11 @@ void aura_main(void)
             if (aura_widgets_pill_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
 
+            /* D-212: mismo resorte, ahora tambien en MenuList (modo
+             * split) -- antes su pastilla saltaba sin animar. */
+            if (aura_menu_list_pill_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+
             /* Cursor parpadeante del teclado de Busqueda: medio
              * segundo encendido, medio apagado -- misma puerta de
              * lcd_active() que el resto. */
@@ -431,6 +437,16 @@ void aura_main(void)
         }
 
         button = next_button(timeout_ticks);
+
+        /* D-209 (encargo del dueno, 2026-08-14): pantalla propia de
+         * apagado -- se dibuja UNA vez, antes de dejar que
+         * default_event_handler() siga con clean_shutdown() (que ya no
+         * dibuja su splash de texto de fabrica, ver
+         * aura_settings_apply_core_defaults()). Sin esto la pantalla se
+         * hubiera quedado congelada en lo ultimo dibujado por Aura (o en
+         * negro sin icono) durante los ~1-2s que tarda el apagado real. */
+        if (button == SYS_POWEROFF)
+            aura_shutdown_screen_draw();
 
         /* SYS_USB_CONNECTED/SYS_POWEROFF/SYS_REBOOT son eventos de
          * sistema, no botones -- aura_screens_handle_button() no los

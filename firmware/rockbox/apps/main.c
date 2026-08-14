@@ -265,6 +265,18 @@ int show_logo_boot( void )
 #if defined(SANSA_CLIP) || defined(SANSA_CLIPV2) || defined(SANSA_CLIPPLUS)
     /* display the logo in the blue area of the screen (bottom 48 pixels) */
     lcd_bmp(&bm_rockboxlogo, (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2, 16);
+#elif defined(IPOD_6G)
+    /* D-210 (encargo del dueno, 2026-08-14): "el splash screen del
+     * inicio... deberia estar al centro el texto Aura (tanto vertical
+     * como horizontalmente)". El eje X ya se centraba
+     * ((LCD_WIDTH-BMPWIDTH)/2) -- el Y estaba fijo en 10px (pegado
+     * arriba, valor original de Rockbox pensado para pantallas mas
+     * chicas/logos mas angostos), nunca centrado. Guardado solo para
+     * IPOD_6G (no el resto de targets Rockbox que comparten este
+     * archivo) para no cambiar el comportamiento de otro dispositivo
+     * real. */
+    lcd_bmp(&bm_rockboxlogo, (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2,
+                              (LCD_HEIGHT - BMPHEIGHT_rockboxlogo) / 2);
 #else
     lcd_bmp(&bm_rockboxlogo, (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2, 10);
 #endif

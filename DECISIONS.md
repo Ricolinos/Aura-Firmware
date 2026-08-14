@@ -2396,4 +2396,76 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-207 — Tipografía más pesada y grande en listas de menú y barra de estado
+
+**Encargo del dueño (2026-08-14)**: "debemos hacer un poco mas grandes los textos y cambiarles el grosor, ahora todos los textos que estaban con SF Pro Regular estaran con SF Pro Semibold y los que estaban con semi bold ahora serán Bold. En la barra de ajustes el texto casi no se nota, ayudame a hacerlo 2px mas grande y en la lista de menus y elementos también."
+
+**Auditoría de presupuesto de fuentes ANTES de tocar código** (regla dura del proyecto: `MAXUSERFONTS=12`, `firmware/export/font.h`, ya en su límite exacto desde D-195/D-205): los comentarios existentes en `apple2026_shell.h` decían que `A26_FONT_STYLE_DS_BOLD_8` "pasó a" DS_BOLD_10 -- pero un `grep` real contra `apps/aura/*.c` (no contra el comentario, que estaba desactualizado) confirmó que ese estilo nunca tuvo NINGÚN consumidor real: fue el único hueco genuinamente libre. Aplicar "Regular → Semibold" a los CUATRO tamaños SF Pro Regular existentes (`micro`, `ds_reg_8`, `ds_reg_10`, `ds_reg_12`) habría necesitado cuatro fuentes nuevas -- solo hay presupuesto para una. `SF-Pro-Text-Semibold.otf` sí existe en `/Library/Fonts` (confirmado antes de prometerlo).
+
+**Decisión de alcance, documentada porque una mala elección acá es cara de deshacer**: el único hueco libre se usó para el rol de mayor impacto y el nombrado explícitamente en el pedido -- `menu_item` (MenuList/LeftPanel: menú principal Y cada submenú, incluyendo Ajustes). Nuevo estilo `A26_FONT_STYLE_DS_SEMIBOLD_14` (14px Semibold, +2px sobre los 12px Regular de D-195), **exclusivo de MenuList** -- a propósito no comparte slot con `np_album`/`np_artist`/`lyrics` (que se quedan en `ds_reg_12` sin tocar), así el reproductor no se ve afectado por este cambio en absoluto. La barra de estado (reloj y título dinámico) subió de 10px (D-205, mismo día) a 12px **reutilizando slots ya cargados** (`ds_reg_12`/`ds_bold_12`, compartidos con `np_album`/`np_title` sin alterar su apariencia ahí) -- costo de fuente cero. `AURA_DS_METRICS_CLOCK_INDICATOR_HEIGHT`/`MAX_WIDTH` (`tokens.json`) se ajustaron al tamaño real del glifo nuevo para que la animación Drop-and-Lift viaje la distancia correcta y el reloj con "AM/PM" no se corte.
+
+**Lo que NO se hizo, y por qué**: las listas de contenido completo (Música/Video/Fotos/Alarmas, `aura_widgets_draw_list`) ya están en `DS_BOLD_14` desde D-205 (subieron de Regular a Bold ESE MISMO día, por la misma limitación de presupuesto) -- no había un slot libre adicional para llevarlas más allá dentro de este mismo pase. El resto de los textos "Regular" (riel A-Z, calendario, campo de búsqueda, `micro`) se dejaron sin tocar a propósito: son glifos únicos/utilitarios, no texto de lectura en listas, y forzar un peso mayor ahí sin presupuesto real habría significado sacrificar otro estilo con consumidores reales. Tampoco hay margen para llevar lo que hoy es Bold a Heavy/Black ("los que estaban con semi bold ahora serán Bold" interpretado como continuación del mismo peso ya vigente) -- el presupuesto de fuentes quedó de nuevo exacto en 12 tras este cambio, sin ningún hueco libre.
+
+**Aceptación**: pipeline de fuentes regenerado (`design-system/generate.py` produjo `a26-ds_semibold_14-14.fnt` desde la fuente real), simulador reconstruido limpio (`build_sim.sh`), `make -C firmware/rockbox/apps/aura/test test` (8/8 suites), capturas confirmando el menú principal y Ajustes con texto visiblemente más grande/pesado sin recortes ni solapamientos. **No se pudo verificar con un build ARM real** en este entorno de trabajo aislado (worktree sin el toolchain cruzado `arm-elf-eabi-gcc`, que vive fuera del árbol versionado) -- los cambios son C portable sin nada específico de ARM (mismo `apps/aura/*.c` que compiló limpio para el simulador), pero corresponde una build ARM real de confirmación antes de instalar en el iPod.
+
+---
+
+## D-208 — Investigación: ¿se puede quitar "Rockbox" de la pantalla del bootloader?
+
+**Pregunta del dueño (2026-08-14)**: "¿Hay forma de modificar la pantalla del bootloader que no diga nada de Rockbox? Si sí solo dime cómo, pero lo implementamos después con mis indicaciones de diseño." -- solo investigación, sin implementar, por instrucción explícita.
+
+**Respuesta: sí, es editable.** El bootloader del iPod 6G es un binario COMPLETAMENTE SEPARADO del firmware de Aura (`bootloader-ipod6g.ipod`/`mks5lboot` en `firmware/dist/`), fuente en `firmware/rockbox/bootloader/ipod-s5l87xx.c`. Todo el texto que menciona "Rockbox" son literales de C en llamadas `printf()`/`lcd_puts()` normales (p. ej. `"Hold MENU+SELECT to reboot and enter Rockbox firmware"`) -- no hay ningún binario ni recurso bloqueado, cambiar las palabras es trivial.
+
+**Dos cosas que el dueño necesita saber antes de decidir cuánto invertir en esto**:
+1. **Ya casi nunca se ve.** Una fase anterior (comentario en el propio código, "Fase 22/D-06x") ya puso el arranque en modo silencioso para IPOD_6G específicamente (`verbose = false`) -- en un arranque normal, este texto NUNCA llega a `lcd_update()`, quede o no en el framebuffer. Solo se hace visible en: un error real (firmware corrupto, disco no legible), batería crítica, o combinaciones de botones de diagnóstico que un usuario normal no presiona por accidente (MENU, SELECT+IZQUIERDA, SELECT+PLAY, todas para entrar a modos de fábrica/diagnóstico). El pedido real, si el objetivo es "que nunca se vea Rockbox", puede que ya esté prácticamente resuelto salvo esos casos de error/diagnóstico.
+2. **Es un entorno gráfico distinto y mucho más limitado**, no una pantalla más del sistema de diseño Apple2026 -- corre ANTES de que exista `apple2026_shell`/paleta/temas/fuentes custom: usa `FONT_SYSFIXED` (fuente de sistema fija) y blanco/negro puro (`LCD_WHITE`/`LCD_BLACK`), sin acceso a `a26_palette` ni a los `.fnt` de Aura. Un reskin visual completo (iconos, tipografía Aura, colores de tema) sería un trabajo bastante más grande que cambiar palabras -- portar una porción del sistema gráfico a un entorno con recursos de arranque muy acotados (antes de que DRAM/NOR estén completamente listos). Un cambio mínimo y de bajo riesgo (solo reemplazar "Rockbox" por "Aura" en los literales, conservando el estilo de texto monocromo actual) es factible sin ese costo.
+
+**Sin cambios de código** -- esta entrada documenta la investigación, la implementación queda pendiente de las indicaciones de diseño del dueño.
+
+---
+
+## D-209 — Pantalla de apagado: icono centrado en negro, sin importar el tema
+
+**Encargo del dueño (2026-08-14)**: "al apagar el dispositivo, debería mostrarse al centro el icono de apagado, en una pantalla negra (icono blanco) independientemente del tema claro u oscuro." No existía ninguna pantalla propia de Aura para esto -- `clean_shutdown()` (`apps/misc.c`, código genérico de Rockbox compartido por todos los targets) solo dibujaba un `splash()` de texto ("Shutting down...") con el cromo por defecto de Rockbox.
+
+**Arreglo**: `aura_shutdown_screen.c` (nuevo, mismo patrón de archivo por pantalla que `aura_screenlock.c`) -- pantalla negra/icono blanco con `LCD_BLACK`/`LCD_WHITE` **crudos**, a propósito NO `a26_color()` (única pantalla del sistema con esta excepción deliberada, documentada en el header del archivo): el pedido es explícitamente independiente del tema. Ícono nuevo `poweroff` (SF Symbol `power`, agregado a `design-system/tokens.json`), tamaño dedicado `shutdown_icon` (64px). `aura_main.c` intercepta `SYS_POWEROFF` en el loop principal, dibuja esta pantalla UNA vez, y deja que `default_event_handler()` siga con el apagado real -- `global_settings.show_shutdown_message` se apaga por default (`aura_settings_apply_core_defaults()`, mismo mecanismo que D-196/D-200/D-209) para que el splash de texto de fábrica no se dibuje encima.
+
+**Verificación limitada**: build de simulador y ARM (ver nota de entorno en D-207) limpios, `make test` 8/8. **No se pudo confirmar visualmente con captura** -- `SYS_POWEROFF` es un evento de sistema, no un botón físico que el arnés de automatización del simulador (`apple2026_sim_shot.sh`) pueda inyectar; la verificación real queda en manos del dueño en hardware.
+
+---
+
+## D-210 — Splash de arranque: el logo de Aura no estaba centrado verticalmente
+
+**Encargo del dueño (2026-08-14)**: "el splash screen del inicio, está bien el que tenemos, pero debería estar al centro el texto Aura (tanto vertical como horizontalmente)."
+
+**Causa encontrada por lectura directa del código** (`apps/main.c:show_logo_boot()`, la función que dibuja el logo de Aura al arrancar -- ya reskineado de "ROCKbox" a Aura en una fase anterior, D-051): `lcd_bmp(&bm_rockboxlogo, (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2, 10)` -- el eje X SÍ se centraba matemáticamente, pero el eje Y estaba fijo en `10` (pegado arriba de la pantalla), un valor heredado de Rockbox genérico pensado para pantallas/logos más chicos, nunca actualizado a centrado real al adoptar el logo de Aura (320x98px en el iPod 6G).
+
+**Arreglo**: rama nueva `#elif defined(IPOD_6G)` (no se toca el resto de targets Rockbox que comparten este archivo) con `(LCD_HEIGHT - BMPHEIGHT_rockboxlogo) / 2` para el eje Y -- mismo criterio matemático que ya usaba el eje X, ahora aplicado a ambos.
+
+**Verificación limitada**: build limpio (simulador + ARM). **No se pudo confirmar con captura** -- el logo se dibuja en `show_logo_boot()`, antes de que el mecanismo de auto-captura del simulador (que engancha sobre el loop principal de `aura_main()`) esté activo; para cuando la primera captura es posible, el logo ya desapareció. Corrección matemática simple y de bajo riesgo, pero la confirmación visual real queda con el dueño.
+
+---
+
+## D-211 — Esquinas de los iconos del panel izquierdo, más redondeadas (estilo iOS actual)
+
+**Encargo del dueño (2026-08-14)**: "los iconos que aparecen en el panel izquierdo (selection-summary) deben tener una estética similar a las aplicaciones del iPhone actual (es decir con las esquinas mucho más redondeadas)."
+
+**Arreglo**: `aura_ds.metrics.selection_summary.tile_corner_radius` (`design-system/tokens.json`) subió de 8px (10% de los 90px del tile -- el radio genérico de tarjeta reutilizado, prácticamente sin curva visible) a 20px (~22% del tile), la proporción real que usan los iconos de apps de iOS actual (el "squircle" de Apple mide ~22.37% del lado; Rockbox solo dibuja esquinas circulares simples, no la curva continua real de Apple, pero a esta proporción se lee como el mismo estilo). Cambio de un solo token -- `aura_selection_summary.c` ya leía el radio vía la macro generada (`AURA_DS_METRICS_SELECTION_SUMMARY_TILE_CORNER_RADIUS`), sin ningún valor hardcodeado que tocar.
+
+**Aceptación**: pipeline de iconos regenerado, simulador reconstruido limpio, `make test` 8/8, captura real confirmando el tile del panel derecho con esquinas visiblemente más redondeadas.
+
+---
+
+## D-212 — La pastilla de MenuList no tenía resorte (no era un delay, era la falta total de animación en el otro lado)
+
+**Encargo del dueño (2026-08-14)**: "en el caso de la lista de elementos, noto que la barra de selección tiene un delay y se tarda en alcanzar al elemento seleccionado, ayúdame a mantener los mismos estilos y efectos en todas las listas ya sean en modo split o full."
+
+**Causa real, encontrada comparando los dos sistemas de pastilla que conviven en Aura**: la lista de pantalla completa (`aura_widgets_draw_list()`, sistema viejo) SÍ tiene un resorte con sobrepaso real (`s_pill_anim_from_y/to_y`, `PILL_SPRING_TICKS` = 380ms, doc SS9.2) -- eso es lo que el dueño percibe como "delay", pero es el comportamiento DE DISEÑO, no un bug. El problema real estaba en el otro lado: `aura_selector_draw()` (la pastilla de `MenuList`/`LeftPanel`, modo split) nunca tuvo ninguna animación -- saltaba directo al destino en cada frame. El propio código ya lo anticipaba: un comentario de D-081 decía literalmente "si algo lo anima en el futuro, dibujarlo antes del texto evita que tape...". No eran inconsistentes por exceso de delay en un lado -- era la falta total de resorte en el otro.
+
+**Arreglo**: `menu_pill_animated_y()` en `aura_menu_list.c`, copia fiel del mismo patrón ya probado en `aura_widgets.c` (mismo `PILL_SPRING_TICKS`, misma `aura_motion_spring()`, misma protección contra "pastilla fantasma" al cambiar de lista -- acá con `items`/`count` como identidad en vez de `items`/`title`, únicos parámetros disponibles en esta firma). `aura_selector_draw()` en sí no se tocó -- solo su llamador le pasa ahora una Y animada en vez de la Y de destino directa. Nuevo `aura_menu_list_pill_animating()` conectado al mismo gate de 20fps del loop principal que ya usa `aura_widgets_pill_animating()`.
+
+**Aceptación**: build de simulador y ARM limpios (ver nota de entorno en D-207), `make test` 8/8, captura real a 2 ticks de un `SCROLL_FWD` mostrando la pastilla todavía sobre la fila anterior mientras el texto de la nueva selección ya cambió a acento -- confirma el resorte en vuelo, no solo el estado final.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

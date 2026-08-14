@@ -22,12 +22,13 @@ void aura_clock_indicator_draw(int x, int width, int y, int enter_progress_256)
      * "--font-statusbar-time" -- ClockIndicator solo vive dentro de
      * StatusBar, doc header de este archivo) via a26_shell_blend()
      * hacia el fondo del shell, mismo mecanismo que sombras/scrollbars. */
-    /* Encargo del dueno (2026-08-14): tipografia de la barra de estado
-     * mas legible -- DS_REG_10 (10px) en vez de DS_REG_8 (8px), mismo
-     * peso Regular, ya cargada (np_counter/aura_alarms.c la usan
-     * tambien). Sin tocar AURA_DS_METRICS_CLOCK_INDICATOR_HEIGHT ni
-     * ningun otro token de geometria -- solo la fuente. */
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    /* Encargo del dueno (2026-08-14, primera pasada): DS_REG_8 (8px) a
+     * DS_REG_10 (10px). Encargo del dueno (2026-08-14, segunda pasada,
+     * "el texto casi no se nota, 2px mas grande"): DS_REG_10 -> DS_REG_12
+     * -- reusa el estilo ya cargado por np_album/np_artist/lyrics, cero
+     * costo de fuente nueva. AURA_DS_METRICS_CLOCK_INDICATOR_HEIGHT/
+     * MAX_WIDTH se ajustaron en tokens.json al tamano real del glifo. */
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
     lcd_set_foreground(a26_shell_blend(a26_color(A26_SHELL_BG), a26_color(A26_TEXT_PRIMARY),
                                         AURA_DS_OPACITY_STATUSBAR_TIME_PCT * 256 / 100));
     lcd_getstringsize((const unsigned char *)buf, &w, &h);
