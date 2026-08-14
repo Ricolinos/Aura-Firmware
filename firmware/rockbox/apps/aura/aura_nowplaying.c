@@ -1234,8 +1234,17 @@ static void draw_playlist_panel(void)
 {
     /* static: 300*64 = 18.75KB, muy por encima del stack de 8KB del hilo
      * de UI (mismo patron de bug que D-226 -- apps/aura/aura_transitions.c,
-     * ver app.lds .stack = 0x2000). */
+     * ver app.lds .stack = 0x2000). Cacheado con TTL de 1s: este panel se
+     * redibuja en CADA CUADRO mientras el Modo Playlist esta activo (via
+     * aura_nowplaying_draw() -> draw_player()), y sin cache
+     * aura_music_list_playlists() repetia un opendir()/readdir() completo
+     * del directorio de listas en disco en cada uno -- el mismo costo que
+     * playlists_exist_cached() (abajo) ya evita para el simple chequeo de
+     * disponibilidad, con el mismo TTL de 1s, pero que el listado real
+     * que este panel muestra no heredaba. */
     static char labels[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+    static int s_cached_n = 0;
+    static long s_checked_tick = 0;
     int n, i;
     int box_h = 28;
     /* En el ESPACIO entre las estrellas y la fila de modos (encargo
@@ -1250,12 +1259,17 @@ static void draw_playlist_panel(void)
     int w, h;
     const char *label;
 
-    n = aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
-    /* Solo para mostrar -- aura_music_add_track_to_playlist() vuelve a
-     * resolver el archivo real por indice, no usa estas cadenas (Fase
-     * 32, D-081: ".m3u8" a la vista es jerga tecnica de archivo). */
-    for (i = 0; i < n; i++)
-        aura_music_playlist_display_name(labels[i], labels[i], AURA_MUSIC_ITEM_LEN);
+    if (s_checked_tick == 0 || current_tick - s_checked_tick > HZ)
+    {
+        s_cached_n = aura_music_list_playlists(labels, AURA_MUSIC_MAX_ITEMS);
+        /* Solo para mostrar -- aura_music_add_track_to_playlist() vuelve a
+         * resolver el archivo real por indice, no usa estas cadenas (Fase
+         * 32, D-081: ".m3u8" a la vista es jerga tecnica de archivo). */
+        for (i = 0; i < s_cached_n; i++)
+            aura_music_playlist_display_name(labels[i], labels[i], AURA_MUSIC_ITEM_LEN);
+        s_checked_tick = current_tick;
+    }
+    n = s_cached_n;
 
     /* Panel flotante, NUNCA pantalla completa (Principio 3, doc SS5,
      * nota de implementacion 5.3) -- pastilla SELECTION_FILL igual que
