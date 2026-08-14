@@ -2504,4 +2504,14 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-220 — Aura Studio: "Mostrar en Finder" en el menú contextual
+
+**Encargo del dueño (2026-08-14)**: "al dar click derecho, debería mostrarse en el menú la opción de 'Mostrar en Finder' para abrir el Finder en la ruta donde está el archivo, y que esté seleccionado."
+
+**Arreglo**: nueva entrada en `contextMenuContent` (`MediaSectionView.swift`), justo antes de "Eliminar" -- `NSWorkspace.shared.activateFileViewerSelecting(targetItems.map(\.sourceURL))`, la API estándar de macOS para exactamente este gesto (abre una ventana de Finder en la carpeta contenedora con el/los archivo(s) ya resaltados). Funciona con cualquier cantidad de elementos seleccionados, no solo uno -- Finder agrupa la selección aunque los archivos vivan en carpetas distintas.
+
+**Aceptación**: `swift build`, `swift test` (151/151, descontando el mismo test de red intermitente ya conocido de sesiones previas -- reconfirmado no relacionado corriendo la suite completa dos veces), `xcodegen generate` + `xcodebuild -scheme AuraStudio -configuration Debug build` → `BUILD SUCCEEDED`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
