@@ -2689,4 +2689,22 @@ Estas rutas se disparan al abrir el panel de listas de reproducción desde Ahora
 
 ---
 
+## D-230 — Cover Flow "no se centra hasta darle a Select": investigado, no reproducible, mecanismo confirmado correcto
+
+**Reporte del dueño (2026-08-14)**: "el álbum activo, muchas veces no se queda perfectamente en el centro, no es hasta que le doy al botón select que se acomoda y después se voltea para mostrar las canciones del álbum... deberíamos encontrar la forma de que una vez que soltemos el click wheel, el álbum que esté más al centro se acomode perfectamente al centro." Pidió una auditoría, no una corrección a ciegas.
+
+**Investigación**: tres hipótesis concretas, cada una verificada contra el código Y reproducida (o refutada) empíricamente en el simulador, con capturas a múltiples offsets de tick tras la última vuelta de rueda (2/6/10/11/16/22/30/60/120 ticks) y con dos cadencias de inyección de botón distintas (250ms de fábrica, y 70ms temporal para forzar el camino de redirección a mitad de vuelo -- revertido después, sin cambios netos):
+
+1. **¿La posición nunca llega exactamente al centro por redondeo de punto fijo?** Refutada por lectura: `aura_pattern_lerp()`/`aura_motion_linear()` CLAMPEAN exacto a `s_target_index*256` en cuanto `elapsed_ms >= 220ms` (`CF_SCROLL_ANIM_MS`) -- sin arrastre residual, sin importar cuántas redirecciones a mitad de vuelo haya habido.
+2. **¿Se dibuja un cuadro final "casi centrado" y ninguno posterior hasta un botón nuevo?** Refutada por lectura (`aura_screens_draw()` corre ANTES de calcular el siguiente `timeout_ticks` en el mismo tick de `current_tick` -- el cuadro que cruza la meta es el mismo que la dibuja) Y por reproducción real: en TODAS las capturas, el carrusel llegó centrado solo, dentro de ~220-250ms de la última vuelta, sin necesidad de ningún SELECT.
+3. **¿El paso calculado sobrepasa el álbum visualmente más cercano?** No reproducible en este entorno (el simulador fuerza velocidad de rueda = 0 para eventos inyectados, así que `aura_wheel_step()` siempre da 1 vía este arnés) -- pero por diseño no es un defecto: `scroll_step()` siempre acumula sobre el ÍNDICE COMPROMETIDO, nunca sobre la posición visual, así que donde caiga el último detente físico es, por diseño, donde se asienta -- la misma física de "avienta y navega" de cualquier click wheel real, no un bug de sobrepaso.
+
+**Explicación alternativa encontrada, no un defecto del mecanismo de asentado**: `BUTTON_SELECT` en `CF_STATE_IDLE` mientras `aura_coverflow_pending()` sigue (brevemente) activo se IGNORA en silencio (`aura_coverflow_handle_button()`), pero `aura_main.c` reproduce el sonido del click del piezo para CUALQUIER botón presionado, sin condicionarlo a si tuvo efecto visible. Si el dueño presiona Select en los últimos ~100-200ms de un asentado, va a escuchar el click sin ver ningún cambio -- y su SIGUIENTE Select (que sí cae después de terminado el asentado) se percibe como "el que lo acomodó", aunque el mecanismo de asentado en sí nunca falló. No se tocó: cambiar el comportamiento del click sería una decisión de UX no pedida (y el click sin efecto visible es consistente con cómo el resto de la interfaz reproduce el mismo sonido en cualquier botón, tenga o no efecto), no la corrección de un bug confirmado.
+
+**Sin cambios de código** -- diff vacío, nada que fusionar. Verificación: `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos.
+
+**Siguiente paso si el problema persiste**: la hipótesis 3 (sobrepaso real por velocidad de rueda) no se pudo poner a prueba en este entorno -- si el dueño lo reproduce de nuevo en el iPod físico, lo más útil sería anotar si el álbum que queda centrado es el que esperaba o uno 1-3 posiciones corrido, para distinguir entre "percepción" (explicación de arriba) y un sobrepaso real que solo aparece con velocidad de rueda física variable.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
