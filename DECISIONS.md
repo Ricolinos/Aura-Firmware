@@ -2338,4 +2338,62 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-215 — "Sincronizado" en texto, no solo en icono
+
+**Encargo del dueño (2026-08-14)**: "en la columna de Estado debería aparecer también el texto 'Sincronizado'" -- D-202 ya marcaba los elementos sincronizados con un icono de iPod junto al check verde, pero sin ningún texto que lo dijera en palabras.
+
+**Arreglo**: `statusCell` (`MediaSectionView.swift`) agrega `Text("Sincronizado")` junto al icono para el caso ya sincronizado, y `Text("Listo")` para el caso "listo mas todavía no copiado a ningún iPod" -- antes ese segundo caso no tenía ningún texto, así que agregarlo solo a un lado habría dejado la columna con huecos inconsistentes. La columna Estado se ensanchó (`min: 70→90`, `ideal: 90→120`) porque "Sincronizado" no entraba cómodo en el ancho pensado solo para un ícono.
+
+**Aceptación**: `swift build`/`swift test` (ver D-218 para el conteo final, que incluye los cuatro cambios de esta sesión), `xcodebuild -scheme AuraStudio -configuration Debug build` → `BUILD SUCCEEDED`.
+
+---
+
+## D-216 — Barra de almacenamiento por color en General
+
+**Encargo del dueño (2026-08-14)**: "en el apartado General... muestre la barra de almacenamiento dividido por colores, indicando que color corresponde a que medio -- rosa música, azul video, verde fotos, naranja 'Otro'."
+
+**De dónde salen los bytes por tipo**: `CatalogSummary` (`sync_summary.cfg`, el mismo archivo que ya lee `AuraDevice.librarySummary`) ya traía `music.bytes`/`video.bytes`/`photo.bytes` desde Fase 24 -- no hizo falta agregar ninguna medición nueva, solo usar lo que ya existía. "Otro" no tiene su propio contador: sale de `device.usedBytes - (music + video + photo)`, es decir, todo lo que el volumen reporta como ocupado de verdad que la biblioteca de Aura no le atribuye a ningún tipo (`.rockbox/`, playlists, archivos copiados por fuera de Aura Studio) -- un número real, no inventado.
+
+**`StorageBarView`** (nueva, en `DeviceGeneralView.swift`): reemplaza el `ProgressView` liso de "Capacidad" por una barra segmentada (`GeometryReader` + anchos proporcionales) con los cuatro colores pedidos, más una leyenda con círculo + etiqueta debajo (solo para los segmentos con bytes > 0, para no mostrar "Otro: 0" en un iPod recién sincronizado). Los colores salen de los system colors de SwiftUI (`.pink`/`.blue`/`.green`/`.orange`) -- ni `AuraColors` (la paleta compartida con el firmware, `design-system/tokens.json`) ni ningún otro lugar de Aura Studio tenían tokens para "color por tipo de medio", y agregar uno al pipeline compartido con el firmware por un gráfico que solo existe en macOS habría sido de más.
+
+**Aceptación**: `swift build`, `xcodebuild -scheme AuraStudio -configuration Debug build` → `BUILD SUCCEEDED`. Sin test unitario dedicado (es una vista compuesta con `GeometryReader`, difícil de testear de forma útil sin un harness de UI) -- se verificó leyendo el cálculo de segmentos a mano contra `CatalogSummary`/`AuraDevice.usedBytes` ya cubiertos por tests existentes.
+
+---
+
+## D-217 — Barra de progreso al sincronizar, con cuenta y tiempo estimado
+
+**Encargo del dueño (2026-08-14)**: "ayudame a implementar una barra de progreso al sincronizar el iPod, para que sepamos cuantas canciones se estan sincronizando, y cuanto tiempo faltaría."
+
+**`LibrarySync.sync()` ganó un `onProgress: (copied: Int, toCopy: Int) -> Void`** (default no-op, no rompe ningún llamador existente ni los tests) invocado tras cada archivo copiado -- `toCopy` es el total que `SyncPlanner` decidió copiar de verdad (los saltos por diferencial no cuentan), así que la barra mide contra lo que efectivamente va a pasar, no contra el tamaño completo de la biblioteca.
+
+**El hilo importa**: `LibrarySync.sync()` es síncrona (copia con `FileManager` en un loop normal) -- llamarla directo desde `LibraryViewModel.sync(toVolumeAt:)` (un método `@MainActor`) habría bloqueado el hilo principal de punta a punta, y una barra de progreso que solo se repinta al terminar no sirve para nada (mismo tipo de problema que ya identificó D-034 con otro callback). Se corre en un `Task.detached(priority: .userInitiated)` -- `LibrarySync`/`LibraryItem`/`Playlist` son structs con solo propiedades Sendable, así que cruzan el limite de concurrencia sin fricción -- y cada tick de `onProgress` salta de vuelta al MainActor (`Task { @MainActor in ... }`) para publicar `LibraryViewModel.syncProgress` (nuevo `@Published`). Verificado con `xcodebuild` real (concurrencia estricta de Swift 6), no solo `swift build` -- el mismo gotcha que D-034 ya advirtió que `swift build` no denuncia.
+
+**Tiempo estimado**: `elapsed / copied * (total - copied)`, el ritmo real de ESTA sesión de sync -- no hay una medida más confiable con pocos archivos, y un número inventado (p. ej. una velocidad de copia fija supuesta) engañaría más de lo que ayudaría. Se muestra solo si faltan más de un segundo, formateado con `DateComponentsFormatter`.
+
+**Dónde se ve**: el botón "Sincronizar" de la barra de herramientas (`ContentView.swift`, D-202) se deshabilita mientras dura y muestra "N/M" en vez de su etiqueta -- visible sin importar la sección activa. `DeviceGeneralView` (sección General) muestra además la barra determinada completa con la cuenta y el tiempo restante.
+
+**Aceptación**: `swift test` -- se agregaron `testOnProgressReportsEachCopiedFileAgainstFilesActuallyCopied`/`testOnProgressNotCalledWhenNothingNeedsCopying` a `LibrarySyncTests.swift`, siguiendo el mismo patrón de disco temporal que el resto de la suite. `xcodebuild -scheme AuraStudio -configuration Debug build` → `BUILD SUCCEEDED`.
+
+---
+
+## D-218 — Edición en lote: aviso previo y ventana con campos "Mixto"
+
+**Encargo del dueño (2026-08-14), con captura de referencia del panel de edición en lote de Música.app**: poder editar varias canciones a la vez desde el menú contextual, bloqueando atributos importantes (el nombre de la canción, de ejemplo) -- con un aviso previo "¿Quieres editar varios elementos?" (checkbox "No volver a mostrar", botones Cancelar/Editar elementos) antes de abrir la ventana de edición.
+
+**Dos piezas nuevas** (`Views/BatchMediaInfoView.swift`): `BatchEditWarningSheet` (el aviso, con la marca de "no volver a mostrar" persistida en `UserDefaults` bajo `aura.batchEditWarningSuppressed` -- no ameritaba una preferencia formal en `AppPreferences` para un solo flag de UI) y `BatchMediaInfoView` (la ventana de edición en sí). Se disparan desde "Obtener información..." del menú contextual (`MediaSectionView.swift`), que reemplaza a "Más información..." cuando hay 2+ canciones seleccionadas (con una sola, sigue siendo "Más información..." de siempre, D-199).
+
+**Campos "Mixto"**: `BatchField` calcula, por cada atributo editable (Artista/Álbum/Artista del álbum/Año/Género), si las canciones seleccionadas ya comparten el mismo valor -- si sí, el campo arranca relleno con ese valor; si no, arranca vacío con "Mixto" como placeholder. Escribir algo (`touched = true`) aplica ese valor a TODAS las canciones seleccionadas al guardar; dejar un campo "Mixto" sin tocar no cambia nada en ninguna. Calificación usa el mismo criterio con `StarRatingView` (tocar una estrella cuenta como "tocado").
+
+**Campos bloqueados**: Título y N.º de pista se muestran (deshabilitados, no ocultos -- el dueño pidió verlos bloqueados, no que desaparecieran) con una nota explicando que se editan de a una canción. `BatchMetadataChanges` ni siquiera tiene un campo para título/pista -- no es solo una restricción de UI, la ruta de datos entera los excluye.
+
+**Límite aceptado a propósito**: no hay forma de BORRAR un campo en lote (dejarlo "Mixto" sin tocar = no se toca; escribirlo = se aplica a todas). Vaciar un campo para borrarlo en varias canciones a la vez es un caso raro que habría complicado el modelo (`String?` de "no tocar" vs. "vaciar" necesitaría un `String??`) para poco beneficio real -- documentado en el propio código (`BatchMetadataChanges`).
+
+**`LibraryViewModel.applyBatchEdit(ids:changes:)`** (nuevo): aplica solo los campos no-nil de `changes` a cada item de música en `ids`, reprocesa `prepareMusic` para que el archivo preparado refleje el cambio (mismo patrón que `applyReview`/`renameItem`), y persiste el catálogo.
+
+**Diseño visual**: adapta el LAYOUT del panel de referencia de Música.app (título "N canciones seleccionadas", ícono en cuadro con borde de color marcando "hay mixtos", campos en formulario) a los atributos reales de Aura Studio -- sin las pestañas Detalles/Ilustración/Opciones/Clasificación del original (Aura Studio no tiene ese volumen de atributos que justifique dividir en pestañas) y con el acento de Aura en vez del rojo de Apple, para quedarse dentro de la propia paleta de la app.
+
+**Aceptación**: `swift build`, `swift test` (151/151 -- `LiveEnrichmentIntegrationTests` pega contra APIs reales de MusicBrainz/Cover Art Archive y puede flaquear por red, no tocadas en esta sesión), `xcodegen generate` + `xcodebuild -scheme AuraStudio -configuration Debug build` → `BUILD SUCCEEDED`. Sin verificación visual interactiva real (un intento anterior de automatizar clicks con AppleScript/System Events en este mismo proyecto casi terminó clickeando otra ventana del sistema por coordenadas mal calculadas -- se optó por no repetir ese riesgo) -- queda pendiente que el dueño lo revise a simple vista.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
