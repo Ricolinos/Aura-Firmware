@@ -2830,4 +2830,20 @@ Dos consumidores reales, gradiente de verdad (no un color plano de respaldo): el
 
 ---
 
+## D-239 — Aura Studio: arrastrar carpetas completas, no solo archivos sueltos
+
+**Encargo del dueño (2026-08-14)**: "podremos arrastrar directamente canciones, y la aplicación deberá ser capaz de identificar por tipo de formato... colocarlo correctamente en la sección... y en la carpeta correspondiente del finder (si copia medios). Si el usuario decidió no copiar sus archivos de medios, las carpetas que arrastre crearán un archivo de configuración y en ajustes... se podrá ver la ruta de las carpetas (bibliotecas) agregadas."
+
+**Alcance real**: soltar archivos SUELTOS ya funcionaba (clasificación por tipo + carpeta correcta de Finder, D-228). Lo que faltaba de verdad era soltar una CARPETA -- hasta ahora se ignoraba en silencio (`LibraryItemKind.classify` no reconoce una carpeta, ninguna extensión coincide).
+
+**Implementación**: nuevo `DroppedURLExpander` (puro, sin `@MainActor`, testeable contra una carpeta temporal real) -- si alguna URL soltada es una carpeta, la reemplaza por la lista PLANA de archivos que contiene (cualquier profundidad, `FileManager.enumerator` con `.skipsHiddenFiles`/`.skipsPackageDescendants` para no bajar dentro de un `.app` u otro paquete que hubiera quedado adentro, y un `errorHandler` tolerante para que una subcarpeta sin permisos se salte en vez de abortar toda la carpeta). Se llama al inicio de `addDroppedFiles`, ANTES del filtro por extensión de siempre -- el resto de la función (y `process(itemAt:)`) nunca se entera de que el origen fue una carpeta, cada archivo adentro sigue exactamente el mismo camino que si se hubiera soltado solo.
+
+Con "Crear copias de los medios..." apagado, además se registra la carpeta soltada como "biblioteca vinculada" (`AppPreferences.linkedLibraryFolders`), visible en Ajustes → Biblioteca con la ruta abreviada y un botón para quitarla de la lista (sin borrar ni desvincular lo ya importado desde ahí). Sin bookmark de seguridad -- el proyecto corre sin sandbox de App Store (D-033), misma razón por la que `libraryFolderPath` tampoco usa uno. Deliberadamente SIN vigilancia de carpeta ni rescan automático: un archivo agregado después a esa carpeta no se importa solo, hay que volver a arrastrarlo -- no pedido, no construido.
+
+**Corregido antes de fusionar**: `linkedLibraryFolders` se había persistido como lista separada por comas (mismo patrón que `photoCollections`/`coverArtProviderOrder`), pero a diferencia de esas dos (nombres cortos elegidos por el usuario, o identificadores de un enum, nunca con coma real) una RUTA de carpeta sí puede traer una coma legítima en el nombre ("Música, respaldo 2024") -- y a diferencia de un nombre de colección, no se le puede quitar la coma sin romper la ruta real. Cambiado a `UserDefaults.set([String]:forKey:)`/`stringArray(forKey:)` nativo, que no tiene ese problema (evita el formato CSV por completo en vez de intentar escapar comas). Prueba de regresión agregada con una ruta real con coma en el nombre.
+
+**Verificación**: `xcodegen generate`, `swift build` limpios (solo warnings preexistentes). `swift test`: 190 pruebas (19 nuevas), 188 pasan -- las 2 que fallan son la misma prueba de red real conocida y no relacionada. `xcodebuild -scheme AuraStudio build` → `** BUILD SUCCEEDED **`, verificado independientemente tras fusionar. Arrastre real por interfaz gráfica no se pudo ejercitar en este entorno (sin sesión interactiva) -- cubierto por pruebas automatizadas contra el sistema de archivos real (carpetas temporales anidadas, mismo patrón que las pruebas de migración de D-228).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
