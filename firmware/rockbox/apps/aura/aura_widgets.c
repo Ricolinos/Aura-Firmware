@@ -17,6 +17,7 @@
 #include "aura_lang.h"
 #include "aura_motion.h"
 #include "aura_selection_summary.h"
+#include "aura_category.h"
 
 /* Layout: barra de estado arriba (Fase 13, PLAN-UX.md), filas de lista
  * debajo. Pantalla dividida izquierda/derecha (Fase 15, L2): en
@@ -84,14 +85,16 @@ static unsigned char icon_buf[ICON_BUF_MAX * ICON_BUF_MAX * 4 + 64];
 /* Tinta runtime por variante -- el MISMO mapeo sufijo->token que
  * design-system/tokens.json (icon.variants) usa para hornear los bmp
  * pre-compuestos, resuelto aca contra la paleta viva en vez de en
- * generacion: "-on" respeta el acento configurable del usuario y
- * "-selector" es el blanco constante del Selector (G5/D-086). */
+ * generacion: "-selector" es el blanco constante del Selector (G5/D-086).
+ * "-on" NO se resuelve aca desde el encargo de categorias (2026-08-14):
+ * draw_icon_variant() la intercepta ANTES de llegar a esta funcion para
+ * resolver un degradado de DOS tonos (aura_category_gradient(), no un
+ * solo `unsigned` -- ninguna funcion que devuelve un color plano puede
+ * representarlo), asi que este mapeo nunca ve ese sufijo. */
 static unsigned variant_ink(const char *suffix)
 {
     if (suffix[0] == '\0')
         return a26_color(A26_TEXT_PRIMARY);
-    if (!strcmp(suffix, "-on"))
-        return aura_accent();
     if (!strcmp(suffix, "-tertiary"))
         return a26_color(A26_TEXT_TERTIARY);
     if (!strcmp(suffix, "-rail"))
@@ -117,13 +120,25 @@ static unsigned variant_ink(const char *suffix)
  *
  * `extra_alpha_256` atenua el icono completo ademas de la cobertura
  * (256 = sin atenuar) -- reemplaza el camino especial que
- * aura_widgets_draw_icon_dimmed() tenia para el 50% de opacidad. */
-static int draw_icon_mask(const char *name, int size, int x, int y,
-                           unsigned ink, int extra_alpha_256)
+ * aura_widgets_draw_icon_dimmed() tenia para el 50% de opacidad.
+ *
+ * `ink_a`/`ink_b` permiten un degradado DIAGONAL de dos tonos en vez de
+ * una tinta plana (encargo del dueno 2026-08-14, jerarquia de color por
+ * categoria: "todos los iconos... degradado entre un tono ligeramente
+ * mas claro y uno ligeramente mas oscuro, no relleno plano"). Misma
+ * convencion de diagonal que draw_diagonal_gradient() en
+ * aura_selection_summary.c (claro arriba-izquierda, oscuro
+ * abajo-derecha) pero por PIXEL en vez de por linea -- ya se recorre
+ * pixel a pixel para la mascara de cobertura, asi que interpolar el tono
+ * en el mismo bucle no agrega una pasada nueva. `ink_a == ink_b` (el
+ * caso de siempre, tinta plana) colapsa a un blend con alpha_256=0 o 256
+ * en cada pixel -- mismo resultado exacto que antes, sin rama especial. */
+static int draw_icon_mask_2(const char *name, int size, int x, int y,
+                             unsigned ink_a, unsigned ink_b, int extra_alpha_256)
 {
     char path[MAX_PATH];
     struct bitmap bm;
-    int ret, row, col;
+    int ret, row, col, max_d;
     const fb_data *mask;
 
     snprintf(path, sizeof(path), "%s/aura/masks/%s-%d.bmp", ICON_DIR, name, size);
@@ -133,6 +148,7 @@ static int draw_icon_mask(const char *name, int size, int x, int y,
     if (ret <= 0)
         return 0;
 
+    max_d = (bm.width - 1) + (bm.height - 1);
     mask = (const fb_data *)bm.data;
     for (row = 0; row < bm.height; row++)
     {
@@ -142,24 +158,40 @@ static int draw_icon_mask(const char *name, int size, int x, int y,
             /* Canal verde crudo de RGB565 (6 bits): 0..63 -> 0..256
              * exacto en los extremos (63*256/63 = 256, tinta pura). */
             int cov = (mask[row * bm.width + col] >> 5) & 0x3F;
-            int alpha;
+            int alpha, t256;
+            unsigned ink;
 
             if (cov == 0)
                 continue;
             alpha = cov * 256 / 63;
             if (extra_alpha_256 < 256)
                 alpha = alpha * extra_alpha_256 / 256;
+            t256 = (max_d > 0) ? ((row + col) * 256 / max_d) : 0;
+            ink = (ink_a == ink_b) ? ink_a : a26_shell_blend(ink_a, ink_b, t256);
             dst[col] = a26_shell_blend(dst[col], ink, alpha);
         }
     }
     return bm.width;
 }
 
+static int draw_icon_mask(const char *name, int size, int x, int y,
+                           unsigned ink, int extra_alpha_256)
+{
+    return draw_icon_mask_2(name, size, x, y, ink, ink, extra_alpha_256);
+}
+
 /* `suffix` elige la variante de color: "" es el color de texto normal,
- * "-on" el acento, "-selector" el blanco constante sobre el Selector.
+ * "-on" la categoria activa (degradado claro/oscuro -- MISMA categoria
+ * que el tile de SelectionSummary, aura_category_current(), encargo del
+ * dueno 2026-08-14), "-selector" el blanco constante sobre el Selector.
  * Camino primario: mascara de cobertura + tinta runtime (ver
- * draw_icon_mask). Fallback: el bmp pre-compuesto por tema/variante de
- * siempre (D-010), por robustez si el disco no trae mascaras. */
+ * draw_icon_mask/draw_icon_mask_2). Fallback: el bmp pre-compuesto por
+ * tema/variante de siempre (D-010), por robustez si el disco no trae
+ * mascaras -- ese camino de respaldo sigue siendo tinta plana (el bmp
+ * horneado no tiene forma de llevar un degradado en runtime), asi que
+ * SOLO en el caso raro de "sin mascaras en disco" el icono "-on" pierde
+ * el degradado y vuelve al acento plano de siempre (D-010, sin
+ * categoria) -- degradacion aceptable, nunca un crash. */
 static int draw_icon_variant(const char *name, int size, int x, int y,
                               const char *suffix)
 {
@@ -170,7 +202,18 @@ static int draw_icon_variant(const char *name, int size, int x, int y,
     if (!name)
         return 0;
 
-    ret = draw_icon_mask(name, size, x, y, variant_ink(suffix), 256);
+    if (!strcmp(suffix, "-on"))
+    {
+        unsigned ink_a, ink_center, ink_b;
+
+        aura_category_gradient(aura_category_current(), &ink_a, &ink_center, &ink_b);
+        (void)ink_center;
+        ret = draw_icon_mask_2(name, size, x, y, ink_a, ink_b, 256);
+    }
+    else
+    {
+        ret = draw_icon_mask(name, size, x, y, variant_ink(suffix), 256);
+    }
     if (ret > 0)
         return ret;
 

@@ -7,6 +7,7 @@
 #include "aura_widgets.h"
 #include "aura_marquee.h"
 #include "aura_flow.h"
+#include "aura_category.h"
 
 #include "aura_selection_summary.h"
 
@@ -172,12 +173,20 @@ static void draw_summary(int x, int width, const char *icon_name,
     total_h = top_h + TILE_SIZE + bottom_h;
     tile_y = (A26_SCREEN_HEIGHT - total_h) / 2 + top_h;
 
-    /* Tile con degradado del acento (componentes/selection-summary.md):
-     * acento al centro, "contaminado" por los dos derivados calculados
-     * en runtime (aura_accent_light()/_dark(), T0.3/G9) -- nunca un
-     * valor fijo, el acento es configurable por el usuario. */
-    draw_diagonal_gradient(tile_x, tile_y, TILE_SIZE,
-                            aura_accent_light(), aura_accent(), aura_accent_dark());
+    /* Tile con degradado por CATEGORIA de la seccion activa
+     * (componentes/selection-summary.md, encargo del dueno 2026-08-14):
+     * antes siempre el acento sin importar la seccion -- ahora Musica
+     * sigue siendo el acento (aura_accent_light/_dark, sin cambio de
+     * comportamiento), pero Ajustes/Video/Fotos/Extras tienen su propio
+     * color en cascada (aura_category_current(), fijado una vez por
+     * cuadro desde aura_screens_draw()). Ver aura_category_gradient()
+     * (apple2026_shell.h) para los 3 puntos del degradado. */
+    {
+        unsigned tile_a, tile_center, tile_b;
+
+        aura_category_gradient(aura_category_current(), &tile_a, &tile_center, &tile_b);
+        draw_diagonal_gradient(tile_x, tile_y, TILE_SIZE, tile_a, tile_center, tile_b);
+    }
     a26_shell_round_bitmap_corners(tile_x, tile_y, TILE_SIZE, TILE_SIZE, TILE_RADIUS,
                                     a26_color(A26_SHELL_BG));
 
