@@ -2257,4 +2257,20 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-202 — El "+" de columnas, la columna Título y visibilidad de la sincronización en Aura Studio
+
+**Reporte del dueño (2026-08-14)**: cuatro pedidos sobre la biblioteca de Aura Studio. (1) "el icono de + que te pedí añadir en la biblioteca de Aura Studio debería estar junto a los títulos de las columnas, no donde lo colocaste" -- D-199 lo había puesto en la barra de herramientas de la ventana, lejos de la tabla. (2) "si la ventana está tapando el contenido, podría aparecer una barra de desplazamiento (siempre bloqueando la columna de nombre, esa sí debe verse siempre)". (3) "ayúdame a implementar un botón de sincronización para cuando esté conectado el iPod". (4) "una forma de hacer visible qué elementos ya están sincronizados con el dispositivo".
+
+**(1) El "+" de columnas**: `Table` de SwiftUI no deja insertar contenido propio dentro de su fila de encabezados -- los títulos de columna solo aceptan texto, no una vista con botón. Se movió el menú de `ToolbarItem` (barra de la ventana) a una franja angosta propia, pegada arriba de la tabla y alineada a la derecha (`columnsBar` en `MediaSectionView.swift`) -- lo más cerca que se puede quedar del renglón de encabezados sin reescribir `Table` a mano con AppKit.
+
+**(2) Columna Título fija al hacer scroll**: `Table` tampoco soporta columnas "congeladas" -- lograrlo de verdad exige partir la tabla en dos vistas sincronizadas (una fija, otra con scroll), una reescritura grande del componente central de la biblioteca con riesgo real de romper selección, orden por encabezado y menú contextual. Se le planteó la disyuntiva al dueño, que eligió la opción segura: ancho mínimo generoso para Título (140→180px en música, 160→180px en video/fotos) en vez de la reescritura completa. La barra de desplazamiento horizontal cuando el contenido no cabe ya es automática (viene gratis del `NSScrollView` que envuelve a `Table`) -- no hizo falta tocar nada para eso.
+
+**(3) Botón de sincronización global**: ya existía un botón "Sincronizar" (D-1xx), pero solo en la barra de herramientas de la sección General -- no aparecía en Música/Video/Fotos, justo donde se arma la biblioteca. Se movió a la barra de herramientas de `ContentView` (raíz de la app), visible sin importar la sección activa, con la misma condición de deshabilitado (sin dispositivo, firmware no-Aura, o un proceso de la biblioteca en curso).
+
+**(4) Visibilidad de elementos ya sincronizados**: la tabla de música/video/fotos ya está en su límite de 10 columnas (`Table`/`TableColumnBuilder` no admite más, ver D-199), así que no había espacio para una columna nueva. Se aprovechó la columna "Estado" existente: los elementos `.ready` que además tienen un registro vigente en `LibrarySync.loadManifest()` (con su archivo de destino todavía presente en el volumen conectado -- si se borró a mano del iPod, el manifiesto podría mentir) muestran un icono de iPod junto al check verde. El manifiesto se relee al conectar/cambiar de dispositivo y justo después de cada sync (`onChange(of: viewModel.lastSyncSummary)`), no en cada redibujado.
+
+**Aceptación**: `swift build`, `swift test` (143/143), `xcodegen generate` + `xcodebuild -scheme AuraStudio -configuration Debug build` → `BUILD SUCCEEDED`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
