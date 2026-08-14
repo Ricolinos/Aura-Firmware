@@ -2719,4 +2719,16 @@ Estas rutas se disparan al abrir el panel de listas de reproducción desde Ahora
 
 ---
 
+## D-232 — Aura Studio: campo "Autor" (compositor) para organizar música en el firmware
+
+**Encargo del dueño (2026-08-14)**: "otro atributo que hay que agregar es el de 'Autores' para que en el firmware, las canciones se acomoden adecuadamente."
+
+**Investigación previa (evitó trabajo de firmware innecesario)**: el firmware YA sabe navegar música por autor/compositor -- `tag_composer` del tagcache de Rockbox, expuesto como `AURA_SCREEN_MUSIC_COMPOSERS` en `aura_music.c` -- confirmado por lectura antes de asignar la tarea. El hueco real estaba entero del lado de Aura Studio: nada en el código Swift leía, mostraba, o ESCRIBÍA ese tag. Alcance final: solo Aura Studio, cero cambios de firmware.
+
+**Implementación**: `composer: String?` agregado a `TrackMetadata`/`PersistedTrackMetadata` (mismo patrón que `genre`/`albumArtist`, ver `LibraryPersistenceMapper`), leído de tags MP3 existentes vía `ID3Writer` (frame `TCOM`, el estándar ID3 para compositor) durante `LibraryEnricher.enrich()`, editable en `MediaInfoView`/`BatchMediaInfoView` ("Autor"), y escrito de vuelta al preparar el archivo (`LibraryViewModel.prepareMusic`). Escritura confinada a MP3 (`ID3Writer`) a propósito: "Mantener original" (formatos no-MP3) nunca reescribe tags embebidos de ningún tipo (alcance documentado desde D-037, solo toca sidecars de letra/portada) -- el mismo límite que ya aplica a `genre`/`albumArtist`, no un hueco nuevo de este cambio. Enriquecimiento en línea (MusicBrainz) explícitamente NO extendido: la respuesta actual de `Recording`/`Release` no trae credito de compositor, y traerlo exigiría una consulta de relaciones de obra aparte -- fuera de alcance, composer se llena solo por lectura de tag existente o a mano. Término de UI "Autor" (no "Compositor"): coincide con como el propio firmware ya lo llama (`AURA_SCREEN_MUSIC_COMPOSERS` → "Autores" en su comentario) y con `docs/design/Reglas de comportamiento - iPod Classic original (2008).md`, que ya lista "Autores (alfabético)" como categoría del original. No se agregó como columna extra de la tabla de Música: esa tabla ya está en el límite duro de 10 columnas de SwiftUI (D-199) y `albumArtist` -- en la misma situación -- ya se dejó fuera de la tabla a propósito por falta de espacio, no por falta de dato; mismo criterio aplicado aquí, disponible en "Más información" y el editor por lote.
+
+**Verificación**: `xcodegen generate` limpio. `swift build` limpio (solo warnings preexistentes de `onChange(of:perform:)`). `swift test`: 164/164 (esta vez sin la flakeza de red que a veces afecta a `LiveEnrichmentIntegrationTests`). `xcodebuild -scheme AuraStudio build` → `** BUILD SUCCEEDED **`, verificado independientemente tras fusionar. Prueba de round-trip TCOM agregada a `ID3WriterTests`.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
