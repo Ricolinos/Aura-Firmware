@@ -2093,4 +2093,42 @@ La causa real apareció en nuestro propio `firmware/target/arm/s5l8702/ipod6g/st
 
 ---
 
+## D-192 — Ajustes: copiar o referenciar medios, organización y calidad por tipo, claves API
+
+**Encargo del dueño (2026-08-13, Fase 1 de una mejora sustancial en dos partes, sin supervisión en vivo)**: pulir Aura Studio empezando por Ajustes -- guías/configuración para API keys de servicios que potencien la biblioteca; una opción para NO copiar los archivos originales a la Biblioteca de Aura (solo referenciarlos, armando el archivo final recién al sincronizar con el iPod); ajustes de organización y nombre de archivo para música; separar fotos en Imágenes/Fotos/Hechas con IA y video en Caseros/Videos/Películas; calidad de imagen (320px optimizado / 640px HD) y de audio (formato original / comprimido a buena calidad).
+
+**Carpeta de biblioteca**: el default cambió de `~/Music/Aura` a `~/Documents/Aura Library`, tal como lo pidió el dueño explícitamente.
+
+**Copiar vs. referenciar** (`AppPreferences.copyMediaIntoLibrary`, default `true` = el comportamiento que ya existía): con el ajuste apagado, `LibraryViewModel.addDroppedFiles` deja de copiar a `Originales/` y el item referencia el archivo original en su ubicación real. El resto del pipeline (`Preparados/`, `Portadas/`, `biblioteca.json`) ya vivía separado de `Originales/` desde D-180, así que el archivo final para el iPod se sigue armando en `Preparados/` leyendo el original en el momento de procesar -- exactamente el "más lento la primera vez, pero sin duplicar la biblioteca completa en disco" que pidió el dueño, sin tener que rediseñar el pipeline. Hizo falta un ajuste puntual: `relativePath(of:)` ya sabía devolver una ruta absoluta cuando el archivo no vive dentro de la biblioteca, pero `loadCatalog()` la reconstruía con `appendingPathComponent` (que trata un string que empieza con "/" como un componente literal, no como ruta absoluta) -- corregido para reconocer el prefijo y usar `URL(fileURLWithPath:)` directo.
+
+**Música**: `MusicOrganization` (Artista/Álbum -- default, Solo álbum, Solo artista) y `MusicFilenameFormat` (solo título -- NUEVO default, número+título, título-artista, título-álbum) se enhebraron hasta `LibrarySync.musicDestinationRelativePath`. El tagcache de Rockbox escanea el volumen completo sin importar la profundidad de carpetas, así que esto no tiene ninguna restricción del firmware que respetar. **Cambio de comportamiento real**: el default de nombre de archivo pasó de incluir siempre el número de pista a solo el título (pedido explícito del dueño) -- se actualizaron los tests existentes que asumían el default viejo, agregando cobertura explícita para cada formato con el parámetro correspondiente.
+
+**Calidad de audio** (`AudioQuality`): `originalLossless` (default, copia tal cual FLAC/ALAC/WAV/MP3/etc., cero pérdida) o `compressed` (nuevo `AudioTranscoder`, ffmpeg a MP3 256kbps, reutilizando el mismo `FFmpegLocator` que ya usaba `FFmpegTranscoder` para video).
+
+**Fotos y video -- categorías** (`MediaCategory`, con clasificación automática best-effort en `MediaCategoryClassifier`: fotos por EXIF -- con datos de cámara = Fotos, sin ellos = Imágenes, tag de software de un generador de IA conocido = Hechas con IA; video por duración vía ffmpeg -- ≤3min Caseros, >40min Películas, el resto Videos): **decisión de diseño importante** -- la categoría es SOLO organización dentro de Aura Studio, nunca cambia dónde se sincroniza en el iPod. El navegador de fotos/video del firmware (`aura_photos.c`/`aura_video.c`, confirmado por lectura directa del código) hace `opendir`/`readdir` PLANO sobre `/Photos` y `/Videos` -- no recorre subcarpetas (D-062 sigue pendiente como su propia funcionalidad). Anidar por categoría en el volumen habría hecho que esos archivos dejaran de aparecer en el iPod, exactamente lo contrario de lo que se buscaba. `LibrarySync` sigue escribiendo ambas carpetas planas sin cambios.
+
+**Calidad de foto** (`PhotoQuality.optimized` 320px default / `.hd` 640px): parametrizó `ImageResizer.maxDimension`, que antes era una constante fija.
+
+**Claves API** (`APIKeyStore`, Keychain genérico -- nunca UserDefaults, cumpliendo el comentario que ya existía en el código desde D-180 -- y nueva pestaña "Claves API" en Ajustes): infraestructura extensible por `APIKeyService` (hoy solo fanart.tv, la única de las fuentes "opcionales" de `SourcesSettingsView` que de verdad pide key -- Deezer/Internet Archive/Openverse son sin key) con guía de dónde conseguirla junto al campo, antes de que falle. Integración de red de estas fuentes queda para después, con el mismo criterio honesto que ya usaba `SourcesSettingsView` para marcarlas "planeadas".
+
+**Aceptación**: `swift build`/`swift test` (127/127, los 2 de red pasan en re-corrida) y `xcodebuild -project AuraStudio.xcodeproj ... BUILD SUCCEEDED`.
+
+---
+
+## D-193 — Biblioteca: gestión de archivos con Vista Previa en vez de reproductor propio
+
+**Encargo del dueño (2026-08-13, Fase 1 parte B)**: una interfaz de gestión de archivos para música/video/fotos que NO sea un reproductor -- reproducir algo debe sentirse como Vista Previa de Finder (seleccionar y apretar espacio) -- con edición de letras, gestión de playlists, y poder importar/sincronizar playlists de otros programas o servicios.
+
+**Vista Previa real, no un reproductor propio** (`QuickLookCoordinator`, sobre `QLPreviewPanel`/Quartz -- el mecanismo real de Finder, no un simulacro): `MediaSectionView` ahora usa `List(selection:)` con soporte de teclado; apretar espacio con un elemento seleccionado abre/cierra el panel de Vista Previa del sistema sobre `item.sourceURL`, igual que en Finder -- apretar espacio de nuevo sobre el mismo elemento lo cierra. Requirió subir el mínimo de despliegue de macOS 13 a 14 (`.onKeyPress`, API introducida en macOS 14) -- cambio de bajo riesgo para una app personal que corre en un Mac ya muy por delante de esa versión.
+
+**Letras** (`MetadataReviewView`): nuevo editor de texto para `syncedLyrics`, disponible junto al resto de la metadata -- se guarda como el mismo sidecar `.lrc` que ya escribía `LibraryViewModel.prepareMusic` cuando la letra viene de LRCLIB, así que el firmware no distingue el origen. La pantalla de revisión, antes solo alcanzable desde el botón "Revisar" de items incompletos, ahora también se abre con el nuevo botón "Editar" de la barra de herramientas sobre cualquier canción seleccionada -- gestión real, no solo corrección de errores.
+
+**Categorías de fotos/video** (D-192): filtro por chips arriba de la lista (Todas/cada categoría) y un menú por fila para corregir a mano la categoría que se sugirió sola, vía el nuevo `LibraryViewModel.setCategory(_:forItem:)`.
+
+**Importar playlists de otros programas** (`PlaylistImporter`, parseo puro de M3U/M3U8 -- el mismo formato que ya escribe `PlaylistExporter` al sincronizar, así que cualquier programa que exporte a ese formato sirve como fuente): nuevo botón "Importar..." en `PlaylistsView`, resuelve rutas relativas contra la carpeta del propio archivo `.m3u`/`.m3u8`, y empareja cada pista contra la biblioteca de Aura primero por ruta absoluta y si no por nombre de archivo -- las que no están en la biblioteca todavía se listan en vez de fallar la importación completa ("copiar" playlists de otros servicios queda limitado a este camino de archivo local: los servicios de streaming no tienen una API de exportación de playlists de uso personal viable, mismo criterio de `SourcesSettingsView` para descartar fuentes).
+
+**Aceptación**: `swift build`/`swift test` (133/133, los 2 de red pasan en re-corrida) y `xcodebuild -project AuraStudio.xcodeproj ... BUILD SUCCEEDED`. Sigue Fase 2 (firmware) de la misma mejora, sin pausa, según encargo explícito del dueño.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
