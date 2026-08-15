@@ -3040,4 +3040,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-258 — CoverDrift: la sombra del LeftPanel, tapada por la carátula desde D-254
+
+**Encargo**: agregar la sombra paralela que el LeftPanel proyecta sobre CoverDrift.
+
+**No era una funcionalidad faltante, era un bug de orden de dibujo** -- `aura_coverdrift_draw()` ya llamaba a `aura_shell_draw_left_panel_shadow()` desde D-254, pero ANTES de dibujar la carátula. Cuando el tile era chico y centrado (90px, diseño original), la sombra se veía perfectamente porque quedaba sobre el fondo plano del panel, alrededor del tile. Desde D-254 la carátula llena el panel COMPLETO (160×240) -- la sombra, dibujada primero, quedaba tapada por completo por la carátula que se pintaba encima un instante después.
+
+**Segundo problema real, encontrado al investigar**: aunque se moviera la llamada al final, `aura_shell_draw_left_panel_shadow()` (`apple2026_shell.c`) mezcla contra un color de FONDO FIJO (`A26_SHELL_BG`), no contra lo que esté realmente dibujado ahí -- su propio comentario en el header ya lo dejaba anotado como limitación conocida: *"funciona bien contra un fondo plano conocido; sobre contenido rico (carátula, foto) es una aproximación, no compositing real"*. Llamarla tal cual sobre la carátula habría pintado una franja de color plano encima de la foto, no un oscurecimiento real de la imagen.
+
+**Arreglo**: nueva `aura_shell_draw_left_panel_shadow_over_content()` (`apple2026_shell.c`/`.h`) -- mismo ancho/opacidad/caída lineal que la variante original, pero lee el píxel YA dibujado en el framebuffer (`dst[0] = a26_shell_blend(dst[0], black, alpha_256)`, mismo patrón de compositing real que ya usa `draw_icon_mask_2()` en `aura_widgets.c`) en vez de mezclar contra un color fijo -- oscurece lo que sea que esté ahí, real. `aura_coverdrift_draw()` ahora llama a esta variante DESPUÉS de dibujar la carátula (crossfade o sólida), no antes.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (sin funciones puras nuevas -- es dibujo directo a framebuffer, no lógica testeable por separado). Verifiqué la sombra de forma cuantitativa, no solo visual: medí el brillo promedio por columna en una captura real, filas 60-180 -- sube de 66 en `x=160` (el borde del panel, más oscuro) a 89 en `x=168` (el ancho completo de la sombra, `AURA_DS_METRICS_SHADOW_LEFT_PANEL_SHADOW_WIDTH`), luego se estabiliza en el rango de variación normal de la fotografía (94-103) -- exactamente la caída lineal esperada, confirmando que la sombra se aplica de verdad sobre la carátula real, no que quedó tapada.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

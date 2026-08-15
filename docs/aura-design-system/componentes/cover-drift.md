@@ -139,11 +139,24 @@ justifica una estrategia más compleja para este alcance.
 Cross-fade al montarse/desmontarse — spec completo en
 `componentes/selection-summary.md`, sección "Transición con `CoverDrift`".
 
-## Sombra de `LeftPanel`
+## Sombra de `LeftPanel` (D-258: compositing real, no aproximación)
 
-Debe renderizarse una sombra que simule que `LeftPanel` está por encima de
-este componente — spec completo en `efectos/01-sombras.md` (regla
-actualizada, compartida con `SelectionSummary`).
+Se renderiza una sombra que simula que `LeftPanel` está por encima de este
+componente — spec completo en `efectos/01-sombras.md` (regla actualizada,
+compartida con `SelectionSummary`).
+
+**Bug real corregido en D-258**: la sombra ya se dibujaba desde D-254, pero
+ANTES de la carátula -- con el tile chico centrado (90px, diseño original)
+se veía bien porque quedaba sobre el fondo plano del panel; al pasar la
+carátula a llenar el panel completo, la sombra quedaba tapada por completo.
+Además, `aura_shell_draw_left_panel_shadow()` (la función original) mezcla
+contra un color de fondo FIJO, no compositing real -- pintarla sobre la
+carátula habría dejado una franja de color plano en vez de oscurecer la
+foto de verdad. Arreglado con una variante nueva,
+`aura_shell_draw_left_panel_shadow_over_content()`
+(`apple2026_shell.c`/`.h`), que lee y oscurece el píxel YA dibujado
+(compositing real, mismo patrón que ya usa el compositor de máscaras de
+íconos) -- llamada DESPUÉS de dibujar la carátula, no antes.
 
 ## Reutilización
 

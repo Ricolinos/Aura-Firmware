@@ -253,7 +253,6 @@ void aura_coverdrift_draw(int x, int width,
 
     lcd_set_foreground(a26_color(A26_SHELL_RAIL));
     lcd_vline(x - 1, 0, A26_SCREEN_HEIGHT - 1);
-    aura_shell_draw_left_panel_shadow(x, 0, A26_SCREEN_HEIGHT);
 
     if (margin_x < 0) margin_x = 0;
     if (margin_y < 0) margin_y = 0;
@@ -300,4 +299,17 @@ void aura_coverdrift_draw(int x, int width,
     {
         draw_image_solid(images, s_index, x, width, margin_x, margin_y, dx, dy);
     }
+
+    /* D-258 (encargo del dueno del producto: "la sombra paralela que
+     * proyecta el LeftPanel sobre CoverDrift"): la sombra YA se
+     * dibujaba (aura_shell_draw_left_panel_shadow(), arriba de este
+     * archivo desde D-254) pero ANTES del contenido -- la caratula, que
+     * ahora llena el panel completo, la tapaba por completo cada
+     * cuadro. Se mueve al final, y se cambia a la variante de
+     * compositing real (aura_shell_draw_left_panel_shadow_over_content(),
+     * apple2026_shell.c) que oscurece el pixel YA dibujado en vez de
+     * mezclar contra un fondo plano fijo -- la variante original esta
+     * documentada para "contenido rico" como una aproximacion que no
+     * aplica aca. */
+    aura_shell_draw_left_panel_shadow_over_content(x, 0, A26_SCREEN_HEIGHT);
 }

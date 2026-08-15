@@ -137,6 +137,18 @@ void aura_category_gradient(aura_category_t cat,
  * `y`/`height` acotan verticalmente la banda. */
 void aura_shell_draw_left_panel_shadow(int x, int y, int height);
 
+/* D-258: variante de COMPOSITING REAL para "contenido rico" (la
+ * limitacion que el comentario de arriba ya dejaba anotada) -- en vez
+ * de mezclar contra un fondo plano fijo (SHELL_BG), lee el pixel YA
+ * dibujado en el framebuffer (lo que sea que este ahi -- una caratula
+ * de CoverDrift, por ejemplo) y lo oscurece en el lugar. Debe llamarse
+ * DESPUES de dibujar ese contenido, nunca antes (si se llama antes,
+ * el contenido posterior la tapa por completo -- bug real de D-254/
+ * D-256, corregido en D-258 moviendo la llamada al final en
+ * aura_coverdrift_draw()). Mismos parametros/ancho/opacidad/caida que
+ * la variante de fondo plano. */
+void aura_shell_draw_left_panel_shadow_over_content(int x, int y, int height);
+
 /* Font id (para lcd_setfont) del estilo dado. */
 int a26_font(a26_font_style_t style);
 

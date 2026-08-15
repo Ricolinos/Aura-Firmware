@@ -194,6 +194,33 @@ void aura_shell_draw_left_panel_shadow(int x, int y, int height)
     }
 }
 
+void aura_shell_draw_left_panel_shadow_over_content(int x, int y, int height)
+{
+    int width = AURA_DS_METRICS_SHADOW_LEFT_PANEL_SHADOW_WIDTH;
+    int max_pct = AURA_DS_OPACITY_SHADOW_PCT;
+    unsigned black = LCD_RGBPACK(0, 0, 0);
+    int col, row;
+
+    if (!aura_settings.left_panel_shadow)
+        return;
+
+    for (col = 0; col < width; col++)
+    {
+        /* Misma caida lineal que la variante de fondo plano, pero
+         * mezclando contra el pixel YA dibujado (dst[0]) en vez de un
+         * color de fondo fijo -- compositing real sobre contenido rico
+         * (D-258). */
+        int pct = max_pct - (max_pct * col) / width;
+        int alpha_256 = pct * 256 / 100;
+
+        for (row = 0; row < height; row++)
+        {
+            fb_data *dst = FBADDR(x + col, y + row);
+            dst[0] = a26_shell_blend(dst[0], black, alpha_256);
+        }
+    }
+}
+
 void a26_shell_clear_screen(void)
 {
     lcd_set_background(a26_color(A26_SHELL_BG));
