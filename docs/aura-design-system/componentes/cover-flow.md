@@ -102,10 +102,10 @@ La `StatusBar` se muestra en modo `(full)` — CoverFlow vive debajo de ella.
 
 Al empezar a scrollear (paso real de rueda, `BACKWARD`/`FORWARD`, o
 seguir girando a mitad de una ráfaga), **todas las tapas visibles del
-carrusel** (no solo la central) se **encogen a ~94% (240/256) con
+carrusel** (no solo la central) se **encogen a ~84% (216/256) con
 ease-in en 150ms**; en cuanto el carrusel se asienta en un álbum,
-vuelven a su tamaño normal (256/256) también con **ease-in, en
-220ms** — el mismo tiempo que ya usa el asentamiento de posición
+vuelven a su tamaño normal (256/256) con **ease-out, en 220ms** — el
+mismo tiempo que ya usa el asentamiento de posición
 (`CF_SCROLL_ANIM_MS`), para que ambos movimientos se sientan
 coordinados. Si el usuario sigue girando la rueda mientras las tapas ya
 están encogidas, no vuelve a "pulsar" con cada paso — se quedan
@@ -115,13 +115,26 @@ encogidas hasta que el carrusel de verdad se detiene.
 orden, a pedido directo del dueño del producto):
 1. 2026-08-14 (D-245): ease-in al encoger, ease-out al volver a normal.
 2. 2026-08-15 (D-247): ease-out en las dos direcciones.
-3. 2026-08-15 (D-248, actual): **ease-in en las dos direcciones** —
-   arranque lento, acelerando hacia el destino, en ambos sentidos del
-   movimiento.
+3. 2026-08-15 (D-248): ease-in en las dos direcciones.
+4. 2026-08-15 (D-249, actual): **de vuelta a ease-in al encoger /
+   ease-out al volver a normal** — la combinación que el dueño del
+   producto confirmó como la correcta, la misma de D-245.
 
-`aura_motion_ease_out()` queda disponible en `aura_motion.c` (con su
-propia prueba) por si hace falta para otro efecto, pero ya no se usa en
-este.
+**Magnitud, historial de ajustes**:
+1. 2026-08-14 (D-245): 240/256 (~6.25% de encogimiento) — elegida por
+   comparación de capturas contra 248/256 (~3%, casi imperceptible) y
+   228/256 (~11%, se sentía "de más") en ese momento.
+2. 2026-08-15 (D-249, actual): **216/256 (~15.6% de encogimiento)** —
+   el dueño del producto pidió un efecto más pronunciado tras probar
+   240/256 con la combinación de curva ya confirmada. Verificado en el
+   simulador que a esta magnitud, con todas las tapas del carrusel
+   encogiendo a la vez (D-246), no hay recorte ni artefactos de render
+   en ninguna tapa, y el reposo tras asentarse vuelve exacto al tamaño
+   original.
+
+`aura_motion_ease_out()` sigue en uso (ahora para el zoom-in de vuelta
+a normal); ambas curvas conviven en este efecto, cada una en su
+dirección.
 
 **Ajuste 2026-08-15**: la primera versión (D-245) aplicaba el efecto
 solo a la tapa central, atenuándolo a 0 hacia las laterales vía la

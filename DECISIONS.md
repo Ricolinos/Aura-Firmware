@@ -2948,4 +2948,14 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-249 — Cover Flow: curva final ease-in/ease-out y encogimiento más pronunciado
+
+**Encargo**: tras probar D-245 (ease-in/ease-out), D-247 (ease-out/ease-out) y D-248 (ease-in/ease-in) en el simulador, el dueño del producto confirmó que la combinación correcta era la original de D-245 -- ease-in al encoger, ease-out al volver a normal -- pero pidió que el encogimiento en sí fuera más pronunciado (portadas visiblemente más pequeñas mientras se scrollea).
+
+**Arreglo**: dos cambios independientes en `aura_coverflow.c`. (1) Curva: `zoom_scale_256()` vuelve a elegir entre `aura_motion_ease_in()` (mientras `s_zoom_shrinking`, encogiendo) y `aura_motion_ease_out()` (volviendo a normal) -- el mismo `if` ternario que tenía D-245 antes de que D-247/D-248 lo simplificaran a una sola curva fija. (2) Magnitud: `CF_ZOOM_SCALE_SHRUNK` sube de `240` (~94%, ~6.25% de encogimiento) a `216` (~84%, ~15.6% de encogimiento) -- más del doble de pronunciado. Duraciones (150ms/220ms) sin cambio.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (296 en `test_motion`, sin cambio -- ambas curvas ya tenían prueba propia desde D-245). Capturas reales en el simulador a la nueva magnitud: mitad de ráfaga de scroll con las ~9 tapas visibles claramente más chicas, sin recorte ni artefactos de render en ninguna; asentamiento tras soltar la rueda vuelve exacto al tamaño y posición original, sin residual.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

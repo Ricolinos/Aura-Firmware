@@ -178,20 +178,20 @@ static long s_anim_since = 0;
  * por cada paso de una rafaga, se queda encogida hasta que de verdad se
  * detiene.
  *
- * D-248: las DOS direcciones usan ease-in (arranca lento, acelera al
- * llegar) -- probadas en el simulador en este orden: ease-in/ease-out
- * (D-245), ease-out/ease-out (D-247), y ahora ease-in/ease-in a pedido
- * expreso del dueno del producto. aura_motion_ease_out() queda sin uso
- * aqui pero se deja en aura_motion.c/.h (con su propia prueba) por si
- * hace falta en otro efecto futuro. */
+ * D-249: ease-in al encoger, ease-out al volver a normal -- probadas en
+ * el simulador en este orden: ease-in/ease-out (D-245), ease-out/
+ * ease-out (D-247), ease-in/ease-in (D-248), y de vuelta a ease-in/
+ * ease-out (D-249, combinacion elegida por el dueno del producto como
+ * la correcta) pero con un encogimiento mas pronunciado -- ver
+ * CF_ZOOM_SCALE_SHRUNK. */
 #define CF_ZOOM_SCALE_NORMAL  256 /* 100%: distance=0, identico al render de siempre */
-#define CF_ZOOM_SCALE_SHRUNK  240 /* ~94%: ver docs/aura-design-system/componentes/cover-flow.md */
+#define CF_ZOOM_SCALE_SHRUNK  216 /* ~84%: D-249, mas pronunciado que el 240 (~94%) original -- ver docs/aura-design-system/componentes/cover-flow.md */
 #define CF_ZOOM_OUT_MS 150 /* ease-in, corto: el arranque debe sentirse inmediato */
-#define CF_ZOOM_IN_MS  CF_SCROLL_ANIM_MS /* ease-in, mismo tiempo que el asentamiento de posicion */
+#define CF_ZOOM_IN_MS  CF_SCROLL_ANIM_MS /* ease-out, mismo tiempo que el asentamiento de posicion */
 static int s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
 static int s_zoom_from_256 = CF_ZOOM_SCALE_NORMAL;
 static long s_zoom_since = 0;
-static int s_zoom_shrinking = 0; /* 1 mientras va hacia SHRUNK (usa CF_ZOOM_OUT_MS), 0 hacia NORMAL (CF_ZOOM_IN_MS) -- la curva es ease-in en ambos casos */
+static int s_zoom_shrinking = 0; /* 1 mientras va hacia SHRUNK (ease-in, CF_ZOOM_OUT_MS), 0 hacia NORMAL (ease-out, CF_ZOOM_IN_MS) */
 
 /* Escala interpolada actual de la caratula central, 256=tamano normal.
  * Cuando from==target (caso comun: reposo total, nunca hubo scroll o
@@ -210,7 +210,8 @@ static int zoom_scale_256(void)
 
     elapsed_ms = (current_tick - s_zoom_since) * 1000L / HZ;
     duration_ms = s_zoom_shrinking ? CF_ZOOM_OUT_MS : CF_ZOOM_IN_MS;
-    t = aura_motion_ease_in(elapsed_ms, duration_ms);
+    t = s_zoom_shrinking ? aura_motion_ease_in(elapsed_ms, duration_ms)
+                          : aura_motion_ease_out(elapsed_ms, duration_ms);
     return aura_pattern_lerp(s_zoom_from_256, s_zoom_target_256, t);
 }
 
