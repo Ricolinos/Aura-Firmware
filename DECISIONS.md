@@ -3010,4 +3010,34 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-256 — CoverDrift: movimiento más pronunciado (borde a borde, 320px), y un bug real corregido (el "flash" rosa entre imágenes)
+
+**Encargo**: hacer el movimiento mucho más pronunciado (imágenes de 320px en vez de 290px, recorriendo borde a borde del margen disponible en los mismos 7s), y corregir la transición -- en vez de un fundido, el dueño del producto veía un destello de color rosa entre una carátula y la siguiente. También subir el fundido de 400ms a 600ms.
+
+**El "flash" era un bug real, no una percepción** -- diagnosticado leyendo el código, no adivinado: `advance_cycle()` (el avance al índice de imagen siguiente) se disparaba DENTRO de `aura_coverdrift_draw()`, en el mismo cuadro en que el llamador (`aura_screens.c`) ya había decodificado la imagen activa ANTES de llamar a `draw()` -- en el cuadro exacto en que el ciclo avanzaba, el llamador todavía no conocía el índice nuevo (se enteraba recién dentro de ese mismo `draw()`, demasiado tarde para decodificarlo a tiempo). `images[s_index].bmp` quedaba `NULL` ese cuadro → caía al placeholder sólido (color de acento, rosa/rojo) → exactamente el destello reportado, una vez por cada cambio de imagen (cada 7s).
+
+**Arreglo del flash**: se separó "decidir si toca avanzar" de "dibujar". Nueva `aura_coverdrift_advance_if_due(width, count)` (`aura_coverdrift.c`/`.h`) que el llamador invoca PRIMERO, antes de decodificar -- así `aura_coverdrift_active_index()`/`_prev_index()` ya reflejan el índice vigente de este cuadro a tiempo de decodificarlo, y `aura_coverdrift_draw()` ya no dispara su propio avance, solo lee el estado y dibuja. `aura_screens.c` actualizado para llamar en el orden correcto (`advance_if_due()` → `ensure_drift_albums_decoded()` → `draw()`), con un comentario explícito de que invertir ese orden reintroduce el bug.
+
+**Movimiento más pronunciado**: `image_size` sube de 290 a 320 (`tokens.json`) -- margen vertical (el que acota la distancia máxima de deriva, panel 160×240 más angosto que alto) sube de 25px a 40px. `pick_distance()` (`aura_coverdrift.c`) ya no elige una fracción aleatoria (40%-100% del margen, D-098/D-254) -- ahora siempre usa el margen completo, así cada movimiento arranca en el borde extremo disponible y viaja hasta el centro, la excursión máxima posible sin revelar el fondo del panel.
+
+**Crossfade**: `crossfade_ms` sube de 400 a 600 (`tokens.json`).
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (cambio de orquestación/constantes, sin funciones puras nuevas en esta pasada). Verifiqué el arreglo del flash de forma indirecta pero rigurosa: tomé 8 capturas del panel en distintos puntos de varios ciclos y medí la desviación estándar de color de la región del panel en cada una -- todas mostraron varianza alta y consistente (68-89), propia de una fotografía real; un flash de color sólido habría dado varianza cercana a 0 en esa captura. Ninguna lo mostró.
+
+---
+
+## D-257 — CoverDrift: movimiento diagonal deja de verse "escalonado" (precisión subpixel real)
+
+**Encargo**: el dueño del producto reportó que el movimiento diagonal se veía escalonado (patrón horizontal-vertical alternado), y pidió específicamente precisión subpixel -- posición/velocidad en punto flotante, actualización basada en tiempo (delta time) aplicada a ambos ejes en el mismo cuadro, truncando a entero solo al dibujar.
+
+**Diagnóstico real, no solo el pedido tal cual**: verifiqué primero (ya lo había hecho en D-254, lo repetí aquí) que `dx`/`dy` en `aura_pattern_drift_pos()` YA se derivaban de un único escalar de distancia compartido cada llamada -- no hay acumulador con estado que pueda desincronizar los ejes en el sentido clásico (tipo Bresenham). La causa real es más sutil: la función encadenaba DOS divisiones enteras independientes (distancia restante → píxeles, luego píxeles → componente por eje) -- cada una trunca por su cuenta, y como el movimiento cubre pocos píxeles en 7 segundos (con el margen nuevo de D-256, ~40px ⇒ bastante menos de 1px por cuadro a 20fps), ese doble truncamiento puede hacer que `dx` y `dy` crucen su umbral de redondeo en cuadros distintos entre sí -- una desincronización real, aunque más sutil que un patrón de escalera clásico.
+
+**Arreglo, en punto fijo (no float)**: este target (ARM926EJ-S) no tiene FPU -- usar `float`/`double` significaría emulación por software, e iría en contra de la convención ya establecida en todo el sistema (`aura_flow.c`, el propio `aura_pattern_drift_pos()`) de trigonometría en punto fijo. Mismo espíritu que pidió el dueño ("acumulador interno en alta precisión, truncar solo al dibujar") pero en fixed-point Q?.8: nueva `aura_pattern_drift_pos_hp()` (`aura_patterns.c`/`.h`) devuelve `dx256`/`dy256` (píxeles × 256) SIN truncar a entero. `aura_pattern_drift_pos()` (la función original, con 5 pruebas existentes que dependen de valores exactos, D-089) pasa a ser un envoltorio de una línea sobre la nueva función -- verificado a mano que coincide exacto en los 5 puntos que esas pruebas comprueban (todos son divisiones "redondas" sin resto), y confirmado corriendo la suite completa sin tocar ninguna de esas 5 pruebas. `aura_coverdrift.c` ahora usa la variante `_hp` y trunca a entero UNA sola vez, al final, con redondeo simétrico al más cercano (`round_to_nearest_q8()`) en vez de la cadena de truncamientos independientes de antes -- los dos ejes redondean desde la misma fuente de precisión, en el mismo instante, así que ya no pueden desincronizarse entre sí.
+
+**Pruebas nuevas** (`test_patterns.c`, +24 checks): cubren `aura_pattern_drift_pos_hp()` en los mismos puntos que ya prueban la versión entera (coinciden exacto tras dividir por 256), más una prueba que demuestra el problema real de forma concreta: con `distance_px=1` a 100ms de un ciclo de 7000ms, la versión entera vieja trunca a `dx=0` (pierde el píxel por completo), mientras que la versión de alta precisión retiene `dx256=252` (~0.98px) -- la precisión que la versión entera descartaba, ahora conservada hasta el último instante posible.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites -- `test_patterns` sube de 58 a 82 checks (24 nuevos), todas las demás pruebas (incluidas las 5 originales de drift) exactamente iguales que antes, confirmando que el refactor no cambió ningún comportamiento ya probado. Captura real confirmando que el panel se sigue viendo correcto, sin regresión.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

@@ -71,6 +71,29 @@ typedef struct {
 aura_pattern_point_t aura_pattern_drift_pos(int angle_deg, int distance_px,
                                               long elapsed_ms, long duration_ms);
 
+/* D-257 (correccion del dueno del producto: el movimiento diagonal se
+ * veia "escalonado" -- dx/dy truncados a pixel entero de forma
+ * independiente en cada uno de los dos pasos de division entera
+ * encadenados de aura_pattern_drift_pos() (distancia->pixeles,
+ * pixeles->componente por eje) podian desincronizarse entre si,
+ * incrementando en cuadros distintos para cada eje pese a venir de la
+ * misma distancia. Variante de punto fijo Q?.8 (dx256/dy256 = pixeles
+ * subpixel*256, SIN truncar a entero) para que el llamador (CoverDrift)
+ * trunque/redondee UNA sola vez, al final, desde una unica fuente de
+ * precision compartida entre ambos ejes -- mismo espiritu que
+ * "posicion en subpixel, redondear solo al dibujar", en punto fijo en
+ * vez de float (este target, ARM926EJ-S, no tiene FPU). Sin
+ * trigonometria nueva -- misma tabla de 8 angulos, misma logica, solo
+ * un paso menos de truncamiento. aura_pattern_drift_pos() es ahora un
+ * envoltorio de esta funcion (ver el .c) -- valores identicos, mismas
+ * 5 pruebas existentes sin tocar. */
+typedef struct {
+    int dx256, dy256; /* offset desde el centro, px * 256 (Q?.8) */
+} aura_pattern_point_hp_t;
+
+aura_pattern_point_hp_t aura_pattern_drift_pos_hp(int angle_deg, int distance_px,
+                                                    long elapsed_ms, long duration_ms);
+
 /* -- Push-and-Drop (coreografia, PLAN.md T1.2) ---------------------------
  * componentes/status-bar.md + transiciones/00-vocabulario.md: 3 fases
  * secuenciales -- push del contenido (sin su chrome, "hueco

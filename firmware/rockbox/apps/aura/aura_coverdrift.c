@@ -23,18 +23,25 @@ static int s_distance = 0;
 static long s_since = 0;
 static int s_count_last = 0;
 
-/* Distancia de arranque de cada movimiento: doc confirma que varia,
- * sin dar rango -- provisional D-098, entre 40% y 100% del margen real
- * disponible, asi que el movimiento siempre es visible pero nunca sale
- * del area dibujable (D-254: "area dibujable" ahora es el margen de
- * sobrante de la imagen, no el panel -- ver max_distance en
- * aura_coverdrift_draw()). */
+/* D-257: redondeo simetrico (no truncamiento hacia cero) de un valor
+ * Q?.8 (pixeles*256) al pixel entero mas cercano -- el unico punto
+ * donde dx/dy pierden precision, a proposito, al final, para ambos
+ * ejes desde la misma fuente (ver aura_coverdrift_draw()). */
+static int round_to_nearest_q8(int v256)
+{
+    return (v256 >= 0) ? (v256 + 128) / 256 : -((-v256 + 128) / 256);
+}
+
+/* Distancia de arranque de cada movimiento (D-256, encargo del dueno
+ * del producto: "recorran de borde a borde" -- movimiento mucho mas
+ * pronunciado). Antes (D-098/D-254) variaba entre 40%-100% del margen
+ * disponible; ahora siempre usa el margen COMPLETO -- cada movimiento
+ * arranca en el borde extremo de la imagen y viaja hasta el centro,
+ * la excursion maxima que el area de sobrante permite sin revelar el
+ * fondo del panel (ver max_distance en aura_coverdrift_draw()). */
 static int pick_distance(int max_distance)
 {
-    int min_distance = max_distance * 2 / 5;
-    if (max_distance <= min_distance)
-        return max_distance;
-    return min_distance + (rand() % (max_distance - min_distance + 1));
+    return max_distance;
 }
 
 static int pick_angle_idx_excluding(int prev_idx)
@@ -144,7 +151,7 @@ static void draw_image_solid(const aura_coverdrift_image_t *images, int index,
  * cada pixel del panel tiene una muestra valida de las dos imagenes
  * sin necesidad de clampear. Costo real: A26_SCREEN_HEIGHT*pw pixeles
  * (38400 con el panel de 160x240) por cuadro, solo durante la ventana
- * de CROSSFADE_MS (~400ms, unos 8 cuadros a la cadencia de animacion
+ * de CROSSFADE_MS (~600ms desde D-256, unos 12 cuadros a la cadencia de animacion
  * de 20fps que ya usa este modulo) -- comparable en orden de magnitud
  * a los compositores de mascara de icono ya existentes en
  * aura_widgets.c (draw_icon_mask_2()), que recorren pixel a pixel sin
@@ -185,6 +192,45 @@ static void draw_crossfade(const aura_coverdrift_image_t *images,
     }
 }
 
+/* D-256 (correccion de un bug real, encargo del dueno del producto:
+ * "en lugar de hacer el fundido... aparece un flash color rosa entre
+ * imagen e imagen"): antes, advance_cycle() (el avance de s_index) se
+ * disparaba DENTRO de aura_coverdrift_draw(), en el mismo cuadro en que
+ * el llamador (aura_screens.c) ya habia decodificado la imagen activa
+ * ANTES de llamar a draw() -- en el cuadro exacto en que el ciclo
+ * avanzaba, el llamador todavia no sabia el nuevo indice (se entera
+ * recien DENTRO de este draw(), demasiado tarde para decodificarlo a
+ * tiempo). images[s_index].bmp quedaba NULL ese cuadro -> cae al
+ * placeholder solido (color de acento, rosa/rojo) -> exactamente el
+ * "flash" reportado, una vez por cada cambio de imagen (cada 7s).
+ *
+ * Arreglo: separar "decidir si toca avanzar" de "dibujar". El llamador
+ * ahora invoca esta funcion PRIMERO (antes de decodificar), para que
+ * aura_coverdrift_active_index() ya refleje el indice nuevo A TIEMPO
+ * de decodificarlo antes de que aura_coverdrift_draw() lo necesite. */
+void aura_coverdrift_advance_if_due(int width, int count)
+{
+    int margin_x = (IMAGE_SIZE - width) / 2;
+    int margin_y = (IMAGE_SIZE - A26_SCREEN_HEIGHT) / 2;
+    int max_distance = margin_x < margin_y ? margin_x : margin_y;
+    long elapsed_ms;
+
+    if (max_distance < 0)
+        max_distance = 0;
+
+    if (count != s_count_last || s_index < 0 || s_index >= count)
+    {
+        s_count_last = count;
+        s_index = -1;
+        advance_cycle(count, max_distance);
+        return;
+    }
+
+    elapsed_ms = (current_tick - s_since) * 1000L / HZ;
+    if (elapsed_ms >= CYCLE_MS)
+        advance_cycle(count, max_distance);
+}
+
 void aura_coverdrift_draw(int x, int width,
                            const aura_coverdrift_image_t *images, int count)
 {
@@ -200,9 +246,10 @@ void aura_coverdrift_draw(int x, int width,
      * draw_image_solid()/draw_crossfade(). */
     int margin_x = (IMAGE_SIZE - width) / 2;
     int margin_y = (IMAGE_SIZE - A26_SCREEN_HEIGHT) / 2;
-    int max_distance = margin_x < margin_y ? margin_x : margin_y;
     long elapsed_ms;
-    aura_pattern_point_t pos;
+    aura_pattern_point_hp_t pos_hp;
+    int dx, dy;
+    (void)count;
 
     lcd_set_foreground(a26_color(A26_SHELL_RAIL));
     lcd_vline(x - 1, 0, A26_SCREEN_HEIGHT - 1);
@@ -210,38 +257,47 @@ void aura_coverdrift_draw(int x, int width,
 
     if (margin_x < 0) margin_x = 0;
     if (margin_y < 0) margin_y = 0;
-    if (max_distance < 0)
-        max_distance = 0;
 
-    if (count != s_count_last || s_index < 0 || s_index >= count)
-    {
-        s_count_last = count;
-        s_index = -1;
-        advance_cycle(count, max_distance);
-    }
+    /* D-256: el avance de ciclo ya se resolvio en
+     * aura_coverdrift_advance_if_due() (el llamador la invoca antes de
+     * decodificar, ver aura_coverdrift.h) -- aca solo queda leer el
+     * tiempo transcurrido del ciclo YA vigente y dibujar. */
+    if (s_index < 0)
+        return;
 
     elapsed_ms = (current_tick - s_since) * 1000L / HZ;
-    if (elapsed_ms >= CYCLE_MS)
-    {
-        advance_cycle(count, max_distance);
-        elapsed_ms = 0;
-    }
+    if (elapsed_ms > CYCLE_MS)
+        elapsed_ms = CYCLE_MS;
 
     /* D-255 (correccion del dueno del producto, 2026-08-15): de vuelta a
      * velocidad CONSTANTE -- D-254 habia agregado una desaceleracion
      * real (ease_out_effective_ms(), remapeando el tiempo antes de
-     * pasarlo aca) que el dueno probo y pidio quitar. aura_pattern_drift_pos()
+     * pasarlo aca) que el dueno probo y pidio quitar. aura_pattern_drift_pos_hp()
      * (aura_patterns.c) ya es puramente lineal por su cuenta -- se le
-     * pasa elapsed_ms directo, sin ningun remapeo de tiempo. */
-    pos = aura_pattern_drift_pos(ANGLES_DEG[s_angle_idx], s_distance, elapsed_ms, CYCLE_MS);
+     * pasa elapsed_ms directo, sin ningun remapeo de tiempo.
+     *
+     * D-257 (correccion del dueno del producto: "el movimiento en
+     * diagonal se ve escalonado"): se usa la variante de alta precision
+     * (dx256/dy256, pixeles*256 sin truncar) en vez de la version
+     * entera -- dx/dy se truncan a pixel UNA sola vez, aca mismo, con
+     * round_to_nearest_q8() (ver arriba), en vez de la cadena de DOS
+     * truncamientos independientes que aura_pattern_drift_pos() hacia
+     * antes internamente. Con eso, los dos ejes redondean desde la
+     * MISMA fuente de precision, en el mismo instante -- ya no pueden
+     * desincronizarse entre si (la causa real del aspecto
+     * "escalonado" a velocidad lenta: 8 direcciones sobre apenas
+     * ~40px en 7s son bastante menos de 1px por cuadro). */
+    pos_hp = aura_pattern_drift_pos_hp(ANGLES_DEG[s_angle_idx], s_distance, elapsed_ms, CYCLE_MS);
+    dx = round_to_nearest_q8(pos_hp.dx256);
+    dy = round_to_nearest_q8(pos_hp.dy256);
 
     if (elapsed_ms < CROSSFADE_MS && s_prev_index >= 0)
     {
         int alpha = (int)(elapsed_ms * 256 / CROSSFADE_MS);
-        draw_crossfade(images, x, width, margin_x, margin_y, pos.dx, pos.dy, alpha);
+        draw_crossfade(images, x, width, margin_x, margin_y, dx, dy, alpha);
     }
     else
     {
-        draw_image_solid(images, s_index, x, width, margin_x, margin_y, pos.dx, pos.dy);
+        draw_image_solid(images, s_index, x, width, margin_x, margin_y, dx, dy);
     }
 }

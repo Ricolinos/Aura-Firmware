@@ -961,6 +961,12 @@ static void draw_menu_screen_v2(const char *title,
         if (coverdrift_armed_and_ready(container_screen, selected_target)
             && aura_coverdrift_should_mount(s_drift_album_pool_count))
         {
+            /* D-256: el orden importa -- advance_if_due() PRIMERO (para
+             * que active_index()/prev_index() ya reflejen el indice
+             * vigente de este cuadro), decodificar despues, dibujar al
+             * final. Invertir este orden reintroduce el bug del "flash"
+             * de color de acento al cambiar de imagen. */
+            aura_coverdrift_advance_if_due(panel_w, s_drift_album_pool_count);
             ensure_drift_albums_decoded();
             aura_coverdrift_draw(panel_x, panel_w,
                                   s_drift_album_images, s_drift_album_pool_count);

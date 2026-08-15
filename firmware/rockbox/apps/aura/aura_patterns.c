@@ -67,12 +67,21 @@ static const drift_dir_t DRIFT_DIRS[] = {
 };
 #define DRIFT_DIRS_N ((int)(sizeof(DRIFT_DIRS) / sizeof(DRIFT_DIRS[0])))
 
-aura_pattern_point_t aura_pattern_drift_pos(int angle_deg, int distance_px,
-                                              long elapsed_ms, long duration_ms)
+/* D-257: nucleo real del calculo, en punto fijo Q?.8 (dx256/dy256 =
+ * pixeles*256) -- ver comentario largo en el .h. `dist_now_256` lleva
+ * 256 unidades subpixel por pixel a traves de la UNICA division entera
+ * que importa (distancia restante -> pixeles); dx256/dy256 salen de
+ * ahi con una segunda division que ya no pierde mas que redondeo de
+ * punto fijo normal (no acumulativo, se recalcula entero cada
+ * llamada). Rango seguro para los valores reales que usa CoverDrift
+ * (distance_px <= unos cientos, duration_ms tipico 7000) -- muy por
+ * debajo de donde `long` de 32 bits desbordaria. */
+aura_pattern_point_hp_t aura_pattern_drift_pos_hp(int angle_deg, int distance_px,
+                                                    long elapsed_ms, long duration_ms)
 {
-    aura_pattern_point_t p = { 0, 0 };
+    aura_pattern_point_hp_t p = { 0, 0 };
     int i, cos256 = 0, sin256 = 0, found = 0;
-    long remain_ms, dist_now;
+    long remain_ms, dist_now_256;
 
     for (i = 0; i < DRIFT_DIRS_N; i++)
     {
@@ -91,10 +100,21 @@ aura_pattern_point_t aura_pattern_drift_pos(int angle_deg, int distance_px,
     if (elapsed_ms > duration_ms) elapsed_ms = duration_ms;
     remain_ms = duration_ms - elapsed_ms; /* distancia restante al centro */
 
-    dist_now = (long)distance_px * remain_ms / duration_ms;
+    dist_now_256 = (long)distance_px * 256 * remain_ms / duration_ms;
 
-    p.dx = (int)(dist_now * cos256 / 256);
-    p.dy = (int)(dist_now * sin256 / 256);
+    p.dx256 = (int)(dist_now_256 * cos256 / 256);
+    p.dy256 = (int)(dist_now_256 * sin256 / 256);
+    return p;
+}
+
+aura_pattern_point_t aura_pattern_drift_pos(int angle_deg, int distance_px,
+                                              long elapsed_ms, long duration_ms)
+{
+    aura_pattern_point_hp_t hp = aura_pattern_drift_pos_hp(angle_deg, distance_px,
+                                                              elapsed_ms, duration_ms);
+    aura_pattern_point_t p;
+    p.dx = hp.dx256 / 256;
+    p.dy = hp.dy256 / 256;
     return p;
 }
 

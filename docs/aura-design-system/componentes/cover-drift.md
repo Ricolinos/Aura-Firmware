@@ -52,36 +52,56 @@ anterior.
 - Cada movimiento **termina en el centro** — no empieza ahí. La imagen
   arranca desde una posición descentrada (en alguna de las 8 direcciones) y
   se desplaza *hacia* el centro.
-- **No siempre recorre el trayecto completo de extremo a extremo** — la
-  distancia de arranque varía entre 40% y 100% del margen disponible.
+- **Recorre el margen disponible completo, de borde a borde** (D-256 —
+  antes, D-098/D-254, la distancia de arranque variaba entre 40% y 100%
+  del margen; el dueño del producto pidió un movimiento mucho más
+  pronunciado, así que ahora siempre usa el margen completo).
 - **Duración: 7 segundos** por desplazamiento.
 - **Curva: velocidad constante** (D-254 probó una desaceleración real hacia
   el cambio de imagen, remapeando el tiempo con `aura_motion_ease_out()`
   antes de pasarlo al motor de posición -- el dueño del producto la probó
-  en el simulador y pidió quitarla, D-255. `aura_pattern_drift_pos()`
-  (`aura_patterns.c`) ya es puramente lineal por su cuenta -- recibe el
-  tiempo real directo, sin ningún remapeo). Verificado analíticamente
-  (misma aritmética entera exacta del código) que la trayectoria resultante
-  es una diagonal genuinamente intercalada entre los dos ejes, nunca un
-  patrón de "escalera" (varios pasos en un eje seguidos de varios en el
-  otro) -- ambos ejes se derivan siempre del mismo escalar de distancia
-  compartido.
+  en el simulador y pidió quitarla, D-255).
+- **Precisión subpixel real** (D-257 — el dueño del producto reportó que el
+  movimiento diagonal se veía "escalonado"): `aura_pattern_drift_pos()`
+  (`aura_patterns.c`) encadenaba dos truncamientos enteros independientes
+  (distancia→píxeles, píxeles→componente por eje) que, a las pocas
+  fracciones de píxel por cuadro que cubre este movimiento, podían hacer
+  que los dos ejes redondearan en cuadros distintos entre sí. Nueva
+  `aura_pattern_drift_pos_hp()` devuelve `dx256`/`dy256` (píxeles×256, sin
+  truncar) en punto fijo Q?.8 -- no en `float`/`double` (este target,
+  ARM926EJ-S, no tiene FPU, sería emulación por software y rompería la
+  convención de trigonometría en punto fijo ya establecida en todo el
+  sistema). `aura_coverdrift.c` trunca a entero UNA sola vez, al final,
+  con redondeo simétrico, desde la misma fuente de precisión para ambos
+  ejes -- ya no pueden desincronizarse. `aura_pattern_drift_pos()` (la
+  función original, 5 pruebas existentes) sigue siendo un envoltorio de
+  una línea sobre la nueva, sin cambio de comportamiento en los puntos ya
+  probados.
 - **Transición entre imágenes: fundido REAL** (D-254, corrección tras un
   primer intento con corte directo) — mezcla píxel a píxel entre la imagen
   saliente (quieta, en el centro) y la entrante (moviéndose), durante los
-  400ms de cross-fade, con una rampa de alpha lineal de 8 pasos a 20fps
-  (misma cadencia de fundidos ya establecida en el sistema,
+  **600ms** de cross-fade (D-256, subido de 400ms), con una rampa de alpha
+  lineal a 20fps (misma cadencia de fundidos ya establecida en el sistema,
   `AURA_MOTION_FADE_FPS`).
+- **Bug real corregido (D-256): el "flash" de color entre imágenes.** El
+  avance de ciclo (`advance_cycle()`) se disparaba dentro de la función de
+  dibujo, en el mismo cuadro en que el llamador ya había decodificado la
+  imagen activa -- el índice nuevo se conocía demasiado tarde para
+  decodificarlo a tiempo, y ese cuadro caía al color de acento como
+  respaldo. Arreglado separando "decidir si toca avanzar"
+  (`aura_coverdrift_advance_if_due()`, nueva, el llamador la invoca ANTES
+  de decodificar) de "dibujar".
 
-## Tamaño de imagen y margen de deriva (D-254)
+## Tamaño de imagen y margen de deriva (D-254, ampliado D-256)
 
 El panel derecho mide 160×240px exactos. Las imágenes de CoverDrift son
-**290×290px** (cuadradas — las carátulas de álbum lo son por naturaleza) —
+**320×320px** (cuadradas — las carátulas de álbum lo son por naturaleza;
+subido de 290px en D-256, movimiento más pronunciado a pedido del dueño) —
 deliberadamente MÁS GRANDES que el panel en ambos ejes, para que el
 movimiento de deriva nunca revele el fondo del panel detrás de la imagen.
-El margen de sobrante es asimétrico: 65px horizontal ((290−160)/2), 25px
-vertical ((290−240)/2) — la distancia máxima de deriva usa el MENOR de los
-dos (25px), así que en cualquiera de las 8 direcciones la imagen sigue
+El margen de sobrante es asimétrico: 80px horizontal ((320−160)/2), 40px
+vertical ((320−240)/2) — la distancia máxima de deriva usa el MENOR de los
+dos (40px), así que en cualquiera de las 8 direcciones la imagen sigue
 cubriendo el panel completo en todo momento.
 
 ## Activación (D-254)
@@ -97,18 +117,18 @@ selección cambia antes de cumplirse el plazo, el temporizador se reinicia;
 si la fila deja de calificar o el pool cae por debajo del umbral, se vuelve
 al ícono normal sin esperar.
 
-## Memoria (D-254)
+## Memoria (D-254, actualizado D-256)
 
 Decodificación bajo demanda: solo la imagen ACTIVA y la ANTERIOR (nunca el
 pool completo — con hasta 300 álbumes posibles, decodificarlos todos de
 antemano sería inviable). Presupuesto real, todo en buffers `static` fijos
 (sin asignación dinámica repetida):
 
-- Dos tiles finales decodificados (activa + anterior): 290×290×2 bytes cada
-  uno ≈ 336KB en total.
+- Dos tiles finales decodificados (activa + anterior): 320×320×2 bytes cada
+  uno ≈ 400KB en total.
 - Buffers de trabajo de decodificación/transposición (`aura_albumart.c`,
   compartidos con Cover Flow, redimensionados para este tamaño mayor):
-  ≈657KB.
+  ≈800KB.
 - Pool de seeks + estructuras auxiliares: ≈23KB.
 
 Total ≈1.2MB, un ~1.9% de los 64MB de RAM del target — trivial, no
