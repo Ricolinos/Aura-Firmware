@@ -103,13 +103,23 @@ La `StatusBar` se muestra en modo `(full)` — CoverFlow vive debajo de ella.
 Al empezar a scrollear (paso real de rueda, `BACKWARD`/`FORWARD`, o
 seguir girando a mitad de una ráfaga), **todas las tapas visibles del
 carrusel** (no solo la central) se **encogen a ~94% (240/256) con
-ease-in en 150ms**; en cuanto el carrusel se asienta en un álbum,
-vuelven a su tamaño normal (256/256) con **ease-out en 220ms** — el
-mismo tiempo que ya usa el asentamiento de posición
+ease-out en 150ms**; en cuanto el carrusel se asienta en un álbum,
+vuelven a su tamaño normal (256/256) también con **ease-out, en
+220ms** — el mismo tiempo que ya usa el asentamiento de posición
 (`CF_SCROLL_ANIM_MS`), para que ambos movimientos se sientan
 coordinados. Si el usuario sigue girando la rueda mientras las tapas ya
 están encogidas, no vuelve a "pulsar" con cada paso — se quedan
 encogidas hasta que el carrusel de verdad se detiene.
+
+**Ajuste 2026-08-15 (D-247)**: la primera versión usaba ease-in para el
+encogimiento (arranque lento, acelerando) y ease-out para la vuelta a
+normal. El dueño del producto probó ambas curvas en el simulador y
+pidió ease-out en las DOS direcciones — el ease-in original se sentía
+con retraso al arrancar el scroll; el ease-out arranca de inmediato y
+desacelera al llegar, coherente en ambos sentidos del movimiento.
+`aura_motion_ease_in()` queda disponible en `aura_motion.c` (con su
+propia prueba) por si hace falta para otro efecto, pero ya no se usa en
+este.
 
 **Ajuste 2026-08-15**: la primera versión (D-245) aplicaba el efecto
 solo a la tapa central, atenuándolo a 0 hacia las laterales vía la

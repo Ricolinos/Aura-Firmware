@@ -165,26 +165,34 @@ static int s_target_index = 0;
 static int s_anim_from_x256 = 0;
 static long s_anim_since = 0;
 
-/* -- Zoom de la caratula central al scrollear (D-245, encargo del
+/* -- Zoom del carrusel al scrollear (D-245/D-246/D-247, encargo del
  * dueno del producto) -----------------------------------------------
  *
  * Mismo patron target/from/since que s_target_index/s_anim_from_x256/
  * s_anim_since de arriba, para una segunda dimension de animacion (la
  * escala en vez de la posicion): un "paso real" de scroll dispara un
- * zoom-out con ease-in hacia CF_ZOOM_SCALE_SHRUNK; en cuanto la
- * posicion se asienta (anim_pos_x256() alcanza el indice objetivo) se
- * dispara el zoom-in de vuelta a CF_ZOOM_SCALE_NORMAL con ease-out. Si
- * el usuario sigue girando la rueda mientras ya esta encogida, el
- * target no cambia -- no vuelve a pulsar por cada paso de una rafaga,
- * se queda encogida hasta que de verdad se detiene. */
+ * zoom-out hacia CF_ZOOM_SCALE_SHRUNK; en cuanto la posicion se asienta
+ * (anim_pos_x256() alcanza el indice objetivo) se dispara el zoom-in de
+ * vuelta a CF_ZOOM_SCALE_NORMAL. Si el usuario sigue girando la rueda
+ * mientras ya esta encogida, el target no cambia -- no vuelve a pulsar
+ * por cada paso de una rafaga, se queda encogida hasta que de verdad se
+ * detiene.
+ *
+ * D-247: las DOS direcciones usan ease-out (arranca rapido, desacelera
+ * al llegar) -- el dueno del producto probo ease-in/ease-out (D-245) y
+ * pidio ease-out en ambos casos, se sentia mas responsive al arrancar
+ * el scroll que el ease-in original (que arrancaba lento a proposito,
+ * y terminaba sintiendose con retraso). aura_motion_ease_in() queda sin
+ * uso aqui pero se deja en aura_motion.c/.h (con su propia prueba) por
+ * si hace falta en otro efecto futuro. */
 #define CF_ZOOM_SCALE_NORMAL  256 /* 100%: distance=0, identico al render de siempre */
 #define CF_ZOOM_SCALE_SHRUNK  240 /* ~94%: ver docs/aura-design-system/componentes/cover-flow.md */
-#define CF_ZOOM_OUT_MS 150 /* ease-in, mas corto: el arranque debe sentirse inmediato */
+#define CF_ZOOM_OUT_MS 150 /* ease-out, corto: el arranque debe sentirse inmediato */
 #define CF_ZOOM_IN_MS  CF_SCROLL_ANIM_MS /* ease-out, mismo tiempo que el asentamiento de posicion */
 static int s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
 static int s_zoom_from_256 = CF_ZOOM_SCALE_NORMAL;
 static long s_zoom_since = 0;
-static int s_zoom_ease_in = 0; /* 1 mientras va hacia SHRUNK, 0 hacia NORMAL */
+static int s_zoom_shrinking = 0; /* 1 mientras va hacia SHRUNK (usa CF_ZOOM_OUT_MS), 0 hacia NORMAL (CF_ZOOM_IN_MS) -- la curva es ease-out en ambos casos */
 
 /* Escala interpolada actual de la caratula central, 256=tamano normal.
  * Cuando from==target (caso comun: reposo total, nunca hubo scroll o
@@ -195,14 +203,15 @@ static int s_zoom_ease_in = 0; /* 1 mientras va hacia SHRUNK, 0 hacia NORMAL */
 static int zoom_scale_256(void)
 {
     long elapsed_ms;
+    long duration_ms;
     int t;
 
     if (s_zoom_from_256 == s_zoom_target_256)
         return s_zoom_target_256;
 
     elapsed_ms = (current_tick - s_zoom_since) * 1000L / HZ;
-    t = s_zoom_ease_in ? aura_motion_ease_in(elapsed_ms, CF_ZOOM_OUT_MS)
-                        : aura_motion_ease_out(elapsed_ms, CF_ZOOM_IN_MS);
+    duration_ms = s_zoom_shrinking ? CF_ZOOM_OUT_MS : CF_ZOOM_IN_MS;
+    t = aura_motion_ease_out(elapsed_ms, duration_ms);
     return aura_pattern_lerp(s_zoom_from_256, s_zoom_target_256, t);
 }
 
@@ -236,10 +245,10 @@ static int zoom_animating(void)
     return zoom_scale_256() != s_zoom_target_256;
 }
 
-/* Dispara el zoom-out (ease-in hacia SHRUNK) desde un paso de scroll
- * real -- llamar solo cuando el indice objetivo de verdad cambio (no
- * en un no-op de borde). Si ya esta encogida o encogiendose (rafaga de
- * pasos), no reinicia nada -- ver comentario de arriba. */
+/* Dispara el zoom-out (ease-out hacia SHRUNK, D-247) desde un paso de
+ * scroll real -- llamar solo cuando el indice objetivo de verdad
+ * cambio (no en un no-op de borde). Si ya esta encogida o encogiendose
+ * (rafaga de pasos), no reinicia nada -- ver comentario de arriba. */
 static void zoom_trigger_scroll_start(void)
 {
     if (s_zoom_target_256 == CF_ZOOM_SCALE_SHRUNK)
@@ -247,7 +256,7 @@ static void zoom_trigger_scroll_start(void)
     s_zoom_from_256 = zoom_scale_256();
     s_zoom_target_256 = CF_ZOOM_SCALE_SHRUNK;
     s_zoom_since = current_tick;
-    s_zoom_ease_in = 1;
+    s_zoom_shrinking = 1;
 }
 
 /* Dispara el zoom-in (ease-out hacia NORMAL) cuando la posicion ya se
@@ -259,7 +268,7 @@ static void zoom_trigger_settle(void)
     s_zoom_from_256 = zoom_scale_256();
     s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
     s_zoom_since = current_tick;
-    s_zoom_ease_in = 0;
+    s_zoom_shrinking = 0;
 }
 
 /* Corta cualquier animacion de zoom en curso y fuerza reposo instantaneo
