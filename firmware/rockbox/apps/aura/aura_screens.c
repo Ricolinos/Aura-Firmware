@@ -12,6 +12,8 @@
 #include "powermgmt.h"
 #include "string-extra.h"
 #include "misc.h"
+#include "mv.h"
+#include "fs_defines.h"
 
 #include "aura_screens.h"
 #include "aura_widgets.h"
@@ -433,14 +435,13 @@ static const aura_str_id_t language_choice_labels[] = {
 };
 /* Cuantos de esa lista estan realmente disponibles (los primeros N). */
 #define LANGUAGE_AVAILABLE_N 2
-/* Solo Desactivado/Todo/Uno -- REPEAT_SHUFFLE y REPEAT_AB quedan fuera
- * del modelo simplificado de Aura (el aleatorio ya es su propio
- * booleano independiente, D-014/Fase 17). El indice de esta lista
- * coincide 1:1 con REPEAT_OFF/REPEAT_ALL/REPEAT_ONE de Rockbox
- * (apps/settings.h), asi que no hace falta traducir indices. */
-static const aura_str_id_t repeat_choice_labels[] = {
-    AURA_STR_REPEAT_OFF, AURA_STR_REPEAT_ALL, AURA_STR_REPEAT_ONE,
-};
+/* Repetir (D-021: solo Desactivado/Todo/Uno -- REPEAT_SHUFFLE y
+ * REPEAT_AB quedan fuera del modelo simplificado de Aura, el aleatorio
+ * ya es su propio booleano independiente, D-014/Fase 17) indices 0/1/2,
+ * coinciden 1:1 con REPEAT_OFF/REPEAT_ALL/REPEAT_ONE de Rockbox (apps/
+ * settings.h) -- reusado por el ciclo en linea de aura_screens_handle_button()
+ * (D-264, ya no es una lista de eleccion navegable, ver is_choice_screen()
+ * arriba). */
 
 /* Apagado del iPod (Task A, encargo del dueno): mismo patron que
  * REPEAT arriba -- ajuste REAL de Rockbox (global_settings.poweroff,
@@ -476,6 +477,13 @@ static const aura_str_id_t accent_choice_labels[] = {
  * que accent_choice_labels arriba. */
 static const unsigned accent_choice_rgb24[] = AURA_DS_COLOR_ACCENT_PRESETS_HEX_RGB24_VALUES;
 
+/* AURA_SCREEN_SETTINGS_REPEAT (D-264): dejo de ser una pantalla de
+ * eleccion navegable -- ahora es una fila en linea (SELECT cicla el
+ * valor, ver aura_screens_handle_button()), igual que Aleatorio/
+ * Clicker. Retirada de esta funcion y de get_choice_table()/
+ * get_choice_current()/apply_choice() abajo -- codigo confirmado sin
+ * otro consumidor real (grep completo contra el arbol, D-264) antes de
+ * borrarlo, no dejado como ruta muerta. */
 static int is_choice_screen(aura_screen_id_t screen)
 {
     return screen == AURA_SCREEN_SETTINGS_THEME
@@ -483,7 +491,6 @@ static int is_choice_screen(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS_GRAPHICS
         || screen == AURA_SCREEN_SETTINGS_EQ
         || screen == AURA_SCREEN_SETTINGS_LANGUAGE
-        || screen == AURA_SCREEN_SETTINGS_REPEAT
         || screen == AURA_SCREEN_SETTINGS_SORT_BY
         || screen == AURA_SCREEN_SETTINGS_ACCENT
         || screen == AURA_SCREEN_SETTINGS_POWEROFF;
@@ -511,9 +518,6 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
     case AURA_SCREEN_SETTINGS_LANGUAGE:
         *out = language_choice_labels;
         return sizeof(language_choice_labels) / sizeof(language_choice_labels[0]);
-    case AURA_SCREEN_SETTINGS_REPEAT:
-        *out = repeat_choice_labels;
-        return sizeof(repeat_choice_labels) / sizeof(repeat_choice_labels[0]);
     case AURA_SCREEN_SETTINGS_ACCENT:
         *out = accent_choice_labels;
         return sizeof(accent_choice_labels) / sizeof(accent_choice_labels[0]);
@@ -536,7 +540,6 @@ static int get_choice_current(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_EQ:       return (int)aura_settings.eq_preset;
     case AURA_SCREEN_SETTINGS_LANGUAGE: return (int)aura_settings.language;
     case AURA_SCREEN_SETTINGS_SORT_BY:  return aura_settings.sort_by_lastname;
-    case AURA_SCREEN_SETTINGS_REPEAT:   return global_settings.repeat_mode;
     case AURA_SCREEN_SETTINGS_POWEROFF:
     {
         size_t i, n = sizeof(poweroff_choice_minutes) / sizeof(poweroff_choice_minutes[0]);
@@ -564,16 +567,6 @@ static int get_choice_current(aura_screen_id_t screen)
 
 static void apply_choice(aura_screen_id_t screen, int index)
 {
-    /* AURA_SCREEN_SETTINGS_REPEAT es un ajuste real de Rockbox
-     * (global_settings.repeat_mode, motor de playlist -- D-021), no
-     * uno propio de Aura: se persiste con settings_save(), no
-     * aura_settings_save(). */
-    if (screen == AURA_SCREEN_SETTINGS_REPEAT)
-    {
-        global_settings.repeat_mode = index;
-        settings_save();
-        return;
-    }
 
     /* Apagado del iPod (Task A): igual que REPEAT arriba, un ajuste
      * REAL de Rockbox -- set_poweroff_timeout() (firmware/powermgmt.c)
@@ -910,11 +903,24 @@ static void ensure_drift_albums_decoded(void)
  * Video, sin necesitar tocar esta funcion otra vez), o cuando cambia
  * el icono/descripcion de una fila sin CoverDrift, cuenta como un
  * cambio real de identidad. */
+/* D-264: contenido real por pantalla del panel derecho -- `panel_top`
+ * (SF Pro Bold 16pt, D-263) y las dos variantes DINAMICAS (icono/pie),
+ * usadas por Reloj (icono: reloj analogico) y Acerca de (pie: grafico
+ * de almacenamiento) respectivamente. `panel_icon`/`panel_top`/
+ * `panel_desc` se ignoran cuando el renderer correspondiente no es NULL
+ * -- mismo contrato que aura_selection_summary_draw_dynamic() (ver ese
+ * archivo). Todos comparados por PUNTERO en panel_identity_equal(),
+ * mismo criterio que el resto de esta identidad -- los textos/renderers
+ * de este archivo son siempre literales/funciones estables, nunca
+ * generados dinamicamente por instancia. */
 typedef struct
 {
     const char *title;
     const char *panel_icon;
+    const char *panel_top;
     const char *panel_desc;
+    aura_selection_summary_icon_renderer_t icon_renderer;
+    aura_selection_summary_bottom_renderer_t bottom_renderer;
     aura_screen_id_t container_screen;
     aura_screen_id_t selected_target;
     bool coverdrift;
@@ -946,7 +952,10 @@ static bool panel_identity_equal(const panel_identity_t *a, const panel_identity
         return a->coverdrift_category == b->coverdrift_category;
     return a->title == b->title
         && a->panel_icon == b->panel_icon
+        && a->panel_top == b->panel_top
         && a->panel_desc == b->panel_desc
+        && a->icon_renderer == b->icon_renderer
+        && a->bottom_renderer == b->bottom_renderer
         && a->container_screen == b->container_screen
         && a->selected_target == b->selected_target;
 }
@@ -1013,11 +1022,26 @@ static void draw_panel_identity(int panel_x, int panel_w, const panel_identity_t
         aura_coverdrift_draw(panel_x, panel_w,
                               s_drift_album_images, s_drift_album_pool_count);
     }
+    else if (id->icon_renderer || id->bottom_renderer)
+    {
+        /* D-264: variante dinamica -- Reloj (icono: reloj analogico,
+         * bottom_renderer NULL) o Acerca de (icono ESTATICO "ipod"
+         * envuelto en un renderer trivial, ver draw_about_icon_renderer()
+         * mas abajo -- pie: grafico de almacenamiento). INVARIANTE: quien
+         * arma este panel_identity_t nunca deja bottom_renderer sin
+         * icon_renderer -- aura_selection_summary_draw_dynamic() no
+         * recibe `icon_name`, asi que un icon_renderer NULL aca
+         * dibujaria el tile sin ningun simbolo encima. */
+        aura_selection_summary_draw_dynamic(panel_x, panel_w, id->icon_renderer,
+                                             panel_identity_category(id),
+                                             id->panel_top, id->panel_desc,
+                                             id->bottom_renderer);
+    }
     else
     {
         aura_selection_summary_draw(panel_x, panel_w, id->panel_icon,
                                      panel_identity_category(id),
-                                     NULL, id->panel_desc);
+                                     id->panel_top, id->panel_desc);
     }
 }
 
@@ -1096,7 +1120,10 @@ static void draw_panel_fade_frame(int panel_x, int panel_w, long elapsed_ms)
  *     en cuanto se cumplen los AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS
  *     -- mientras tanto se queda mostrando lo comprometido, congelado. */
 static void render_panel_debounced(int panel_x, int panel_w, const char *title,
-                                    const char *panel_icon, const char *panel_desc,
+                                    const char *panel_icon, const char *panel_top,
+                                    const char *panel_desc,
+                                    aura_selection_summary_icon_renderer_t icon_renderer,
+                                    aura_selection_summary_bottom_renderer_t bottom_renderer,
                                     aura_screen_id_t container_screen,
                                     aura_screen_id_t selected_target)
 {
@@ -1105,7 +1132,10 @@ static void render_panel_debounced(int panel_x, int panel_w, const char *title,
     ensure_drift_album_pool();
     pending.title = title;
     pending.panel_icon = panel_icon;
+    pending.panel_top = panel_top;
     pending.panel_desc = panel_desc;
+    pending.icon_renderer = icon_renderer;
+    pending.bottom_renderer = bottom_renderer;
     pending.container_screen = container_screen;
     pending.selected_target = selected_target;
     pending.coverdrift = music_row_wants_coverdrift(container_screen, selected_target)
@@ -1215,6 +1245,22 @@ bool aura_screens_coverdrift_active_for(aura_screen_id_t target)
         == aura_category_for_screen(s_panel_committed.selected_target);
 }
 
+/* D-264: equivalente de aura_screens_coverdrift_active_for() pero para
+ * la fila "Acerca de" -- el dueno confirmo explicitamente que el morph
+ * al entrar a esa pantalla REUSA el revelado detras de paneles de
+ * CoverDrift (D-259/D-261), no una animacion nueva. Como Acerca de no
+ * es CoverDrift, no puede usar esa funcion (que exige
+ * s_panel_committed.coverdrift) -- compara por DESTINO exacto, no por
+ * categoria (a diferencia de CoverDrift, esta fila es la unica en su
+ * categoria que califica, no hace falta la nocion de "sesion"). Misma
+ * disciplina: solo lee s_panel_committed, sin efectos secundarios. */
+bool aura_screens_about_reveal_active(void)
+{
+    return s_panel_has_committed
+        && s_panel_committed.container_screen == AURA_SCREEN_SETTINGS
+        && s_panel_committed.selected_target == AURA_SCREEN_SETTINGS_ABOUT;
+}
+
 /* Pantalla de menu completa del sistema nuevo (auditoria 2026-08-12,
  * cierre de la migracion parcial de T2.2/T2.3): StatusBar v2 en
  * (split) + MenuList v2/Selector en LeftPanel + SelectionSummary en el
@@ -1242,10 +1288,18 @@ bool aura_screens_coverdrift_active_for(aura_screen_id_t target)
  * menu raiz/submenu de Musica (nunca califica, ver
  * music_row_wants_coverdrift(), asi que esos llamadores no cambian de
  * comportamiento). */
+/* `panel_top`/`icon_renderer`/`bottom_renderer` (D-264): contenido real
+ * del panel derecho, vacio (NULL) para casi todos los llamadores --
+ * solo draw_nav_list() (Musica/Video/Fotos/Ajustes) los puebla de
+ * verdad, el resto (listas de eleccion, deslizadores) sigue exactamente
+ * igual que antes. */
 static void draw_menu_screen_v2(const char *title,
                                  const aura_menu_item_v2_t *items, int count,
                                  int selected, const char *panel_icon,
+                                 const char *panel_top,
                                  const char *panel_desc,
+                                 aura_selection_summary_icon_renderer_t icon_renderer,
+                                 aura_selection_summary_bottom_renderer_t bottom_renderer,
                                  aura_screen_id_t container_screen,
                                  aura_screen_id_t selected_target)
 {
@@ -1269,7 +1323,8 @@ static void draw_menu_screen_v2(const char *title,
          * estabilidad. Decide TAMBIEN si la identidad resultante es
          * CoverDrift o SelectionSummary/icono normal -- reemplaza el
          * bloque instantaneo que vivia aca antes (2026-08-12). */
-        render_panel_debounced(panel_x, panel_w, title, panel_icon, panel_desc,
+        render_panel_debounced(panel_x, panel_w, title, panel_icon, panel_top, panel_desc,
+                                icon_renderer, bottom_renderer,
                                 container_screen, selected_target);
     }
 }
@@ -1308,6 +1363,306 @@ static const char *root_selection_description(aura_screen_id_t target)
     }
 }
 
+/* -- Contenido real del panel derecho, D-264 -----------------------------
+ *
+ * Encargo textual del dueno del producto, 2026-08-15: generaliza
+ * root_selection_description() (arriba, solo cubria el menu raiz) a
+ * TAMBIEN las filas de DENTRO de cada submenu de biblioteca (Musica/
+ * Video/Fotos: titulo de seccion arriba + "No hay X" abajo cuando esa
+ * seccion esta vacia) y a un puñado de filas especiales de Ajustes
+ * (Aleatorio, Repetir, Fecha y hora, Acerca de). */
+
+/* Manifiesto de Aura Studio (aura_manifest.h, ya usado por la pantalla
+ * completa de Acerca de) cacheado en memoria -- aura_manifest_load() abre
+ * y lee un archivo cada vez que se llama, y este archivo lo consulta
+ * potencialmente TODOS los cuadros mientras se recorre Video/Fotos o
+ * Acerca de (draw_nav_list() corre cada cuadro, con o sin debounce del
+ * panel derecho -- el debounce solo retrasa el DIBUJO, no el computo de
+ * `pending`). Cargado una sola vez por sesion (arranque perezoso, no se
+ * refresca) -- si el usuario sincroniza de nuevo desde Aura Studio a
+ * mitad de sesion, el resumen queda desactualizado hasta reiniciar; el
+ * mismo compromiso que ya acepta silenciosamente la pantalla completa
+ * de Acerca de hoy (recarga en cada draw_about(), pero esa pantalla no
+ * se dibuja continuamente como un menu). */
+static aura_manifest_t s_manifest_cache;
+static bool s_manifest_loaded = false;
+static bool s_manifest_has_data = false;
+
+static const aura_manifest_t *cached_manifest(void)
+{
+    if (!s_manifest_loaded)
+    {
+        s_manifest_loaded = true;
+        s_manifest_has_data = aura_manifest_load(&s_manifest_cache);
+    }
+    return s_manifest_has_data ? &s_manifest_cache : NULL;
+}
+
+/* Cuenta real (no cacheada -- ver ensure_drift_album_pool() arriba en
+ * este archivo para el patron de cache por generacion que si haria
+ * falta si esto se volviera un costo real medido, no solo teorico) de
+ * si `target` tiene contenido navegable -- pedir 1 solo item basta para
+ * saber "vacio" vs "no vacio", no hace falta la lista completa. */
+static bool music_target_has_content(aura_screen_id_t target)
+{
+    static aura_music_item_t scratch[1];
+
+    if (!aura_music_db_ready())
+        return false;
+    return aura_music_browse(target, scratch, 1) > 0;
+}
+
+/* "No hay artistas"/"No hay álbumes"/etc, solo cuando la seccion esta
+ * genuinamente vacia -- si tiene contenido, NULL (sin texto inferior
+ * extra; el dueno no describio que mostrar en el caso "con contenido",
+ * se deja igual que hoy en vez de inventar un conteo no pedido).
+ * Cover Flow consulta Albumes (mismo contenido real que dibuja, D-254) --
+ * Busqueda no tiene un "vacio" natural antes de escribir nada, se deja
+ * sin texto (juicio propio, el encargo no lo cubre). */
+static const char *music_row_empty_description(aura_screen_id_t target)
+{
+    aura_screen_id_t query = (target == AURA_SCREEN_MUSIC_COVERFLOW)
+        ? AURA_SCREEN_MUSIC_ALBUMS : target;
+    aura_str_id_t empty_id;
+
+    switch (target)
+    {
+    case AURA_SCREEN_MUSIC_ARTISTS:    empty_id = AURA_STR_MUSIC_EMPTY_ARTISTS; break;
+    case AURA_SCREEN_MUSIC_ALBUMS:
+    case AURA_SCREEN_MUSIC_COVERFLOW:  empty_id = AURA_STR_MUSIC_EMPTY_ALBUMS; break;
+    case AURA_SCREEN_MUSIC_SONGS:      empty_id = AURA_STR_MUSIC_EMPTY_SONGS; break;
+    case AURA_SCREEN_MUSIC_PLAYLISTS:  empty_id = AURA_STR_MUSIC_EMPTY_PLAYLISTS; break;
+    case AURA_SCREEN_MUSIC_GENRES:     empty_id = AURA_STR_MUSIC_EMPTY_GENRES; break;
+    case AURA_SCREEN_MUSIC_COMPOSERS:  empty_id = AURA_STR_MUSIC_EMPTY_COMPOSERS; break;
+    case AURA_SCREEN_MUSIC_AUDIOBOOKS: empty_id = AURA_STR_MUSIC_EMPTY_AUDIOBOOKS; break;
+    default: return NULL;
+    }
+
+    if (music_target_has_content(query))
+        return NULL;
+    return aura_str(empty_id);
+}
+
+/* Peliculas/Series/Videoclips (D-264): filas INERTES/atenuadas hoy (ver
+ * `dimmed` en draw_nav_list()) -- todavia sin desglose real por
+ * subcarpeta (esa clasificacion es trabajo aparte, no incluido en esta
+ * pasada), asi que su texto "vacio" se muestra SIEMPRE mientras sigan
+ * inertes, no condicionado a un conteo que este archivo todavia no
+ * puede calcular. "Todos" (VIDEOS_ALL) si tiene un conteo real via el
+ * manifiesto -- mismo dato que ya usa la pantalla completa de Acerca
+ * de. */
+static const char *video_row_empty_description(aura_screen_id_t target)
+{
+    const aura_manifest_t *m;
+
+    switch (target)
+    {
+    case AURA_SCREEN_VIDEOS_MOVIES:  return aura_str(AURA_STR_VIDEOS_EMPTY_MOVIES);
+    case AURA_SCREEN_VIDEOS_TVSHOWS: return aura_str(AURA_STR_VIDEOS_EMPTY_TVSHOWS);
+    case AURA_SCREEN_VIDEOS_CLIPS:   return aura_str(AURA_STR_VIDEOS_EMPTY_CLIPS);
+    case AURA_SCREEN_VIDEOS_ALL:
+        m = cached_manifest();
+        return (m && m->video_count > 0) ? NULL : aura_str(AURA_STR_EMPTY_VIDEOS);
+    default: return NULL;
+    }
+}
+
+static const char *photos_row_empty_description(aura_screen_id_t target)
+{
+    const aura_manifest_t *m;
+
+    if (target != AURA_SCREEN_PHOTOS_ALL)
+        return NULL;
+    m = cached_manifest();
+    return (m && m->photo_count > 0) ? NULL : aura_str(AURA_STR_EMPTY_PHOTOS);
+}
+
+/* HH:MM real (D-264, fila "Fecha y hora"): reusa aura_format_clock()
+ * (aura_statusbar.c/.h), YA respeta global_settings.timeformat -- sin
+ * formato propio inventado. Buffer estatico reescrito en el lugar,
+ * MISMO puntero en cada llamada (patron por-puntero que ya usa todo
+ * este componente para detectar cambio de VALOR, aura_selection_summary.c) --
+ * el contenido se actualiza cada cuadro sin que panel_identity_equal()
+ * lo vea como "cambio de fila" (deliberado: el reloj debe seguir
+ * corriendo en vivo mientras el panel esta "congelado" en esta fila,
+ * mismo criterio que la deriva ambiental de CoverDrift durante el
+ * debounce de D-262 -- ver esa nota en DECISIONS.md D-262). Buffer de 12
+ * bytes -- bug real encontrado en revision: el original (8 bytes) le
+ * quedaba corto al formato de 12 horas ("12:59 PM" son 8 caracteres + el
+ * nulo, 9 bytes -- snprintf() no desborda, pero SI trunca en silencio,
+ * cortando la "M" final). El ancho del texto varia entre 1 y 2 digitos
+ * de hora en formato de 12 horas (9:05 AM vs 12:05 PM) -- MarqueeText
+ * nunca lo nota (texto corto de sobra para no desbordar el panel en
+ * ningun caso), asi que no hace falta reiniciar su fase por esto. */
+static const char *clock_row_top_text(void)
+{
+    static char buf[12];
+    aura_format_clock(buf, sizeof(buf));
+    return buf;
+}
+
+/* Renderer de icono trivial (D-264, "Acerca de"): envuelve el icono
+ * ESTATICO nuevo "ipod" (D-263, SVG propio) en la forma de renderer que
+ * aura_selection_summary_draw_dynamic() espera -- necesario porque esa
+ * funcion no recibe `icon_name` (solo el renderer), y Acerca de necesita
+ * la variante dinamica de todos modos por su bottom_renderer (grafico de
+ * almacenamiento). Convierte el centro (x,y) que pasa el componente al
+ * origen top-left que espera aura_widgets_draw_icon_variant_selector(). */
+static void draw_about_icon_renderer(int cx, int cy, int size)
+{
+    aura_widgets_draw_icon_variant_selector("ipod", size,
+                                             cx - size / 2, cy - size / 2);
+}
+
+/* Color solido representativo de una categoria -- el centro del
+ * degradado de 3 puntos que ya usa aura_category_gradient() (mismo tono
+ * base que el resto del sistema, ninguna paleta nueva). */
+static unsigned category_flat_color(aura_category_t cat)
+{
+    unsigned a, center, b;
+    aura_category_gradient(cat, &a, &center, &b);
+    return center;
+}
+
+/* Grafico de almacenamiento por color (D-264, "Acerca de" -- encargo
+ * textual: "un grafico para mostrar el almacenamiento por colores (sin
+ * numero), pero si que las barras tengan un porcentaje"). Extiende la
+ * barra segmentada que YA existe en la pantalla completa de Acerca de
+ * (draw_about_storage() arriba en este archivo, D-081) con dos
+ * segmentos que esa version no tenia -- "Otros" y "Libre" -- via
+ * volume_size() (firmware/export/mv.h), la API que el comentario
+ * original de D-081 documentaba como pendiente ("necesitaria consultar
+ * el espacio real de disco... sin precedente en este modulo"). Los
+ * porcentajes aca son del DISCO TOTAL, no solo de la proporcion entre
+ * Musica/Video/Fotos como en la pantalla completa -- lectura mas fiel
+ * al encargo especifico de este componente ("que las barras tengan un
+ * porcentaje"). Colores: acento para Musica (igual que el resto del
+ * sistema), colores fijos de categoria para Video/Fotos, gris de
+ * categoria (Ajustes) para "Otros" -- ninguno es un RGB nuevo, todos
+ * ya existen en a26_palette/aura_category_gradient(). */
+static void draw_about_storage_bars(int x, int y, int width, int height)
+{
+    const aura_manifest_t *m = cached_manifest();
+    sector_t vol_size = 0, vol_free = 0;
+    long long music_b = m ? m->music_bytes : 0;
+    long long video_b = m ? m->video_bytes : 0;
+    long long photo_b = m ? m->photo_bytes : 0;
+    long long total_b, other_b, free_b;
+    int seg_x = x;
+    int i;
+    struct { long long bytes; unsigned color; } segs[5];
+
+    volume_size(IF_MV(0,) &vol_size, &vol_free);
+    total_b = (long long)vol_size * SECTOR_SIZE;
+    free_b = (long long)vol_free * SECTOR_SIZE;
+    other_b = total_b - free_b - music_b - video_b - photo_b;
+    if (other_b < 0)
+        other_b = 0;
+
+    segs[0].bytes = music_b; segs[0].color = aura_accent();
+    segs[1].bytes = video_b; segs[1].color = category_flat_color(AURA_CATEGORY_VIDEO);
+    segs[2].bytes = photo_b; segs[2].color = category_flat_color(AURA_CATEGORY_PHOTOS);
+    segs[3].bytes = other_b; segs[3].color = category_flat_color(AURA_CATEGORY_SETTINGS);
+    segs[4].bytes = free_b;  segs[4].color = a26_color(A26_PROGRESS_TRACK);
+
+    /* Radio = mitad del alto, mismo criterio de "extremos totalmente
+     * redondeados" que ya usa draw_about_storage() para su propia
+     * barra. */
+    a26_shell_fill_rounded_rect(x, y, width, height, height / 2,
+                                 a26_color(A26_PROGRESS_TRACK), a26_color(A26_SHELL_BG));
+
+    if (total_b <= 0)
+        return;
+
+    for (i = 0; i < 5; i++)
+    {
+        int seg_w = (int)((long long)width * segs[i].bytes / total_b);
+        if (seg_w <= 0)
+            continue;
+        lcd_set_foreground(segs[i].color);
+        lcd_fillrect(seg_x, y, seg_w, height);
+        if (seg_x > x)
+        {
+            lcd_set_foreground(a26_color(A26_SHELL_BG));
+            lcd_vline(seg_x, y, y + height - 1);
+        }
+        seg_x += seg_w;
+    }
+}
+
+/* Punto de entrada unico (D-264): llamado por draw_nav_list() para
+ * CUALQUIER pantalla -- filas sin caso especial simplemente no tocan
+ * ninguna salida (se quedan en lo que el llamador ya puso por defecto:
+ * `*panel_icon` sin cambios, el resto en NULL). */
+static void compute_panel_content(aura_screen_id_t screen, aura_screen_id_t target,
+                                   const char **panel_icon,
+                                   const char **panel_top,
+                                   const char **panel_desc,
+                                   aura_selection_summary_icon_renderer_t *icon_renderer,
+                                   aura_selection_summary_bottom_renderer_t *bottom_renderer)
+{
+    if (screen == AURA_SCREEN_ROOT)
+    {
+        *panel_desc = root_selection_description(target);
+        return;
+    }
+
+    if (screen == AURA_SCREEN_MUSIC)
+    {
+        *panel_top = aura_str(AURA_STR_MUSIC);
+        *panel_desc = music_row_empty_description(target);
+        return;
+    }
+
+    if (screen == AURA_SCREEN_VIDEOS)
+    {
+        *panel_top = aura_str(AURA_STR_VIDEOS);
+        *panel_desc = video_row_empty_description(target);
+        return;
+    }
+
+    if (screen == AURA_SCREEN_PHOTOS)
+    {
+        *panel_top = aura_str(AURA_STR_PHOTOS);
+        *panel_desc = photos_row_empty_description(target);
+        return;
+    }
+
+    if (screen == AURA_SCREEN_SETTINGS)
+    {
+        if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
+        {
+            *panel_desc = settings_row_toggle_value(AURA_SCREEN_SETTINGS_SHUFFLE)
+                ? aura_str(AURA_STR_TOGGLE_ON) : aura_str(AURA_STR_TOGGLE_OFF);
+            return;
+        }
+        if (target == AURA_SCREEN_SETTINGS_REPEAT)
+        {
+            int mode = global_settings.repeat_mode;
+            *panel_icon = (mode == 2) ? "repeat-1" : "repeat";
+            *panel_top = aura_str(AURA_STR_REPEAT_ROW_TOP);
+            *panel_desc = (mode == 1) ? aura_str(AURA_STR_REPEAT_SUMMARY_ALL)
+                        : (mode == 2) ? aura_str(AURA_STR_REPEAT_SUMMARY_ONE)
+                        : aura_str(AURA_STR_TOGGLE_OFF);
+            return;
+        }
+        if (target == AURA_SCREEN_SETTINGS_DATETIME)
+        {
+            *icon_renderer = aura_selection_summary_render_analog_clock;
+            *panel_top = clock_row_top_text();
+            *panel_desc = aura_str(AURA_STR_SETTINGS_DATETIME);
+            return;
+        }
+        if (target == AURA_SCREEN_SETTINGS_ABOUT)
+        {
+            *icon_renderer = draw_about_icon_renderer;
+            *panel_top = aura_str(AURA_STR_ABOUT_MY_IPOD);
+            *bottom_renderer = draw_about_storage_bars;
+            return;
+        }
+    }
+}
+
 static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
 {
     const nav_entry_t *entries;
@@ -1328,7 +1683,13 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
          * a ningun lado, la regla de exclusion del documento ya lo
          * cubre pero se evita marcarlo siquiera. */
         items[i].indent = 0;
+        /* Repetir (D-264): fila en linea igual que Aleatorio/Clicker
+         * (SELECT cicla el valor, nunca navega) -- pero NO es un
+         * toggle booleano (`toggle` se queda en -1, 3 estados, sin
+         * pastilla de switch propia), asi que necesita su propia
+         * exclusion aca ademas de la que ya cubre `toggle < 0`. */
         items[i].full_screen_target = (items[i].toggle < 0)
+            && entries[i].target != AURA_SCREEN_SETTINGS_REPEAT
             && !screen_uses_split_layout(entries[i].target);
         /* Filas del arbol del original sin contenido propio todavia. */
         items[i].dimmed = (entries[i].target == AURA_SCREEN_MUSIC_COMPILATIONS
@@ -1339,27 +1700,40 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
                            || entries[i].target == AURA_SCREEN_EXTRAS_CONTACTS);
     }
 
-    if (selected >= 0 && selected < count)
     {
-        if (entries[selected].icon_name)
-            panel_icon = entries[selected].icon_name;
-        else if (screen == AURA_SCREEN_MUSIC)
-            panel_icon = "music"; /* icono del item padre en el raiz --
-                                   * los items de biblioteca no tienen
-                                   * icono 1:1 producido todavia */
-        else
-            panel_icon = parent_settings_icon(screen);
-    }
+        const char *panel_top = NULL;
+        const char *panel_desc = NULL;
+        aura_selection_summary_icon_renderer_t icon_renderer = NULL;
+        aura_selection_summary_bottom_renderer_t bottom_renderer = NULL;
+        aura_screen_id_t target = (selected >= 0 && selected < count)
+            ? entries[selected].target : AURA_SCREEN_COUNT;
 
-    draw_menu_screen_v2(screen == AURA_SCREEN_ROOT ? "Aura"
-                                                    : aura_str(screen_title_id(screen)),
-                         items, count, selected, panel_icon,
-                         screen == AURA_SCREEN_ROOT && selected >= 0 && selected < count
-                             ? root_selection_description(entries[selected].target)
-                             : NULL,
-                         screen,
-                         (selected >= 0 && selected < count)
-                             ? entries[selected].target : AURA_SCREEN_COUNT);
+        if (selected >= 0 && selected < count)
+        {
+            if (entries[selected].icon_name)
+                panel_icon = entries[selected].icon_name;
+            else if (screen == AURA_SCREEN_MUSIC)
+                panel_icon = "music"; /* icono del item padre en el raiz --
+                                       * los items de biblioteca no tienen
+                                       * icono 1:1 producido todavia */
+            else
+                panel_icon = parent_settings_icon(screen);
+
+            /* D-264: contenido real por fila -- generaliza
+             * root_selection_description() (arriba) al resto de
+             * pantallas. Puede sobreescribir `panel_icon` (Repetir,
+             * icono segun estado) ademas de poblar top/desc/renderers. */
+            compute_panel_content(screen, target, &panel_icon, &panel_top,
+                                   &panel_desc, &icon_renderer, &bottom_renderer);
+        }
+
+        draw_menu_screen_v2(screen == AURA_SCREEN_ROOT ? "Aura"
+                                                        : aura_str(screen_title_id(screen)),
+                             items, count, selected, panel_icon,
+                             panel_top, panel_desc,
+                             icon_renderer, bottom_renderer,
+                             screen, target);
+    }
 }
 
 /* -- Vista grafica del Ecualizador (encargo 2026-08-13) -------------------
@@ -1545,7 +1919,7 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
     }
 
     draw_menu_screen_v2(aura_str(screen_title_id(screen)), items, count,
-                         selected, panel_icon, NULL,
+                         selected, panel_icon, NULL, NULL, NULL, NULL,
                          AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
@@ -1807,7 +2181,8 @@ static void draw_backlight(aura_nav_t *nav)
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
                          aura_nav_get_selection(nav),
-                         parent_settings_icon(AURA_SCREEN_SETTINGS_BACKLIGHT), NULL,
+                         parent_settings_icon(AURA_SCREEN_SETTINGS_BACKLIGHT), NULL, NULL,
+                         NULL, NULL,
                          AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
@@ -1867,7 +2242,8 @@ static void draw_sleeptimer(aura_nav_t *nav)
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
                          aura_nav_get_selection(nav),
-                         parent_settings_icon(AURA_SCREEN_SETTINGS_SLEEPTIMER), NULL,
+                         parent_settings_icon(AURA_SCREEN_SETTINGS_SLEEPTIMER), NULL, NULL,
+                         NULL, NULL,
                          AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
@@ -2019,7 +2395,8 @@ static void draw_mainmenu(aura_nav_t *nav)
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
                          sel,
                          (sel >= 0 && sel < MAINMENU_ROWS) ? items[sel].icon_name
-                                                            : "menu-list", NULL,
+                                                            : "menu-list", NULL, NULL,
+                         NULL, NULL,
                          AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
@@ -3478,6 +3855,20 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
             toggle_settings_row(entries[sel].target);
             break;
         }
+        /* Repetir (D-264): en linea igual que las filas booleanas de
+         * arriba, pero de 3 estados en vez de 2 -- SELECT cicla
+         * Desactivado -> Todo -> Uno -> Desactivado (mismos indices
+         * 0/1/2 que ya usaba la lista de eleccion retirada, D-021) y
+         * persiste con settings_save() (ajuste real de Rockbox,
+         * global_settings.repeat_mode -- mismo criterio que ya
+         * documentaba apply_choice() antes de que esta fila dejara de
+         * navegar ahi). */
+        if (entries[sel].target == AURA_SCREEN_SETTINGS_REPEAT)
+        {
+            global_settings.repeat_mode = (global_settings.repeat_mode + 1) % 3;
+            settings_save();
+            break;
+        }
         /* "Canciones aleat." (menu de inicio del original) es una
          * ACCION, no una pantalla: baraja toda la biblioteca, arranca
          * la reproduccion y abre el reproductor. */
@@ -3870,14 +4261,19 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             if (depth_after < depth_before)
                 aura_widgets_panel_force_next();
 
-            /* D-261: infraestructura generica lista, pero TODAVIA sin
-             * conectar aca -- se pasa `false` a proposito (preserva el
-             * push clasico de siempre). Conectar el revelado real para
-             * cada origen/destino relevante (Musica mas alla de Cover
-             * Flow, Canciones aleatorias, Video, Fotos) es trabajo
-             * aparte, deliberadamente NO incluido en esta pasada. */
+            /* D-261: infraestructura generica lista. D-264 conecta el
+             * primer destino real distinto de Cover Flow: Ajustes ->
+             * Acerca de, encargo explicito del dueno ("morph al entrar,
+             * reusa el revelado de CoverDrift"). Acotado a ESTE origen/
+             * destino exacto -- Musica mas alla de Cover Flow, Canciones
+             * aleatorias, Video, Fotos siguen sin conectar, trabajo
+             * aparte. `depth_after > depth_before`: el revelado solo
+             * tiene sentido ENTRANDO, nunca al salir. */
+            bool about_reveal = depth_after > depth_before
+                && to == AURA_SCREEN_SETTINGS_ABOUT
+                && aura_screens_about_reveal_active();
             aura_transition_slide(nav, depth_after > depth_before ? 1 : -1,
-                                  width, false);
+                                  width, about_reveal);
         }
     }
 }

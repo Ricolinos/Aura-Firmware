@@ -191,6 +191,26 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_POWEROFF_1HOUR]      = "Después de 1 hora",
     [AURA_STR_SCREENLOCK_DISABLE_TITLE] = "Desactivar bloqueo",
     [AURA_STR_SCREENLOCK_DISABLE_BODY]  = "Se borrará la clave guardada. Para volver a activar el bloqueo habrá que configurar una clave nueva.",
+
+    [AURA_STR_MUSIC_EMPTY_ARTISTS]    = "No hay artistas",
+    [AURA_STR_MUSIC_EMPTY_ALBUMS]     = "No hay álbumes",
+    [AURA_STR_MUSIC_EMPTY_SONGS]      = "No hay canciones",
+    [AURA_STR_MUSIC_EMPTY_PLAYLISTS]  = "No hay listas",
+    [AURA_STR_MUSIC_EMPTY_GENRES]     = "No hay géneros",
+    [AURA_STR_MUSIC_EMPTY_COMPOSERS]  = "No hay compositores",
+    [AURA_STR_MUSIC_EMPTY_AUDIOBOOKS] = "No hay audiolibros",
+    [AURA_STR_VIDEOS_EMPTY_MOVIES]    = "No hay películas",
+    [AURA_STR_VIDEOS_EMPTY_TVSHOWS]   = "No hay series",
+    [AURA_STR_VIDEOS_EMPTY_CLIPS]     = "No hay videoclips",
+
+    [AURA_STR_TOGGLE_ON]              = "Activado",
+    [AURA_STR_TOGGLE_OFF]             = "Desactivado",
+
+    [AURA_STR_REPEAT_ROW_TOP]         = "Repetir",
+    [AURA_STR_REPEAT_SUMMARY_ALL]     = "Repetir todo",
+    [AURA_STR_REPEAT_SUMMARY_ONE]     = "Repetir una",
+
+    [AURA_STR_ABOUT_MY_IPOD]          = "Mi iPod",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -382,6 +402,26 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_POWEROFF_1HOUR]      = "After 1 hour",
     [AURA_STR_SCREENLOCK_DISABLE_TITLE] = "Turn Off Screen Lock",
     [AURA_STR_SCREENLOCK_DISABLE_BODY]  = "The saved passcode will be deleted. To turn the lock back on you'll need to set a new passcode.",
+
+    [AURA_STR_MUSIC_EMPTY_ARTISTS]    = "No artists",
+    [AURA_STR_MUSIC_EMPTY_ALBUMS]     = "No albums",
+    [AURA_STR_MUSIC_EMPTY_SONGS]      = "No songs",
+    [AURA_STR_MUSIC_EMPTY_PLAYLISTS]  = "No playlists",
+    [AURA_STR_MUSIC_EMPTY_GENRES]     = "No genres",
+    [AURA_STR_MUSIC_EMPTY_COMPOSERS]  = "No composers",
+    [AURA_STR_MUSIC_EMPTY_AUDIOBOOKS] = "No audiobooks",
+    [AURA_STR_VIDEOS_EMPTY_MOVIES]    = "No movies",
+    [AURA_STR_VIDEOS_EMPTY_TVSHOWS]   = "No TV shows",
+    [AURA_STR_VIDEOS_EMPTY_CLIPS]     = "No video clips",
+
+    [AURA_STR_TOGGLE_ON]              = "On",
+    [AURA_STR_TOGGLE_OFF]             = "Off",
+
+    [AURA_STR_REPEAT_ROW_TOP]         = "Repeat",
+    [AURA_STR_REPEAT_SUMMARY_ALL]     = "Repeat All",
+    [AURA_STR_REPEAT_SUMMARY_ONE]     = "Repeat One",
+
+    [AURA_STR_ABOUT_MY_IPOD]          = "My iPod",
 };
 
 const char *aura_str(aura_str_id_t id)

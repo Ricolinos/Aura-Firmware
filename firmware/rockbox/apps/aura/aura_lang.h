@@ -245,6 +245,39 @@ typedef enum {
     AURA_STR_SCREENLOCK_DISABLE_TITLE,
     AURA_STR_SCREENLOCK_DISABLE_BODY,
 
+    /* D-264: contenido real del panel derecho por fila dentro de cada
+     * submenu de biblioteca (Musica/Video/Fotos, generaliza
+     * root_selection_description() del menu raiz) y para un puñado de
+     * filas especiales de Ajustes (Aleatorio, Repetir, Fecha y hora,
+     * Acerca de). */
+    AURA_STR_MUSIC_EMPTY_ARTISTS,
+    AURA_STR_MUSIC_EMPTY_ALBUMS,
+    AURA_STR_MUSIC_EMPTY_SONGS,
+    AURA_STR_MUSIC_EMPTY_PLAYLISTS,
+    AURA_STR_MUSIC_EMPTY_GENRES,
+    AURA_STR_MUSIC_EMPTY_COMPOSERS,
+    AURA_STR_MUSIC_EMPTY_AUDIOBOOKS,
+    AURA_STR_VIDEOS_EMPTY_MOVIES,
+    AURA_STR_VIDEOS_EMPTY_TVSHOWS,
+    AURA_STR_VIDEOS_EMPTY_CLIPS,
+
+    /* Generico -- reusado por Aleatorio y por el resumen de Repetir
+     * (D-264): "Activado"/"Desactivado" ligado al valor real del
+     * ajuste, distinto de AURA_STR_YES/_NO (esos son de confirmacion,
+     * no de estado). */
+    AURA_STR_TOGGLE_ON,
+    AURA_STR_TOGGLE_OFF,
+
+    /* Repetir como fila en linea (D-264): texto del resumen, distinto
+     * de AURA_STR_REPEAT_ALL/_ONE ("Todo"/"Uno", usados por la lista de
+     * eleccion vieja que esta fila reemplaza) -- frase completa para el
+     * slot inferior del panel derecho. */
+    AURA_STR_REPEAT_ROW_TOP,
+    AURA_STR_REPEAT_SUMMARY_ALL,
+    AURA_STR_REPEAT_SUMMARY_ONE,
+
+    AURA_STR_ABOUT_MY_IPOD,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 
