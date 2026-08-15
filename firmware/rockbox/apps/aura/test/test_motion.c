@@ -92,6 +92,54 @@ static void test_spring_starts_at_zero_and_is_smooth(void)
     }
 }
 
+static void test_ease_in_bounds_and_no_overshoot(void)
+{
+    long e;
+    int prev = -1;
+
+    CHECK(aura_motion_ease_in(-5, 150) == 0);
+    CHECK(aura_motion_ease_in(0, 150) == 0);
+    CHECK(aura_motion_ease_in(150, 150) == 256);
+    CHECK(aura_motion_ease_in(1000, 150) == 256);
+    CHECK(aura_motion_ease_in(0, 0) == 0);
+
+    /* Cuadratica, arranca mas lenta que la lineal: a la mitad del
+     * tiempo debe ir por menos de la mitad del recorrido (D-245). */
+    CHECK(aura_motion_ease_in(75, 150) < 128);
+
+    for (e = 0; e <= 150; e += 5)
+    {
+        int v = aura_motion_ease_in(e, 150);
+        CHECK(v >= 0 && v <= 256);
+        CHECK(v >= prev); /* monotona, sin sobrepaso */
+        prev = v;
+    }
+}
+
+static void test_ease_out_bounds_and_no_overshoot(void)
+{
+    long e;
+    int prev = -1;
+
+    CHECK(aura_motion_ease_out(-5, 220) == 0);
+    CHECK(aura_motion_ease_out(0, 220) == 0);
+    CHECK(aura_motion_ease_out(220, 220) == 256);
+    CHECK(aura_motion_ease_out(1000, 220) == 256);
+    CHECK(aura_motion_ease_out(0, 0) == 0);
+
+    /* Desacelera: a la mitad del tiempo ya paso de la mitad del
+     * recorrido (justo lo opuesto de ease-in). */
+    CHECK(aura_motion_ease_out(110, 220) > 128);
+
+    for (e = 0; e <= 220; e += 5)
+    {
+        int v = aura_motion_ease_out(e, 220);
+        CHECK(v >= 0 && v <= 256);
+        CHECK(v >= prev); /* monotona, sin sobrepaso */
+        prev = v;
+    }
+}
+
 int main(void)
 {
     test_linear_bounds();
@@ -99,6 +147,8 @@ int main(void)
     test_spring_bounds();
     test_spring_overshoots_then_settles();
     test_spring_starts_at_zero_and_is_smooth();
+    test_ease_in_bounds_and_no_overshoot();
+    test_ease_out_bounds_and_no_overshoot();
 
     printf("%d/%d checks OK\n", checks - failures, checks);
     if (failures)

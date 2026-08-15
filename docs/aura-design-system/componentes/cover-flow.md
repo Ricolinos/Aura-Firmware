@@ -93,6 +93,49 @@ La `StatusBar` se muestra en modo `(full)` — CoverFlow vive debajo de ella.
   al inicio.
 - **SELECT**: voltea la tapa enfocada para mostrar su reverso (solo con el
   carrusel en reposo exacto).
+- **Zoom al scrollear** (encargo del dueño del producto, 2026-08-14, ver
+  detalle abajo): la tapa central se encoge ligeramente al empezar a
+  scrollear y vuelve a su tamaño normal al asentarse.
+
+## Zoom de la tapa central al scrollear (confirmado 2026-08-14)
+
+Al empezar a scrollear (paso real de rueda, `BACKWARD`/`FORWARD`, o
+seguir girando a mitad de una ráfaga), la tapa central se **encoge a
+~94% (240/256) con ease-in en 150ms**; en cuanto el carrusel se asienta
+en un álbum, vuelve a su tamaño normal (256/256) con **ease-out en
+220ms** — el mismo tiempo que ya usa el asentamiento de posición
+(`CF_SCROLL_ANIM_MS`), para que ambos movimientos se sientan
+coordinados. Si el usuario sigue girando la rueda mientras la tapa ya
+está encogida, no vuelve a "pulsar" con cada paso — se queda encogida
+hasta que el carrusel de verdad se detiene.
+
+**Magnitud elegida**: 240/256 (~6.25% de encogimiento), comparado por
+captura contra candidatos más sutiles (248/256, ~3%) y más marcados
+(228/256, ~11%) — el elegido se nota con claridad en la pantalla
+pequeña del iPod sin leerse exagerado; el más sutil casi no se
+percibía, el más marcado ya se sentía "de más".
+
+**Excepción deliberada a la regla de movimiento** (`Reglas de diseño
+Apple2026 (v2).md` §6/§9.2): esa regla fija que las carátulas
+(contenido) van en **fundido lineal**, y reserva el **resorte con
+sobrepaso** (`aura_motion_spring`) exclusivamente a la capa de
+controles, nunca al contenido. Este efecto es una excepción puntual y
+deliberada a esa regla, pedida explícitamente por el dueño del
+producto — pero la curva usada (`aura_motion_ease_in`/`_ease_out`,
+cuadráticas, nuevas en `aura_motion.c`) sigue respetando el espíritu de
+la regla histórica: son curvas simples que aceleran/desaceleran **sin
+ningún sobrepaso/rebote**, muy distintas del resorte tipo iOS que sigue
+prohibido sobre contenido. No es lo mismo "una curva no lineal sobre
+contenido" que "el resorte con overshoot sobre contenido" — solo lo
+segundo sigue vedado.
+
+**Implementación**: reusa el canal `slide.distance` del motor de
+perspectiva (`aura_flow.c`) que ya usa el crecimiento 130→200px del
+giro del reverso — la tapa central nunca lo había usado antes (siempre
+0). Se aplica solo a la tapa central: la fórmula interpola el efecto a
+0 según la misma variable `t_center` que ya atenúa ángulo/posición/fade
+hacia las laterales, así que ninguna lateral queda con encogimiento
+residual.
 
 ## El reverso del álbum (`show_tracks`) — diseño confirmado 2026-08
 

@@ -44,4 +44,18 @@ int aura_motion_linear(long elapsed, long duration);
  * 256 despues de `elapsed>=duration`. */
 int aura_motion_spring(long elapsed, long duration);
 
+/* Ease-in/ease-out cuadraticos SIN sobrepaso (D-245, encargo del dueno
+ * del producto: zoom-out al empezar a scrollear Cover Flow, zoom-in al
+ * asentarse). SS6/SS9.2 de "Reglas de diseno Apple2026 (v2).md" fija
+ * que las caratulas (contenido) van en fundido lineal y reserva el
+ * resorte con sobrepaso (aura_motion_spring) exclusivamente a la capa
+ * de controles -- esta es una excepcion puntual y deliberada a esa
+ * regla, autorizada expresamente para este efecto, pero la curva sigue
+ * respetando el espiritu de la regla (nunca resorte/overshoot sobre
+ * contenido): son curvas simples que aceleran/desaceleran sin rebote,
+ * ver docs/aura-design-system/componentes/cover-flow.md. Progreso en
+ * punto fijo [0, 256], misma forma/clamping que aura_motion_linear. */
+int aura_motion_ease_in(long elapsed, long duration);
+int aura_motion_ease_out(long elapsed, long duration);
+
 #endif /* AURA_MOTION_H */

@@ -52,3 +52,21 @@ int aura_motion_spring(long elapsed, long duration)
     b = spring_table[idx + 1];
     return a + (int)((b - a) * rem / 256);
 }
+
+/* t^2: arranca lento, acelera -- sin division salvo la ya hecha dentro
+ * de aura_motion_linear() (todo el clamping/casos borde se hereda de
+ * ahi: elapsed<=0 o duration<=0 da t=0 => 0; elapsed>=duration da
+ * t=256 => 256*256/256=256). */
+int aura_motion_ease_in(long elapsed, long duration)
+{
+    int t = aura_motion_linear(elapsed, duration);
+    return (int)((long)t * t / 256);
+}
+
+/* 1-(1-t)^2: arranca rapido, desacelera hasta asentarse -- misma
+ * herencia de clamping via aura_motion_linear() que ease_in. */
+int aura_motion_ease_out(long elapsed, long duration)
+{
+    int u = 256 - aura_motion_linear(elapsed, duration);
+    return (int)(256 - (long)u * u / 256);
+}
