@@ -3082,4 +3082,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-261 — Revelado detrás de paneles generalizado a `aura_transition_slide()` (etapa 1 de 4, sin conectar todavía)
+
+**Encargo**: el dueño del producto pidió replicar el efecto de D-259 (paneles se abren revelando la pantalla completa) en el resto de las transiciones split→full donde CoverDrift esté activo -- Música más allá de Cover Flow, Canciones aleatorias, Video, Fotos. Primera etapa de 4: solo la infraestructura genérica, sin conectar ningún destino nuevo todavía (eso son las etapas 2-4, unidades de trabajo separadas).
+
+**Mecanismo**: D-259 había construido la coreografía ("capturar el frame saliente, prerrenderizar el destino, dos bordes revelando detrás") DENTRO de `aura_transition_coverflow_enter()`, específica para Cover Flow. D-261 la extrae a dos funciones compartidas en `aura_transitions.c` -- `capture_outgoing_split_frame()` (snapshot del framebuffer en vivo) y `reveal_behind_panels(panel_w, bar_h, bg, frames, frame_delay)` (el bucle de dos bordes) -- y `aura_transition_slide()` (el push genérico usado por CUALQUIER otra navegación split→full) gana un cuarto parámetro, `cover_drift_was_active`, que activa la misma coreografía cuando corresponde. `aura_transition_coverflow_enter()` pasa a ser un llamador más de estas funciones compartidas, sin cambio de comportamiento propio.
+
+**Contrato de seguridad**: la coreografía nueva solo se activa si `cover_drift_was_active` es `true` Y `width == A26_SCREEN_WIDTH` (destino a pantalla completa, el único caso donde tiene sentido) -- si el llamador pasa `true` con un `width` distinto (p. ej. un push split→split), se ignora con seguridad y corre el push clásico de siempre. Verifiqué a mano (leyendo el cálculo de `bar_changes`/`body_top`/`old_split` más arriba en la función) que cuando la coreografía nueva SÍ se activa, `body_top` ya es exactamente `0` y `bar_changes && old_split` ya son ciertos por construcción -- `reveal_behind_panels()` reproduce el mismo hueco de barra que el push clásico ya dejaba para ese caso específico, sin ningún comportamiento divergente.
+
+**Todos los llamadores existentes preservados exactos**: los dos call sites actuales de `aura_transition_slide()` (`aura_screens.c`) pasan `false` explícitamente -- cero cambio de comportamiento para cualquier navegación existente. El fork verificó la ruta nueva conectando temporalmente un call site de prueba (marcado explícitamente, revertido antes de la entrega) -- confirmé yo mismo que no quedó nada conectado revisando el diff final.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos. Capturas reales confirmando cero regresión: Ajustes (split→split, sin cambios), y Cover Flow con CoverDrift activo (D-259, ahora corriendo sobre las funciones compartidas) -- ambos se ven exactamente como antes.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
