@@ -1,24 +1,37 @@
 # Color por categoría del Menú principal
 
-🟢 Definido — encargo del dueño 2026-08-14 ("fixed per-menu-category
-colors cascading to submenu icons"). Ver también
-`fundamentos/01-color.md` (tabla de colores) y
-`componentes/selection-summary.md` (color del tile).
+🟢 Definido — encargo del dueño 2026-08-14, **alcance corregido
+2026-08-15 (D-250)**. Ver también `fundamentos/01-color.md` (tabla de
+colores) y `componentes/selection-summary.md` (color del tile).
+
+**Corrección D-250**: el encargo original (2026-08-14) hacía que el
+color de categoría "cayera en cascada" a cualquier ícono seleccionado
+en cualquier lista/submenú, no solo al tile de `SelectionSummary`. El
+dueño del producto corrigió esto el 2026-08-15: **el color de
+categoría vive SOLO en el contenedor del tile de `SelectionSummary`**
+(panel derecho). El ícono/texto de la fila seleccionada en el panel
+izquierdo (menú principal, cualquier submenú, listas de contenido,
+íconos de NowPlaying, chevron del Selector) **siempre es el acento**,
+sin excepción — nunca el color de categoría. El resto de este documento
+describe el mecanismo ya corregido; la sección "Los dos consumidores
+reales" de la versión original quedó en uno solo.
 
 ## Qué resuelve
 
-Antes de este encargo, el ícono de `SelectionSummary` (tile + glifo) y
-el glifo de cualquier ícono "activo"/seleccionado en una lista
-(`MenuList`, listas de contenido) usaban **siempre** el mismo color: el
-acento configurable del usuario, sin importar en qué sección del Menú
-principal estuviera el usuario. Video se veía igual que Música, Ajustes
-se veía igual que Fotos.
+Antes del encargo original, el ícono de `SelectionSummary` (tile +
+glifo) usaba **siempre** el mismo color: el acento configurable del
+usuario, sin importar en qué sección del Menú principal estuviera el
+usuario. Video se veía igual que Música, Ajustes se veía igual que
+Fotos.
 
-La regla nueva: cada una de las 5 secciones de nivel superior del Menú
-principal (Música/Video/Fotos/Extras/Ajustes) tiene su propio color, y
-**toda pantalla descendiente de esa sección lo hereda**, sin importar la
-profundidad de navegación. Ver la tabla completa de colores en
-`fundamentos/01-color.md`.
+La regla vigente: cada una de las 5 secciones de nivel superior del
+Menú principal (Música/Video/Fotos/Extras/Ajustes) tiene su propio
+color, y **el CONTENEDOR (tile) de `SelectionSummary` lo hereda** para
+toda pantalla descendiente de esa sección, sin importar la profundidad
+de navegación. El glifo dentro del tile sigue blanco constante, y el
+ícono/texto de la fila resaltada en el panel izquierdo sigue siendo
+siempre acento — eso NO cambia con la sección activa. Ver la tabla
+completa de colores en `fundamentos/01-color.md`.
 
 ## Mecanismo
 
@@ -80,7 +93,7 @@ tile de `SelectionSummary` (esquina clara / centro / esquina oscura):
 Consumidores que solo necesitan 2 tonos (no 3) usan `color_a`/`color_b`
 y descartan `color_center`.
 
-### 3. Los dos consumidores reales
+### 3. El único consumidor real (corregido D-250)
 
 **Tile de fondo de `SelectionSummary`** (`aura_selection_summary.c`,
 `draw_summary()`): el degradado diagonal de 3 puntos que antes SIEMPRE
@@ -89,25 +102,34 @@ los 3 puntos a `aura_category_gradient(aura_category_current(), ...)`.
 El glifo/símbolo ENCIMA del tile sigue siendo blanco constante
 (variante `-selector`, sin cambios) — la regla de "símbolo claro sobre
 tile de color pleno" de `componentes/selection-summary.md` no se toca,
-es lo que mantiene el glifo legible sobre CUALQUIER color de tile.
+es lo que mantiene el glifo legible sobre CUALQUIER color de tile. Este
+es el ÚNICO sitio del firmware donde `aura_category_gradient()` recibe
+`aura_category_current()` — en todos los demás usos se le pasa
+`AURA_CATEGORY_MUSIC` fijo (ver abajo), precisamente para que el color
+de categoría no se filtre a ningún otro lado.
 
-**Glifo "activo"/seleccionado de cualquier ícono** (`aura_widgets.c`,
-`draw_icon_variant()`, sufijo `-on` — el que usan
-`aura_widgets_draw_icon_selected()`, consumido por `aura_menu_list.c`
-y `aura_widgets_draw_list()` para la fila resaltada de cualquier lista):
-antes resolvía un color PLANO (`aura_accent()`, vía `variant_ink()`).
-Ahora resuelve un degradado verdadero de DOS tonos
-(`aura_category_gradient()`, usando `color_a`/`color_b` y descartando
-`color_center`) a través de una extensión nueva del compositor de
-máscaras de cobertura, `draw_icon_mask_2()`: la MISMA mezcla por píxel
-que ya hacía `draw_icon_mask()` contra el framebuffer real (antialias
-correcto sobre cualquier fondo), pero interpolando el tono de tinta por
-posición diagonal (`(fila+columna)/ancho+alto`, misma convención que el
-degradado del tile: claro arriba-izquierda, oscuro abajo-derecha) en
-vez de una tinta fija. `draw_icon_mask()` (tinta plana, todavía usada
-por las variantes `""`/`-tertiary`/`-rail`/`-selector`) pasó a ser un
-envoltorio de una línea sobre `draw_icon_mask_2()` con `ink_a == ink_b`
-— mismo resultado exacto que antes, sin rama especial.
+**Glifo "activo"/seleccionado de cualquier ícono, SIEMPRE acento**
+(`aura_widgets.c`, `draw_icon_variant()`, sufijo `-on` — el que usan
+`aura_widgets_draw_icon_selected()`, consumido por `aura_menu_list.c`,
+`aura_widgets_draw_list()` para la fila resaltada de cualquier lista,
+íconos de modo/repetir/aleatorio de NowPlaying, y el chevron del
+Selector): el encargo original (D-236) lo hacía resolver
+`aura_category_gradient(aura_category_current(), ...)`, igual que el
+tile — eso filtraba el color de categoría a CUALQUIER ícono
+seleccionado en cualquier pantalla, no solo al tile. **D-250 lo
+corrigió**: ahora siempre llama
+`aura_category_gradient(AURA_CATEGORY_MUSIC, ...)` (el caso de
+fallback que ya existía en la función, "Música y cualquier categoría
+sin resolver" → degradado plano del acento) — comportamiento idéntico
+al de antes de D-236, sin importar en qué sección esté el usuario.
+
+Sigue resolviendo un degradado verdadero de DOS tonos (no una tinta
+plana) a través de `draw_icon_mask_2()` — el compositor de máscaras de
+cobertura extendido en D-236 sigue en uso, solo que ahora siempre
+recibe los tonos claro/oscuro del acento en vez de los de categoría.
+`draw_icon_mask()` (tinta plana, usada por `""`/`-tertiary`/`-rail`/
+`-selector`) sigue siendo el envoltorio de una línea sobre
+`draw_icon_mask_2()` con `ink_a == ink_b`, sin cambios de D-250.
 
 Esto es un degradado real por píxel, no una aproximación — confirmado
 visualmente incluso a 20px (tamaño de ícono de fila de `MenuList`), no

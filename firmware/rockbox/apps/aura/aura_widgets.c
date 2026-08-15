@@ -181,17 +181,32 @@ static int draw_icon_mask(const char *name, int size, int x, int y,
 }
 
 /* `suffix` elige la variante de color: "" es el color de texto normal,
- * "-on" la categoria activa (degradado claro/oscuro -- MISMA categoria
- * que el tile de SelectionSummary, aura_category_current(), encargo del
- * dueno 2026-08-14), "-selector" el blanco constante sobre el Selector.
- * Camino primario: mascara de cobertura + tinta runtime (ver
- * draw_icon_mask/draw_icon_mask_2). Fallback: el bmp pre-compuesto por
- * tema/variante de siempre (D-010), por robustez si el disco no trae
- * mascaras -- ese camino de respaldo sigue siendo tinta plana (el bmp
- * horneado no tiene forma de llevar un degradado en runtime), asi que
- * SOLO en el caso raro de "sin mascaras en disco" el icono "-on" pierde
- * el degradado y vuelve al acento plano de siempre (D-010, sin
- * categoria) -- degradacion aceptable, nunca un crash. */
+ * "-on" el estado seleccionado/activo (degradado claro/oscuro del
+ * ACENTO, siempre -- nunca el color de categoria), "-selector" el
+ * blanco constante sobre el Selector. Camino primario: mascara de
+ * cobertura + tinta runtime (ver draw_icon_mask/draw_icon_mask_2).
+ * Fallback: el bmp pre-compuesto por tema/variante de siempre (D-010),
+ * por robustez si el disco no trae mascaras -- ese camino de respaldo
+ * sigue siendo tinta plana (el bmp horneado no tiene forma de llevar un
+ * degradado en runtime), asi que SOLO en el caso raro de "sin mascaras
+ * en disco" el icono "-on" pierde el degradado y vuelve al acento plano
+ * de siempre (D-010) -- degradacion aceptable, nunca un crash.
+ *
+ * D-250 (correccion del dueno del producto, 2026-08-15): D-236 hacia
+ * que "-on" resolviera el degradado de aura_category_current() -- eso
+ * filtraba el color de categoria (gris de Ajustes, azul marino de
+ * Video, amarillo/acento de Extras) a CUALQUIER icono "-on" en
+ * cualquier pantalla (filas de menu/submenu, iconos de NowPlaying,
+ * chevron del Selector -- ver todos los llamadores de
+ * aura_widgets_draw_icon_selected()), no solo al tile de
+ * SelectionSummary. El color de categoria debe vivir SOLO en el
+ * contenedor del tile de SelectionSummary (aura_selection_summary.c ya
+ * lo hace bien: llama aura_category_gradient() directo para el fondo
+ * del tile, y dibuja el icono en blanco constante via el sufijo
+ * "-selector", sin pasar por aqui) -- "-on" siempre usa el degradado
+ * PLANO del acento, forzando AURA_CATEGORY_MUSIC (el caso de
+ * fallback ya existente en aura_category_gradient(), identico al
+ * comportamiento pre-D-236). */
 static int draw_icon_variant(const char *name, int size, int x, int y,
                               const char *suffix)
 {
@@ -206,7 +221,7 @@ static int draw_icon_variant(const char *name, int size, int x, int y,
     {
         unsigned ink_a, ink_center, ink_b;
 
-        aura_category_gradient(aura_category_current(), &ink_a, &ink_center, &ink_b);
+        aura_category_gradient(AURA_CATEGORY_MUSIC, &ink_a, &ink_center, &ink_b);
         (void)ink_center;
         ret = draw_icon_mask_2(name, size, x, y, ink_a, ink_b, 256);
     }

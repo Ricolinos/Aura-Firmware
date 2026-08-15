@@ -2958,4 +2958,16 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-250 — Corrección: el color de categoría (D-236) se filtraba a cualquier ícono seleccionado, no solo al tile de SelectionSummary
+
+**Encargo**: el dueño del producto corrigió el alcance de D-236 -- el color del ícono en el panel izquierdo (fila de menú/submenú seleccionada) siempre debe ser el color de acento, sin excepción; los colores de categoría (gris de Ajustes, azul marino de Video, degradado amarillo/acento de Extras, etc.) solo deben aplicarse sobre el **contenedor** del ícono en el tile de SelectionSummary (panel derecho).
+
+**Causa**: `draw_icon_variant()` (`aura_widgets.c`), sufijo `"-on"` (el estado seleccionado/activo), resolvía su degradado con `aura_category_gradient(aura_category_current(), ...)` desde D-236. Como `aura_widgets_draw_icon_selected()` (la función pública que usa ese sufijo) es el camino compartido de CUALQUIER ícono en estado seleccionado en todo el firmware -- filas de menú/submenú (`aura_menu_list.c`, listas de contenido en `aura_widgets.c`), íconos de modo/repetir/aleatorio de NowPlaying, el chevron del Selector (`aura_selector.c`) -- el color de categoría se filtraba a todos esos sitios, no solo al tile de SelectionSummary como se pidió originalmente. El propio tile de SelectionSummary (`aura_selection_summary.c`) ya estaba bien: llama `aura_category_gradient()` directo para el FONDO del tile, y dibuja el ícono adentro en blanco constante vía el sufijo `"-selector"` (no pasa por `"-on"`) -- ese archivo no necesitó ningún cambio.
+
+**Arreglo**: `"-on"` ahora fuerza `aura_category_gradient(AURA_CATEGORY_MUSIC, ...)` en vez de `aura_category_current()` -- reutiliza el mismo caso de fallback que ya existía en `aura_category_gradient()` ("Música y cualquier categoría sin resolver" → degradado plano del acento), que es exactamente el comportamiento pre-D-236. Con esto, cualquier ícono `"-on"` en cualquier pantalla vuelve a ser siempre acento, y el color de categoría queda exclusivamente en el tile de SelectionSummary, donde ya funcionaba bien.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (cambio de una sola constante en una llamada, sin lógica nueva que testear). Capturas reales en el simulador: "Fotos"/"Ajustes" seleccionados en el menú principal muestran el texto e ícono de la fila en acento (idéntico a "Música"), mientras el tile de SelectionSummary sigue en su color de categoría (naranja/gris) con ícono blanco adentro; dentro de Ajustes, "Acerca de" seleccionado en el submenú también en acento, tile sigue gris.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
