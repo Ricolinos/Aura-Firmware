@@ -99,6 +99,132 @@ static void ensure_photo_list(void)
     closedir(d);
 }
 
+/* -- CoverDrift para la lista de Fotos (D-251) -----------------------
+ *
+ * A diferencia de Musica (que reusa el cache .pfraw de aura_albumart.c
+ * ya existente), aca no habia NINGUN cargador de miniatura -- solo el
+ * visor de una foto a pantalla completa (load_current_photo() arriba,
+ * buffer s_view_scratch/s_bm de UNA sola foto). Buffer NUEVO y
+ * SEPARADO para no corromper ese estado si el usuario esta navegando
+ * el visor a la vez que la lista pide una miniatura de fondo.
+ *
+ * `read_jpeg_file()` no garantiza el tamano exacto pedido salvo con
+ * FORMAT_RESIZE (sin FORMAT_KEEP_ASPECT, para llenar el tile cuadrado
+ * completo en vez de dejar franjas -- aceptable para un fondo
+ * ambiental, no es el visor real). El presupuesto de bytes
+ * (`maxsize`) necesario NO es proporcional al tamano final: el
+ * decoder necesita margen para el factor de escala JPEG intermedio
+ * antes del resize final (JPEG_DECODE_OVERHEAD son 38KB fijos, mas
+ * el buffer intermedio del propio factor de escala) -- mismo motivo
+ * por el que load_current_photo() ya reserva 240KB
+ * (VIEW_SCRATCH_SIZE) para un destino final de solo 320x240x2=150KB;
+ * se reusa el MISMO tamano probado en vez de arriesgar un numero mas
+ * chico con fotos reales grandes. */
+#define DRIFT_THUMB_SCRATCH_SIZE VIEW_SCRATCH_SIZE
+static unsigned char s_drift_thumb_scratch[DRIFT_THUMB_SCRATCH_SIZE];
+
+static aura_coverdrift_image_t s_drift_photo_images[MAX_PHOTOS];
+static int s_drift_photo_buf_a_idx = -1;
+static int s_drift_photo_buf_b_idx = -1;
+static struct bitmap s_drift_photo_bmp_a;
+static struct bitmap s_drift_photo_bmp_b;
+static fb_data s_drift_photo_pixels_a[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
+                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
+static fb_data s_drift_photo_pixels_b[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
+                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
+static int s_drift_photo_pool_count_last = -1;
+
+/* Decodifica la foto `photo_idx` a un tile cuadrado de
+ * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE px fila-contigua en `dst`.
+ * `false` si el formato no es decodificable (mismo criterio que
+ * `.supported` del visor) o si la decodificacion fallo -- el llamador
+ * cae al placeholder de CoverDrift dejando `.bmp` en NULL, nunca
+ * arriesga un tile a medio llenar. */
+static bool decode_photo_drift_tile(int photo_idx, fb_data *dst)
+{
+    enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
+    char path[MAX_PATH];
+    struct bitmap bm;
+    int format = FORMAT_NATIVE | FORMAT_RESIZE;
+    int ret;
+
+    if (!s_photos[photo_idx].supported)
+        return false;
+
+    snprintf(path, sizeof(path), "%s/%s", PHOTOS_DIR, s_photos[photo_idx].filename);
+
+    bm.width = SZ;
+    bm.height = SZ;
+    bm.data = (char *)s_drift_thumb_scratch;
+#if (LCD_DEPTH > 1)
+    bm.maskdata = NULL;
+#endif
+
+    if (has_ext(path, ".bmp"))
+        ret = read_bmp_file(path, &bm, sizeof(s_drift_thumb_scratch), format, NULL);
+    else
+        ret = read_jpeg_file(path, &bm, sizeof(s_drift_thumb_scratch), format, NULL);
+
+    if (ret <= 0)
+        return false;
+
+    memcpy(dst, s_drift_thumb_scratch, SZ * SZ * sizeof(fb_data));
+    return true;
+}
+
+/* Decodifica bajo demanda SOLO la miniatura activa y la anterior (ver
+ * aura_coverdrift.h) -- nunca las s_photo_count de una vez. Si el
+ * conteo de fotos cambia (lista releida), invalida todo -- mismo
+ * criterio que ensure_drift_album_pool() en aura_screens.c. */
+static void ensure_drift_photos_decoded(void)
+{
+    enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
+    int active, prev;
+
+    if (s_photo_count != s_drift_photo_pool_count_last)
+    {
+        s_drift_photo_pool_count_last = s_photo_count;
+        memset(s_drift_photo_images, 0, sizeof(s_drift_photo_images));
+        s_drift_photo_buf_a_idx = -1;
+        s_drift_photo_buf_b_idx = -1;
+    }
+
+    active = aura_coverdrift_active_index();
+    prev = aura_coverdrift_prev_index();
+
+    if (active >= 0 && active < s_photo_count && active != s_drift_photo_buf_a_idx)
+    {
+        s_drift_photo_buf_a_idx = active;
+        if (decode_photo_drift_tile(active, s_drift_photo_pixels_a))
+        {
+            s_drift_photo_bmp_a.width = SZ;
+            s_drift_photo_bmp_a.height = SZ;
+            s_drift_photo_bmp_a.data = (char *)s_drift_photo_pixels_a;
+            s_drift_photo_images[active].bmp = &s_drift_photo_bmp_a;
+        }
+        else
+        {
+            s_drift_photo_images[active].bmp = NULL;
+        }
+    }
+
+    if (prev >= 0 && prev < s_photo_count && prev != s_drift_photo_buf_b_idx)
+    {
+        s_drift_photo_buf_b_idx = prev;
+        if (decode_photo_drift_tile(prev, s_drift_photo_pixels_b))
+        {
+            s_drift_photo_bmp_b.width = SZ;
+            s_drift_photo_bmp_b.height = SZ;
+            s_drift_photo_bmp_b.data = (char *)s_drift_photo_pixels_b;
+            s_drift_photo_images[prev].bmp = &s_drift_photo_bmp_b;
+        }
+        else
+        {
+            s_drift_photo_images[prev].bmp = NULL;
+        }
+    }
+}
+
 static void draw_message(aura_str_id_t msg_id)
 {
     int w, h;
@@ -139,8 +265,11 @@ void aura_photos_draw(aura_nav_t *nav)
         items[i].toggle = -1;
         items[i].dimmed = 0;
     }
-    aura_widgets_draw_list(aura_str(AURA_STR_PHOTOS), items, s_photo_count,
-                            aura_nav_get_selection(nav));
+    ensure_drift_photos_decoded();
+
+    aura_widgets_draw_list_with_art(aura_str(AURA_STR_PHOTOS), items, s_photo_count,
+                                     aura_nav_get_selection(nav),
+                                     s_drift_photo_images, s_photo_count);
 }
 
 void aura_photos_handle_button(aura_nav_t *nav, long button)

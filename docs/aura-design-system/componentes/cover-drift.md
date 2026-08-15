@@ -60,12 +60,48 @@ Cuando tengamos un tercer caso de reutilización confirmado, esto se mueve de
 `componentes/` a `modulos/` formalmente — por ahora se queda aquí porque
 solo hay dos contextos confirmados.
 
-## Pendiente de definir
+## Confirmado con el consumidor real (D-251, 2026-08-15)
 
-- [ ] ¿Cada imagen individual tiene su propio ciclo de 7s independiente
-      (desfasadas entre sí), o todas se mueven sincronizadas al mismo tiempo?
-- [ ] ¿Cómo se elige la posición/ángulo de arranque de cada movimiento — es
-      aleatorio entre los 8, o sigue algún orden?
-- [ ] ¿Qué pasa inmediatamente después de que una imagen llega al centro —
-      pausa antes del siguiente movimiento, o arranca el siguiente de
-      inmediato?
+Las 3 preguntas de abajo quedaban "pendientes" desde la construcción del
+componente (D-098) — el propio código ya las había respondido de facto, y
+D-251 (primer consumidor real, ver abajo) las deja confirmadas:
+
+- **Una sola imagen visible a la vez**, con un ciclo de 7s COMPARTIDO — no
+  hay ciclos independientes desfasados por imagen. `s_index` rota
+  SECUENCIALMENTE (`(s_index+1) % count`) por la biblioteca, una imagen
+  activa a la vez (G10).
+- El ángulo de arranque de cada movimiento es **aleatorio entre los 8**,
+  con una única restricción: nunca repite el ángulo inmediatamente
+  anterior (evita que dos movimientos seguidos se vean iguales).
+- Al llegar al centro, **el siguiente movimiento arranca de inmediato**,
+  en el mismo cuadro — no hay pausa entre un movimiento y el siguiente.
+
+**Consumidor real: Fotos** (`aura_photos.c`, lista de fotos). Miniatura de
+90px decodificada bajo demanda con `read_jpeg_file()`
+(`FORMAT_NATIVE | FORMAT_RESIZE`, sin `FORMAT_KEEP_ASPECT` — llena el tile
+cuadrado completo). Solo se decodifica la imagen ACTIVA y la ANTERIOR
+(nunca todo el pool de una vez, ver `aura_coverdrift_active_index()`/
+`_prev_index()` en `aura_coverdrift.h`) — con hasta 200 fotos posibles
+(`MAX_PHOTOS`), decodificar todas de antemano sería inviable en memoria.
+
+**Musica queda SIN conectar en esta pasada** — investigado a fondo: las
+pantallas de Canciones/Artistas/Géneros corren hoy en layout FULL
+(`screen_uses_split_layout()` no las incluye), sin ningún panel derecho.
+Volverlas SPLIT para darle un hueco a CoverDrift no es un simple cableado
+— en layout FULL usan el riel A-Z (`draw_index_rail()`), que desaparece
+en SPLIT; quitar el riel A-Z justo de las listas alfabéticas más largas
+del sistema para ganar un fondo ambiental es un cambio de UX de fondo,
+pendiente de decisión del dueño del producto. La infraestructura
+(`aura_widgets_draw_list_with_art()`, los getters de índice de
+`aura_coverdrift.h`) es genérica y ya está lista para Música en cuanto
+se tome esa decisión.
+
+**Bug real encontrado y corregido de paso** (no relacionado al motivo original
+de esta tarea, pero bloqueaba por completo poder verificar Fotos):
+`AURA_SCREEN_PHOTOS_ALL` (el destino real de la fila "Todas las fotos" del
+menú de Fotos) no tenía NINGÚN caso de dibujo en `aura_screens.c` — caía al
+`draw_empty_state()` genérico, mostrando "Nada sonando" en vez de la lista
+real de fotos. Corregido (dispatch de dibujo + entrada en
+`screen_uses_split_layout()`). El mismo bug, por el mismo motivo, existe
+para `AURA_SCREEN_VIDEOS_ALL` — fuera de alcance de esta tarea, señalado
+para quien decida abordarlo.

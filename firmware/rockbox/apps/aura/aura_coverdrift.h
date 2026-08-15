@@ -4,7 +4,7 @@
  * >=10 imagenes -- con menos, el llamador debe seguir mostrando
  * SelectionSummary (T2.8) en su lugar.
  *
- * Alcance real de esta pasada (ver DECISIONS.md D-098):
+ * Alcance real de la construccion original (ver DECISIONS.md D-098):
  * - Motor de rotacion/deriva completo: angulo aleatorio sin repetir el
  *   anterior (G10), distancia variable, cross-fade real de <0.5s entre
  *   imagenes -- para el caso de imagen NO cargada (placeholder solido),
@@ -14,12 +14,17 @@
  *   sin fundido -- mezclar dos bitmaps arbitrarios pixel a pixel
  *   necesita un compositor offscreen que este sistema no tiene todavia
  *   (mismo tipo de brecha de arquitectura que dejo T1.2/Push-and-Drop
- *   sin conectar su render real). Diferido, no bloqueado: se resuelve
- *   cuando algun consumidor real (Musica/Fotos) necesite bitmaps reales
- *   aqui, hoy ninguno lo hace todavia.
- * - Ningun consumidor real: Musica/Fotos no invocan esto todavia (esa
- *   integracion es trabajo de Etapa 3, T3.1/T3.2, que ya construyen su
- *   propia carga real de caratulas). Verificado con overlay temporal.
+ *   sin conectar su render real). Diferido, no bloqueado -- sigue sin
+ *   resolverse en D-251 (ver abajo), ningun consumidor real necesita
+ *   fundido de bitmap todavia, un corte directo es aceptable a esta
+ *   cadencia de 7s por imagen.
+ *
+ * D-251: conectado a dos consumidores reales -- el pool de caratulas de
+ * album en las listas de Canciones/Artistas/Generos de Musica
+ * (aura_screens.c, draw_music_browse()) y las miniaturas de la lista de
+ * Fotos (aura_photos.c) -- ambos via aura_widgets_draw_list_with_art().
+ * Los getters de indice de abajo existen exactamente para permitir esa
+ * decodificacion bajo demanda sin cargar el pool completo en memoria.
  */
 #ifndef AURA_COVERDRIFT_H
 #define AURA_COVERDRIFT_H
@@ -51,5 +56,21 @@ void aura_coverdrift_draw(int x, int width,
  * consistencia con la puerta de energia central. */
 int aura_coverdrift_pending(void);
 int aura_coverdrift_animating(void);
+
+/* D-251 (conexion a un consumidor real, Musica/Fotos): decodificar las
+ * `count` imagenes de un pool de antemano es inviable en memoria (un
+ * pool de musica puede tener hasta AURA_MUSIC_MAX_ITEMS=300 caratulas;
+ * decodificarlas todas serian cientos de KB a MB). El llamador solo
+ * necesita decodificar bajo demanda la imagen ACTIVA y la ANTERIOR
+ * (para el cross-fade) -- estos getters exponen el indice que
+ * aura_coverdrift_draw() va a leer en el PROXIMO cuadro, para que el
+ * llamador pueda decodificar antes de esa llamada. Devuelven -1 si
+ * CoverDrift todavia no se monto ninguna vez (antes de la primera
+ * llamada a aura_coverdrift_draw() con count>0) -- en ese primer
+ * cuadro se ve el placeholder solido (bmp==NULL para el indice que se
+ * vaya a usar), y desde el segundo cuadro en adelante ya hay bitmap
+ * real: degradacion de un solo cuadro, imperceptible. */
+int aura_coverdrift_active_index(void);
+int aura_coverdrift_prev_index(void);
 
 #endif /* AURA_COVERDRIFT_H */
