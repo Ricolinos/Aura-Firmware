@@ -2995,20 +2995,4 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
-## D-252 — CoverDrift conectado también a Música (Canciones/Artistas/Géneros y variantes)
-
-**Encargo**: tras ver D-251 (CoverDrift solo en Fotos) en el simulador, el dueño del producto pidió corregirlo porque esperaba verlo también con carátulas de álbum. Le presenté el trade-off real que D-251 había dejado documentado pero sin resolver -- conectar Música implica pasar esas pantallas a layout SPLIT, lo que les quita el riel A-Z que tienen hoy en layout FULL -- y confirmó explícitamente que acepta perder el riel a cambio del fondo animado.
-
-**Pantallas conectadas**: todo `is_music_browse_screen()` que NO sea de Álbumes -- `AURA_SCREEN_MUSIC_ARTISTS`, `SONGS`, `SONGS_BY_ALBUM`, `SONGS_BY_GENRE`, `GENRES`, `COMPOSERS`, `SONGS_BY_ARTIST`, `SONGS_BY_COMPOSER`, `ARTISTS_BY_GENRE` -- ampliado deliberadamente más allá de los 3 ejemplos citados en el encargo ("Canciones/Artistas/Géneros") porque las 9 comparten exactamente la misma rama `else` de `draw_music_browse()`; tratarlas distinto habría sido arbitrario y habría dejado algunas con el riel y otras sin él sin ningún criterio real. Álbumes y Playlists NO se tocan -- conservan su propio renderizador de miniatura por fila (`draw_album_list()`/`draw_playlist_list()`, D-221/D-237), sin panel derecho, ahí CoverDrift nunca encajó.
-
-**Mecanismo, reusando exactamente el patrón de D-251**: `screen_uses_split_layout()` (`aura_screens.c`) ahora incluye las 9 pantallas -- consecuencia automática: pasan a SPLIT (panel derecho) y pierden el riel A-Z (`draw_index_rail()` solo se dibuja en el `!split` de `aura_widgets_draw_list_with_art()`, código sin tocar). `draw_music_browse()` pasa de `aura_widgets_draw_list()` a `aura_widgets_draw_list_with_art()` con un pool de imágenes.
-
-**El mismo camino bloqueado de D-242, evitado igual que en D-251**: no existe API pública para resolver el álbum exacto de una canción/artista/género visible en la lista -- se usa un **pool general** de todos los álbumes de la biblioteca (`aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, ...)`, sin filtrar), cacheado por generación de tagcache (`ensure_drift_album_pool()`), solo conserva el `seek` de cada álbum (no el label). Decodificación bajo demanda de solo la imagen activa + la anterior (`ensure_drift_albums_decoded()`, usando los getters `aura_coverdrift_active_index()`/`_prev_index()` que ya existían desde D-251) -- nunca las hasta 300 de una vez, mismo presupuesto de ~32KB que Fotos.
-
-**Pieza nueva que Fotos no necesitó**: `decode_album_drift_tile()` transpone el formato columna-mayor de `aura_albumart_t` (mismo cache `.pfraw` en disco que ya usa Cover Flow/la lista de Álbumes, pidiendo tamaño 90 en vez de 48 -- genera su propio archivo de cache aparte) a fila-mayor (lo que espera `aura_coverdrift_draw()` vía `lcd_bitmap()`) -- confirmé que el bucle de transposición (`dst[row*SZ+col] = cover[col*SZ+row]`) usa exactamente el mismo criterio de indexado columna-mayor que `draw_album_thumb()` (código existente, sin tocar).
-
-**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (sin funciones puras nuevas -- toda la lógica nueva es de orquestación/decodificación, ya cubierta indirectamente por las pruebas existentes del motor). Verificación visual real en el simulador contra la biblioteca real sincronizada (22 álbumes, por encima del umbral de 10): Canciones muestra una carátula real de fondo (The Beatles) en el panel derecho sin riel A-Z, texto de fila a ancho completo; Artistas confirma lo mismo con una carátula distinta; Álbumes verificado sin ningún cambio (miniatura por fila, pantalla completa, sin panel derecho). Sin panic en ninguna navegación.
-
----
-
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
