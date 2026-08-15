@@ -2970,4 +2970,14 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-253 — D-251 y D-252 revertidos: el enfoque de "CoverDrift reemplaza a SelectionSummary en el panel derecho" no era lo que pedía el dueño del producto
+
+**Qué pasó**: D-251 conectó CoverDrift a la lista de Fotos y D-252 lo extendió a Música (Canciones/Artistas/Géneros y variantes), en ambos casos montándolo en el panel derecho existente en lugar de `SelectionSummary` -- en Música eso implicó además pasar esas pantallas a layout SPLIT, perdiendo el riel A-Z que tenían en FULL. El dueño del producto vio el resultado en el simulador y lo rechazó de plano: ese no era el enfoque que tenía en mente, ni siquiera para Fotos (que no había cambiado de layout, solo de contenido del panel derecho). Pidió revertir ambas decisiones por completo y retomar la conversación desde cero, preguntando antes de asumir la próxima vez.
+
+**Revertido**: cuatro `git revert` (dos commits simples + los dos merges, con `-m 1`) devuelven el árbol exactamente al estado de D-250 (`794a26e`) -- confirmado con `git diff 794a26e HEAD --stat` vacío tras el revert. Esto incluye deshacer, junto con el cableado de CoverDrift, el arreglo real de `AURA_SCREEN_PHOTOS_ALL` sin caso de dibujo que D-251 encontró de paso (la pantalla de Fotos vuelve a ser inalcanzable por navegación normal) -- si se quiere conservar ese arreglo puntual independiente del enfoque de CoverDrift, hay que reaplicarlo aparte. Build ARM real y de simulador limpios tras el revert, `make -C firmware/rockbox/apps/aura/test test` 8/8 en los mismos conteos que D-250. `firmware/dist/` ya coincidía byte a byte con el de D-250 (los binarios revertidos son idénticos), sin necesidad de re-empaquetar.
+
+**Pendiente**: el diseño real de cómo debería verse/dónde debería vivir CoverDrift -- a definir en conversación directa con el dueño del producto antes de intentar de nuevo.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
