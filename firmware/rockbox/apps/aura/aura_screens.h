@@ -23,4 +23,12 @@ int aura_wheel_advance(int sel, int count, int direction);
  * aura_coverdrift_animating() una vez montado. */
 bool aura_screens_coverdrift_arming(void);
 
+/* D-259: true si CoverDrift estaba realmente MONTADO (armado Y ya
+ * paso el retardo de 3s Y el pool tenia imagenes suficientes) para la
+ * fila con destino `target`, en el ultimo cuadro dibujado -- para que
+ * el manejador de SELECT decida que coreografia de transicion usar al
+ * entrar a esa pantalla. Sin efectos secundarios (no reinicia ningun
+ * temporizador). */
+bool aura_screens_coverdrift_active_for(aura_screen_id_t target);
+
 #endif /* AURA_SCREENS_H */

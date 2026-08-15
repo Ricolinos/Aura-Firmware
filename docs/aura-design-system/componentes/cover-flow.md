@@ -204,15 +204,26 @@ desliza hacia abajo, agrandándose en proporción** con el zoom del giro
 
 ### Entrada a CoverFlow (desde el submenú Música)
 
-Caso sin `CoverDrift` (el único posible hoy): `LeftPanel` Y su StatusBar
-`(split)` salen empujados hacia la izquierda, mientras la pantalla del
-CoverFlow entra desde el borde derecho POR ENCIMA del `SelectionSummary`;
-cuando el contenido terminó de entrar, la StatusBar `(full)` entra CAYENDO
-desde arriba (el `Push-and-Drop` de `status-bar.md`).
+Caso sin `CoverDrift` activo (el comportamiento de siempre, sin cambios):
+`LeftPanel` Y su StatusBar `(split)` salen empujados hacia la izquierda,
+mientras la pantalla del CoverFlow entra desde el borde derecho POR ENCIMA
+del `SelectionSummary`; cuando el contenido terminó de entrar, la StatusBar
+`(full)` entra CAYENDO desde arriba (el `Push-and-Drop` de
+`status-bar.md`).
 
-Caso CON `CoverDrift` (para cuando exista): ambos paneles salen (izquierdo
-a la izquierda, derecho a la derecha) y el CoverFlow se revela DETRÁS,
-renderizándose desde el primer cuadro.
+Caso CON `CoverDrift` activo (D-259, implementado — **prueba acotada SOLO a
+esta entrada** a pedido del dueño del producto, antes de replicarla a
+cualquier otro punto de entrada a pantalla completa): ambos paneles salen
+CADA UNO hacia su propio borde (izquierdo a la izquierda, derecho a la
+derecha) y el CoverFlow se revela DETRÁS — ya renderizado completo, quieto,
+desde el primer cuadro, no entrando desde ningún borde. La StatusBar
+`(full)` de CoverFlow sigue cayendo desde arriba al final, igual que en el
+caso sin `CoverDrift`. `aura_screens_coverdrift_active_for()`
+(`aura_screens.c`) decide, en el instante exacto del `SELECT`, si
+`CoverDrift` estaba realmente montado (no solo armado) para la fila
+"Cover Flow" — nunca puede dar verdadero desde ningún otro origen que el
+submenú de Música (`music_row_wants_coverdrift()` no califica ningún otro
+para este destino).
 
 ### Vuelo CoverFlow → reproductor (reemplaza al `Flip-and-Flow` original)
 
@@ -263,4 +274,3 @@ una transición se ignoran hasta soltarlo (nunca navegaciones en cadena).
       curva como valor de diseño)
 - [ ] Sentido percibido del giro del vuelo (hoy continúa el sentido de la
       apertura del flip; confirmar en vivo si se lee como antihorario)
-- [ ] Variante de entrada CON `CoverDrift` (bloqueada por T2.9)

@@ -913,6 +913,28 @@ bool aura_screens_coverdrift_arming(void)
     return s_drift_arm_target != AURA_SCREEN_COUNT;
 }
 
+/* D-259: publica (aura_screens.h) para que el manejador de SELECT
+ * (aura_screens_handle_button(), mas abajo en este archivo) sepa si
+ * CoverDrift estaba realmente MONTADO (no solo armado/contando) para
+ * `target` en el ultimo cuadro dibujado -- para elegir la coreografia
+ * de transicion de entrada. Consulta SIN efectos secundarios: si
+ * llamara de nuevo a coverdrift_armed_and_ready() reiniciaria el
+ * temporizador en el caso (que no deberia poder pasar aca, pero mejor
+ * no depender de eso) de que `target` no coincida con
+ * `s_drift_arm_target` vigente -- esta funcion solo LEE el estado que
+ * el ultimo draw() ya dejo. */
+bool aura_screens_coverdrift_active_for(aura_screen_id_t target)
+{
+    if (s_drift_arm_target != target)
+        return false;
+
+    if ((current_tick - s_drift_arm_since) * 1000L / HZ
+        < AURA_DS_METRICS_COVER_DRIFT_ACTIVATION_DELAY_MS)
+        return false;
+
+    return aura_coverdrift_should_mount(s_drift_album_pool_count) != 0;
+}
+
 /* Pantalla de menu completa del sistema nuevo (auditoria 2026-08-12,
  * cierre de la migracion parcial de T2.2/T2.3): StatusBar v2 en
  * (split) + MenuList v2/Selector en LeftPanel + SelectionSummary en el
@@ -3503,7 +3525,15 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_main_swallow_repeats(button);
 
         if (depth_after > depth_before && is_coverflow_screen(to))
-            aura_transition_coverflow_enter(nav);
+            /* D-259: prueba acotada -- coreografia distinta SOLO si
+             * CoverDrift estaba realmente montado (no solo armado) para
+             * esta fila justo antes del push. aura_screens_coverdrift_active_for()
+             * lee s_drift_arm_target/s_drift_arm_since, que el ultimo
+             * draw() ya dejo listos -- nunca da true salvo entrando
+             * desde el submenu de Musica con la fila Cover Flow
+             * resaltada (music_row_wants_coverdrift() no califica
+             * ningun otro origen para este destino, ver esa funcion). */
+            aura_transition_coverflow_enter(nav, aura_screens_coverdrift_active_for(to));
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
                  && aura_nowplaying_take_fullscreen_exit())
         {

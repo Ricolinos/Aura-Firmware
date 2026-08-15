@@ -9,6 +9,7 @@
 #define AURA_TRANSITIONS_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "aura_nav.h"
 
@@ -33,8 +34,20 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width);
 /* T4 (revelado de Coverflow, L4): el contenido nuevo emerge desde
  * ambos bordes hacia el centro en vez de deslizar desde uno solo --
  * distingue visualmente la entrada a Coverflow de una navegacion de
- * lista comun. No hace nada en modo Ultra (Coverflow no existe ahi). */
-void aura_transition_coverflow_enter(aura_nav_t *nav);
+ * lista comun. No hace nada en modo Ultra (Coverflow no existe ahi).
+ *
+ * `cover_drift_was_active` (D-259, prueba acotada SOLO a esta entrada
+ * -- encargo del dueno del producto): true si CoverDrift estaba
+ * mostrandose en el panel derecho del submenu de Musica en el instante
+ * exacto en que se disparo esta transicion (ver
+ * aura_screens_coverdrift_active_for()). Cuando es true, LeftPanel Y el
+ * panel derecho (con la caratula de CoverDrift) salen CADA UNO hacia su
+ * propio borde -- izquierdo a la izquierda, derecho a la derecha --
+ * revelando el Coverflow ya renderizado, quieto, detras de ambos desde
+ * el primer cuadro. Cuando es false, coreografia identica a la de
+ * siempre (sin cambios): LeftPanel sale por la izquierda, Coverflow
+ * entra desde el borde derecho. */
+void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_active);
 
 /* `Flip-and-Flow` (PLAN.md T3.2(d), componentes/cover-flow.md,
  * transiciones/00-vocabulario.md): al elegir una cancion en Cover

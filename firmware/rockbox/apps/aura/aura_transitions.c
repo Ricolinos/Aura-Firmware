@@ -290,21 +290,29 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width)
 }
 
 /* Entrada a Cover Flow (coreografia del dueno del diseno, 2026-08-12,
- * caso SIN CoverDrift -- el unico posible hoy, CoverDrift/T2.9 no
- * existe): LeftPanel Y su StatusBar (split) salen empujados hacia la
- * izquierda ("la barra de estado se va junto con el panel izquierdo"),
- * mientras la pantalla del Cover Flow entra desde el borde derecho POR
- * ENCIMA del SelectionSummary, que se queda quieto debajo hasta ser
- * cubierto. Cuando el contenido termino de entrar, la StatusBar (full)
- * del Cover Flow entra CAYENDO desde arriba -- el mismo Push-and-Drop
- * que status-bar.md describe para (split)->(full).
+ * caso SIN CoverDrift -- se mantiene identica, sin cambios, para
+ * cualquier entrada a Coverflow donde CoverDrift no estaba activo):
+ * LeftPanel Y su StatusBar (split) salen empujados hacia la izquierda
+ * ("la barra de estado se va junto con el panel izquierdo"), mientras
+ * la pantalla del Cover Flow entra desde el borde derecho POR ENCIMA
+ * del SelectionSummary, que se queda quieto debajo hasta ser cubierto.
+ * Cuando el contenido termino de entrar, la StatusBar (full) del Cover
+ * Flow entra CAYENDO desde arriba -- el mismo Push-and-Drop que
+ * status-bar.md describe para (split)->(full).
  *
- * Variante CON CoverDrift (documentada por el dueno del diseno, para
- * cuando T2.9 exista): el panel derecho tambien sale, hacia la
- * derecha, y el Cover Flow se revela DETRAS de ambos paneles
- * (renderizado desde el primer cuadro). No implementable todavia sin
- * el componente -- misma coreografia de barra. */
-void aura_transition_coverflow_enter(aura_nav_t *nav)
+ * Variante CON CoverDrift (D-259 -- documentada por el dueno del
+ * diseno el 2026-08-12 para cuando CoverDrift existiera, implementada
+ * ahora que existe, D-254 a D-258; PRUEBA ACOTADA a proposito SOLO a
+ * esta entrada -- encargo explicito del dueno del producto, antes de
+ * replicarla en cualquier otro punto de entrada a pantalla completa):
+ * el panel derecho TAMBIEN sale, hacia la derecha, y el Cover Flow se
+ * revela DETRAS de ambos paneles, renderizado desde el primer cuadro
+ * (no entra desde un borde -- ya esta ahi, quieto, todo el tiempo).
+ * Mismo Drop de StatusBar en la Fase 2, sin cambios, para ambos
+ * casos. */
+static fb_data s_outgoing_fb[A26_SCREEN_WIDTH * A26_SCREEN_HEIGHT];
+
+void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_active)
 {
     int frames, frame_delay, i, y;
     int d_prev = 0;
@@ -330,6 +338,24 @@ void aura_transition_coverflow_enter(aura_nav_t *nav)
         frame_delay = HZ / 45;
     }
 
+    /* D-259: captura EXACTA de lo que hay en pantalla ahora mismo
+     * (LeftPanel + panel derecho con CoverDrift) -- tiene que ser ANTES
+     * de renderizar Cover Flow al framebuffer real (mas abajo), o ese
+     * contenido real se pierde. Mismo patron de lectura directa del
+     * framebuffer que ya usa aura_transition_flip_and_flow() (s_back_tex)
+     * para capturar "lo que esta ahora en pantalla". Solo hace falta en
+     * el caso CON CoverDrift -- el caso SIN el sigue leyendo el
+     * framebuffer en vivo via memmove, sin cambios. */
+    if (cover_drift_was_active)
+    {
+        for (y = 0; y < A26_SCREEN_HEIGHT; y++)
+        {
+            const fb_data *src = FBADDR(0, y);
+            memcpy(&s_outgoing_fb[y * A26_SCREEN_WIDTH], src,
+                   A26_SCREEN_WIDTH * sizeof(fb_data));
+        }
+    }
+
     /* Cover Flow completo (con su barra full incluida) renderizado UNA
      * vez al framebuffer offscreen -- misma mecanica que el push. La
      * franja de su barra (y < bar_h) NO se blitea en la fase de
@@ -345,67 +371,125 @@ void aura_transition_coverflow_enter(aura_nav_t *nav)
     aura_screens_draw(nav);
     lcd_set_viewport(saved);
 
-    /* Fase 1: deslizamiento simultaneo. El panel izquierdo (barra split
-     * incluida: TODAS las filas de x < panel_w) recorre panel_w px; el
-     * Cover Flow recorre la pantalla completa en el mismo numero de
-     * cuadros (entra "al doble de velocidad", asi ambos terminan
-     * juntos). El hueco entre el panel saliente y el contenido entrante
-     * muestra el fondo del shell -- el SelectionSummary sigue visible
-     * debajo hasta que el contenido lo cubre. */
-    for (i = 1; i <= frames; i++)
+    if (cover_drift_was_active)
     {
-        int d = eased_offset(panel_w, i, frames);          /* salida del panel */
-        int d_cf = eased_offset(A26_SCREEN_WIDTH, i, frames); /* entrada del CF */
-        int delta = d - d_prev;
-        int cf_left = A26_SCREEN_WIDTH - d_cf;
-
-        for (y = 0; y < A26_SCREEN_HEIGHT; y++)
+        /* D-259: ambos paneles salen hacia SU borde, revelando Cover
+         * Flow (ya renderizado completo, quieto) segun se abren. `d`
+         * es el mismo avance de eased_offset() que usa el caso sin
+         * CoverDrift para su panel izquierdo -- mismo ritmo, misma
+         * familia de movimiento. Se repinta la base de Cover Flow
+         * completa cada cuadro (mas simple y robusto que llevar la
+         * cuenta de la franja delta exacta recien revelada) -- barato,
+         * son solo dos blits desde buffers estaticos, nunca mas de
+         * `frames` iteraciones. */
+        for (i = 1; i <= frames; i++)
         {
-            fb_data *row = FBADDR(0, y);
+            int d = eased_offset(panel_w, i, frames);
+            int left_w = panel_w - d;
+            int right_w = panel_w - d;
+            int right_x = A26_SCREEN_WIDTH - right_w;
 
-            /* Panel izquierdo saliendo (remanente [0, panel_w-d)). */
-            if (delta > 0 && d < panel_w)
-                memmove(row, row + delta, (panel_w - d) * sizeof(fb_data));
-
-            /* Hueco revelado tras el panel: fondo plano. */
-            if (d > 0 && panel_w - d < panel_w && cf_left > panel_w - d)
-            {
-                int gap_end = cf_left < panel_w ? cf_left : panel_w;
-                int gx;
-                for (gx = panel_w - d; gx < gap_end; gx++)
-                    row[gx] = bg;
-            }
-        }
-
-        /* Cover Flow entrando desde la derecha (solo el cuerpo, la
-         * barra cae en la fase 2): sus columnas [0, d_cf) aparecen en
-         * x = [320-d_cf, 320). La franja superior queda en fondo plano
-         * mientras tanto. */
-        if (d_cf > 0)
-        {
+            /* Base: cuerpo de Cover Flow (bar_h aparte, cae en la Fase
+             * 2 igual que en el caso sin CoverDrift). */
             lcd_bitmap_part(s_push_fb, 0, bar_h, A26_SCREEN_WIDTH,
-                            cf_left, bar_h, d_cf, A26_SCREEN_HEIGHT - bar_h);
+                             0, bar_h, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT - bar_h);
             for (y = 0; y < bar_h; y++)
             {
-                fb_data *row = FBADDR(cf_left, y);
+                fb_data *row = FBADDR(0, y);
                 int gx;
-                for (gx = 0; gx < d_cf; gx++)
+                for (gx = 0; gx < A26_SCREEN_WIDTH; gx++)
                     row[gx] = bg;
             }
-        }
 
-        lcd_update();
-        drain_button_queue_if_full();
-        d_prev = d;
-        if (i < frames)
-            sleep(frame_delay);
+            /* LeftPanel remanente (columnas [d, panel_w) de lo
+             * capturado -- la mitad derecha de la imagen, ya que se
+             * desliza hacia la izquierda y su mitad izquierda es la que
+             * ya salio de encuadre), pegado al borde izquierdo. */
+            if (left_w > 0)
+                lcd_bitmap_part(s_outgoing_fb, d, 0, A26_SCREEN_WIDTH,
+                                 0, 0, left_w, A26_SCREEN_HEIGHT);
+
+            /* Panel derecho remanente (columnas [panel_w, panel_w+right_w)
+             * de lo capturado -- la mitad IZQUIERDA de esa imagen, ya
+             * que se desliza hacia la derecha y su mitad derecha es la
+             * que ya salio de encuadre), pegado al borde derecho segun
+             * avanza. */
+            if (right_w > 0)
+                lcd_bitmap_part(s_outgoing_fb, panel_w, 0, A26_SCREEN_WIDTH,
+                                 right_x, 0, right_w, A26_SCREEN_HEIGHT);
+
+            lcd_update();
+            drain_button_queue_if_full();
+            if (i < frames)
+                sleep(frame_delay);
+        }
+    }
+    else
+    {
+        /* Fase 1 original, sin cambios: deslizamiento simultaneo. El
+         * panel izquierdo (barra split incluida: TODAS las filas de
+         * x < panel_w) recorre panel_w px; el Cover Flow recorre la
+         * pantalla completa en el mismo numero de cuadros (entra "al
+         * doble de velocidad", asi ambos terminan juntos). El hueco
+         * entre el panel saliente y el contenido entrante muestra el
+         * fondo del shell -- el SelectionSummary sigue visible debajo
+         * hasta que el contenido lo cubre. */
+        for (i = 1; i <= frames; i++)
+        {
+            int d = eased_offset(panel_w, i, frames);          /* salida del panel */
+            int d_cf = eased_offset(A26_SCREEN_WIDTH, i, frames); /* entrada del CF */
+            int delta = d - d_prev;
+            int cf_left = A26_SCREEN_WIDTH - d_cf;
+
+            for (y = 0; y < A26_SCREEN_HEIGHT; y++)
+            {
+                fb_data *row = FBADDR(0, y);
+
+                /* Panel izquierdo saliendo (remanente [0, panel_w-d)). */
+                if (delta > 0 && d < panel_w)
+                    memmove(row, row + delta, (panel_w - d) * sizeof(fb_data));
+
+                /* Hueco revelado tras el panel: fondo plano. */
+                if (d > 0 && panel_w - d < panel_w && cf_left > panel_w - d)
+                {
+                    int gap_end = cf_left < panel_w ? cf_left : panel_w;
+                    int gx;
+                    for (gx = panel_w - d; gx < gap_end; gx++)
+                        row[gx] = bg;
+                }
+            }
+
+            /* Cover Flow entrando desde la derecha (solo el cuerpo, la
+             * barra cae en la fase 2): sus columnas [0, d_cf) aparecen en
+             * x = [320-d_cf, 320). La franja superior queda en fondo plano
+             * mientras tanto. */
+            if (d_cf > 0)
+            {
+                lcd_bitmap_part(s_push_fb, 0, bar_h, A26_SCREEN_WIDTH,
+                                cf_left, bar_h, d_cf, A26_SCREEN_HEIGHT - bar_h);
+                for (y = 0; y < bar_h; y++)
+                {
+                    fb_data *row = FBADDR(cf_left, y);
+                    int gx;
+                    for (gx = 0; gx < d_cf; gx++)
+                        row[gx] = bg;
+                }
+            }
+
+            lcd_update();
+            drain_button_queue_if_full();
+            d_prev = d;
+            if (i < frames)
+                sleep(frame_delay);
+        }
     }
 
     /* Fase 2: Drop de la StatusBar (full) -- entra cayendo desde arriba
      * una vez que el contenido termino de entrar (status-bar.md,
      * Push-and-Drop, paso 3). En el cuadro `i`, las primeras `dd` filas
      * de pantalla muestran las ULTIMAS `dd` filas de la barra (la barra
-     * asomando desde el borde superior). */
+     * asomando desde el borde superior). IDENTICA en ambos casos, sin
+     * cambios. */
     {
         int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
 
