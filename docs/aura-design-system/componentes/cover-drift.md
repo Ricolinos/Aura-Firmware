@@ -84,17 +84,31 @@ cuadrado completo). Solo se decodifica la imagen ACTIVA y la ANTERIOR
 `_prev_index()` en `aura_coverdrift.h`) — con hasta 200 fotos posibles
 (`MAX_PHOTOS`), decodificar todas de antemano sería inviable en memoria.
 
-**Musica queda SIN conectar en esta pasada** — investigado a fondo: las
-pantallas de Canciones/Artistas/Géneros corren hoy en layout FULL
-(`screen_uses_split_layout()` no las incluye), sin ningún panel derecho.
-Volverlas SPLIT para darle un hueco a CoverDrift no es un simple cableado
-— en layout FULL usan el riel A-Z (`draw_index_rail()`), que desaparece
-en SPLIT; quitar el riel A-Z justo de las listas alfabéticas más largas
-del sistema para ganar un fondo ambiental es un cambio de UX de fondo,
-pendiente de decisión del dueño del producto. La infraestructura
-(`aura_widgets_draw_list_with_art()`, los getters de índice de
-`aura_coverdrift.h`) es genérica y ya está lista para Música en cuanto
-se tome esa decisión.
+**Consumidor real: Música (D-252, 2026-08-15)** — conectado tras confirmar
+el dueño del producto que acepta el tradeoff: las pantallas de
+Canciones/Artistas/Géneros/Compositores y variantes filtradas (todo
+`is_music_browse_screen()` menos las de Álbumes, que tienen su propio
+renderizador de miniatura por fila, sin panel derecho, sin cambios) pasan
+a layout SPLIT (`screen_uses_split_layout()`, `aura_screens.c`) — **pierden
+el riel A-Z** que tenían en FULL (`draw_index_rail()` solo se dibuja en
+`!split`), a cambio del fondo animado de carátulas.
+
+No existe API pública para resolver "el álbum de esta canción/artista/
+género específico visible en la lista" (D-242, esta misma sesión —
+`tagcache_get_numeric()` rechaza `tag_album`, el mapeo real vive en
+funciones `static` internas de `tagcache.c`). En su lugar, un **pool
+GENERAL** de todos los álbumes de la biblioteca
+(`aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, ...)`, sin filtrar por lo
+que se esté viendo) — fondo ambiental representativo de la música del
+dispositivo, no literalmente "los álbumes de estas filas exactas".
+Cacheado por generación de tagcache (`ensure_drift_album_pool()`,
+`aura_screens.c`), solo conserva el `seek` de cada álbum. Decodificación
+bajo demanda (activa + anterior, mismo patrón que Fotos) con un paso
+extra que Fotos no necesita: transponer de columna-mayor
+(`aura_albumart_t`, formato de Cover Flow) a fila-mayor (lo que espera
+`aura_coverdrift_draw()`) — `decode_album_drift_tile()`, reusa el mismo
+cache `.pfraw` en disco que ya usa la lista de Álbumes, pidiendo tamaño
+90 en vez de 48.
 
 **Bug real encontrado y corregido de paso** (no relacionado al motivo original
 de esta tarea, pero bloqueaba por completo poder verificar Fotos):

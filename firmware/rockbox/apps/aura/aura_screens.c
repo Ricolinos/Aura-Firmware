@@ -2539,6 +2539,133 @@ static void draw_album_list(aura_nav_t *nav, aura_screen_id_t screen)
                                 a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
 }
 
+/* -- CoverDrift para Musica (D-252) -----------------------------------
+ *
+ * D-242 (esta misma sesion) ya encontro que no existe API publica para
+ * resolver "el album de ESTA cancion/artista/genero especifico" -- el
+ * mapeo vive en funciones static internas de tagcache.c. En vez de
+ * eso, un pool GENERAL de todos los albumes de la biblioteca
+ * (aura_music_browse() con AURA_SCREEN_MUSIC_ALBUMS, sin filtrar por
+ * lo que se este viendo) -- fondo ambiental representativo de la
+ * musica del dispositivo, decision ya documentada en D-251/
+ * cover-drift.md, no literalmente "los albumes de estas filas
+ * exactas". Solo se conserva el `seek` de cada album -- el array
+ * completo de aura_music_item_t que exige la firma de
+ * aura_music_browse() es un scratch TEMPORAL, descartado apenas se
+ * copian los seeks (nunca se persiste el label). */
+static int32_t s_drift_album_pool_seeks[AURA_MUSIC_MAX_ITEMS];
+static int s_drift_album_pool_count = 0;
+static int s_drift_album_pool_generation = -1;
+
+/* Decodificado bajo demanda (activa + anterior, nunca el pool
+ * completo -- ver aura_coverdrift_active_index()/_prev_index(), mismo
+ * criterio que ensure_drift_photos_decoded() en aura_photos.c,
+ * D-251). Presupuesto: 2 tiles de 90x90x2 bytes = ~32KB, trivial. */
+static aura_coverdrift_image_t s_drift_album_images[AURA_MUSIC_MAX_ITEMS];
+static int s_drift_album_buf_a_idx = -1;
+static int s_drift_album_buf_b_idx = -1;
+static struct bitmap s_drift_album_bmp_a;
+static struct bitmap s_drift_album_bmp_b;
+static fb_data s_drift_album_pixels_a[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
+                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
+static fb_data s_drift_album_pixels_b[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
+                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
+
+static void ensure_drift_album_pool(void)
+{
+    static aura_music_item_t s_pool_scratch[AURA_MUSIC_MAX_ITEMS];
+    int gen = aura_music_filter_generation();
+    int n, i;
+
+    if (s_drift_album_pool_generation == gen)
+        return;
+
+    s_drift_album_pool_generation = gen;
+    n = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_pool_scratch, AURA_MUSIC_MAX_ITEMS);
+
+    s_drift_album_pool_count = 0;
+    for (i = 0; i < n; i++)
+    {
+        /* seek<0: fila sintetica "Canciones" (browse_all_row_target()),
+         * no es un album real -- se descarta del pool. */
+        if (s_pool_scratch[i].seek < 0)
+            continue;
+        s_drift_album_pool_seeks[s_drift_album_pool_count++] = s_pool_scratch[i].seek;
+    }
+
+    /* Pool regenerado: cualquier decodificacion previa quedo obsoleta
+     * (los indices ya no apuntan a los mismos albumes). */
+    memset(s_drift_album_images, 0, sizeof(s_drift_album_images));
+    s_drift_album_buf_a_idx = -1;
+    s_drift_album_buf_b_idx = -1;
+}
+
+/* Transpone de columna-mayor (aura_albumart_t, mismo formato que usa
+ * CoverFlow/draw_album_thumb()) a fila-mayor (lo que espera
+ * aura_coverdrift_draw() via lcd_bitmap()). Pide tamano 90 directo al
+ * mismo cache .pfraw en disco que ya usa Albumes con 48 -- genera su
+ * propio archivo de cache aparte, sin invalidar el existente. */
+static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
+{
+    enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
+    static unsigned char cover_buf[SZ * SZ * sizeof(fb_data)];
+    static unsigned char refl_buf[SZ *
+        (SZ * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
+        * sizeof(fb_data)];
+    aura_albumart_t art;
+    const fb_data *cover;
+    int col, row;
+
+    if (pool_idx < 0 || pool_idx >= s_drift_album_pool_count)
+        return false;
+
+    art.size = SZ;
+    art.radius = A26_LAYOUT_CORNER_RADIUS_CARD;
+    art.cover_data = cover_buf;
+    art.reflection_data = refl_buf;
+
+    if (!aura_albumart_load_for_album(s_drift_album_pool_seeks[pool_idx], &art))
+        return false;
+
+    cover = (const fb_data *)art.cover_data;
+    for (col = 0; col < SZ; col++)
+        for (row = 0; row < SZ; row++)
+            dst[row * SZ + col] = cover[col * SZ + row];
+    return true;
+}
+
+static void ensure_drift_albums_decoded(void)
+{
+    int active = aura_coverdrift_active_index();
+    int prev = aura_coverdrift_prev_index();
+
+    if (active >= 0 && active < s_drift_album_pool_count && active != s_drift_album_buf_a_idx)
+    {
+        s_drift_album_buf_a_idx = active;
+        s_drift_album_images[active].bmp = NULL;
+        if (decode_album_drift_tile(active, s_drift_album_pixels_a))
+        {
+            s_drift_album_bmp_a.width = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE;
+            s_drift_album_bmp_a.height = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE;
+            s_drift_album_bmp_a.data = (char *)s_drift_album_pixels_a;
+            s_drift_album_images[active].bmp = &s_drift_album_bmp_a;
+        }
+    }
+
+    if (prev >= 0 && prev < s_drift_album_pool_count && prev != s_drift_album_buf_b_idx)
+    {
+        s_drift_album_buf_b_idx = prev;
+        s_drift_album_images[prev].bmp = NULL;
+        if (decode_album_drift_tile(prev, s_drift_album_pixels_b))
+        {
+            s_drift_album_bmp_b.width = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE;
+            s_drift_album_bmp_b.height = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE;
+            s_drift_album_bmp_b.data = (char *)s_drift_album_pixels_b;
+            s_drift_album_images[prev].bmp = &s_drift_album_bmp_b;
+        }
+    }
+}
+
 static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
 {
     int i;
@@ -2571,20 +2698,18 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
         s_music_items_buf[i].toggle = -1;
     }
 
-    /* D-251: CoverDrift NO se cablea aca -- Canciones/Artistas/Generos
-     * corren hoy en layout FULL (screen_uses_split_layout() no las
-     * incluye), sin panel derecho de ningun tipo. Volverlas SPLIT para
-     * darle un hueco a CoverDrift es una decision de producto real, no
-     * un simple cableado: en FULL usan draw_index_rail() (riel A-Z),
-     * que desaparece en SPLIT -- quitarlo justo de las listas donde mas
-     * se usa (Canciones/Artistas, alfabeticas y potencialmente largas)
-     * para ganar un fondo ambiental es un cambio de UX de fondo,
-     * pendiente de que el dueno del producto lo decida. La
-     * infraestructura (aura_widgets_draw_list_with_art(), los getters
-     * de aura_coverdrift.h) es generica y ya esta lista para Musica en
-     * cuanto se tome esa decision -- ver reporte de D-251. */
-    aura_widgets_draw_list(aura_str(screen_title_id(screen)), s_music_items_buf,
-                            s_music_cache_count, aura_nav_get_selection(nav));
+    /* D-252: CoverDrift conectado -- pool general de caratulas de album
+     * (ensure_drift_album_pool()), decodificado bajo demanda
+     * (ensure_drift_albums_decoded()). screen_uses_split_layout() ya
+     * incluye estas pantallas (encargo confirmado del dueno del
+     * producto: acepta perder el riel A-Z de estas listas a cambio del
+     * fondo animado). */
+    ensure_drift_album_pool();
+    ensure_drift_albums_decoded();
+
+    aura_widgets_draw_list_with_art(aura_str(screen_title_id(screen)), s_music_items_buf,
+                                     s_music_cache_count, aura_nav_get_selection(nav),
+                                     s_drift_album_images, s_drift_album_pool_count);
 }
 
 static aura_screen_id_t s_playlist_cache_screen = AURA_SCREEN_COUNT;
@@ -2769,7 +2894,26 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
          * panel derecho ni para SelectionSummary ni para CoverDrift.
          * Mismo bug (por el mismo motivo) existe para
          * AURA_SCREEN_VIDEOS_ALL, fuera de alcance de esta tarea. */
-        || screen == AURA_SCREEN_PHOTOS_ALL;
+        || screen == AURA_SCREEN_PHOTOS_ALL
+        /* D-252 (encargo confirmado del dueno del producto): las
+         * pantallas de musica que caen en la rama generica de
+         * draw_music_browse() (todo is_music_browse_screen() menos las
+         * de is_album_list_screen(), que tienen su propio renderizador
+         * de pantalla completa) pasan a SPLIT para darle un hueco a
+         * CoverDrift en el panel derecho -- pierden el riel A-Z
+         * (draw_index_rail() solo se dibuja en el !split de
+         * aura_widgets_draw_list_with_art()), a cambio del fondo
+         * animado de caratulas. Tradeoff aceptado explicitamente, no
+         * un efecto colateral. */
+        || screen == AURA_SCREEN_MUSIC_ARTISTS
+        || screen == AURA_SCREEN_MUSIC_SONGS
+        || screen == AURA_SCREEN_MUSIC_SONGS_BY_ALBUM
+        || screen == AURA_SCREEN_MUSIC_SONGS_BY_GENRE
+        || screen == AURA_SCREEN_MUSIC_GENRES
+        || screen == AURA_SCREEN_MUSIC_COMPOSERS
+        || screen == AURA_SCREEN_MUSIC_SONGS_BY_ARTIST
+        || screen == AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER
+        || screen == AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE;
 }
 
 /* Categoria de la seccion activa para TODO el cuadro (encargo del dueno
