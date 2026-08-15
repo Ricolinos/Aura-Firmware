@@ -141,20 +141,33 @@ alrededor (hora arriba, algo más abajo). Ver
 `componentes/date-editor.md` — todavía sin resolver si esto es una variante
 de `SelectionSummary` o un componente distinto.
 
-## Comportamiento
+## Comportamiento (revertido por D-262 — ya NO es instantáneo)
 
-**Ícono y texto (superior/inferior): ambos cambian de forma instantánea**
-al cambiar de selección en `LeftPanel` — sin transición, sin `Fade-Slide`
-ni `Scroll-Slide`. A diferencia de `DynamicTitle`, `SelectionSummary` no
-anima sus cambios de valor.
+**El panel izquierdo (`MenuList`/`Selector`) sigue actualizándose al
+instante con cada movimiento, como siempre — pero `SelectionSummary`
+YA NO.** Hasta D-261 este componente cambiaba de forma instantánea con la
+selección; D-262 revierte esa regla a pedido explícito del dueño del
+producto ("darle chance al ipod de procesar y renderizar correctamente"):
+ahora se congela mientras se recorre `LeftPanel` y solo se actualiza — con
+un fundido real de 600ms, no un corte — tras **2000ms** de estabilidad
+sobre la misma fila. Es el mismo mecanismo general que gobierna
+`CoverDrift` (ver `componentes/cover-drift.md`, sección Activación): un
+solo debounce para todo el panel derecho, sin distinguir si el contenido
+final es un ícono normal o `CoverDrift`. A diferencia de `DynamicTitle`,
+`SelectionSummary` sigue sin animar sus cambios de VALOR en sí (el texto no
+hace `Fade-Slide` ni `Scroll-Slide` interno) — lo que cambió es únicamente
+CUÁNDO se aplica ese cambio.
 
 ## Transición con `CoverDrift`
 
 Cuando el contenido rico (carátulas, fotos) termina de cargar y
 `CoverDrift` (`componentes/cover-drift.md`) se monta en `--layer-content`,
-la transición entre ambos es un **cross-fade** — `SelectionSummary` se
-desvanece mientras `CoverDrift` aparece. Aplica igual en reversa (si el
-contenido rico deja de estar disponible).
+la transición entre ambos es un **cross-fade** de 600ms — `SelectionSummary`
+se desvanece mientras `CoverDrift` aparece. Aplica igual en reversa (si el
+contenido rico deja de estar disponible). Desde D-262 este cross-fade es un
+caso más del mecanismo general de debounce/fundido del panel derecho, no
+una transición dedicada aparte — dispara bajo la misma regla de 2000ms de
+estabilidad que cualquier otro cambio de identidad del panel.
 
 ## Sombra de `LeftPanel`
 

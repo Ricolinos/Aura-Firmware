@@ -104,25 +104,34 @@ vertical ((320−240)/2) — la distancia máxima de deriva usa el MENOR de los
 dos (40px), así que en cualquiera de las 8 direcciones la imagen sigue
 cubriendo el panel completo en todo momento.
 
-## Activación (D-254, corregido D-260)
+## Activación (D-254, corregido D-260, unificado D-262)
 
 **Umbral de montaje: al menos 3 imágenes disponibles** (bajado de un valor
 provisional de 10 a pedido directo del dueño del producto). Con menos,
 sigue `SelectionSummary`.
 
-Cuando la selección se posa sobre una fila que califica, CoverDrift NO
-reemplaza el ícono de inmediato — espera **3000ms** (tiempo para que el
-dispositivo decodifique la primera carátula) antes de montarse. Si la fila
-deja de calificar o el pool cae por debajo del umbral, se vuelve al ícono
-normal sin esperar.
+**D-262 retira el temporizador de 3000ms propio de CoverDrift** — ya no
+existe como mecanismo separado. En su lugar, CoverDrift se rige por el
+mismo debounce/fundido GENERAL de todo el panel derecho de la Ruta A (ver
+`sistema/02-navegacion-menus-contenido.md` o el comentario grande junto a
+`render_panel_debounced()` en `aura_screens.c`): el panel se congela
+mientras se recorre el `LeftPanel`, y solo se actualiza (con un fundido
+real, no un corte) tras **2000ms** de estabilidad sobre la misma
+identidad — sea que esa identidad pase a ser CoverDrift, vuelva a
+`SelectionSummary`, o cambie de un ícono normal a otro. Encargo textual
+del dueño del producto al confirmar la relación entre ambos plazos: "El de
+2s reemplaza al de 3s — CoverDrift ya no necesita su propia espera de 3s
+aparte, se unifica en esta regla general más simple".
 
-**El temporizador se rearma por CATEGORÍA, no por fila exacta (D-260)** —
-moverse entre filas que califican DENTRO de la misma categoría (p. ej. de
-"Música" en el menú raíz a "Cover Flow" en el submenú de Música, o entre
-cualquier par de filas del submenú) NO reinicia el plazo — es la misma
-sesión continua. Solo se reinicia al cambiar de categoría (o al llegar a
-una fila que no califica, como "Audiolibros" — ahí se desarma de inmediato,
-sin esperar).
+**La identidad se compara por CATEGORÍA para CoverDrift, no por fila exacta
+(D-260, preservado por D-262)** — moverse entre filas que califican DENTRO
+de la misma categoría (p. ej. de "Música" en el menú raíz a "Cover Flow" en
+el submenú de Música, o entre cualquier par de filas del submenú) NO cuenta
+como un cambio de identidad y por lo tanto NO dispara ningún fundido — es
+la misma sesión continua, siempre en vivo. Solo cuenta como cambio real
+dejar de calificar (p. ej. llegar a "Audiolibros") o cambiar de categoría —
+ahí sí aplican los 2000ms y el fundido de 600ms antes de reemplazar el
+contenido.
 
 ## Memoria (D-254, actualizado D-256)
 

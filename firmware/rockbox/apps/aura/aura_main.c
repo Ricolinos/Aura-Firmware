@@ -509,13 +509,19 @@ void aura_main(void)
              * de esta puerta): pending()/animating() coinciden. */
             if (aura_coverdrift_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
-            /* D-254: temporizador de 3s de "armado" (antes de montarse
-             * -- s_index sigue en -1, aura_coverdrift_animating() no lo
-             * sabe todavia). Cadencia gruesa: no hay nada que animar
-             * en pantalla durante la espera, solo hace falta que el
-             * reloj avance para poder cumplir el plazo aunque el
-             * usuario no toque botones. */
-            else if (aura_screens_coverdrift_arming() && timeout_ticks < 0)
+
+            /* D-262: debounce/fundido general del panel derecho de la
+             * Ruta A (reemplaza el temporizador de 3s especifico de
+             * CoverDrift, D-254) -- cadencia FINA mientras el fundido
+             * de 600ms esta realmente corriendo (se vea fluido, igual
+             * que aura_coverdrift_animating()); cadencia gruesa durante
+             * el resto del tramo pendiente (solo hace falta que el
+             * reloj avance para cumplir el plazo de 2s aunque el
+             * usuario no toque botones, nada que animar en pantalla
+             * todavia). */
+            if (aura_screens_right_panel_fading() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+            else if (aura_screens_right_panel_pending() && timeout_ticks < 0)
                 timeout_ticks = HZ / 4;
 
             /* CoverFlow (T3.2(b)) -- idle/scrolling, mismo criterio de

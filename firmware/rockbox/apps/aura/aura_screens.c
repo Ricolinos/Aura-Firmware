@@ -4,6 +4,7 @@
 #include "button.h"
 #include "audio.h"
 #include "lcd.h"
+#include "gui/viewport.h"
 #include "backlight.h"
 #include "settings.h"
 #include "version.h"
@@ -872,84 +873,327 @@ static void ensure_drift_albums_decoded(void)
     }
 }
 
-/* Temporizador de "armado" de 3s (encargo textual: "tras 3 segundos,
- * de forma automatica... para que el ipod tenga oportunidad de
- * prepararse y cargar las imagenes") -- no existe ningun debounce
- * reusable para esto (el de ~1s de aura_widgets.c pertenece a la Ruta
- * B y ni siquiera se ejerce en pantallas SPLIT hoy). Arranca/reinicia
- * SOLO cuando cambia de CATEGORIA (D-260, correccion del dueno del
- * producto: "al entrar al menu de musica ya no tendria por que
- * quitarse el coverdrift... solo desaparece cuando nos cambiamos a una
- * opcion que no lo tenga activo, o que tenga otro coverdrift
- * distinto") -- ANTES se armaba por `target` exacto, asi que pasar de
- * la fila "Musica" del menu raiz (target=AURA_SCREEN_MUSIC) a la fila
- * "Cover Flow" del submenu (target=AURA_SCREEN_MUSIC_COVERFLOW)
- * contaba como "cambio de fila" y reiniciaba el temporizador -- aunque
- * las dos filas son la MISMA categoria Musica de principio a fin.
- * `aura_category_for_screen()` (aura_category.h, D-236) ya resuelve
- * ambas al mismo AURA_CATEGORY_MUSIC -- se reusa esa nocion de
- * "sesion" en vez de comparar el destino exacto. Si deja de calificar
- * (fila que no aplica, o el pool cae del umbral), se desarma de
- * inmediato -- sin cambios respecto a antes. Mismo patron general que
- * s_album_activity_since/s_album_last_selected mas abajo en este
- * archivo. */
-static aura_category_t s_drift_arm_category = AURA_CATEGORY_NONE;
-static long s_drift_arm_since = 0;
-
-static bool coverdrift_armed_and_ready(aura_screen_id_t container, aura_screen_id_t target)
+/* -- Debounce/fundido general del panel derecho (D-262) -----------------
+ *
+ * Encargo textual del dueno del producto, 2026-08-15: "aplicar un delay
+ * de 2seg al panel derecho respecto a lo que se elija en el panel
+ * izquierdo... mientras nos desplacemos por el panel izquierdo, el
+ * panel derecho no cambiara, manteniendo lo renderizado. sin embargo,
+ * una vez dejemos de mover el scroll... despues de 2 seg. de estar en
+ * la nueva opcion, el panel derecho se renderizara adecuadamente, si
+ * cae a una opcion sin coverdrift, el coverdrift que este se
+ * desvanecera, si cae a una opcion con otro tipo de coverdrift, igual
+ * habra una transicion... lo mismo con fotos, o con el selection
+ * summary". Generaliza y REEMPLAZA el temporizador de 3s especifico de
+ * CoverDrift (coverdrift_armed_and_ready(), s_drift_arm_category/
+ * _since, retirados) -- confirmado explicitamente por el dueno al
+ * preguntarle la relacion entre ambos plazos ("El de 2s reemplaza al
+ * de 3s -- CoverDrift ya no necesita su propia espera de 3s aparte, se
+ * unifica en esta regla general mas simple"). Aplica a CUALQUIER
+ * llamador de draw_menu_screen_v2() con panel activo, no solo a
+ * Musica: el icono/descripcion normal del panel tambien se congela y
+ * funde igual que CoverDrift, en vez de cambiar al instante como antes
+ * (2026-08-12).
+ *
+ * Identidad de lo que se ve en el panel derecho en un cuadro dado.
+ * `coverdrift`+`coverdrift_category` colapsan container_screen/
+ * selected_target/panel_icon/panel_desc en dos campos para la
+ * COMPARACION (panel_identity_equal() mas abajo): dos filas cualquiera
+ * que ambas califiquen CoverDrift de la MISMA categoria son la MISMA
+ * identidad visual (el fondo ambiental de esa categoria no cambia por
+ * fila exacta -- misma nocion de "sesion por categoria" que ya uso
+ * D-260), asi que moverse entre ellas NUNCA dispara un fundido
+ * innecesario. Solo cuando se ENTRA o se SALE de CoverDrift, cuando
+ * CAMBIA la categoria de CoverDrift (Musica/Video/Fotos -- ningun
+ * llamador califica todavia mas de Musica, pero la comparacion tiene
+ * que ser correcta desde ya para cuando D-263/D-264 conecten Fotos/
+ * Video, sin necesitar tocar esta funcion otra vez), o cuando cambia
+ * el icono/descripcion de una fila sin CoverDrift, cuenta como un
+ * cambio real de identidad. */
+typedef struct
 {
-    bool qualifies = music_row_wants_coverdrift(container, target);
-    aura_category_t cat;
+    const char *title;
+    const char *panel_icon;
+    const char *panel_desc;
+    aura_screen_id_t container_screen;
+    aura_screen_id_t selected_target;
+    bool coverdrift;
+    aura_category_t coverdrift_category;
+} panel_identity_t;
 
-    if (!qualifies)
-    {
-        s_drift_arm_category = AURA_CATEGORY_NONE;
+static bool panel_identity_equal(const panel_identity_t *a, const panel_identity_t *b)
+{
+    if (a->coverdrift != b->coverdrift)
         return false;
-    }
+    if (a->coverdrift)
+        return a->coverdrift_category == b->coverdrift_category;
+    return a->title == b->title
+        && a->panel_icon == b->panel_icon
+        && a->panel_desc == b->panel_desc
+        && a->container_screen == b->container_screen
+        && a->selected_target == b->selected_target;
+}
 
-    cat = aura_category_for_screen(target);
-    if (cat != s_drift_arm_category)
+/* Lo que esta REALMENTE dibujado en el panel derecho ahora mismo (tras
+ * cualquier fundido en curso). `s_panel_pending_target` es la identidad
+ * que se esta cronometrando para reemplazarla -- puede ser igual a la
+ * comprometida (nada pendiente) o distinta (contando los 2s, o ya en
+ * pleno fundido hacia ella). */
+static bool s_panel_has_committed = false;
+static panel_identity_t s_panel_committed;
+static panel_identity_t s_panel_pending_target;
+static long s_panel_pending_since = 0;
+static bool s_panel_fading = false;
+static long s_panel_fade_since = 0;
+
+/* Snapshots de 160x240 (ancho real del panel derecho) para el fundido:
+ * "vieja" = lo comprometido, leido directo del framebuffer real justo
+ * despues de dibujarlo (ya esta ahi, congelado, este mismo cuadro);
+ * "nueva" = lo pendiente, renderizado UNA sola vez a un framebuffer
+ * offscreen (ver start_panel_fade()) y leido de vuelta -- ambas quedan
+ * fijas durante los AURA_DS_METRICS_COVER_DRIFT_CROSSFADE_MS del
+ * fundido (nunca se re-renderiza CoverDrift en vivo a mitad de un
+ * fundido -- el movimiento ambiental es lento, 7s de borde a borde, una
+ * imagen congelada 600ms es imperceptible, y evita re-disparar
+ * aura_coverdrift_advance_if_due() dos veces en el mismo cuadro). */
+enum { PANEL_FADE_W = A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH };
+static fb_data s_panel_old_snapshot[PANEL_FADE_W * A26_SCREEN_HEIGHT];
+static fb_data s_panel_new_snapshot[PANEL_FADE_W * A26_SCREEN_HEIGHT];
+
+/* Framebuffer offscreen para renderizar la identidad PENDIENTE antes de
+ * que sea comprometida -- mismo patron que s_push_fb de
+ * aura_transitions.c (viewport_set_buffer(), API estandar de Rockbox).
+ * Tiene que cubrir el ANCHO COMPLETO de pantalla, no solo el panel
+ * derecho: aura_selection_summary_draw()/aura_coverdrift_draw() reciben
+ * `x` ABSOLUTO (AURA_DS_METRICS_LEFT_PANEL_WIDTH = 160), asi que un
+ * buffer de 160px de ancho dejaria ese x fuera de rango. */
+static fb_data s_panel_render_fb[A26_SCREEN_WIDTH * A26_SCREEN_HEIGHT];
+
+static void *panel_render_fb_address(int x, int y)
+{
+    return &s_panel_render_fb[y * A26_SCREEN_WIDTH + x];
+}
+
+static struct frame_buffer_t s_panel_render_buffer = {
+    { .fb_ptr = s_panel_render_fb },
+    .get_address_fn = &panel_render_fb_address,
+    .stride = STRIDE_MAIN(A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT),
+    .elems = A26_SCREEN_WIDTH * A26_SCREEN_HEIGHT,
+};
+
+/* Dibuja una identidad de panel de forma "en vivo" (CoverDrift sigue
+ * avanzando su ciclo si le toca, SelectionSummary/icono normal si no)
+ * -- usada tanto para redibujar lo comprometido cuadro a cuadro (sea
+ * que este congelado esperando el plazo, o normal) como para
+ * renderizar la identidad pendiente UNA vez al arrancar un fundido
+ * (ver start_panel_fade()). */
+static void draw_panel_identity(int panel_x, int panel_w, const panel_identity_t *id)
+{
+    if (id->coverdrift)
     {
-        s_drift_arm_category = cat;
-        s_drift_arm_since = current_tick;
+        aura_coverdrift_advance_if_due(panel_w, s_drift_album_pool_count);
+        ensure_drift_albums_decoded();
+        aura_coverdrift_draw(panel_x, panel_w,
+                              s_drift_album_images, s_drift_album_pool_count);
+    }
+    else
+    {
+        aura_selection_summary_draw(panel_x, panel_w, id->panel_icon, NULL, id->panel_desc);
+    }
+}
+
+/* Arranca el fundido hacia s_panel_pending_target: captura lo viejo del
+ * framebuffer real (el llamador ya dibujo lo comprometido este mismo
+ * cuadro, congelado, justo antes de esta llamada) y renderiza lo nuevo
+ * una vez a un viewport offscreen para capturarlo tambien. Despues de
+ * esta funcion, cada cuadro subsiguiente hasta que el fundido termine
+ * solo hace blend de los dos snapshots (draw_panel_fade_frame()) --
+ * ningun redibujo en vivo de ninguno de los dos lados a mitad del
+ * fundido. */
+static void start_panel_fade(int panel_x, int panel_w)
+{
+    struct viewport vp;
+    struct viewport *saved;
+    int x, y;
+
+    for (y = 0; y < A26_SCREEN_HEIGHT; y++)
+    {
+        const fb_data *src = FBADDR(panel_x, y);
+        memcpy(&s_panel_old_snapshot[y * panel_w], src, panel_w * sizeof(fb_data));
     }
 
-    return (current_tick - s_drift_arm_since) * 1000L / HZ
-        >= AURA_DS_METRICS_COVER_DRIFT_ACTIVATION_DELAY_MS;
+    viewport_set_defaults(&vp, SCREEN_MAIN);
+    viewport_set_buffer(&vp, &s_panel_render_buffer, SCREEN_MAIN);
+    saved = lcd_set_viewport(&vp);
+    draw_panel_identity(panel_x, panel_w, &s_panel_pending_target);
+    lcd_set_viewport(saved);
+
+    for (y = 0; y < A26_SCREEN_HEIGHT; y++)
+        for (x = 0; x < panel_w; x++)
+            s_panel_new_snapshot[y * panel_w + x] =
+                s_panel_render_fb[y * A26_SCREEN_WIDTH + panel_x + x];
+
+    s_panel_fading = true;
+    s_panel_fade_since = current_tick;
+}
+
+/* Un cuadro del fundido en curso: blend por pixel de los dos snapshots
+ * congelados, escrito directo al framebuffer real (mismo
+ * a26_shell_blend() que ya usa la sombra paralela de D-258 y el propio
+ * fundido interno de CoverDrift, D-256). */
+static void draw_panel_fade_frame(int panel_x, int panel_w, long elapsed_ms)
+{
+    int alpha_256 = elapsed_ms * 256 / AURA_DS_METRICS_COVER_DRIFT_CROSSFADE_MS;
+    int x, y;
+
+    if (alpha_256 > 256) alpha_256 = 256;
+    if (alpha_256 < 0) alpha_256 = 0;
+
+    for (y = 0; y < A26_SCREEN_HEIGHT; y++)
+    {
+        fb_data *dst = FBADDR(panel_x, y);
+        const fb_data *from = &s_panel_old_snapshot[y * panel_w];
+        const fb_data *to = &s_panel_new_snapshot[y * panel_w];
+        for (x = 0; x < panel_w; x++)
+            dst[x] = a26_shell_blend(from[x], to[x], alpha_256);
+    }
+}
+
+/* Punto de entrada unico para el panel derecho de la Ruta A, llamado
+ * desde draw_menu_screen_v2() en vez del dibujo instantaneo de antes.
+ * Reglas, en orden:
+ *  1. Entrada a una pantalla distinta (title cambia de puntero -- ver
+ *     nota de aura_str() en root_selection_description()): SIEMPRE
+ *     instantaneo, sin fundido -- nunca debe verse contenido de la
+ *     pantalla ANTERIOR congelado al entrar a una nueva.
+ *  2. Fundido en curso: si la identidad pendiente sigue siendo la
+ *     misma, avanza el fundido (o lo cierra si ya se cumplieron los
+ *     CROSSFADE_MS); si cambio a mitad del fundido, lo aborta (vuelve
+ *     a mostrar lo comprometido solido) y reinicia el conteo de
+ *     estabilidad para la nueva pendiente.
+ *  3. Sin fundido: si la fila resaltada ya coincide con lo
+ *     comprometido, redibuja en vivo sin mas. Si difiere, cronometra
+ *     (reinicia el conteo si la pendiente cambio) y arranca el fundido
+ *     en cuanto se cumplen los AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS
+ *     -- mientras tanto se queda mostrando lo comprometido, congelado. */
+static void render_panel_debounced(int panel_x, int panel_w, const char *title,
+                                    const char *panel_icon, const char *panel_desc,
+                                    aura_screen_id_t container_screen,
+                                    aura_screen_id_t selected_target)
+{
+    panel_identity_t pending;
+
+    ensure_drift_album_pool();
+    pending.title = title;
+    pending.panel_icon = panel_icon;
+    pending.panel_desc = panel_desc;
+    pending.container_screen = container_screen;
+    pending.selected_target = selected_target;
+    pending.coverdrift = music_row_wants_coverdrift(container_screen, selected_target)
+        && aura_coverdrift_should_mount(s_drift_album_pool_count);
+    pending.coverdrift_category = pending.coverdrift
+        ? aura_category_for_screen(selected_target) : AURA_CATEGORY_NONE;
+
+    if (!s_panel_has_committed || pending.title != s_panel_committed.title)
+    {
+        s_panel_fading = false;
+        s_panel_committed = pending;
+        s_panel_pending_target = pending;
+        s_panel_pending_since = current_tick;
+        s_panel_has_committed = true;
+        draw_panel_identity(panel_x, panel_w, &s_panel_committed);
+        return;
+    }
+
+    if (s_panel_fading)
+    {
+        long elapsed_ms;
+
+        if (!panel_identity_equal(&pending, &s_panel_pending_target))
+        {
+            s_panel_fading = false;
+            s_panel_pending_target = pending;
+            s_panel_pending_since = current_tick;
+            draw_panel_identity(panel_x, panel_w, &s_panel_committed);
+            return;
+        }
+
+        elapsed_ms = (current_tick - s_panel_fade_since) * 1000L / HZ;
+        if (elapsed_ms >= AURA_DS_METRICS_COVER_DRIFT_CROSSFADE_MS)
+        {
+            s_panel_fading = false;
+            s_panel_committed = s_panel_pending_target;
+            s_panel_pending_since = current_tick;
+            draw_panel_identity(panel_x, panel_w, &s_panel_committed);
+            return;
+        }
+
+        draw_panel_fade_frame(panel_x, panel_w, elapsed_ms);
+        return;
+    }
+
+    if (!panel_identity_equal(&pending, &s_panel_pending_target))
+    {
+        s_panel_pending_target = pending;
+        s_panel_pending_since = current_tick;
+    }
+
+    if (panel_identity_equal(&pending, &s_panel_committed))
+    {
+        draw_panel_identity(panel_x, panel_w, &s_panel_committed);
+        return;
+    }
+
+    if ((current_tick - s_panel_pending_since) * 1000L / HZ
+        >= AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS)
+    {
+        draw_panel_identity(panel_x, panel_w, &s_panel_committed);
+        start_panel_fade(panel_x, panel_w);
+        draw_panel_fade_frame(panel_x, panel_w, 0);
+        return;
+    }
+
+    draw_panel_identity(panel_x, panel_w, &s_panel_committed);
 }
 
 /* Publica (aura_screens.h) para que aura_main.c pida cuadros a cadencia
- * fina mientras el temporizador de 3s corre -- aura_coverdrift_animating()
- * ya cubre el resto (una vez montado), pero antes de montarse (armando)
- * s_index sigue en -1 y esa funcion todavia no lo sabe. */
-bool aura_screens_coverdrift_arming(void)
+ * fina/media mientras el panel derecho tiene algo pendiente sin
+ * confirmar todavia (contando los 2s, o corriendo el fundido) --
+ * aura_coverdrift_animating() sigue cubriendo el movimiento ambiental
+ * en vivo una vez comprometido, esto cubre el tramo de espera/fundido
+ * que antes solo existia para CoverDrift (D-254) y ahora aplica a
+ * cualquier panel derecho de la Ruta A. */
+bool aura_screens_right_panel_pending(void)
 {
-    return s_drift_arm_category != AURA_CATEGORY_NONE;
+    return s_panel_has_committed
+        && !panel_identity_equal(&s_panel_pending_target, &s_panel_committed);
 }
 
-/* D-259/D-260: publica (aura_screens.h) para que el manejador de
+/* Cadencia FINA (HZ/20, igual que aura_coverdrift_animating()) mientras
+ * el fundido de 600ms esta realmente corriendo -- aura_screens_right_
+ * panel_pending() por si sola solo pide HZ/4 (misma cadencia que antes
+ * usaba el "armado" de 3s), insuficiente para que el fundido se vea
+ * fluido. */
+bool aura_screens_right_panel_fading(void)
+{
+    return s_panel_fading;
+}
+
+/* D-259/D-260/D-262: publica (aura_screens.h) para que el manejador de
  * SELECT (aura_screens_handle_button(), mas abajo en este archivo)
- * sepa si CoverDrift estaba realmente MONTADO (no solo armado/
- * contando) para `target` en el ultimo cuadro dibujado -- para elegir
+ * sepa si CoverDrift estaba realmente MONTADO (comprometido, no solo
+ * pendiente) para `target` en el ultimo cuadro dibujado -- para elegir
  * la coreografia de transicion de entrada. Consulta SIN efectos
- * secundarios -- esta funcion solo LEE el estado que el ultimo draw()
- * ya dejo. D-260: compara por CATEGORIA (misma nocion de "sesion" que
- * coverdrift_armed_and_ready()), no por destino exacto -- si el pool
- * quedo armado desde la fila "Musica" del menu raiz, un `target` como
- * AURA_SCREEN_MUSIC_COVERFLOW (misma categoria) tambien cuenta como
- * activo, aunque nunca se haya vuelto a reiniciar el temporizador
- * puntualmente para esa fila. */
+ * secundarios. Compara por CATEGORIA (aura_category_for_screen()), no
+ * por destino exacto -- misma nocion de "sesion" que panel_identity_
+ * equal() ya usa internamente para CoverDrift. */
 bool aura_screens_coverdrift_active_for(aura_screen_id_t target)
 {
-    if (s_drift_arm_category == AURA_CATEGORY_NONE
-        || aura_category_for_screen(target) != s_drift_arm_category)
+    if (!s_panel_has_committed || !s_panel_committed.coverdrift)
         return false;
 
-    if ((current_tick - s_drift_arm_since) * 1000L / HZ
-        < AURA_DS_METRICS_COVER_DRIFT_ACTIVATION_DELAY_MS)
-        return false;
-
-    return aura_coverdrift_should_mount(s_drift_album_pool_count) != 0;
+    return aura_category_for_screen(target)
+        == aura_category_for_screen(s_panel_committed.selected_target);
 }
 
 /* Pantalla de menu completa del sistema nuevo (auditoria 2026-08-12,
@@ -961,10 +1205,17 @@ bool aura_screens_coverdrift_active_for(aura_screen_id_t target)
  * sistema/02-navegacion-menus-contenido.md, "esas se detallan en su
  * propio componente cuando lleguemos a ellas").
  *
- * El panel derecho cambia INSTANTANEO con la seleccion
- * (selection-summary.md, "ambos cambian de forma instantanea") -- el
- * debounce de ~1s del sistema viejo (L3/D-068) era comportamiento del
- * firmware original, reemplazado a proposito por el documento nuevo. */
+ * El panel izquierdo (MenuList/Selector) sigue actualizandose al
+ * INSTANTE con cada movimiento, como siempre. El panel derecho YA NO
+ * (D-262, revierte la regla "ambos cambian de forma instantanea" de
+ * selection-summary.md, documentada aca desde la auditoria 2026-08-12
+ * -- encargo textual del dueno: "darle chance al ipod de procesar y
+ * renderizar correctamente") -- se congela mientras se recorre el
+ * LeftPanel y solo se actualiza, con un fundido real, tras
+ * AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS de estabilidad sobre la
+ * misma fila; ver render_panel_debounced() arriba en este archivo para
+ * el mecanismo completo (aplica por igual a CoverDrift y a SelectionSummary/
+ * icono normal). */
 /* `container_screen`/`selected_target` (D-254): identidad de la
  * pantalla y del destino de la fila resaltada, SOLO para decidir si
  * CoverDrift reemplaza a SelectionSummary en este cuadro -- pasa
@@ -991,29 +1242,16 @@ static void draw_menu_screen_v2(const char *title,
         int panel_x = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
         int panel_w = A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH;
 
-        /* D-254: CoverDrift solo si (1) la fila califica Y ya paso el
-         * temporizador de 3s (coverdrift_armed_and_ready() gestiona
-         * ambas cosas) Y (2) el pool tiene imagenes suficientes -- sin
-         * (2), aunque la fila califique y hayan pasado los 3s, se
-         * queda en SelectionSummary (nunca un panel vacio). */
-        ensure_drift_album_pool();
-        if (coverdrift_armed_and_ready(container_screen, selected_target)
-            && aura_coverdrift_should_mount(s_drift_album_pool_count))
-        {
-            /* D-256: el orden importa -- advance_if_due() PRIMERO (para
-             * que active_index()/prev_index() ya reflejen el indice
-             * vigente de este cuadro), decodificar despues, dibujar al
-             * final. Invertir este orden reintroduce el bug del "flash"
-             * de color de acento al cambiar de imagen. */
-            aura_coverdrift_advance_if_due(panel_w, s_drift_album_pool_count);
-            ensure_drift_albums_decoded();
-            aura_coverdrift_draw(panel_x, panel_w,
-                                  s_drift_album_images, s_drift_album_pool_count);
-        }
-        else
-        {
-            aura_selection_summary_draw(panel_x, panel_w, panel_icon, NULL, panel_desc);
-        }
+        /* D-262: el panel derecho ya no cambia al instante con la
+         * seleccion (ver el comentario grande junto a
+         * render_panel_debounced() mas arriba) -- se congela mientras
+         * el usuario recorre el LeftPanel y solo se actualiza (con
+         * fundido real) tras AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS de
+         * estabilidad. Decide TAMBIEN si la identidad resultante es
+         * CoverDrift o SelectionSummary/icono normal -- reemplaza el
+         * bloque instantaneo que vivia aca antes (2026-08-12). */
+        render_panel_debounced(panel_x, panel_w, title, panel_icon, panel_desc,
+                                container_screen, selected_target);
     }
 }
 
@@ -3543,13 +3781,14 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
 
         if (depth_after > depth_before && is_coverflow_screen(to))
             /* D-259: prueba acotada -- coreografia distinta SOLO si
-             * CoverDrift estaba realmente montado (no solo armado) para
-             * esta fila justo antes del push. aura_screens_coverdrift_active_for()
-             * lee s_drift_arm_category/s_drift_arm_since (D-260), que el
-             * ultimo draw() ya dejo listos -- nunca da true salvo
-             * entrando desde el submenu de Musica con la fila Cover
-             * Flow resaltada (music_row_wants_coverdrift() no califica
-             * ningun otro origen para este destino, ver esa funcion). */
+             * CoverDrift estaba realmente montado (comprometido, no
+             * solo pendiente) para esta fila justo antes del push.
+             * aura_screens_coverdrift_active_for() lee s_panel_committed
+             * (D-262), que el ultimo draw() ya dejo listo -- nunca da
+             * true salvo entrando desde el submenu de Musica con la
+             * fila Cover Flow resaltada (music_row_wants_coverdrift()
+             * no califica ningun otro origen para este destino, ver esa
+             * funcion). */
             aura_transition_coverflow_enter(nav, aura_screens_coverdrift_active_for(to));
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
                  && aura_nowplaying_take_fullscreen_exit())
