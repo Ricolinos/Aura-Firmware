@@ -3070,4 +3070,16 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-260 — CoverDrift ya no se reinicia al entrar al submenú de Música desde el menú raíz
+
+**Encargo**: si en el menú raíz el selector está sobre "Música" y CoverDrift ya está mostrándose, entrar al submenú de Música no debería quitarlo ni reiniciar la espera de 3s -- debe ser la misma sesión, continua. Solo debe desaparecer al movernos a una fila que no lo tenga activo, o (en el futuro) que tenga un CoverDrift de otra categoría (Video/Fotos).
+
+**Causa**: el temporizador de armado (`coverdrift_armed_and_ready()`, `aura_screens.c`) se rearmaba por `target` EXACTO -- pasar de la fila "Música" del menú raíz (`target=AURA_SCREEN_MUSIC`) a la fila "Cover Flow" del submenú (`target=AURA_SCREEN_MUSIC_COVERFLOW`, la primera fila resaltada por defecto al entrar) contaba como "cambió de fila", así que el temporizador se reiniciaba -- CoverDrift desaparecía y había que esperar otros 3s.
+
+**Arreglo**: el armado ahora se lleva por CATEGORÍA, no por destino exacto -- reusa `aura_category_for_screen()` (`aura_category.h`, D-236), que ya resuelve tanto `AURA_SCREEN_MUSIC` como `AURA_SCREEN_MUSIC_COVERFLOW` (y el resto del árbol de Música) al mismo `AURA_CATEGORY_MUSIC`. `s_drift_arm_target` (el `aura_screen_id_t` exacto) pasa a ser `s_drift_arm_category` (`aura_category_t`) -- el temporizador solo se reinicia cuando la CATEGORÍA cambia, no el destino puntual. `aura_screens_coverdrift_active_for()` (usada por la transición de entrada a Cover Flow, D-259) actualizada con el mismo criterio -- sigue funcionando igual para su caso de uso (comparar categorías da el mismo resultado que comparar destinos exactos cuando ambos ya son Cover Flow). Si la fila deja de calificar (Audiolibros, o cae el pool) sigue desarmando de inmediato, sin cambios ahí.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos. Capturas reales confirmando los tres casos: (1) esperar los 3s con "Música" resaltada en el menú raíz, presionar SELECT, capturar ~50ms después -- CoverDrift ya se ve con carátula real, no el ícono normal; (2) moverse entre varias filas que califican dentro del submenú (Cover Flow → Géneros) -- sigue mostrándose sin interrupción; (3) llegar a "Audiolibros" -- vuelve al ícono normal de inmediato, sin cambios respecto a antes.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

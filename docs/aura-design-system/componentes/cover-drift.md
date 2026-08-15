@@ -104,7 +104,7 @@ vertical ((320−240)/2) — la distancia máxima de deriva usa el MENOR de los
 dos (40px), así que en cualquiera de las 8 direcciones la imagen sigue
 cubriendo el panel completo en todo momento.
 
-## Activación (D-254)
+## Activación (D-254, corregido D-260)
 
 **Umbral de montaje: al menos 3 imágenes disponibles** (bajado de un valor
 provisional de 10 a pedido directo del dueño del producto). Con menos,
@@ -112,10 +112,17 @@ sigue `SelectionSummary`.
 
 Cuando la selección se posa sobre una fila que califica, CoverDrift NO
 reemplaza el ícono de inmediato — espera **3000ms** (tiempo para que el
-dispositivo decodifique la primera carátula) antes de montarse. Si la
-selección cambia antes de cumplirse el plazo, el temporizador se reinicia;
-si la fila deja de calificar o el pool cae por debajo del umbral, se vuelve
-al ícono normal sin esperar.
+dispositivo decodifique la primera carátula) antes de montarse. Si la fila
+deja de calificar o el pool cae por debajo del umbral, se vuelve al ícono
+normal sin esperar.
+
+**El temporizador se rearma por CATEGORÍA, no por fila exacta (D-260)** —
+moverse entre filas que califican DENTRO de la misma categoría (p. ej. de
+"Música" en el menú raíz a "Cover Flow" en el submenú de Música, o entre
+cualquier par de filas del submenú) NO reinicia el plazo — es la misma
+sesión continua. Solo se reinicia al cambiar de categoría (o al llegar a
+una fila que no califica, como "Audiolibros" — ahí se desarma de inmediato,
+sin esperar).
 
 ## Memoria (D-254, actualizado D-256)
 

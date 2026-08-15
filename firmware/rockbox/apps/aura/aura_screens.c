@@ -877,26 +877,40 @@ static void ensure_drift_albums_decoded(void)
  * prepararse y cargar las imagenes") -- no existe ningun debounce
  * reusable para esto (el de ~1s de aura_widgets.c pertenece a la Ruta
  * B y ni siquiera se ejerce en pantallas SPLIT hoy). Arranca/reinicia
- * cada vez que el destino resaltado cambia; si dejo de calificar, se
- * desarma de inmediato (sin esperar) y vuelve al icono normal. Mismo
- * patron que s_album_activity_since/s_album_last_selected mas abajo en
- * este archivo. */
-static aura_screen_id_t s_drift_arm_target = AURA_SCREEN_COUNT;
+ * SOLO cuando cambia de CATEGORIA (D-260, correccion del dueno del
+ * producto: "al entrar al menu de musica ya no tendria por que
+ * quitarse el coverdrift... solo desaparece cuando nos cambiamos a una
+ * opcion que no lo tenga activo, o que tenga otro coverdrift
+ * distinto") -- ANTES se armaba por `target` exacto, asi que pasar de
+ * la fila "Musica" del menu raiz (target=AURA_SCREEN_MUSIC) a la fila
+ * "Cover Flow" del submenu (target=AURA_SCREEN_MUSIC_COVERFLOW)
+ * contaba como "cambio de fila" y reiniciaba el temporizador -- aunque
+ * las dos filas son la MISMA categoria Musica de principio a fin.
+ * `aura_category_for_screen()` (aura_category.h, D-236) ya resuelve
+ * ambas al mismo AURA_CATEGORY_MUSIC -- se reusa esa nocion de
+ * "sesion" en vez de comparar el destino exacto. Si deja de calificar
+ * (fila que no aplica, o el pool cae del umbral), se desarma de
+ * inmediato -- sin cambios respecto a antes. Mismo patron general que
+ * s_album_activity_since/s_album_last_selected mas abajo en este
+ * archivo. */
+static aura_category_t s_drift_arm_category = AURA_CATEGORY_NONE;
 static long s_drift_arm_since = 0;
 
 static bool coverdrift_armed_and_ready(aura_screen_id_t container, aura_screen_id_t target)
 {
     bool qualifies = music_row_wants_coverdrift(container, target);
+    aura_category_t cat;
 
     if (!qualifies)
     {
-        s_drift_arm_target = AURA_SCREEN_COUNT;
+        s_drift_arm_category = AURA_CATEGORY_NONE;
         return false;
     }
 
-    if (target != s_drift_arm_target)
+    cat = aura_category_for_screen(target);
+    if (cat != s_drift_arm_category)
     {
-        s_drift_arm_target = target;
+        s_drift_arm_category = cat;
         s_drift_arm_since = current_tick;
     }
 
@@ -910,22 +924,25 @@ static bool coverdrift_armed_and_ready(aura_screen_id_t container, aura_screen_i
  * s_index sigue en -1 y esa funcion todavia no lo sabe. */
 bool aura_screens_coverdrift_arming(void)
 {
-    return s_drift_arm_target != AURA_SCREEN_COUNT;
+    return s_drift_arm_category != AURA_CATEGORY_NONE;
 }
 
-/* D-259: publica (aura_screens.h) para que el manejador de SELECT
- * (aura_screens_handle_button(), mas abajo en este archivo) sepa si
- * CoverDrift estaba realmente MONTADO (no solo armado/contando) para
- * `target` en el ultimo cuadro dibujado -- para elegir la coreografia
- * de transicion de entrada. Consulta SIN efectos secundarios: si
- * llamara de nuevo a coverdrift_armed_and_ready() reiniciaria el
- * temporizador en el caso (que no deberia poder pasar aca, pero mejor
- * no depender de eso) de que `target` no coincida con
- * `s_drift_arm_target` vigente -- esta funcion solo LEE el estado que
- * el ultimo draw() ya dejo. */
+/* D-259/D-260: publica (aura_screens.h) para que el manejador de
+ * SELECT (aura_screens_handle_button(), mas abajo en este archivo)
+ * sepa si CoverDrift estaba realmente MONTADO (no solo armado/
+ * contando) para `target` en el ultimo cuadro dibujado -- para elegir
+ * la coreografia de transicion de entrada. Consulta SIN efectos
+ * secundarios -- esta funcion solo LEE el estado que el ultimo draw()
+ * ya dejo. D-260: compara por CATEGORIA (misma nocion de "sesion" que
+ * coverdrift_armed_and_ready()), no por destino exacto -- si el pool
+ * quedo armado desde la fila "Musica" del menu raiz, un `target` como
+ * AURA_SCREEN_MUSIC_COVERFLOW (misma categoria) tambien cuenta como
+ * activo, aunque nunca se haya vuelto a reiniciar el temporizador
+ * puntualmente para esa fila. */
 bool aura_screens_coverdrift_active_for(aura_screen_id_t target)
 {
-    if (s_drift_arm_target != target)
+    if (s_drift_arm_category == AURA_CATEGORY_NONE
+        || aura_category_for_screen(target) != s_drift_arm_category)
         return false;
 
     if ((current_tick - s_drift_arm_since) * 1000L / HZ
@@ -3528,10 +3545,10 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             /* D-259: prueba acotada -- coreografia distinta SOLO si
              * CoverDrift estaba realmente montado (no solo armado) para
              * esta fila justo antes del push. aura_screens_coverdrift_active_for()
-             * lee s_drift_arm_target/s_drift_arm_since, que el ultimo
-             * draw() ya dejo listos -- nunca da true salvo entrando
-             * desde el submenu de Musica con la fila Cover Flow
-             * resaltada (music_row_wants_coverdrift() no califica
+             * lee s_drift_arm_category/s_drift_arm_since (D-260), que el
+             * ultimo draw() ya dejo listos -- nunca da true salvo
+             * entrando desde el submenu de Musica con la fila Cover
+             * Flow resaltada (music_row_wants_coverdrift() no califica
              * ningun otro origen para este destino, ver esa funcion). */
             aura_transition_coverflow_enter(nav, aura_screens_coverdrift_active_for(to));
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
