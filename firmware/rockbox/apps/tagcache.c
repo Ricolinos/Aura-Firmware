@@ -3376,6 +3376,22 @@ static bool commit(void)
 #ifdef HAVE_TC_RAMCACHE
     bool ramcache_buffer_stolen = false;
 #endif
+    /* Aura: rastrea si el buffer temporal salio del camino de reserva
+     * general de mas abajo (D-021), a diferencia de dircache_buffer_stolen/
+     * ramcache_buffer_stolen de arriba. Hace falta sin importar
+     * HAVE_DIRCACHE/HAVE_TC_RAMCACHE porque el unico free_tempbuf() que
+     * ya existia en esta funcion vive bajo `#ifdef HAVE_DIRCACHE` -- en
+     * un target sin dircache (el SIMULADOR, ver HAVE_DIRCACHE en
+     * firmware/export/config.h: `#ifndef SIMULATOR`) ese bloque entero
+     * no compila, asi que un commit de siempre (sin base previa, sin
+     * ramcache que robar) que solo consigue su buffer por este camino
+     * nunca lo liberaba: quedaba retenido para siempre despues del
+     * primer commit, dejando a audio_reset_buffer() sin memoria
+     * disponible en CUALQUIER intento de reproduccion posterior
+     * (panic "audio_reset_buffer(): OOM!", D-244). En hardware real
+     * esto no se nota porque HAVE_DIRCACHE siempre esta definido ahi
+     * (MEMORYSIZE >= 8) y dircache_buffer_stolen ya cubre la limpieza. */
+    bool aura_general_tempbuf_used = false;
     logf("committing tagcache");
 
     while (write_lock)
@@ -3474,7 +3490,10 @@ static bool commit(void)
      * el proximo arranque" para siempre, ya que ningun arranque
      * futuro cambia esta situacion (D-021). */
     if (tempbuf_size == 0)
+    {
         allocate_tempbuf();
+        aura_general_tempbuf_used = (tempbuf_size != 0);
+    }
 #endif
 
     /* And finally fail if there are no buffers available. */
@@ -3581,6 +3600,15 @@ commit_error:
 #endif /* HAVE_TC_RAMCACHE */
 
     read_lock--;
+
+    /* Aura: liberar el buffer del camino de reserva general SIEMPRE que
+     * se haya usado, sin importar HAVE_DIRCACHE (ver comentario junto a
+     * la declaracion de esta variable, arriba). Si dircache tambien
+     * termina liberandolo mas abajo, free_tempbuf() ya es un no-op
+     * seguro (chequea tempbuf_size == 0 antes de tocar el handle) --
+     * nunca un doble free. */
+    if (aura_general_tempbuf_used)
+        free_tempbuf();
 
 #ifdef HAVE_DIRCACHE
     /* Resume the dircache, if we stole the buffer. */
