@@ -1068,6 +1068,26 @@ static void start_panel_fade(int panel_x, int panel_w)
     viewport_set_defaults(&vp, SCREEN_MAIN);
     viewport_set_buffer(&vp, &s_panel_render_buffer, SCREEN_MAIN);
     saved = lcd_set_viewport(&vp);
+    /* Bug real (encontrado por el dueno, "parpadeo" de una imagen de
+     * CoverDrift al cambiar de fila incluso sin CoverDrift de por medio):
+     * s_panel_render_fb es un buffer ESTATICO, nunca se limpia entre usos
+     * -- SelectionSummary (draw_summary(), aura_selection_summary.c) NUNCA
+     * llena el rectangulo completo del panel, solo el tile+texto (deja
+     * margenes sin tocar, confiando en que el llamador YA limpio la
+     * pantalla -- cierto en el camino en vivo, a26_shell_clear_screen() al
+     * inicio de draw_menu_screen_v2(), pero FALSO aca: este buffer offscreen
+     * nunca pasa por ahi). Si una renderizacion anterior a este mismo buffer
+     * fue CoverDrift (llena el panel completo, borde a borde), sus pixeles
+     * sobrevivian en los margenes de cualquier fundido posterior hacia
+     * SelectionSummary -- visibles durante los 600ms del fundido, hasta
+     * que el commit final vuelve al framebuffer real (ya limpio cada
+     * cuadro). Limpiar el viewport aca (mismo par bg/fg que
+     * a26_shell_clear_screen(), pero contra el viewport YA canjeado a este
+     * buffer offscreen, no al framebuffer real) elimina cualquier pixel
+     * viejo antes de dibujar la identidad pendiente encima. */
+    lcd_set_background(a26_color(A26_SHELL_BG));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_clear_viewport();
     draw_panel_identity(panel_x, panel_w, &s_panel_pending_target);
     lcd_set_viewport(saved);
 

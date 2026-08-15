@@ -3164,4 +3164,20 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+---
+
+## D-265 — Panel derecho: parpadeo de una imagen de CoverDrift durante fundidos que nunca deberían mostrarla
+
+**Encargo**: el dueño reportó, tras probar D-264 en el simulador (con permiso explícito para que yo también lo revisara ahí), un parpadeo real: al cambiar de fila -- incluso entre dos filas que nunca tienen CoverDrift activo -- aparecía momentáneamente una imagen de CoverDrift antes de que el panel se ajustara al contenido correcto.
+
+**Diagnóstico**: `start_panel_fade()` (`aura_screens.c`, D-262) renderiza la identidad PENDIENTE una sola vez a un framebuffer offscreen estático (`s_panel_render_fb`/`s_panel_render_buffer`) para capturar `s_panel_new_snapshot` antes de que arranque el fundido. Ese buffer NUNCA se limpiaba entre usos. `aura_selection_summary_draw()`/`draw_summary()` (`aura_selection_summary.c`) nunca llena el rectángulo completo del panel -- solo pinta el tile+texto, dejando los márgenes sin tocar, confiando en que el llamador ya limpió la pantalla. Eso es cierto en el camino EN VIVO (`a26_shell_clear_screen()` corre una vez por cuadro al inicio de `draw_menu_screen_v2()`), pero FALSO en este buffer offscreen, que nunca pasa por ahí. Resultado: la primera vez que CoverDrift se renderizaba a este mismo buffer compartido (llena el panel completo, borde a borde, D-254), sus píxeles quedaban ahí para siempre en los márgenes -- CUALQUIER fundido posterior hacia una fila de SelectionSummary normal, sin importar qué tan lejos estuviera de Música, seguía mostrando esos restos durante los 600ms del fundido, hasta que el commit final volvía al framebuffer real (ya limpio cada cuadro). Esto explica exactamente el síntoma reportado: el parpadeo aparecía en transiciones que "ni siquiera tienen CoverDrift", porque la contaminación venía de una visita ANTERIOR a Música en la misma sesión, no de la transición actual.
+
+**Arreglo**: `start_panel_fade()` limpia el viewport offscreen (mismo par `lcd_set_background`/`lcd_set_foreground` + `lcd_clear_viewport()` que ya usa `a26_shell_clear_screen()`, pero contra el viewport YA canjeado a `s_panel_render_buffer`, no al framebuffer real) justo antes de dibujar la identidad pendiente encima -- una sola línea de más por fundido, elimina cualquier píxel viejo de raíz en vez de intentar que cada variante de contenido se responsabilice de llenar el rectángulo completo por su cuenta.
+
+**Verificado que NO es la misma cosa que un caso legítimo parecido**: un fundido que sale DE una fila con CoverDrift genuinamente activo hacia una fila sin él SÍ debe mostrar la imagen desvaneciéndose a mitad de camino -- eso es `s_panel_old_snapshot` (capturado del framebuffer real, ya limpio ese mismo cuadro, siempre correcto) mezclándose con lo nuevo, el comportamiento que D-262 pidió explícitamente ("si cae a una opción sin coverdrift, el coverdrift que esté se desvanecerá"). Confirmé la diferencia con dos capturas reales a mitad de fundido: (1) Cover Flow (CoverDrift real, comprometido) → Audiolibros -- muestra la carátula desvaneciéndose de verdad, correcto; (2) Acerca de → Aleatorio, DESPUÉS de haber contaminado el buffer visitando Música antes en la misma sesión -- antes del arreglo habría mostrado restos de carátula, después del arreglo solo mezcla los dos contenidos reales (ícono/texto de Acerca de fundiéndose hacia el de Aleatorio), sin ningún resto de imagen.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (dibujo directo a framebuffer, sin lógica pura nueva). Capturas reales confirmando ambos casos arriba.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
