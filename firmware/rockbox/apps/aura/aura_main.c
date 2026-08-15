@@ -509,6 +509,14 @@ void aura_main(void)
              * de esta puerta): pending()/animating() coinciden. */
             if (aura_coverdrift_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
+            /* D-254: temporizador de 3s de "armado" (antes de montarse
+             * -- s_index sigue en -1, aura_coverdrift_animating() no lo
+             * sabe todavia). Cadencia gruesa: no hay nada que animar
+             * en pantalla durante la espera, solo hace falta que el
+             * reloj avance para poder cumplir el plazo aunque el
+             * usuario no toque botones. */
+            else if (aura_screens_coverdrift_arming() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
 
             /* CoverFlow (T3.2(b)) -- idle/scrolling, mismo criterio de
              * movimiento continuo que CoverDrift. pending() cubre las
