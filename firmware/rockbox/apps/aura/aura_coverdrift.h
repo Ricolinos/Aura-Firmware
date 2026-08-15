@@ -19,12 +19,18 @@
  *   fundido de bitmap todavia, un corte directo es aceptable a esta
  *   cadencia de 7s por imagen.
  *
- * D-251: conectado a dos consumidores reales -- el pool de caratulas de
- * album en las listas de Canciones/Artistas/Generos de Musica
- * (aura_screens.c, draw_music_browse()) y las miniaturas de la lista de
- * Fotos (aura_photos.c) -- ambos via aura_widgets_draw_list_with_art().
- * Los getters de indice de abajo existen exactamente para permitir esa
+ * D-251: conectado a un consumidor real -- las miniaturas de la lista
+ * de Fotos (aura_photos.c), via aura_widgets_draw_list_with_art(). Los
+ * getters de indice de abajo existen exactamente para permitir esa
  * decodificacion bajo demanda sin cargar el pool completo en memoria.
+ * Musica (Canciones/Artistas/Generos) queda SIN conectar a proposito
+ * -- esas pantallas corren en layout FULL (con riel A-Z propio), sin
+ * panel derecho de ningun tipo; darles uno para CoverDrift es una
+ * decision de UX real (quitar el riel A-Z), pendiente de que el dueno
+ * del producto la tome -- ver el comentario en
+ * aura_screens.c:draw_music_browse(). La infraestructura generica
+ * (aura_widgets_draw_list_with_art(), estos getters) ya esta lista
+ * para Musica en cuanto se decida.
  */
 #ifndef AURA_COVERDRIFT_H
 #define AURA_COVERDRIFT_H
