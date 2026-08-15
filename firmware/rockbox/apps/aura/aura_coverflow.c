@@ -165,6 +165,108 @@ static int s_target_index = 0;
 static int s_anim_from_x256 = 0;
 static long s_anim_since = 0;
 
+/* -- Zoom de la caratula central al scrollear (D-245, encargo del
+ * dueno del producto) -----------------------------------------------
+ *
+ * Mismo patron target/from/since que s_target_index/s_anim_from_x256/
+ * s_anim_since de arriba, para una segunda dimension de animacion (la
+ * escala en vez de la posicion): un "paso real" de scroll dispara un
+ * zoom-out con ease-in hacia CF_ZOOM_SCALE_SHRUNK; en cuanto la
+ * posicion se asienta (anim_pos_x256() alcanza el indice objetivo) se
+ * dispara el zoom-in de vuelta a CF_ZOOM_SCALE_NORMAL con ease-out. Si
+ * el usuario sigue girando la rueda mientras ya esta encogida, el
+ * target no cambia -- no vuelve a pulsar por cada paso de una rafaga,
+ * se queda encogida hasta que de verdad se detiene. */
+#define CF_ZOOM_SCALE_NORMAL  256 /* 100%: distance=0, identico al render de siempre */
+#define CF_ZOOM_SCALE_SHRUNK  240 /* ~94%: ver docs/aura-design-system/componentes/cover-flow.md */
+#define CF_ZOOM_OUT_MS 150 /* ease-in, mas corto: el arranque debe sentirse inmediato */
+#define CF_ZOOM_IN_MS  CF_SCROLL_ANIM_MS /* ease-out, mismo tiempo que el asentamiento de posicion */
+static int s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
+static int s_zoom_from_256 = CF_ZOOM_SCALE_NORMAL;
+static long s_zoom_since = 0;
+static int s_zoom_ease_in = 0; /* 1 mientras va hacia SHRUNK, 0 hacia NORMAL */
+
+/* Escala interpolada actual de la caratula central, 256=tamano normal.
+ * Cuando from==target (caso comun: reposo total, nunca hubo scroll o
+ * ya termino de asentarse) devuelve el valor exacto sin pasar por
+ * ninguna curva -- evita que un current_tick=0 inicial o un duration
+ * agotado introduzcan un redondeo que deje la caratula perceptiblemente
+ * distinta de 256 en reposo. */
+static int zoom_scale_256(void)
+{
+    long elapsed_ms;
+    int t;
+
+    if (s_zoom_from_256 == s_zoom_target_256)
+        return s_zoom_target_256;
+
+    elapsed_ms = (current_tick - s_zoom_since) * 1000L / HZ;
+    t = s_zoom_ease_in ? aura_motion_ease_in(elapsed_ms, CF_ZOOM_OUT_MS)
+                        : aura_motion_ease_out(elapsed_ms, CF_ZOOM_IN_MS);
+    return aura_pattern_lerp(s_zoom_from_256, s_zoom_target_256, t);
+}
+
+/* Distancia de camara (canal `slide.distance` de aura_flow, el mismo
+ * que ya usa el crecimiento 130->200px del flip) equivalente a la
+ * escala interpolada actual -- formula inversa de la ya documentada en
+ * CF_GROW_DISTANCE (escala = CAM_DIST/(CAM_DIST+d) => d =
+ * CAM_DIST*(256-escala)/escala). Con escala==256 (reposo) da
+ * exactamente 0, igual que el `slide.distance = 0` que reemplaza. */
+static int zoom_center_distance(void)
+{
+    int scale = zoom_scale_256();
+    if (scale >= CF_ZOOM_SCALE_NORMAL)
+        return 0;
+    return AURA_FLOW_CAM_DIST * (CF_ZOOM_SCALE_NORMAL - scale) / scale;
+}
+
+/* Para pending()/animating(): mientras la escala todavia no alcanzo su
+ * target (zoom-out en curso, o zoom-in de vuelta a la normal en curso
+ * DESPUES de que la posicion ya se asento) hacen falta mas cuadros, o
+ * el zoom-in de cierre se congela a medio camino en cuanto la posicion
+ * deja de exigir refresco por su cuenta. */
+static int zoom_animating(void)
+{
+    return zoom_scale_256() != s_zoom_target_256;
+}
+
+/* Dispara el zoom-out (ease-in hacia SHRUNK) desde un paso de scroll
+ * real -- llamar solo cuando el indice objetivo de verdad cambio (no
+ * en un no-op de borde). Si ya esta encogida o encogiendose (rafaga de
+ * pasos), no reinicia nada -- ver comentario de arriba. */
+static void zoom_trigger_scroll_start(void)
+{
+    if (s_zoom_target_256 == CF_ZOOM_SCALE_SHRUNK)
+        return;
+    s_zoom_from_256 = zoom_scale_256();
+    s_zoom_target_256 = CF_ZOOM_SCALE_SHRUNK;
+    s_zoom_since = current_tick;
+    s_zoom_ease_in = 1;
+}
+
+/* Dispara el zoom-in (ease-out hacia NORMAL) cuando la posicion ya se
+ * asento. Idempotente igual que la anterior. */
+static void zoom_trigger_settle(void)
+{
+    if (s_zoom_target_256 == CF_ZOOM_SCALE_NORMAL)
+        return;
+    s_zoom_from_256 = zoom_scale_256();
+    s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
+    s_zoom_since = current_tick;
+    s_zoom_ease_in = 0;
+}
+
+/* Corta cualquier animacion de zoom en curso y fuerza reposo instantaneo
+ * -- para los mismos puntos donde la posicion tambien se fuerza a
+ * reposo instantaneo (entrar a una lista distinta, volver de una
+ * transicion), donde arrastrar una escala a medio encoger no tendria
+ * sentido. */
+static void zoom_settle_idle(void)
+{
+    s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
+    s_zoom_from_256 = CF_ZOOM_SCALE_NORMAL;
+}
+
 static aura_screen_id_t s_cache_screen = AURA_SCREEN_COUNT;
 static int s_cache_generation = -1;
 static aura_music_item_t s_albums[AURA_MUSIC_MAX_ITEMS];
@@ -214,6 +316,19 @@ static int flip_progress_256(void)
     return aura_motion_linear(elapsed_ms, CF_FLIP_MS);
 }
 
+/* Solo la POSICION -- para el gate de SELECT (ver mas abajo), que
+ * necesita saber si la tapa objetivo ya esta en su lugar, no si el
+ * zoom (D-245) sigue interpolando de vuelta a tamano normal. Antes de
+ * D-245 esto era exactamente lo que hacia aura_coverflow_pending(); al
+ * sumarle zoom_animating() para la cadencia de render, el gate de
+ * SELECT habria heredado ~220ms extra de espera injustificada cada vez
+ * que se selecciona justo al terminar de scrollear. */
+static int position_pending(void)
+{
+    return anim_pos_x256() != s_target_index * 256
+        || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
+}
+
 int aura_coverflow_pending(void)
 {
     if (s_state == CF_STATE_SHOW_TRACKS)
@@ -240,19 +355,22 @@ int aura_coverflow_pending(void)
     }
 
     return anim_pos_x256() != s_target_index * 256
+        || zoom_animating()
         || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
 }
 
 int aura_coverflow_animating(void)
 {
     /* Cadencia fina solo cuando los pixeles se mueven de verdad: el
-     * carrusel/flip, o el tramo de MOVIMIENTO del marquee de la
-     * cabecera -- no durante su tramo estatico ni la persistencia del
-     * ScrollIndicator (esos van por pending() a cadencia gruesa). */
+     * carrusel/flip, el zoom de la caratula central (D-245), o el
+     * tramo de MOVIMIENTO del marquee de la cabecera -- no durante su
+     * tramo estatico ni la persistencia del ScrollIndicator (esos van
+     * por pending() a cadencia gruesa). */
     if (s_state == CF_STATE_SHOW_TRACKS)
         return s_header_overflowing && marquee_phase_scrolling(s_header_since);
 
     return anim_pos_x256() != s_target_index * 256
+        || zoom_animating()
         || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
 }
 
@@ -286,6 +404,7 @@ static void ensure_albums(aura_screen_id_t screen)
         s_target_index = 0;
         s_anim_from_x256 = 0;
         s_anim_since = current_tick;
+        zoom_settle_idle();
     }
 
     for (i = 0; i < CF_CACHE_SLOTS; i++)
@@ -437,8 +556,20 @@ static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
  * de reposo -- exactos en los offsets enteros (fmuln con offset=k*256
  * da identico resultado a la formula discreta anterior), suaves entre
  * medio. Es lo que hace que las tapas se DESLICEN entre posiciones en
- * vez de saltar. */
-static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
+ * vez de saltar.
+ *
+ * `center_distance` (D-245) es el `slide.distance` que produce el zoom
+ * de la caratula central al scrollear -- calculado UNA vez por cuadro
+ * en aura_coverflow_draw() (ver zoom_center_distance()), no por tapa,
+ * para no repetir su division en cada una de las ~9 tapas visibles.
+ * Se interpola con el MISMO t_center que ya atenua angle/cx/fade hacia
+ * la tapa lateral: a t_center=0 (offset==0, la tapa mas centrada de
+ * este cuadro) el efecto es completo; a t_center=256 (ya en su
+ * posicion lateral de reposo) cae a 0 -- ninguna lateral queda con
+ * distancia residual, es el mismo criterio continuo que ya usa el
+ * resto de esta funcion. */
+static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
+                                    int center_distance)
 {
     aura_flow_slide_t slide;
     aura_flow_projection_t proj;
@@ -479,7 +610,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256)
      * offset==0 (sign==0) todo colapsa a angulo/cx cero, sin distorsion,
      * igual que antes. */
     slide.angle = -sign * aura_pattern_lerp(0, CF_ITILT, t_center);
-    slide.distance = 0;
+    slide.distance = aura_pattern_lerp(center_distance, 0, t_center);
     slide.cx = sign * (aura_pattern_lerp(0, CF_OFFSETX_R, t_center)
                         + (int)((long)CF_SLIDE_SPACING_R * extra_x256 / 256));
 
@@ -834,7 +965,7 @@ typedef struct { int idx; int offset_x256; } cf_entry_t;
 
 void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 {
-    int pos_x256, center_idx, i, n;
+    int pos_x256, center_idx, i, n, zoom_dist;
     cf_entry_t entries[2 * CF_VISIBLE_RADIUS + 3];
     (void)nav;
 
@@ -875,6 +1006,14 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
      * de solo aparecer/desaparecer en los extremos. */
     pos_x256 = anim_pos_x256();
     center_idx = (pos_x256 + (pos_x256 >= 0 ? 128 : -128)) / 256; /* redondeo al mas cercano */
+
+    /* D-245: la posicion del carrusel ya se asento (sin esto, un
+     * asentamiento detectado a medio camino de un salto acelerado
+     * dispararia el zoom-in de forma prematura, antes de que el
+     * carrusel de verdad termine de moverse). */
+    if (pos_x256 == s_target_index * 256)
+        zoom_trigger_settle();
+    zoom_dist = zoom_center_distance();
 
     n = 0;
     for (i = -(CF_VISIBLE_RADIUS + 1); i <= CF_VISIBLE_RADIUS + 1; i++)
@@ -950,7 +1089,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
          * significado. Un solo camino de render para central y
          * laterales, con distancia CONTINUA (ver comentario de
          * draw_slide_perspective). */
-        draw_slide_perspective(slot, offset_x256);
+        draw_slide_perspective(slot, offset_x256, zoom_dist);
     }
 
     {
@@ -1026,6 +1165,7 @@ static void jump_albums(int delta)
     s_anim_from_x256 = anim_pos_x256();
     s_target_index = new_target;
     s_anim_since = current_tick;
+    zoom_trigger_scroll_start();
 }
 
 /* PLAY sobre la tapa enfocada (encargo del dueno del diseno,
@@ -1078,6 +1218,8 @@ static void scroll_step(int dir)
      * brusco al nuevo destino, sigue deslizandose suave desde donde
      * ya estaba (mismo patron que el cross-fade de CoverDrift/T2.9 y
      * el morph de NowPlaying/T3.1c). */
+    if (new_target != s_target_index)
+        zoom_trigger_scroll_start(); /* D-245: solo en un paso real, no en el no-op de borde */
     s_anim_from_x256 = anim_pos_x256();
     s_target_index = new_target;
     s_anim_since = current_tick;
@@ -1145,8 +1287,11 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
     case BUTTON_SELECT:
         /* Select solo cicla el carrusel a reposo exacto -- flipear a
          * mitad de un deslizamiento (target != posicion animada) se
-         * veria mal, la tapa objetivo todavia no esta en su lugar. */
-        if (s_album_count > 0 && !aura_coverflow_pending())
+         * veria mal, la tapa objetivo todavia no esta en su lugar.
+         * position_pending() (no aura_coverflow_pending()): el zoom de
+         * D-245 no debe añadir latencia a SELECT, solo la posicion
+         * importa aca -- ver comentario de position_pending(). */
+        if (s_album_count > 0 && !position_pending())
         {
             aura_music_select_album(s_albums[s_target_index].seek);
             s_track_count = aura_music_browse(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM,
@@ -1206,7 +1351,11 @@ static void draw_carousel_sides(int extra_out_x256)
             offset += (offset > 0 ? extra_out_x256 : -extra_out_x256);
 
             slot = get_slot_for(use);
-            draw_slide_perspective(slot, offset);
+            /* d>=1 siempre: nunca dibuja la tapa central (offset==0)
+             * aca, es coreografia de vuelo de entrada/salida -- sin
+             * zoom D-245, que solo aplica durante scroll dentro del
+             * carrusel normal. */
+            draw_slide_perspective(slot, offset, 0);
         }
     }
 }
@@ -1274,4 +1423,5 @@ void aura_coverflow_settle_idle(void)
     s_state = CF_STATE_IDLE;
     s_anim_from_x256 = s_target_index * 256;
     s_anim_since = current_tick;
+    zoom_settle_idle();
 }
