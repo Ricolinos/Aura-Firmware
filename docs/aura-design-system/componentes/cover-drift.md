@@ -55,17 +55,17 @@ anterior.
 - **No siempre recorre el trayecto completo de extremo a extremo** — la
   distancia de arranque varía entre 40% y 100% del margen disponible.
 - **Duración: 7 segundos** por desplazamiento.
-- **Curva: desaceleración real** (D-254, corrección tras probar velocidad
-  lineal constante) — el movimiento arranca rápido y se hace cada vez más
-  lento según se acerca el cambio de imagen, en vez de una velocidad
-  uniforme todo el trayecto. Implementado remapeando el tiempo con
-  `aura_motion_ease_out()` ANTES de pasarlo al motor de posición
-  (`aura_pattern_drift_pos()`, `aura_patterns.c`) — ese motor sigue siendo
-  puramente lineal, sin tocar (tiene 5 pruebas que dependen de esa
-  linealidad exacta). Verificado analíticamente (misma aritmética entera
-  exacta del código) que la trayectoria resultante es una diagonal
-  genuinamente intercalada entre los dos ejes, nunca un patrón de
-  "escalera" (varios pasos en un eje seguidos de varios en el otro).
+- **Curva: velocidad constante** (D-254 probó una desaceleración real hacia
+  el cambio de imagen, remapeando el tiempo con `aura_motion_ease_out()`
+  antes de pasarlo al motor de posición -- el dueño del producto la probó
+  en el simulador y pidió quitarla, D-255. `aura_pattern_drift_pos()`
+  (`aura_patterns.c`) ya es puramente lineal por su cuenta -- recibe el
+  tiempo real directo, sin ningún remapeo). Verificado analíticamente
+  (misma aritmética entera exacta del código) que la trayectoria resultante
+  es una diagonal genuinamente intercalada entre los dos ejes, nunca un
+  patrón de "escalera" (varios pasos en un eje seguidos de varios en el
+  otro) -- ambos ejes se derivan siempre del mismo escalar de distancia
+  compartido.
 - **Transición entre imágenes: fundido REAL** (D-254, corrección tras un
   primer intento con corte directo) — mezcla píxel a píxel entre la imagen
   saliente (quieta, en el centro) y la entrante (moviéndose), durante los

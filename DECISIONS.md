@@ -3000,4 +3000,14 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-255 — CoverDrift: de vuelta a velocidad constante, sin desaceleración
+
+**Encargo**: tras ver D-254 en el simulador, el dueño del producto pidió quitar la desaceleración hacia el cambio de imagen -- el movimiento debe ser a velocidad constante.
+
+**Arreglo**: `aura_coverdrift.c` quita `ease_out_effective_ms()` (el remapeo de tiempo vía `aura_motion_ease_out()` que D-254 introdujo) -- `aura_pattern_drift_pos()` (`aura_patterns.c`, ya puramente lineal desde D-089, nunca se tocó) ahora recibe el `elapsed_ms` real directo, sin ningún remapeo. `#include "aura_motion.h"` retirado por quedar sin uso. Resto del componente (imagen de 290×290 llenando el panel, fundido real entre carátulas, umbral de 3, retardo de 3s) sin cambios.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos. Captura real confirmando que el panel sigue llenándose correctamente con una carátula real, sin regresión visual.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

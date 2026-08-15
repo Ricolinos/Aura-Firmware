@@ -22,12 +22,12 @@
  *   fila calificada antes de reemplazar el icono normal (tiempo para
  *   decodificar la primera caratula) -- ese temporizador vive en
  *   aura_screens.c, no aqui (este modulo no sabe de filas/pantallas).
- * - Movimiento con desaceleracion real acercandose al cambio de imagen
- *   (antes: velocidad lineal constante todo el ciclo) -- logrado
- *   remapeando el tiempo con aura_motion_ease_out() ANTES de pasarlo a
- *   aura_pattern_drift_pos() (que sigue siendo puramente lineal, sin
- *   tocar, tiene 5 pruebas que dependen de esa linealidad exacta,
- *   D-089) -- ver ease_out_effective_ms() en el .c.
+ * - Movimiento a velocidad CONSTANTE (D-254 probo una desaceleracion
+ *   real con aura_motion_ease_out(), remapeando el tiempo antes de
+ *   pasarlo a aura_pattern_drift_pos() -- el dueno del producto la
+ *   probo en el simulador y pidio quitarla, D-255). aura_pattern_drift_pos()
+ *   (aura_patterns.c) ya es puramente lineal por su cuenta -- se le pasa
+ *   el tiempo real directo, sin ningun remapeo.
  * - Fundido REAL (blend pixel a pixel) entre la imagen saliente y la
  *   entrante durante la ventana de cross-fade -- reemplaza el corte
  *   directo que D-098/D-251 dejaban deliberadamente diferido por falta

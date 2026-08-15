@@ -6,7 +6,6 @@
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
 #include "aura_patterns.h"
-#include "aura_motion.h"
 
 #include "aura_coverdrift.h"
 
@@ -53,22 +52,6 @@ static void advance_cycle(int count, int max_distance)
     s_angle_idx = pick_angle_idx_excluding(s_angle_idx);
     s_distance = pick_distance(max_distance);
     s_since = current_tick;
-}
-
-/* D-254: remapea el tiempo real con aura_motion_ease_out() ANTES de
- * pasarlo a aura_pattern_drift_pos() -- la imagen recorre la mayor
- * parte de la distancia rapido al principio del ciclo y se desliza
- * cada vez mas lento el resto, hasta casi detenerse justo antes del
- * cambio de imagen (encargo textual del dueno: "un movimiento suave y
- * sutil solo que antes de cambiar de imagen se haria un poco mas
- * lento"). aura_pattern_drift_pos() (aura_patterns.c) sigue siendo
- * puramente lineal, SIN TOCAR -- tiene 5 pruebas que dependen de esa
- * linealidad exacta (D-089); envolver el tiempo de entrada logra el
- * efecto pedido sin arriesgar ese modulo ya probado. */
-static long ease_out_effective_ms(long elapsed_ms, long duration_ms)
-{
-    int progress_256 = aura_motion_ease_out(elapsed_ms, duration_ms);
-    return (long)progress_256 * duration_ms / 256;
 }
 
 int aura_coverdrift_should_mount(int image_count)
@@ -218,7 +201,7 @@ void aura_coverdrift_draw(int x, int width,
     int margin_x = (IMAGE_SIZE - width) / 2;
     int margin_y = (IMAGE_SIZE - A26_SCREEN_HEIGHT) / 2;
     int max_distance = margin_x < margin_y ? margin_x : margin_y;
-    long elapsed_ms, effective_ms;
+    long elapsed_ms;
     aura_pattern_point_t pos;
 
     lcd_set_foreground(a26_color(A26_SHELL_RAIL));
@@ -244,8 +227,13 @@ void aura_coverdrift_draw(int x, int width,
         elapsed_ms = 0;
     }
 
-    effective_ms = ease_out_effective_ms(elapsed_ms, CYCLE_MS);
-    pos = aura_pattern_drift_pos(ANGLES_DEG[s_angle_idx], s_distance, effective_ms, CYCLE_MS);
+    /* D-255 (correccion del dueno del producto, 2026-08-15): de vuelta a
+     * velocidad CONSTANTE -- D-254 habia agregado una desaceleracion
+     * real (ease_out_effective_ms(), remapeando el tiempo antes de
+     * pasarlo aca) que el dueno probo y pidio quitar. aura_pattern_drift_pos()
+     * (aura_patterns.c) ya es puramente lineal por su cuenta -- se le
+     * pasa elapsed_ms directo, sin ningun remapeo de tiempo. */
+    pos = aura_pattern_drift_pos(ANGLES_DEG[s_angle_idx], s_distance, elapsed_ms, CYCLE_MS);
 
     if (elapsed_ms < CROSSFADE_MS && s_prev_index >= 0)
     {
