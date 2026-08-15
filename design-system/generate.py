@@ -355,17 +355,29 @@ def render_symbol_shapes(tokens, shapes_dir):
     # identico entre variantes (ver comment en tokens.json).
     dyn = icon_cfg.get("dynamic_speaker")
 
+    # D-263: icon_key con SVG propio (rutas relativas a design-system/,
+    # resueltas aqui a absolutas -- el renderizador Swift recibe rutas
+    # ya resueltas, no le corresponde a el buscar la raiz del repo).
+    svg_overrides = {
+        k: str((ROOT / v).resolve())
+        for k, v in icon_cfg.get("svg_overrides", {}).items()
+    }
+
     jobs = []
     for icon_key, symbol_name in icon_cfg["names"].items():
+        svg_path = svg_overrides.get(icon_key)
         for size_name, size_px in icon_cfg["sizes"].items():
             w_px, h_px = icon_canvas_dims(icon_cfg, icon_key, size_name, size_px)
             job = {
-                "symbol": symbol_name,
                 "px": w_px * SUPERSAMPLE,
                 "py": h_px * SUPERSAMPLE,
-                "weight": icon_cfg["weight_by_size"][size_name],
                 "out": str(shapes_dir / f"{icon_key}-{size_px}.png"),
             }
+            if svg_path:
+                job["svgPath"] = svg_path
+            else:
+                job["symbol"] = symbol_name
+                job["weight"] = icon_cfg["weight_by_size"][size_name]
             if (dyn and icon_key in dyn["icons"]
                     and size_name == dyn["size"]):
                 ref_px = icon_cfg["sizes"][dyn["body_ref"]]

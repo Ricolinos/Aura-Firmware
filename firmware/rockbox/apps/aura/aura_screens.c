@@ -921,6 +921,23 @@ typedef struct
     aura_category_t coverdrift_category;
 } panel_identity_t;
 
+/* Categoria CONGELADA de una identidad de panel -- reproduce, sobre
+ * container_screen/selected_target ya comprometidos, la MISMA regla que
+ * update_active_category() aplica en vivo cada cuadro (mas arriba en
+ * este archivo): en la raiz del Menu principal la categoria real es la
+ * del item resaltado, fuera de la raiz es la de la pantalla contenedora.
+ * D-263: pasada explicita a aura_selection_summary_draw()/_draw_dynamic()
+ * en vez de que ese componente consulte aura_category_current() en
+ * vivo -- ver el comentario grande en aura_selection_summary.c para el
+ * bug real que esto corrige (el color del tile saltaba antes que el
+ * icono durante el debounce de D-262). */
+static aura_category_t panel_identity_category(const panel_identity_t *id)
+{
+    return (id->container_screen == AURA_SCREEN_ROOT)
+        ? aura_category_for_screen(id->selected_target)
+        : aura_category_for_screen(id->container_screen);
+}
+
 static bool panel_identity_equal(const panel_identity_t *a, const panel_identity_t *b)
 {
     if (a->coverdrift != b->coverdrift)
@@ -998,7 +1015,9 @@ static void draw_panel_identity(int panel_x, int panel_w, const panel_identity_t
     }
     else
     {
-        aura_selection_summary_draw(panel_x, panel_w, id->panel_icon, NULL, id->panel_desc);
+        aura_selection_summary_draw(panel_x, panel_w, id->panel_icon,
+                                     panel_identity_category(id),
+                                     NULL, id->panel_desc);
     }
 }
 

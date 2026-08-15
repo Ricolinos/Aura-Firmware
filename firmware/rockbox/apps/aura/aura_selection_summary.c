@@ -1,6 +1,9 @@
+#include <string.h>
+
 #include "lcd.h"
 #include "timefuncs.h"
 #include "tick.h"
+#include "string-extra.h"
 
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
@@ -24,14 +27,25 @@
 
 /* Estado del marquee por slot (mismo patron de aura_statusbar.c/T2.1:
  * comparacion por puntero, los textos de este proyecto son siempre
- * literales de cadena estables). Dos relojes independientes -- ambos
- * slots pueden desbordar a la vez con textos de largo distinto. */
+ * literales de cadena estables). El slot superior es una sola linea
+ * (valor/titulo corto, D-263); el inferior admite hasta DOS lineas
+ * (D-263, "el texto de abajo se podra mostrar en dos filas") -- cada
+ * fila tiene su propio reloj de marquee independiente, igual que antes
+ * lo tenian los dos SLOTS: una fila larga puede desbordar mientras la
+ * otra no, sobre todo porque el texto de una fila casi siempre es mas
+ * corto que el de la otra tras partir por palabra. */
 static const char *s_top_shown = NULL;
-static const char *s_bottom_shown = NULL;
 static long s_top_since = 0;
-static long s_bottom_since = 0;
 static int s_top_overflowing = 0;
-static int s_bottom_overflowing = 0;
+
+#define BOTTOM_LINES 2
+static const char *s_bottom_shown[BOTTOM_LINES] = { NULL, NULL };
+static long s_bottom_since[BOTTOM_LINES] = { 0, 0 };
+static int s_bottom_overflowing[BOTTOM_LINES] = { 0, 0 };
+/* Buffers de las dos lineas partidas -- estables mientras el texto
+ * fuente (comparado por puntero) no cambie, ver split_two_lines(). */
+static char s_bottom_line_buf[BOTTOM_LINES][64];
+static const char *s_bottom_line_source = NULL;
 
 static int marquee_phase_animating(long since)
 {
@@ -48,15 +62,25 @@ static int marquee_phase_animating(long since)
 
 int aura_selection_summary_pending(void)
 {
-    return s_top_overflowing || s_bottom_overflowing;
+    int i;
+
+    if (s_top_overflowing)
+        return 1;
+    for (i = 0; i < BOTTOM_LINES; i++)
+        if (s_bottom_overflowing[i])
+            return 1;
+    return 0;
 }
 
 int aura_selection_summary_animating(void)
 {
+    int i;
+
     if (s_top_overflowing && marquee_phase_animating(s_top_since))
         return 1;
-    if (s_bottom_overflowing && marquee_phase_animating(s_bottom_since))
-        return 1;
+    for (i = 0; i < BOTTOM_LINES; i++)
+        if (s_bottom_overflowing[i] && marquee_phase_animating(s_bottom_since[i]))
+            return 1;
     return 0;
 }
 
@@ -130,19 +154,109 @@ static void draw_text_slot(int x, int y, int max_width, const char *text,
     }
 }
 
+/* Parte `text` en hasta BOTTOM_LINES=2 lineas por palabra, cada una
+ * buscando caber en `max_width` con la fuente YA configurada por el
+ * llamador (D-263: "el texto de abajo se podra mostrar en dos filas si
+ * es necesario"). Voraz: la linea 1 crece mientras el prefijo completo
+ * siga cabiendo en un limite de palabra; el resto entero (quepa o no)
+ * pasa a la linea 2 -- nunca se corte una palabra a la mitad. Si una
+ * sola palabra ya excede `max_width` por si sola, se deja completa en
+ * su linea -- esa linea usara MarqueeText (draw_text_slot ya lo hace
+ * por su cuenta si sigue sin caber) en vez de forzar una tercera fila
+ * que el documento no pide. Si el texto completo ya cabe en una sola
+ * linea, `line2` queda vacio -- el llamador no reserva su altura en ese
+ * caso. Resultado cacheado por puntero de `text` (mismo patron del
+ * resto del archivo, D-091): recalcula solo cuando el texto fuente
+ * cambia, no cada cuadro. */
+static void split_two_lines(const char *text, int max_width)
+{
+    size_t len, split_at, i;
+    int w, h;
+
+    if (text == s_bottom_line_source)
+        return;
+
+    s_bottom_line_source = text;
+    s_bottom_line_buf[0][0] = '\0';
+    s_bottom_line_buf[1][0] = '\0';
+    if (!text || !text[0])
+        return;
+
+    len = strlen(text);
+    if (len >= sizeof(s_bottom_line_buf[0]) + sizeof(s_bottom_line_buf[1]))
+        len = sizeof(s_bottom_line_buf[0]) + sizeof(s_bottom_line_buf[1]) - 2;
+                                    /* recorte defensivo -- las etiquetas
+                                     * reales de este sistema son cortas */
+
+    lcd_getstringsize((const unsigned char *)text, &w, &h);
+    if (w <= max_width)
+    {
+        strlcpy(s_bottom_line_buf[0], text, sizeof(s_bottom_line_buf[0]));
+        return;
+    }
+
+    /* Ultimo espacio tal que el prefijo [0, i) todavia quepa -- se
+     * detiene en el primero que ya no cabe (el ancho crece de forma
+     * monotona con el prefijo, ningun prefijo posterior podria caber si
+     * este ya no). */
+    split_at = 0;
+    for (i = 0; i < len; i++)
+    {
+        char tmp[sizeof(s_bottom_line_buf[0])];
+        int tw, th;
+
+        if (text[i] != ' ')
+            continue;
+        if (i >= sizeof(tmp))
+            break;
+
+        memcpy(tmp, text, i);
+        tmp[i] = '\0';
+        lcd_getstringsize((const unsigned char *)tmp, &tw, &th);
+        if (tw > max_width)
+            break;
+        split_at = i;
+    }
+
+    if (split_at == 0)
+    {
+        strlcpy(s_bottom_line_buf[0], text, sizeof(s_bottom_line_buf[0]));
+        return;
+    }
+
+    memcpy(s_bottom_line_buf[0], text, split_at);
+    s_bottom_line_buf[0][split_at] = '\0';
+    strlcpy(s_bottom_line_buf[1], text + split_at + 1, sizeof(s_bottom_line_buf[1]));
+}
+
 /* Layout completo (tile, degradado, sombra, texto) compartido por la
  * version estatica y la dinamica (B-04 en BLOCKED.md: "debe ser una
  * variante") -- lo UNICO que cambia entre las dos es como se pinta el
  * simbolo sobre el tile, aca aislado a las dos lineas finales del
- * bloque "Simbolo". `icon_name` NULL => usa `renderer` en su lugar. */
+ * bloque "Simbolo". `icon_name` NULL => usa `renderer` en su lugar.
+ *
+ * `category` (D-263): el degradado del tile YA NO consulta
+ * aura_category_current() en vivo -- la recibe explicita del llamador,
+ * que debe pasar la categoria CONGELADA de la identidad de panel que
+ * este cuadro realmente esta dibujando (aura_screens.c:
+ * panel_identity_category(), calculada sobre container_screen/
+ * selected_target ya comprometidos por D-262, no sobre la seleccion en
+ * vivo del LeftPanel). Bug real encontrado en la revision de D-262: con
+ * aura_category_current() el color del tile saltaba al instante con
+ * cada fila recorrida (se recalcula cada cuadro) mientras el icono
+ * seguia congelado los 2s completos -- para cuando llegaba el fundido
+ * real ya no quedaba color que fundir, solo el icono se movia. Con la
+ * categoria tambien congelada, ambos (color e icono) cambian juntos,
+ * en el mismo fundido. */
 static void draw_summary(int x, int width, const char *icon_name,
                           aura_selection_summary_icon_renderer_t renderer,
+                          aura_category_t category,
                           const char *top_text, const char *bottom_text)
 {
     int tile_x = x + (width - TILE_SIZE) / 2;
     int text_max_w = width - 2 * TEXT_PAD;
     int text_x = x + TEXT_PAD;
-    int top_h = 0, bottom_h = 0;
+    int top_h = 0, bottom_h = 0, bottom_lines = 0;
     int total_h, tile_y, w, h;
 
     /* Separador + sombra de LeftPanel (efectos/01-sombras.md, "SIEMPRE
@@ -157,17 +271,23 @@ static void draw_summary(int x, int width, const char *icon_name,
     /* Altura de cada slot de texto medida con la fuente real antes de
      * calcular el centrado vertical del conjunto -- mismo criterio ya
      * usado en aura_statusbar.c (centrado por altura medida, no un
-     * numero magico). */
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+     * numero magico). Slot superior: SF Pro Bold 16pt (D-263, DS_BOLD_16,
+     * unica linea -- "valor" o titulo corto, nunca se envuelve). Slot
+     * inferior: DS_REG_10 sin cambios, hasta DOS lineas por palabra
+     * (split_two_lines()). */
     if (top_text && top_text[0])
     {
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_16));
         lcd_getstringsize((const unsigned char *)top_text, &w, &h);
         top_h = h + TEXT_GAP;
     }
     if (bottom_text && bottom_text[0])
     {
-        lcd_getstringsize((const unsigned char *)bottom_text, &w, &h);
-        bottom_h = h + TEXT_GAP;
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+        split_two_lines(bottom_text, text_max_w);
+        bottom_lines = s_bottom_line_buf[1][0] ? 2 : 1;
+        lcd_getstringsize((const unsigned char *)s_bottom_line_buf[0], &w, &h);
+        bottom_h = bottom_lines * h + TEXT_GAP;
     }
 
     total_h = top_h + TILE_SIZE + bottom_h;
@@ -175,16 +295,15 @@ static void draw_summary(int x, int width, const char *icon_name,
 
     /* Tile con degradado por CATEGORIA de la seccion activa
      * (componentes/selection-summary.md, encargo del dueno 2026-08-14):
-     * antes siempre el acento sin importar la seccion -- ahora Musica
-     * sigue siendo el acento (aura_accent_light/_dark, sin cambio de
-     * comportamiento), pero Ajustes/Video/Fotos/Extras tienen su propio
-     * color en cascada (aura_category_current(), fijado una vez por
-     * cuadro desde aura_screens_draw()). Ver aura_category_gradient()
+     * Musica sigue siendo el acento (aura_accent_light/_dark, sin cambio
+     * de comportamiento), pero Ajustes/Video/Fotos/Extras tienen su
+     * propio color en cascada -- congelado junto con el icono desde
+     * D-263, ver comentario grande arriba. Ver aura_category_gradient()
      * (apple2026_shell.h) para los 3 puntos del degradado. */
     {
         unsigned tile_a, tile_center, tile_b;
 
-        aura_category_gradient(aura_category_current(), &tile_a, &tile_center, &tile_b);
+        aura_category_gradient(category, &tile_a, &tile_center, &tile_b);
         draw_diagonal_gradient(tile_x, tile_y, TILE_SIZE, tile_a, tile_center, tile_b);
     }
     a26_shell_round_bitmap_corners(tile_x, tile_y, TILE_SIZE, TILE_SIZE, TILE_RADIUS,
@@ -199,36 +318,55 @@ static void draw_summary(int x, int width, const char *icon_name,
     else if (renderer)
         renderer(tile_x + TILE_SIZE / 2, tile_y + TILE_SIZE / 2, SYMBOL_SIZE);
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
 
     if (top_h)
+    {
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_16));
         draw_text_slot(text_x, tile_y - top_h, text_max_w, top_text,
                         &s_top_shown, &s_top_since, &s_top_overflowing);
+    }
     else
         s_top_overflowing = 0;
 
-    if (bottom_h)
-        draw_text_slot(text_x, tile_y + TILE_SIZE + TEXT_GAP, text_max_w, bottom_text,
-                        &s_bottom_shown, &s_bottom_since, &s_bottom_overflowing);
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    if (bottom_lines >= 1)
+    {
+        int line_h = (bottom_h - TEXT_GAP) / bottom_lines;
+
+        draw_text_slot(text_x, tile_y + TILE_SIZE + TEXT_GAP, text_max_w,
+                        s_bottom_line_buf[0],
+                        &s_bottom_shown[0], &s_bottom_since[0], &s_bottom_overflowing[0]);
+        if (bottom_lines == 2)
+            draw_text_slot(text_x, tile_y + TILE_SIZE + TEXT_GAP + line_h, text_max_w,
+                            s_bottom_line_buf[1],
+                            &s_bottom_shown[1], &s_bottom_since[1], &s_bottom_overflowing[1]);
+        else
+            s_bottom_overflowing[1] = 0;
+    }
     else
-        s_bottom_overflowing = 0;
+    {
+        s_bottom_overflowing[0] = 0;
+        s_bottom_overflowing[1] = 0;
+    }
 }
 
 void aura_selection_summary_draw(int x, int width,
                                   const char *icon_name,
+                                  aura_category_t category,
                                   const char *top_text,
                                   const char *bottom_text)
 {
-    draw_summary(x, width, icon_name, NULL, top_text, bottom_text);
+    draw_summary(x, width, icon_name, NULL, category, top_text, bottom_text);
 }
 
 void aura_selection_summary_draw_dynamic(int x, int width,
                                           aura_selection_summary_icon_renderer_t renderer,
+                                          aura_category_t category,
                                           const char *top_text,
                                           const char *bottom_text)
 {
-    draw_summary(x, width, NULL, renderer, top_text, bottom_text);
+    draw_summary(x, width, NULL, renderer, category, top_text, bottom_text);
 }
 
 /* Reloj analogico (componentes/selection-summary.md, "Variante

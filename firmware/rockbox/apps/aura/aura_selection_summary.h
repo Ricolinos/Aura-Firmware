@@ -26,20 +26,32 @@
 #ifndef AURA_SELECTION_SUMMARY_H
 #define AURA_SELECTION_SUMMARY_H
 
+#include "aura_category.h"
+
 /* Dibuja en la franja [x, x+width) x [0, A26_SCREEN_HEIGHT) -- todo el
  * espacio vertical disponible del panel derecho (StatusBar en (split)
  * solo vive sobre el panel izquierdo, doc status-bar.md, asi que este
  * componente no necesita dejarle hueco arriba).
  *
  * `icon_name` nunca NULL (siempre hay un icono por item de menu, regla
- * de diseno cerrada en el documento). `top_text` puede ser NULL (slot
- * superior opcional); `bottom_text` casi siempre presente pero tambien
- * acepta NULL para cubrir el caso limite. Ninguno de los dos anima su
- * cambio de VALOR (icono y texto cambian de forma instantanea) -- solo
- * el loop de MarqueeText si el texto no cabe.
+ * de diseno cerrada en el documento). `category` (D-263) fija el
+ * degradado del tile -- el llamador SIEMPRE debe pasar la categoria ya
+ * CONGELADA/comprometida del contenido que esta dibujando en este
+ * cuadro, nunca una consulta en vivo a la seleccion actual del
+ * LeftPanel (ver aura_screens.c: panel_identity_category()) -- de lo
+ * contrario el color del tile cambia antes que el icono/texto durante
+ * el debounce de D-262, deshaciendo el fundido. `top_text` puede ser
+ * NULL (slot superior opcional, SF Pro Bold 16pt, una sola linea --
+ * "valor" o titulo corto); `bottom_text` casi siempre presente pero
+ * tambien acepta NULL para cubrir el caso limite -- hasta DOS lineas
+ * por palabra si no cabe en una (D-263), MarqueeText por linea si ni
+ * asi cabe. Ninguno de los dos anima su cambio de VALOR (icono y texto
+ * cambian de forma instantanea) -- solo el loop de MarqueeText si el
+ * texto no cabe.
  */
 void aura_selection_summary_draw(int x, int width,
                                   const char *icon_name,
+                                  aura_category_t category,
                                   const char *top_text,
                                   const char *bottom_text);
 
@@ -53,6 +65,7 @@ typedef void (*aura_selection_summary_icon_renderer_t)(int x, int y, int size);
 
 void aura_selection_summary_draw_dynamic(int x, int width,
                                           aura_selection_summary_icon_renderer_t renderer,
+                                          aura_category_t category,
                                           const char *top_text,
                                           const char *bottom_text);
 

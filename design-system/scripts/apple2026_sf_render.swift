@@ -1,4 +1,5 @@
-// Renderiza un lote de SF Symbols a PNGs cuadrados, negro sobre alfa 0.
+// Renderiza un lote de SF Symbols (o SVG propios, D-263) a PNGs
+// cuadrados, negro sobre alfa 0.
 //
 // SF Symbols no se distribuyen como archivos sueltos que se puedan
 // versionar (la app SF Symbols exporta SVG de a uno a mano, y ni siquiera
@@ -6,13 +7,24 @@
 // pedirselos al sistema con NSImage(systemSymbolName:) -- la MISMA fuente
 // que usa cualquier app de Apple. Requiere macOS 11+.
 //
+// D-263 (encargo del dueno de producto): dos iconos (Musica, iPod para
+// Acerca de) vienen de un SVG propio en vez de un SF Symbol -- Apple no
+// publica un glifo de iPod, y el dueno queria una forma de nota musical
+// distinta a la de SF Symbols para Musica. `svgPath` (job.svgPath, en vez
+// de job.symbol) carga el archivo con NSImage(contentsOfFile:) y lo
+// dibuja con el mismo 'contain'+centrado que un SF Symbol -- SIN
+// SymbolConfiguration (eso solo aplica a simbolos del sistema, no a una
+// imagen vectorial propia): el peso/grosor del trazo lo define el SVG
+// mismo, no este script.
+//
 // Se procesa un lote entero por invocacion, leyendo la lista de trabajos
 // como JSON por stdin: `swift file.swift` recompila el script en cada
 // ejecucion (~2s), asi que 57 invocaciones costarian minutos y una sola
 // cuesta segundos.
 //
 // Entrada (stdin):  [{"symbol":"music.note","px":20,"weight":"medium","out":"/ruta/x.png"}, ...]
-// Salida: los PNG pedidos. Codigo != 0 si algun simbolo no existe.
+//              o:    [{"svgPath":"/ruta/music.svg","px":20,"out":"/ruta/x.png"}, ...]
+// Salida: los PNG pedidos. Codigo != 0 si algun simbolo/SVG no existe.
 //
 // El color no importa aca: generate.py umbraliza el alfa y aplica el
 // color del tema/variante. Este script solo define la FORMA.
@@ -21,9 +33,12 @@ import AppKit
 import Foundation
 
 struct Job: Decodable {
-    let symbol: String
+    // Exactamente uno de los dos: `symbol` (SF Symbol del sistema) o
+    // `svgPath` (SVG propio, D-263) -- `weight` solo aplica al primero.
+    let symbol: String?
+    let svgPath: String?
     let px: Int
-    let weight: String
+    let weight: String?
     let out: String
     // pointSize fijo opcional: se dibuja a tamano NATURAL centrado en el
     // lienzo, sin contain -- para familias cuyo cuerpo debe medir igual
@@ -59,19 +74,34 @@ guard let jobs = try? JSONDecoder().decode([Job].self, from: input) else {
 }
 
 for job in jobs {
-    guard let weight = weights[job.weight] else {
-        fail("peso desconocido: \(job.weight)")
-    }
-    guard let symbol = NSImage(systemSymbolName: job.symbol, accessibilityDescription: nil) else {
-        fail("SF Symbol no disponible en este macOS: \(job.symbol)")
-    }
+    let image: NSImage
+    let label: String
+    let isSvg = job.svgPath != nil
 
-    // pointSize se pide algo menor que el lienzo: a un pointSize P la caja
-    // de un SF Symbol es mas alta que P, asi que pedir P = px lo dejaria
-    // recortado o con un relleno optico distinto al del resto del set.
-    let config = NSImage.SymbolConfiguration(pointSize: job.pt ?? Double(job.px) * 0.82, weight: weight)
-    guard let configured = symbol.withSymbolConfiguration(config) else {
-        fail("no se pudo configurar \(job.symbol)")
+    if let svgPath = job.svgPath {
+        guard let svgImage = NSImage(contentsOfFile: svgPath) else {
+            fail("no se pudo cargar el SVG: \(svgPath)")
+        }
+        image = svgImage
+        label = svgPath
+    } else if let symbolName = job.symbol {
+        guard let weightName = job.weight, let weight = weights[weightName] else {
+            fail("peso desconocido para \(symbolName): \(job.weight ?? "(ninguno)")")
+        }
+        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) else {
+            fail("SF Symbol no disponible en este macOS: \(symbolName)")
+        }
+        // pointSize se pide algo menor que el lienzo: a un pointSize P la
+        // caja de un SF Symbol es mas alta que P, asi que pedir P = px lo
+        // dejaria recortado o con un relleno optico distinto al resto.
+        let config = NSImage.SymbolConfiguration(pointSize: job.pt ?? Double(job.px) * 0.82, weight: weight)
+        guard let configured = symbol.withSymbolConfiguration(config) else {
+            fail("no se pudo configurar \(symbolName)")
+        }
+        image = configured
+        label = symbolName
+    } else {
+        fail("job sin 'symbol' ni 'svgPath': \(job.out)")
     }
 
     let canvasH = job.py ?? job.px
@@ -80,7 +110,7 @@ for job in jobs {
         bitmapDataPlanes: nil, pixelsWide: job.px, pixelsHigh: canvasH,
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else {
-        fail("no se pudo crear el bitmap para \(job.symbol)")
+        fail("no se pudo crear el bitmap para \(label)")
     }
     rep.size = NSSize(width: job.px, height: canvasH)
 
@@ -89,13 +119,13 @@ for job in jobs {
     NSGraphicsContext.current?.imageInterpolation = .high
 
     // Escalar para caber (contain) y centrar: preserva las proporciones
-    // nativas de cada simbolo, que es lo que los hace ver opticamente
+    // nativas de cada simbolo/SVG, que es lo que los hace ver opticamente
     // consistentes entre si dentro de un mismo tamano.
-    let natural = configured.size
+    let natural = image.size
     var scale = min(Double(job.px) / natural.width, Double(canvasH) / natural.height)
-    if job.pt != nil {
+    if job.pt != nil && !isSvg {
         if natural.width > Double(job.px) || natural.height > Double(canvasH) {
-            fail("\(job.symbol) a pointSize fijo no cabe en el lienzo de \(job.px)x\(canvasH)px "
+            fail("\(label) a pointSize fijo no cabe en el lienzo de \(job.px)x\(canvasH)px "
                  + "(natural \(natural)) -- agranda el lienzo en tokens.json")
         }
         scale = 1.0 // tamano natural: el cuerpo mide igual en toda la familia
@@ -105,13 +135,13 @@ for job in jobs {
                          y: (Double(canvasH) - drawn.height) / 2.0)
 
     NSColor.black.set()
-    configured.draw(in: NSRect(origin: origin, size: drawn),
-                    from: .zero, operation: .sourceOver, fraction: 1.0)
+    image.draw(in: NSRect(origin: origin, size: drawn),
+               from: .zero, operation: .sourceOver, fraction: 1.0)
 
     NSGraphicsContext.restoreGraphicsState()
 
     guard let png = rep.representation(using: .png, properties: [:]) else {
-        fail("no se pudo codificar el PNG de \(job.symbol)")
+        fail("no se pudo codificar el PNG de \(label)")
     }
     do {
         try png.write(to: URL(fileURLWithPath: job.out))

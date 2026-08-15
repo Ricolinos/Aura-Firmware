@@ -24,6 +24,7 @@ void a26_shell_init(void)
         [A26_FONT_STYLE_DS_REG_12]  = FONT_DIR "/" A26_FONT_DS_REG_12,
         [A26_FONT_STYLE_DS_BOLD_12] = FONT_DIR "/" A26_FONT_DS_BOLD_12,
         [A26_FONT_STYLE_DS_BOLD_14] = FONT_DIR "/" A26_FONT_DS_BOLD_14,
+        [A26_FONT_STYLE_DS_BOLD_16] = FONT_DIR "/" A26_FONT_DS_BOLD_16,
     };
     int i;
 

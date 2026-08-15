@@ -48,7 +48,15 @@ enum {
     FONT_SYSFIXED = -1, /* system fixed pitch font*/
     FONT_FIRSTUSERFONT = 0, /* first id for the user fonts */
 };
-#define MAXUSERFONTS 12
+/* 13 (encargo del dueno de producto, 2026-08-15): Aura llego al limite
+ * exacto de 12 con sus 12 estilos apple2026 (ver apple2026_shell.h,
+ * DECISIONS.md D-263) -- el texto superior nuevo de SelectionSummary
+ * (SF Pro Bold 16px) necesitaba un slot mas y no habia ninguno libre
+ * para reusar, asi que se sube el limite en vez de comprometer la
+ * especificacion. Costo real: un slot estatico mas en
+ * skin_parser.c:skinfonts[]/id_array[] -- estas son fuentes bitmap
+ * chicas, no un costo de memoria significativo en este target. */
+#define MAXUSERFONTS 13
 
 /* SYSFONT, FONT_UI, FONT_UI_REMOTE + MAXUSERFONTS fonts in skins */
 #define MAXFONTS (FONT_FIRSTUSERFONT + MAXUSERFONTS)

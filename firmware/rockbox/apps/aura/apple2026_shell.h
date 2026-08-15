@@ -56,7 +56,9 @@ typedef enum {
      * lyrics son los tres 12px Regular = DS_REG_12) y cargar un
      * archivo repetido en mas de un slot desperdiciaria presupuesto de
      * MAXUSERFONTS (12 exacto con estas 7 + las 5 de arriba, ver
-     * D-086). El mapeo rol->estilo vive en
+     * D-086 -- D-263 subio el limite real a 13 para el octavo estilo
+     * ds_*, ds_bold_16, el primer aumento de MAXUSERFONTS de toda la
+     * migracion). El mapeo rol->estilo vive en
      * design-system/tokens.json -> aura_ds.type_scale_roles,
      * documentacion para humanos; el codigo C usa el estilo
      * directamente. */
@@ -75,6 +77,7 @@ typedef enum {
     A26_FONT_STYLE_DS_REG_12,     /* np_album, np_artist, lyrics, statusbar_time (encargo 2026-08-14, +2px reusando este estilo) */
     A26_FONT_STYLE_DS_BOLD_12,    /* np_title, statusbar_title (encargo 2026-08-14, +2px reusando este estilo) */
     A26_FONT_STYLE_DS_BOLD_14,    /* lyrics_active, filas de listas de contenido (D-205) */
+    A26_FONT_STYLE_DS_BOLD_16,    /* selection_summary texto superior (D-263) -- unico consumidor, SF Pro Bold 16pt exacto pedido por el dueno, subio MAXUSERFONTS a 13 */
     A26_FONT_STYLE_COUNT,
 } a26_font_style_t;
 

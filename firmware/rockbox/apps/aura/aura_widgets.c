@@ -424,9 +424,15 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name)
         return;
     }
 
+    /* Ruta B (listas de CONTENIDO): nunca es (split) hoy (ver comentario
+     * de arriba), asi que este camino no se ejercita en la practica --
+     * D-263 le agrego el parametro `category` a la firma, aca se pasa
+     * aura_category_current() sin cambio de comportamiento (este
+     * llamador nunca tuvo el mecanismo de congelado/debounce de D-262,
+     * es dibujo directo). */
     aura_selection_summary_draw(A26_LAYOUT_PANEL_LEFT_WIDTH,
                                  A26_SCREEN_WIDTH - A26_LAYOUT_PANEL_LEFT_WIDTH,
-                                 icon_name, NULL, NULL);
+                                 icon_name, aura_category_current(), NULL, NULL);
 }
 
 /* Barra de deslizamiento (doc SS5.3): aparece/persiste/desvanece segun
