@@ -2938,4 +2938,14 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-248 — Cover Flow: el zoom de scroll vuelve a cambiar de curva, ahora ease-in en las dos direcciones
+
+**Encargo**: tras probar D-247 (ease-out en ambas direcciones) en el simulador, el dueño del producto pidió lo contrario -- ease-in en las dos direcciones.
+
+**Arreglo**: mismo mecanismo que D-247, en sentido inverso -- `zoom_scale_256()` ahora llama `aura_motion_ease_in()` en vez de `aura_motion_ease_out()` para ambas direcciones. `s_zoom_shrinking` sigue decidiendo solo la duración (`CF_ZOOM_OUT_MS`/`CF_ZOOM_IN_MS`), no la curva. `aura_motion_ease_out()` queda intacta en `aura_motion.c`/`.h` con su propia prueba, sin uso en este archivo por ahora. Magnitud (240/256) y duraciones (150ms/220ms) sin cambio, tercera vez que se ajusta solo la curva sin tocar el resto del mecanismo.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (296 en `test_motion`, sin cambio).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
