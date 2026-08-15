@@ -3566,7 +3566,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
                 aura_transition_flow_return(nav);
             }
             else
-                aura_transition_slide(nav, -1, A26_SCREEN_WIDTH);
+                aura_transition_slide(nav, -1, A26_SCREEN_WIDTH, false);
         }
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
                  && is_coverflow_screen(to))
@@ -3612,8 +3612,14 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             if (depth_after < depth_before)
                 aura_widgets_panel_force_next();
 
+            /* D-261: infraestructura generica lista, pero TODAVIA sin
+             * conectar aca -- se pasa `false` a proposito (preserva el
+             * push clasico de siempre). Conectar el revelado real para
+             * cada origen/destino relevante (Musica mas alla de Cover
+             * Flow, Canciones aleatorias, Video, Fotos) es trabajo
+             * aparte, deliberadamente NO incluido en esta pasada. */
             aura_transition_slide(nav, depth_after > depth_before ? 1 : -1,
-                                  width);
+                                  width, false);
         }
     }
 }

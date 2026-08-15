@@ -28,8 +28,29 @@
  * Cubre dos de los cuatro patrones de PLAN-UX.md L4: T1 (menu->menu) y
  * T3 (push de pantalla completa) -- ambos son, en la practica, "revela
  * la pantalla nueva desde un borde", la misma animacion con distinto
- * origen segun la direccion. Ver D-058 en DECISIONS.md. */
-void aura_transition_slide(aura_nav_t *nav, int direction, int width);
+ * origen segun la direccion. Ver D-058 en DECISIONS.md.
+ *
+ * `cover_drift_was_active` (D-261, generalizado de la variante que
+ * D-259 construyo SOLO para aura_transition_coverflow_enter()): true
+ * si CoverDrift estaba mostrandose en el panel derecho del origen en
+ * el instante exacto en que se disparo esta transicion (ver
+ * aura_screens_coverdrift_active_for()). Cuando es true Y `width` es
+ * A26_SCREEN_WIDTH (destino a pantalla completa -- el UNICO caso donde
+ * esta coreografia tiene sentido), LeftPanel Y el panel derecho (con
+ * la caratula de CoverDrift) salen CADA UNO hacia su propio borde,
+ * revelando el destino ya renderizado, quieto, detras de ambos desde
+ * el primer cuadro -- igual que la entrada a Cover Flow con CoverDrift
+ * (D-259). Si `cover_drift_was_active` es true pero `width` no es
+ * pantalla completa (por ejemplo un T1 split->split), se ignora con
+ * seguridad y corre el push clasico de siempre -- el contrato real
+ * (el llamador solo debe pasar `true` cuando el origen era SPLIT y
+ * CoverDrift genuinamente estaba montado ahi) es responsabilidad de
+ * quien llama, pero esta funcion nunca confia ciegamente en eso.
+ * `false` reproduce EXACTAMENTE el comportamiento de siempre, sin
+ * ningun cambio -- todos los llamadores existentes antes de D-261
+ * pasan `false`. */
+void aura_transition_slide(aura_nav_t *nav, int direction, int width,
+                            bool cover_drift_was_active);
 
 /* T4 (revelado de Coverflow, L4): el contenido nuevo emerge desde
  * ambos bordes hacia el centro en vez de deslizar desde uno solo --
