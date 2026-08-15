@@ -23,14 +23,18 @@
  * de Fotos (aura_photos.c), via aura_widgets_draw_list_with_art(). Los
  * getters de indice de abajo existen exactamente para permitir esa
  * decodificacion bajo demanda sin cargar el pool completo en memoria.
- * Musica (Canciones/Artistas/Generos) queda SIN conectar a proposito
- * -- esas pantallas corren en layout FULL (con riel A-Z propio), sin
- * panel derecho de ningun tipo; darles uno para CoverDrift es una
- * decision de UX real (quitar el riel A-Z), pendiente de que el dueno
- * del producto la tome -- ver el comentario en
- * aura_screens.c:draw_music_browse(). La infraestructura generica
- * (aura_widgets_draw_list_with_art(), estos getters) ya esta lista
- * para Musica en cuanto se decida.
+ *
+ * D-252: conectado tambien a Musica -- las pantallas de
+ * Canciones/Artistas/Generos/Compositores/etc. (todo
+ * is_music_browse_screen() menos las de Albumes, que tienen su propio
+ * renderizador de miniatura por fila) pasan a layout SPLIT
+ * (screen_uses_split_layout(), aura_screens.c) para darle un hueco a
+ * CoverDrift -- pierden el riel A-Z que tenian en FULL, tradeoff
+ * aceptado explicitamente por el dueno del producto. Ver
+ * ensure_drift_album_pool()/ensure_drift_albums_decoded() en
+ * aura_screens.c: usan un pool GENERAL de todos los albumes de la
+ * biblioteca (no el album exacto de cada fila -- D-242 encontro que
+ * esa resolucion no tiene API publica).
  */
 #ifndef AURA_COVERDRIFT_H
 #define AURA_COVERDRIFT_H
