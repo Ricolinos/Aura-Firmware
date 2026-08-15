@@ -23,10 +23,23 @@
 
 /* Buffer de trabajo para decodificar+remuestrear (FORMAT_RESIZE
  * necesita bastante mas espacio que el bitmap final, ver
- * BM_SCALED_SIZE en recorder/bmp.h); 64KB alcanza sobrado para
- * cualquier tamano de caratula que use Aura (<=100px). */
-static unsigned char s_decode_scratch[64 * 1024];
-static unsigned char s_transpose_scratch[64 * 1024];
+ * BM_SCALED_SIZE en recorder/bmp.h) -- dimensionado sobre el mayor
+ * consumidor real, no un numero fijo adivinado. D-254 (CoverDrift en
+ * Musica) es hoy ese consumidor: AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
+ * es mayor que los 130px de Cover Flow, que era el limite implicito de
+ * los 64KB anteriores (bug real encontrado en verificacion: pedir
+ * 290px ahi hacia que read_jpeg_file()/read_bmp_file() fallaran en
+ * silencio por falta de espacio -- degradaba al placeholder solido sin
+ * ningun error visible, nunca llegaba a decodificar la caratula real).
+ * Margen x2 sobre el tamano final en pixeles (mismo orden de magnitud
+ * que ya probaron suficiente los 64KB sobre el final de 130px de Cover
+ * Flow, ~1.9x) para el factor de escala JPEG intermedio antes del
+ * resize final (JPEG_DECODE_OVERHEAD, recorder/jpeg_load.h, mas el
+ * margen de ese intermedio). */
+#define AURA_ALBUMART_DECODE_SCRATCH_SIZE \
+    (AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE * 2 * 2)
+static unsigned char s_decode_scratch[AURA_ALBUMART_DECODE_SCRATCH_SIZE];
+static unsigned char s_transpose_scratch[AURA_ALBUMART_DECODE_SCRATCH_SIZE];
 
 /* Mismo valor que aura_settings.c/aura_manifest.c -- no hay un header
  * compartido para esto en el proyecto, cada archivo lo redefine igual

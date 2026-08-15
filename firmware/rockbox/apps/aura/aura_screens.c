@@ -26,6 +26,7 @@
 #include "aura_photos.h"
 #include "aura_albumart.h"
 #include "aura_art.h"
+#include "aura_coverdrift.h"
 #include "aura_scroll_indicator.h"
 #include "aura_flow.h"
 #include "rtc.h"
@@ -703,6 +704,215 @@ static void toggle_settings_row(aura_screen_id_t target)
  * (selector.md: "cuando lleva a un componente de pantalla completa"). */
 static int screen_uses_split_layout(aura_screen_id_t screen);
 
+/* -- CoverDrift en Musica (D-254) -----------------------------------
+ *
+ * Reemplaza aura_selection_summary_draw() SOLO para ciertas filas de
+ * ciertas pantallas de la Ruta A (draw_menu_screen_v2(), esta seccion)
+ * -- NUNCA en la Ruta B (listas de contenido, aura_widgets_draw_list()),
+ * y NUNCA convierte una pantalla FULL en SPLIT (screen_uses_split_layout()
+ * no se toca, ver DECISIONS.md D-253/D-254). Encargo textual del dueno
+ * del producto, 2026-08-15: en el menu raiz, solo la fila Musica; dentro
+ * del submenu de Musica, todas las filas EXCEPTO Audiolibros -- Video y
+ * Fotos quedan fuera de esta pasada a proposito (el dueno los pidio
+ * despues, uno a la vez, para validar comportamiento en un solo lugar
+ * primero). */
+static bool music_row_wants_coverdrift(aura_screen_id_t container, aura_screen_id_t target)
+{
+    if (container == AURA_SCREEN_ROOT)
+        return target == AURA_SCREEN_MUSIC;
+
+    if (container == AURA_SCREEN_MUSIC)
+        return target == AURA_SCREEN_MUSIC_COVERFLOW
+            || target == AURA_SCREEN_MUSIC_PLAYLISTS
+            || target == AURA_SCREEN_MUSIC_ARTISTS
+            || target == AURA_SCREEN_MUSIC_ALBUMS
+            || target == AURA_SCREEN_MUSIC_COMPILATIONS
+            || target == AURA_SCREEN_MUSIC_SONGS
+            || target == AURA_SCREEN_MUSIC_GENRES
+            || target == AURA_SCREEN_MUSIC_COMPOSERS
+            || target == AURA_SCREEN_MUSIC_SEARCH;
+            /* AURA_SCREEN_MUSIC_AUDIOBOOKS excluida a proposito -- fila
+             * inerte, el dueno la nombro explicitamente como excepcion. */
+
+    return false;
+}
+
+/* Pool GENERAL de todas las caratulas de album de la biblioteca (no el
+ * album exacto de la fila resaltada -- D-242, esta misma sesion, ya
+ * encontro que resolver eso no tiene API publica, el mapeo vive en
+ * funciones static internas de tagcache.c). Mismo patron de cache por
+ * generacion que ensure_music_cache() (arriba en este archivo); solo
+ * conserva el seek de cada album, no el label. */
+static int32_t s_drift_album_pool_seeks[AURA_MUSIC_MAX_ITEMS];
+static int s_drift_album_pool_count = 0;
+static int s_drift_album_pool_generation = -1;
+static bool s_drift_album_pool_was_ready = false;
+
+/* aura_music_db_ready() (aura_music.c) no es solo una consulta -- es lo
+ * que DISPARA tagcache_rebuild() la primera vez (Aura no tiene pantalla
+ * de "Base de datos > Inicializar", ver el comentario grande junto a su
+ * definicion), no bloqueante e idempotente por sus propias banderas
+ * static. Sin llamarla, la base de datos se queda vacia para siempre en
+ * un primer arranque -- CoverDrift necesita dispararla igual que
+ * draw_music_browse() ya lo hace, aunque el usuario nunca haya entrado
+ * a Musica todavia (puede quedarse resaltando la fila Musica en el
+ * menu raiz sin entrar). `s_drift_album_pool_was_ready` evita el mismo
+ * bug al reves: aura_music_filter_generation() NO cambia cuando la base
+ * pasa de no-lista a lista (solo cambia con filtros de artista/album/
+ * genero), asi que el cache por generacion por si solo dejaria el pool
+ * vacio para siempre si el primer intento cayo antes de que la base
+ * estuviera lista -- se reintenta en cada cuadro hasta que
+ * aura_music_db_ready() de verdad devuelva true por primera vez. */
+static void ensure_drift_album_pool(void)
+{
+    static aura_music_item_t s_pool_scratch[AURA_MUSIC_MAX_ITEMS];
+    int gen;
+    int n, i;
+
+    if (!aura_music_db_ready())
+        return;
+
+    gen = aura_music_filter_generation();
+    if (s_drift_album_pool_was_ready && s_drift_album_pool_generation == gen)
+        return;
+
+    s_drift_album_pool_was_ready = true;
+    s_drift_album_pool_generation = gen;
+    n = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_pool_scratch, AURA_MUSIC_MAX_ITEMS);
+
+    s_drift_album_pool_count = 0;
+    for (i = 0; i < n; i++)
+    {
+        if (s_pool_scratch[i].seek < 0) /* fila sintetica "Canciones", no es un album real */
+            continue;
+        s_drift_album_pool_seeks[s_drift_album_pool_count++] = s_pool_scratch[i].seek;
+    }
+}
+
+/* Decodificacion bajo demanda de solo la imagen activa + la anterior
+ * (nunca el pool completo -- con hasta AURA_MUSIC_MAX_ITEMS=300 albumes
+ * y ~168KB por imagen al tamano de CoverDrift D-254, decodificarlas
+ * todas de una vez es inviable). aura_albumart_load_for_album() (mismo
+ * cache .pfraw en disco que ya usa Cover Flow/la lista de Albumes, pide
+ * el tamano nuevo directo -- genera su propio archivo de cache aparte,
+ * sin invalidar el de 48px/130px que usan otras pantallas) da el
+ * bitmap TRANSPUESTO (columna-mayor, mismo formato que
+ * draw_album_thumb() de mas abajo); se transpone a fila-mayor (lo que
+ * espera aura_coverdrift_draw() via lcd_bitmap_part()) una sola vez por
+ * cambio de indice activo, nunca por cuadro. */
+static aura_coverdrift_image_t s_drift_album_images[AURA_MUSIC_MAX_ITEMS];
+static int s_drift_album_buf_a_idx = -1;
+static int s_drift_album_buf_b_idx = -1;
+static struct bitmap s_drift_album_bmp_a;
+static struct bitmap s_drift_album_bmp_b;
+static fb_data s_drift_album_pixels_a[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
+                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
+static fb_data s_drift_album_pixels_b[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
+                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
+
+static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
+{
+    enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
+    static unsigned char cover_buf[SZ * SZ * sizeof(fb_data)];
+    static unsigned char refl_buf[SZ *
+        (SZ * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
+        * sizeof(fb_data)];
+    aura_albumart_t art;
+    const fb_data *cover;
+    int col, row;
+
+    if (pool_idx < 0 || pool_idx >= s_drift_album_pool_count)
+        return false;
+
+    art.size = SZ;
+    art.radius = A26_LAYOUT_CORNER_RADIUS_CARD;
+    art.cover_data = cover_buf;
+    art.reflection_data = refl_buf;
+
+    if (!aura_albumart_load_for_album(s_drift_album_pool_seeks[pool_idx], &art))
+        return false;
+
+    cover = (const fb_data *)art.cover_data;
+    for (col = 0; col < SZ; col++)
+        for (row = 0; row < SZ; row++)
+            dst[row * SZ + col] = cover[col * SZ + row];
+    return true;
+}
+
+static void ensure_drift_albums_decoded(void)
+{
+    enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
+    int active = aura_coverdrift_active_index();
+    int prev = aura_coverdrift_prev_index();
+
+    if (active >= 0 && active < s_drift_album_pool_count && active != s_drift_album_buf_a_idx)
+    {
+        s_drift_album_buf_a_idx = active;
+        s_drift_album_images[active].bmp = NULL;
+        if (decode_album_drift_tile(active, s_drift_album_pixels_a))
+        {
+            s_drift_album_bmp_a.width = SZ;
+            s_drift_album_bmp_a.height = SZ;
+            s_drift_album_bmp_a.data = (char *)s_drift_album_pixels_a;
+            s_drift_album_images[active].bmp = &s_drift_album_bmp_a;
+        }
+    }
+
+    if (prev >= 0 && prev < s_drift_album_pool_count && prev != s_drift_album_buf_b_idx)
+    {
+        s_drift_album_buf_b_idx = prev;
+        s_drift_album_images[prev].bmp = NULL;
+        if (decode_album_drift_tile(prev, s_drift_album_pixels_b))
+        {
+            s_drift_album_bmp_b.width = SZ;
+            s_drift_album_bmp_b.height = SZ;
+            s_drift_album_bmp_b.data = (char *)s_drift_album_pixels_b;
+            s_drift_album_images[prev].bmp = &s_drift_album_bmp_b;
+        }
+    }
+}
+
+/* Temporizador de "armado" de 3s (encargo textual: "tras 3 segundos,
+ * de forma automatica... para que el ipod tenga oportunidad de
+ * prepararse y cargar las imagenes") -- no existe ningun debounce
+ * reusable para esto (el de ~1s de aura_widgets.c pertenece a la Ruta
+ * B y ni siquiera se ejerce en pantallas SPLIT hoy). Arranca/reinicia
+ * cada vez que el destino resaltado cambia; si dejo de calificar, se
+ * desarma de inmediato (sin esperar) y vuelve al icono normal. Mismo
+ * patron que s_album_activity_since/s_album_last_selected mas abajo en
+ * este archivo. */
+static aura_screen_id_t s_drift_arm_target = AURA_SCREEN_COUNT;
+static long s_drift_arm_since = 0;
+
+static bool coverdrift_armed_and_ready(aura_screen_id_t container, aura_screen_id_t target)
+{
+    bool qualifies = music_row_wants_coverdrift(container, target);
+
+    if (!qualifies)
+    {
+        s_drift_arm_target = AURA_SCREEN_COUNT;
+        return false;
+    }
+
+    if (target != s_drift_arm_target)
+    {
+        s_drift_arm_target = target;
+        s_drift_arm_since = current_tick;
+    }
+
+    return (current_tick - s_drift_arm_since) * 1000L / HZ
+        >= AURA_DS_METRICS_COVER_DRIFT_ACTIVATION_DELAY_MS;
+}
+
+/* Publica (aura_screens.h) para que aura_main.c pida cuadros a cadencia
+ * fina mientras el temporizador de 3s corre -- aura_coverdrift_animating()
+ * ya cubre el resto (una vez montado), pero antes de montarse (armando)
+ * s_index sigue en -1 y esa funcion todavia no lo sabe. */
+bool aura_screens_coverdrift_arming(void)
+{
+    return s_drift_arm_target != AURA_SCREEN_COUNT;
+}
+
 /* Pantalla de menu completa del sistema nuevo (auditoria 2026-08-12,
  * cierre de la migracion parcial de T2.2/T2.3): StatusBar v2 en
  * (split) + MenuList v2/Selector en LeftPanel + SelectionSummary en el
@@ -716,10 +926,19 @@ static int screen_uses_split_layout(aura_screen_id_t screen);
  * (selection-summary.md, "ambos cambian de forma instantanea") -- el
  * debounce de ~1s del sistema viejo (L3/D-068) era comportamiento del
  * firmware original, reemplazado a proposito por el documento nuevo. */
+/* `container_screen`/`selected_target` (D-254): identidad de la
+ * pantalla y del destino de la fila resaltada, SOLO para decidir si
+ * CoverDrift reemplaza a SelectionSummary en este cuadro -- pasa
+ * AURA_SCREEN_COUNT en ambos desde cualquier llamador que no sea el
+ * menu raiz/submenu de Musica (nunca califica, ver
+ * music_row_wants_coverdrift(), asi que esos llamadores no cambian de
+ * comportamiento). */
 static void draw_menu_screen_v2(const char *title,
                                  const aura_menu_item_v2_t *items, int count,
                                  int selected, const char *panel_icon,
-                                 const char *panel_desc)
+                                 const char *panel_desc,
+                                 aura_screen_id_t container_screen,
+                                 aura_screen_id_t selected_target)
 {
     a26_shell_clear_screen();
     /* Barra y panel del MISMO dato (regla dura 2026-08-13): con
@@ -729,9 +948,28 @@ static void draw_menu_screen_v2(const char *title,
     aura_widgets_draw_status_bar(title);
     aura_menu_list_draw(0, A26_LAYOUT_STATUSBAR_HEIGHT, items, count, selected);
     if (panel_icon && aura_widgets_split_active())
-        aura_selection_summary_draw(AURA_DS_METRICS_LEFT_PANEL_WIDTH,
-                                     A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH,
-                                     panel_icon, NULL, panel_desc);
+    {
+        int panel_x = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+        int panel_w = A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+
+        /* D-254: CoverDrift solo si (1) la fila califica Y ya paso el
+         * temporizador de 3s (coverdrift_armed_and_ready() gestiona
+         * ambas cosas) Y (2) el pool tiene imagenes suficientes -- sin
+         * (2), aunque la fila califique y hayan pasado los 3s, se
+         * queda en SelectionSummary (nunca un panel vacio). */
+        ensure_drift_album_pool();
+        if (coverdrift_armed_and_ready(container_screen, selected_target)
+            && aura_coverdrift_should_mount(s_drift_album_pool_count))
+        {
+            ensure_drift_albums_decoded();
+            aura_coverdrift_draw(panel_x, panel_w,
+                                  s_drift_album_images, s_drift_album_pool_count);
+        }
+        else
+        {
+            aura_selection_summary_draw(panel_x, panel_w, panel_icon, NULL, panel_desc);
+        }
+    }
 }
 
 /* Icono del item de Ajustes que abre `screen` -- el arbol de menus
@@ -816,7 +1054,10 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
                          items, count, selected, panel_icon,
                          screen == AURA_SCREEN_ROOT && selected >= 0 && selected < count
                              ? root_selection_description(entries[selected].target)
-                             : NULL);
+                             : NULL,
+                         screen,
+                         (selected >= 0 && selected < count)
+                             ? entries[selected].target : AURA_SCREEN_COUNT);
 }
 
 /* -- Vista grafica del Ecualizador (encargo 2026-08-13) -------------------
@@ -1002,7 +1243,8 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
     }
 
     draw_menu_screen_v2(aura_str(screen_title_id(screen)), items, count,
-                         selected, panel_icon, NULL);
+                         selected, panel_icon, NULL,
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
 static void draw_brightness(void)
@@ -1263,7 +1505,8 @@ static void draw_backlight(aura_nav_t *nav)
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_BACKLIGHT), items, BACKLIGHT_VALUES_N,
                          aura_nav_get_selection(nav),
-                         parent_settings_icon(AURA_SCREEN_SETTINGS_BACKLIGHT), NULL);
+                         parent_settings_icon(AURA_SCREEN_SETTINGS_BACKLIGHT), NULL,
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
 static void handle_backlight(aura_nav_t *nav, long button)
@@ -1322,7 +1565,8 @@ static void draw_sleeptimer(aura_nav_t *nav)
     }
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_SLEEPTIMER), items, SLEEPTIMER_VALUES_N,
                          aura_nav_get_selection(nav),
-                         parent_settings_icon(AURA_SCREEN_SETTINGS_SLEEPTIMER), NULL);
+                         parent_settings_icon(AURA_SCREEN_SETTINGS_SLEEPTIMER), NULL,
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
 static void handle_sleeptimer(aura_nav_t *nav, long button)
@@ -1473,7 +1717,8 @@ static void draw_mainmenu(aura_nav_t *nav)
     draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_MAINMENU), items, MAINMENU_ROWS,
                          sel,
                          (sel >= 0 && sel < MAINMENU_ROWS) ? items[sel].icon_name
-                                                            : "menu-list", NULL);
+                                                            : "menu-list", NULL,
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
 }
 
 static void handle_mainmenu(aura_nav_t *nav, long button)

@@ -1,25 +1,42 @@
-/* CoverDrift (PLAN.md T2.9, componentes/cover-drift.md): imagenes
- * (caratulas, fotos) que se desplazan hacia el centro en 8 direcciones
- * fijas, una a la vez, rotando entre las disponibles. Monta solo con
- * >=10 imagenes -- con menos, el llamador debe seguir mostrando
- * SelectionSummary (T2.8) en su lugar.
+/* CoverDrift (componentes/cover-drift.md, D-254): reemplazo del panel
+ * derecho de SelectionSummary, condicional por fila -- NUNCA convierte
+ * una pantalla FULL en SPLIT ni viceversa (esa clasificacion ya esta
+ * cerrada, ver DECISIONS.md D-253). Vive exclusivamente en pantallas
+ * que YA son SPLIT (Menu raiz, submenus de Musica/Video/Fotos, "Ruta
+ * A" de aura_screens.c/draw_menu_screen_v2()) y solo para ciertas
+ * filas resaltadas -- cuales exactas es decision del llamador
+ * (aura_screens.c), este modulo solo sabe dibujar, no de que pantalla
+ * viene.
  *
- * Alcance real de esta pasada (ver DECISIONS.md D-098):
- * - Motor de rotacion/deriva completo: angulo aleatorio sin repetir el
- *   anterior (G10), distancia variable, cross-fade real de <0.5s entre
- *   imagenes -- para el caso de imagen NO cargada (placeholder solido),
- *   donde el cross-fade es un blend de color puro (a26_shell_blend, sin
- *   infraestructura nueva).
- * - Cross-fade de bitmaps REALES (`bmp` no NULL) es un corte directo
- *   sin fundido -- mezclar dos bitmaps arbitrarios pixel a pixel
- *   necesita un compositor offscreen que este sistema no tiene todavia
- *   (mismo tipo de brecha de arquitectura que dejo T1.2/Push-and-Drop
- *   sin conectar su render real). Diferido, no bloqueado: se resuelve
- *   cuando algun consumidor real (Musica/Fotos) necesite bitmaps reales
- *   aqui, hoy ninguno lo hace todavia.
- * - Ningun consumidor real: Musica/Fotos no invocan esto todavia (esa
- *   integracion es trabajo de Etapa 3, T3.1/T3.2, que ya construyen su
- *   propia carga real de caratulas). Verificado con overlay temporal.
+ * D-254 (encargo directo del dueno del producto, 2026-08-15, tras
+ * rechazar por completo un primer intento -- D-251/D-252, revertidos
+ * en D-253 -- que convertia pantallas de FULL a SPLIT):
+ * - Imagen que LLENA el panel derecho (160x240) y lo EXCEDE a proposito
+ *   (AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE, cuadrada porque las
+ *   caratulas de album lo son) -- el margen de sobrante acota cuanto
+ *   puede desplazarse en cualquiera de las 8 direcciones sin revelar
+ *   el fondo del panel. Reemplaza el tile chico centrado de D-098.
+ * - Umbral de montaje bajado de 10 a 3 imagenes disponibles
+ *   (AURA_DS_METRICS_COVER_DRIFT_MIN_IMAGES_TO_ACTIVATE).
+ * - El llamador espera 3000ms desde que la seleccion se posa sobre una
+ *   fila calificada antes de reemplazar el icono normal (tiempo para
+ *   decodificar la primera caratula) -- ese temporizador vive en
+ *   aura_screens.c, no aqui (este modulo no sabe de filas/pantallas).
+ * - Movimiento con desaceleracion real acercandose al cambio de imagen
+ *   (antes: velocidad lineal constante todo el ciclo) -- logrado
+ *   remapeando el tiempo con aura_motion_ease_out() ANTES de pasarlo a
+ *   aura_pattern_drift_pos() (que sigue siendo puramente lineal, sin
+ *   tocar, tiene 5 pruebas que dependen de esa linealidad exacta,
+ *   D-089) -- ver ease_out_effective_ms() en el .c.
+ * - Fundido REAL (blend pixel a pixel) entre la imagen saliente y la
+ *   entrante durante la ventana de cross-fade -- reemplaza el corte
+ *   directo que D-098/D-251 dejaban deliberadamente diferido por falta
+ *   de compositor offscreen. Con las dos imagenes garantizadas a cubrir
+ *   el panel completo siempre (ver el .c), el blend es directo: por
+ *   cada pixel visible del panel, mezcla el pixel correspondiente de
+ *   ambas imagenes con a26_shell_blend() (mismo mecanismo que el resto
+ *   del sistema usa para blends de un color de tinta, aqui aplicado
+ *   pixel real contra pixel real).
  */
 #ifndef AURA_COVERDRIFT_H
 #define AURA_COVERDRIFT_H
@@ -27,29 +44,34 @@
 #include "lcd.h"
 
 typedef struct {
-    const struct bitmap *bmp; /* NULL = sin imagen real cargada todavia (placeholder) */
+    const struct bitmap *bmp; /* NULL = imagen activa todavia sin decodificar (placeholder) */
 } aura_coverdrift_image_t;
 
 /* True si hay imagenes suficientes para montar CoverDrift en vez de
  * SelectionSummary (componentes/cover-drift.md, "Montaje"). */
 int aura_coverdrift_should_mount(int image_count);
 
-/* Dibuja en la franja [x, x+width) x [0, A26_SCREEN_HEIGHT), mismo
- * espacio vertical completo que SelectionSummary (T2.8) -- ambos
- * ocupan el mismo hueco del panel derecho, nunca a la vez.
- * `images`/`count` son las imagenes disponibles (>=10, verificar con
- * aura_coverdrift_should_mount() antes de llamar); la imagen ACTIVA
- * rota sola entre ellas, nunca varias a la vez (G10: "una imagen
- * visible a la vez"). */
+/* Dibuja en la franja [x, x+width) x [0, A26_SCREEN_HEIGHT) -- mismo
+ * hueco exacto que ocuparia aura_selection_summary_draw() en la misma
+ * llamada, nunca los dos a la vez. `images`/`count` son el pool
+ * disponible (>=3, verificar con aura_coverdrift_should_mount() antes
+ * de llamar); la imagen ACTIVA rota sola entre ellas (una visible a la
+ * vez, G10), el resto del pool no necesita estar decodificado -- ver
+ * los getters de indice abajo. */
 void aura_coverdrift_draw(int x, int width,
                            const aura_coverdrift_image_t *images, int count);
 
-/* Mismo par pending()/animating() del resto del sistema -- animating()
- * es practicamente siempre true mientras este montado (el movimiento es
- * continuo, a diferencia de MarqueeText/ScrollIndicator que tienen
- * tramos estaticos reales), pero se expone el par completo por
- * consistencia con la puerta de energia central. */
 int aura_coverdrift_pending(void);
 int aura_coverdrift_animating(void);
+
+/* D-254: el llamador decodifica bajo demanda SOLO la imagen activa y
+ * la anterior (nunca el pool completo -- con hasta 300 caratulas de
+ * album posibles y ~168KB por imagen al tamano nuevo, decodificarlas
+ * todas de una vez es inviable). Estos getters exponen el indice que
+ * aura_coverdrift_draw() va a leer en el PROXIMO cuadro, para que el
+ * llamador decodifique antes de esa llamada. Devuelven -1 si CoverDrift
+ * todavia no se monto ninguna vez. */
+int aura_coverdrift_active_index(void);
+int aura_coverdrift_prev_index(void);
 
 #endif /* AURA_COVERDRIFT_H */
