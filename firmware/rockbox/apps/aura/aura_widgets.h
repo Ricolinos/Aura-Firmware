@@ -6,8 +6,6 @@
 #ifndef AURA_WIDGETS_H
 #define AURA_WIDGETS_H
 
-#include "aura_coverdrift.h" /* aura_coverdrift_image_t, ver aura_widgets_draw_list_with_art() */
-
 typedef struct {
     const char *label;
     const char *icon_name; /* NULL = sin icono */
@@ -32,24 +30,6 @@ typedef struct {
  * cuando presentar el frame. */
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected);
-
-/* Misma firma que aura_widgets_draw_list(), mas una fuente opcional de
- * imagenes (D-251) para CoverDrift (componentes/cover-drift.md): si el
- * item seleccionado no tiene icono propio (icon_name NULL, el caso de
- * TODA lista de contenido) y `drift_count` alcanza el minimo
- * (aura_coverdrift_should_mount()), el panel derecho muestra CoverDrift
- * en vez del panel limpio de siempre -- carga ambiental con las
- * imagenes de `drift_images`. `drift_images`/`drift_count` NULL/0 (lo
- * que sigue haciendo aura_widgets_draw_list(), envoltorio de esta
- * funcion) preserva el comportamiento exacto de siempre. El llamador es
- * responsable de mantener `drift_images[i].bmp` resuelto (no-NULL) para
- * los indices que aura_coverdrift_active_index()/_prev_index() vayan a
- * pedir en el PROXIMO cuadro -- decodificar bajo demanda, nunca las
- * `drift_count` imagenes de una vez (ver aura_coverdrift.h). */
-void aura_widgets_draw_list_with_art(const char *title, const aura_list_item_t *items,
-                                       int count, int selected,
-                                       const aura_coverdrift_image_t *drift_images,
-                                       int drift_count);
 
 /* True si el modo grafico activo usa pantalla dividida (todos menos
  * Ultra). Lo consultan las pantallas con dibujo propio (Coverflow,
@@ -102,15 +82,6 @@ void aura_widgets_panel_force_next(void);
  * llamar esto; una pantalla con dibujo propio que quiera el mismo
  * panel sin contenido animado puede llamarlo directo. */
 void aura_widgets_draw_right_panel_icon(const char *icon_name);
-
-/* Misma firma, mas la fuente opcional de CoverDrift (D-251, ver
- * aura_widgets_draw_list_with_art()) -- `icon_name==NULL` con
- * `drift_count` suficiente monta CoverDrift en vez del panel limpio.
- * aura_widgets_draw_right_panel_icon() es el envoltorio de esta funcion
- * con drift_images=NULL/drift_count=0. */
-void aura_widgets_draw_right_panel_icon_ex(const char *icon_name,
-                                            const aura_coverdrift_image_t *drift_images,
-                                            int drift_count);
 
 /* Numero de filas de lista que caben en pantalla con el layout actual;
  * usado por aura_screens.c para el scroll. */

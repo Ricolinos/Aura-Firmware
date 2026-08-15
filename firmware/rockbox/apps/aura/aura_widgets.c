@@ -374,9 +374,7 @@ void aura_widgets_panel_force_next(void)
     s_panel_force_next = 1;
 }
 
-static void draw_right_panel_debounced(const char *icon_name,
-                                        const aura_coverdrift_image_t *drift_images,
-                                        int drift_count)
+static void draw_right_panel_debounced(const char *icon_name)
 {
     if (icon_name != s_panel_pending_icon)
     {
@@ -398,14 +396,7 @@ static void draw_right_panel_debounced(const char *icon_name,
     if (TIME_AFTER(current_tick, s_panel_pending_since + PANEL_RETARDO_TICKS))
         s_panel_shown_icon = s_panel_pending_icon;
 
-    /* El debounce es sobre icon_name (identidad del icono) -- en listas
-     * de contenido (D-251) icon_name es SIEMPRE NULL, asi que
-     * s_panel_pending_icon/s_panel_shown_icon nunca divergen aca: el
-     * mecanismo queda inerte para CoverDrift, que se dibuja de
-     * inmediato cada cuadro (drift_images/drift_count no pasan por
-     * ningun retardo propio, coherente con que el contenido "de fondo"
-     * ya estaba visible, no es una seleccion nueva que deba esperar). */
-    aura_widgets_draw_right_panel_icon_ex(s_panel_shown_icon, drift_images, drift_count);
+    aura_widgets_draw_right_panel_icon(s_panel_shown_icon);
 }
 
 int aura_widgets_panel_pending(void)
@@ -413,31 +404,20 @@ int aura_widgets_panel_pending(void)
     return s_panel_shown_icon != s_panel_pending_icon;
 }
 
-void aura_widgets_draw_right_panel_icon_ex(const char *icon_name,
-                                            const aura_coverdrift_image_t *drift_images,
-                                            int drift_count)
+void aura_widgets_draw_right_panel_icon(const char *icon_name)
 {
     /* Panel derecho real: SelectionSummary (componentes/selection-summary.md)
      * -- icono sobre tile con degradado del acento. Desde la migracion
      * de TODOS los menus a MenuList v2 (auditoria 2026-08-12), los
      * unicos consumidores que quedan de este camino son listas de
      * CONTENIDO (canciones/artistas/albumes/videos/fotos), cuyas filas
-     * no tienen icono 1:1 -- con icon_name NULL, SelectionSummary no
-     * aplica (exige icono por contrato). D-251: si ademas hay un pool
-     * de imagenes suficiente (aura_coverdrift_should_mount()), se monta
-     * CoverDrift (componentes/cover-drift.md) en ese hueco -- carga
-     * ambiental real en vez del panel limpio. Sin pool suficiente, sigue
-     * el panel limpio de siempre (separador + sombra de LeftPanel). */
+     * no tienen icono 1:1 -- con icon_name NULL se dibuja solo el
+     * separador + sombra de LeftPanel (panel limpio), nunca un tile
+     * vacio: SelectionSummary exige icono por contrato y el componente
+     * de contenido rico (CoverDrift y equivalentes) es trabajo aparte
+     * ya diferido por el design system. */
     if (!icon_name)
     {
-        if (aura_coverdrift_should_mount(drift_count))
-        {
-            aura_coverdrift_draw(A26_LAYOUT_PANEL_LEFT_WIDTH,
-                                  A26_SCREEN_WIDTH - A26_LAYOUT_PANEL_LEFT_WIDTH,
-                                  drift_images, drift_count);
-            return;
-        }
-
         lcd_set_foreground(a26_color(A26_SHELL_RAIL));
         lcd_vline(A26_LAYOUT_PANEL_LEFT_WIDTH - 1, 0, A26_SCREEN_HEIGHT - 1);
         aura_shell_draw_left_panel_shadow(A26_LAYOUT_PANEL_LEFT_WIDTH, 0, A26_SCREEN_HEIGHT);
@@ -447,11 +427,6 @@ void aura_widgets_draw_right_panel_icon_ex(const char *icon_name,
     aura_selection_summary_draw(A26_LAYOUT_PANEL_LEFT_WIDTH,
                                  A26_SCREEN_WIDTH - A26_LAYOUT_PANEL_LEFT_WIDTH,
                                  icon_name, NULL, NULL);
-}
-
-void aura_widgets_draw_right_panel_icon(const char *icon_name)
-{
-    aura_widgets_draw_right_panel_icon_ex(icon_name, NULL, 0);
 }
 
 /* Barra de deslizamiento (doc SS5.3): aparece/persiste/desvanece segun
@@ -718,14 +693,6 @@ static void draw_index_rail(const aura_list_item_t *items, int count, int select
 void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected)
 {
-    aura_widgets_draw_list_with_art(title, items, count, selected, NULL, 0);
-}
-
-void aura_widgets_draw_list_with_art(const char *title, const aura_list_item_t *items,
-                                       int count, int selected,
-                                       const aura_coverdrift_image_t *drift_images,
-                                       int drift_count)
-{
     int split = aura_widgets_split_active();
     int width = list_width();
     int visible = aura_widgets_visible_rows();
@@ -846,8 +813,7 @@ void aura_widgets_draw_list_with_art(const char *title, const aura_list_item_t *
     }
 
     if (split)
-        draw_right_panel_debounced(count > 0 ? items[selected].icon_name : NULL,
-                                    drift_images, drift_count);
+        draw_right_panel_debounced(count > 0 ? items[selected].icon_name : NULL);
     else
         draw_index_rail(items, count, selected);
 

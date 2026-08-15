@@ -72,23 +72,12 @@ int aura_coverdrift_animating(void)
     return s_index >= 0;
 }
 
-int aura_coverdrift_active_index(void)
-{
-    return s_index;
-}
-
-int aura_coverdrift_prev_index(void)
-{
-    return s_prev_index;
-}
-
-/* Placeholder solido cuando `bmp` es NULL -- desde D-251 esto ya solo
- * ocurre en el primer cuadro tras montarse (el llamador todavia no
- * decodifico la imagen activa, ver aura_coverdrift_active_index() en
- * el header) o si un pool de imagenes viene con una entrada sin
- * bitmap resuelto. Paleta sintetica solo para distinguir imagenes a
- * simple vista durante la verificacion, NO es una decision de diseno
- * real. */
+/* Placeholder solido cuando `bmp` es NULL (sin imagen real cargada
+ * todavia -- ningun consumidor real conecta Musica/Fotos aqui en esta
+ * pasada, ver header). Paleta sintetica solo para distinguir imagenes
+ * a simple vista durante la verificacion, NO es una decision de
+ * diseno real -- cuando haya un consumidor real esto se reemplaza por
+ * el bitmap decodificado. */
 static unsigned placeholder_color(int index)
 {
     switch (index % 4)

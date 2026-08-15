@@ -2571,18 +2571,6 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
         s_music_items_buf[i].toggle = -1;
     }
 
-    /* D-251: CoverDrift NO se cablea aca -- Canciones/Artistas/Generos
-     * corren hoy en layout FULL (screen_uses_split_layout() no las
-     * incluye), sin panel derecho de ningun tipo. Volverlas SPLIT para
-     * darle un hueco a CoverDrift es una decision de producto real, no
-     * un simple cableado: en FULL usan draw_index_rail() (riel A-Z),
-     * que desaparece en SPLIT -- quitarlo justo de las listas donde mas
-     * se usa (Canciones/Artistas, alfabeticas y potencialmente largas)
-     * para ganar un fondo ambiental es un cambio de UX de fondo,
-     * pendiente de que el dueno del producto lo decida. La
-     * infraestructura (aura_widgets_draw_list_with_art(), los getters
-     * de aura_coverdrift.h) es generica y ya esta lista para Musica en
-     * cuanto se tome esa decision -- ver reporte de D-251. */
     aura_widgets_draw_list(aura_str(screen_title_id(screen)), s_music_items_buf,
                             s_music_cache_count, aura_nav_get_selection(nav));
 }
@@ -2760,16 +2748,7 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
         || screen == AURA_SCREEN_SETTINGS_SLEEPTIMER
         || screen == AURA_SCREEN_SETTINGS_MAINMENU
         || screen == AURA_SCREEN_VIDEOS
-        || screen == AURA_SCREEN_PHOTOS
-        /* D-251: AURA_SCREEN_PHOTOS es la fila-menu "Todas las fotos"
-         * que cuelga del menu raiz (get_nav_table()/photos_entries[]);
-         * el contenido real de la lista de fotos vive en
-         * AURA_SCREEN_PHOTOS_ALL (handle_nav_list() empuja ahi), que le
-         * faltaba aca -- sin esto renderizaba a ancho completo, sin
-         * panel derecho ni para SelectionSummary ni para CoverDrift.
-         * Mismo bug (por el mismo motivo) existe para
-         * AURA_SCREEN_VIDEOS_ALL, fuera de alcance de esta tarea. */
-        || screen == AURA_SCREEN_PHOTOS_ALL;
+        || screen == AURA_SCREEN_PHOTOS;
 }
 
 /* Categoria de la seccion activa para TODO el cuadro (encargo del dueno
@@ -2884,23 +2863,6 @@ void aura_screens_draw(aura_nav_t *nav)
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
         draw_playlists(nav);
     else if (screen == AURA_SCREEN_PHOTOS)
-        aura_photos_draw(nav);
-    else if (screen == AURA_SCREEN_PHOTOS_ALL)
-        /* D-251: bug real preexistente encontrado al cablear CoverDrift
-         * a Fotos -- AURA_SCREEN_PHOTOS (el "Todas las fotos" que
-         * cuelga del menu raiz, get_nav_table()/photos_entries[])
-         * intercepta el dibujo mas arriba en esta misma cadena de
-         * screen_uses_split_layout()/aura_screens_draw() (fuera de este
-         * fragmento) antes de llegar aqui -- el check `screen ==
-         * AURA_SCREEN_PHOTOS` de arriba nunca se alcanza en la practica.
-         * AURA_SCREEN_PHOTOS_ALL (el destino real al que empuja esa fila
-         * "Todas las fotos", handle_nav_list()) nunca tenia un caso de
-         * dibujo propio -- caia al fallback final (draw_empty_state(),
-         * default: AURA_STR_NOTHING_PLAYING) mostrando "Nada sonando" en
-         * vez de la lista de fotos real. El mismo bug existe para
-         * AURA_SCREEN_VIDEOS_ALL (ver videos_entries[]/AURA_SCREEN_VIDEOS
-         * un poco mas abajo) -- fuera de alcance de esta tarea, senalado
-         * aparte para quien revise este diff. */
         aura_photos_draw(nav);
     else if (screen == AURA_SCREEN_PHOTO_VIEWER)
         aura_photo_viewer_draw(nav);
