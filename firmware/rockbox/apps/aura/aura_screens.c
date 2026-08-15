@@ -713,7 +713,16 @@ static int screen_uses_split_layout(aura_screen_id_t screen);
 static bool music_row_wants_coverdrift(aura_screen_id_t container, aura_screen_id_t target)
 {
     if (container == AURA_SCREEN_ROOT)
-        return target == AURA_SCREEN_MUSIC;
+        /* D-266 (encargo del dueno de producto): "Canciones aleat." y
+         * "Ahora suena" tambien son filas de Musica en el menu raiz
+         * (mismo criterio que ya usa aura_category_for_screen() -- las
+         * tres resuelven a AURA_CATEGORY_MUSIC), asi que tambien
+         * califican para CoverDrift en el panel derecho -- antes solo
+         * Musica lo hacia. Etapa 2 del plan original de D-259/D-261,
+         * pendiente desde entonces. */
+        return target == AURA_SCREEN_MUSIC
+            || target == AURA_SCREEN_SHUFFLE_SONGS
+            || target == AURA_SCREEN_NOWPLAYING;
 
     if (container == AURA_SCREEN_MUSIC)
         return target == AURA_SCREEN_MUSIC_COVERFLOW
@@ -1129,16 +1138,26 @@ static void draw_panel_fade_frame(int panel_x, int panel_w, long elapsed_ms)
  *     nota de aura_str() en root_selection_description()): SIEMPRE
  *     instantaneo, sin fundido -- nunca debe verse contenido de la
  *     pantalla ANTERIOR congelado al entrar a una nueva.
- *  2. Fundido en curso: si la identidad pendiente sigue siendo la
- *     misma, avanza el fundido (o lo cierra si ya se cumplieron los
- *     CROSSFADE_MS); si cambio a mitad del fundido, lo aborta (vuelve
- *     a mostrar lo comprometido solido) y reinicia el conteo de
- *     estabilidad para la nueva pendiente.
- *  3. Sin fundido: si la fila resaltada ya coincide con lo
- *     comprometido, redibuja en vivo sin mas. Si difiere, cronometra
- *     (reinicia el conteo si la pendiente cambio) y arranca el fundido
- *     en cuanto se cumplen los AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS
- *     -- mientras tanto se queda mostrando lo comprometido, congelado. */
+ *  2. Fundido en curso (SOLO ocurre camino a CoverDrift, ver regla 3):
+ *     si la identidad pendiente sigue siendo la misma, avanza el fundido
+ *     (o lo cierra si ya se cumplieron los CROSSFADE_MS); si cambio a
+ *     mitad del fundido, lo aborta (vuelve a mostrar lo comprometido
+ *     solido) y reinicia el conteo de estabilidad para la nueva
+ *     pendiente.
+ *  3. Sin fundido: si la fila resaltada ya coincide con lo comprometido,
+ *     redibuja en vivo sin mas. Si difiere, cronometra (reinicia el
+ *     conteo si la pendiente cambio) -- D-266 (correccion del dueno tras
+ *     probar D-262 en el simulador, 2026-08-15): la espera y la accion
+ *     final YA NO son uniformes, dependen de hacia DONDE se dirige la
+ *     pendiente. Si la pendiente es CoverDrift: espera
+ *     RIGHT_PANEL_DEBOUNCE_MS (2s) y, al cumplirse, arranca el fundido
+ *     real (start_panel_fade(), CROSSFADE_MS). Si la pendiente es
+ *     SelectionSummary/icono normal (nunca CoverDrift): espera
+ *     RIGHT_PANEL_DEBOUNCE_FAST_MS (1s, mas corta) y, al cumplirse,
+ *     compromete DIRECTO -- corte instantaneo, sin fundido -- sin
+ *     importar si lo comprometido saliente era CoverDrift o no. Mientras
+ *     se cuenta cualquiera de las dos esperas, se sigue mostrando lo
+ *     comprometido, congelado. */
 static void render_panel_debounced(int panel_x, int panel_w, const char *title,
                                     const char *panel_icon, const char *panel_top,
                                     const char *panel_desc,
@@ -1213,13 +1232,26 @@ static void render_panel_debounced(int panel_x, int panel_w, const char *title,
         return;
     }
 
-    if ((current_tick - s_panel_pending_since) * 1000L / HZ
-        >= AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS)
     {
-        draw_panel_identity(panel_x, panel_w, &s_panel_committed);
-        start_panel_fade(panel_x, panel_w);
-        draw_panel_fade_frame(panel_x, panel_w, 0);
-        return;
+        long debounce_ms = s_panel_pending_target.coverdrift
+            ? AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS
+            : AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_FAST_MS;
+
+        if ((current_tick - s_panel_pending_since) * 1000L / HZ >= debounce_ms)
+        {
+            if (s_panel_pending_target.coverdrift)
+            {
+                draw_panel_identity(panel_x, panel_w, &s_panel_committed);
+                start_panel_fade(panel_x, panel_w);
+                draw_panel_fade_frame(panel_x, panel_w, 0);
+            }
+            else
+            {
+                s_panel_committed = s_panel_pending_target;
+                draw_panel_identity(panel_x, panel_w, &s_panel_committed);
+            }
+            return;
+        }
     }
 
     draw_panel_identity(panel_x, panel_w, &s_panel_committed);

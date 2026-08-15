@@ -3180,4 +3180,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+---
+
+## D-266 — CoverDrift en "Canciones aleat."/"Ahora suena" (menú raíz) + espera y transición asimétricas por destino
+
+**Dos correcciones del dueño en la misma sesión, tras probar D-262/D-264/D-265 en el simulador.**
+
+**Parte 1 -- CoverDrift también en "Canciones aleat." y "Ahora suena"**: encargo explícito -- "en el panel de la derecha debe verse el coverdrift de música [al resaltar 'Ahora suena'], al igual que en la opción de canciones aleatoria". Verificado que ninguna de las dos calificaba hoy -- `music_row_wants_coverdrift()` en la raíz solo devolvía verdadero para `AURA_SCREEN_MUSIC`. Ambos destinos ya resuelven a `AURA_CATEGORY_MUSIC` en `aura_category_for_screen()` desde antes (comentario propio ahí: "incluye Ahora suena/Canciones aleat.: son reproducción, mismo color que el resto del árbol de Música"), así que toda la maquinaria de categoría (persistencia D-260, comparación D-262/D-264) ya funcionaba correcta para ellos sin tocar nada más -- extender la función a los tres targets (`AURA_SCREEN_MUSIC`, `AURA_SCREEN_SHUFFLE_SONGS`, `AURA_SCREEN_NOWPLAYING`) fue suficiente. Es la Etapa 2 del plan original de D-259/D-261, pendiente desde entonces. "Ahora suena" solo aparece en el menú raíz cuando hay reproducción real en curso (`aura_nowplaying_active()`, comportamiento del original sin cambios) -- verificado arrancando reproducción real vía "Canciones aleat." y confirmando que, de vuelta en el menú raíz, la fila "Ahora suena" ya muestra CoverDrift real.
+
+**Parte 2 -- la espera y la transición dejan de ser uniformes, dependen del DESTINO**: encargo textual -- "de coverdrift a coverdrift sí hay transición de fundido, pero de coverdrift a selectionsummary, no, solo 1seg, y da el salto, un cambio repentino, igual de selection summary a selection summary (los dos segundos se quedan para aparecer coverdrift, el segundo para selection summary)". D-262 usaba una sola espera (2s) y una sola acción final (fundido de 600ms) sin importar hacia dónde se dirigía la identidad pendiente. Ahora `render_panel_debounced()` decide por el tipo de la identidad PENDIENTE (no de la comprometida): si la pendiente es CoverDrift, espera `AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS` (2s, sin cambio) y al cumplirse arranca el fundido real de siempre (`start_panel_fade()`, 600ms). Si la pendiente es SelectionSummary/ícono normal (nunca CoverDrift), espera la mitad -- nueva `AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_FAST_MS` (1s, `tokens.json`) -- y al cumplirse compromete DIRECTO, sin pasar por `start_panel_fade()` en absoluto: corte instantáneo, sin importar si lo que se deja atrás era CoverDrift o no. El `s_panel_fading`/crossfade de 600ms queda reservado exclusivamente para cuando SÍ se está entrando a CoverDrift.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (orquestación/estado, sin funciones puras nuevas). Capturas reales contra la biblioteca sincronizada: (1) "Canciones aleat." y "Ahora suena" (con reproducción real arrancada) muestran CoverDrift real en el menú raíz; (2) a los 600ms de resaltar una fila nueva sin CoverDrift de por medio, el panel sigue mostrando lo comprometido ANTERIOR, congelado (la espera de 1s todavía no se cumple); (3) a los 1100ms, ya cambió -- contenido nuevo limpio, sin ningún rastro de mezcla; (4) mismo patrón confirmado saliendo de una fila con CoverDrift genuinamente activo (Álbumes) hacia una sin él (Audiolibros) -- a los 1100ms el ícono de Audiolibros se ve limpio, sin ghosting de la carátula anterior.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
