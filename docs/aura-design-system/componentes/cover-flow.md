@@ -93,21 +93,32 @@ La `StatusBar` se muestra en modo `(full)` — CoverFlow vive debajo de ella.
   al inicio.
 - **SELECT**: voltea la tapa enfocada para mostrar su reverso (solo con el
   carrusel en reposo exacto).
-- **Zoom al scrollear** (encargo del dueño del producto, 2026-08-14, ver
-  detalle abajo): la tapa central se encoge ligeramente al empezar a
-  scrollear y vuelve a su tamaño normal al asentarse.
+- **Zoom al scrollear** (encargo del dueño del producto, 2026-08-14/15,
+  ver detalle abajo): **todo el carrusel** (tapa central y laterales
+  por igual) se encoge ligeramente al empezar a scrollear y vuelve a su
+  tamaño normal al asentarse.
 
-## Zoom de la tapa central al scrollear (confirmado 2026-08-14)
+## Zoom del carrusel al scrollear (confirmado 2026-08-14, ampliado a todas las tapas 2026-08-15)
 
 Al empezar a scrollear (paso real de rueda, `BACKWARD`/`FORWARD`, o
-seguir girando a mitad de una ráfaga), la tapa central se **encoge a
-~94% (240/256) con ease-in en 150ms**; en cuanto el carrusel se asienta
-en un álbum, vuelve a su tamaño normal (256/256) con **ease-out en
-220ms** — el mismo tiempo que ya usa el asentamiento de posición
+seguir girando a mitad de una ráfaga), **todas las tapas visibles del
+carrusel** (no solo la central) se **encogen a ~94% (240/256) con
+ease-in en 150ms**; en cuanto el carrusel se asienta en un álbum,
+vuelven a su tamaño normal (256/256) con **ease-out en 220ms** — el
+mismo tiempo que ya usa el asentamiento de posición
 (`CF_SCROLL_ANIM_MS`), para que ambos movimientos se sientan
-coordinados. Si el usuario sigue girando la rueda mientras la tapa ya
-está encogida, no vuelve a "pulsar" con cada paso — se queda encogida
-hasta que el carrusel de verdad se detiene.
+coordinados. Si el usuario sigue girando la rueda mientras las tapas ya
+están encogidas, no vuelve a "pulsar" con cada paso — se quedan
+encogidas hasta que el carrusel de verdad se detiene.
+
+**Ajuste 2026-08-15**: la primera versión (D-245) aplicaba el efecto
+solo a la tapa central, atenuándolo a 0 hacia las laterales vía la
+misma variable `t_center` que ya gradúa ángulo/posición/fade. El dueño
+del producto pidió explícitamente que el encogimiento incluya a todas
+las tapas del carrusel, para que se sienta como una sensación de
+velocidad fluida del conjunto en vez de un efecto aislado en una sola
+tapa (D-246) — se quitó esa atenuación solo para `distance`, que ahora
+se aplica idéntico a cada tapa visible.
 
 **Magnitud elegida**: 240/256 (~6.25% de encogimiento), comparado por
 captura contra candidatos más sutiles (248/256, ~3%) y más marcados
@@ -131,11 +142,14 @@ segundo sigue vedado.
 
 **Implementación**: reusa el canal `slide.distance` del motor de
 perspectiva (`aura_flow.c`) que ya usa el crecimiento 130→200px del
-giro del reverso — la tapa central nunca lo había usado antes (siempre
-0). Se aplica solo a la tapa central: la fórmula interpola el efecto a
-0 según la misma variable `t_center` que ya atenúa ángulo/posición/fade
-hacia las laterales, así que ninguna lateral queda con encogimiento
-residual.
+giro del reverso — antes de D-245 ninguna tapa del carrusel normal lo
+usaba (siempre 0). Se aplica idéntico a cada tapa visible del carrusel
+(central y laterales) — a diferencia de ángulo/posición/fade (que sí
+se siguen graduando con `t_center` según qué tan lateral es cada una,
+eso no cambió). La coreografía de vuelo de entrada/salida al abrir/
+cerrar Cover Flow (tapas que aparecen/desaparecen por los bordes) sigue
+excluida del efecto — es una animación de otro tipo, no scroll dentro
+del carrusel.
 
 ## El reverso del álbum (`show_tracks`) — diseño confirmado 2026-08
 

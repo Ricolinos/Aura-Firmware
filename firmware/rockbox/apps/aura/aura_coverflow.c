@@ -211,8 +211,14 @@ static int zoom_scale_256(void)
  * escala interpolada actual -- formula inversa de la ya documentada en
  * CF_GROW_DISTANCE (escala = CAM_DIST/(CAM_DIST+d) => d =
  * CAM_DIST*(256-escala)/escala). Con escala==256 (reposo) da
- * exactamente 0, igual que el `slide.distance = 0` que reemplaza. */
-static int zoom_center_distance(void)
+ * exactamente 0, igual que el `slide.distance = 0` que reemplaza.
+ *
+ * D-246 (encargo del dueno del producto: "no solo la tapa central,
+ * todas junto con ella, para dar sensacion de rapidez fluida"): este
+ * MISMO valor se le pasa por igual a TODAS las tapas visibles del
+ * carrusel (ver aura_coverflow_draw() y draw_slide_perspective()) --
+ * ya no se atenua hacia 0 segun que tan lateral sea cada una. */
+static int zoom_distance(void)
 {
     int scale = zoom_scale_256();
     if (scale >= CF_ZOOM_SCALE_NORMAL)
@@ -558,18 +564,18 @@ static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
  * medio. Es lo que hace que las tapas se DESLICEN entre posiciones en
  * vez de saltar.
  *
- * `center_distance` (D-245) es el `slide.distance` que produce el zoom
- * de la caratula central al scrollear -- calculado UNA vez por cuadro
- * en aura_coverflow_draw() (ver zoom_center_distance()), no por tapa,
- * para no repetir su division en cada una de las ~9 tapas visibles.
- * Se interpola con el MISMO t_center que ya atenua angle/cx/fade hacia
- * la tapa lateral: a t_center=0 (offset==0, la tapa mas centrada de
- * este cuadro) el efecto es completo; a t_center=256 (ya en su
- * posicion lateral de reposo) cae a 0 -- ninguna lateral queda con
- * distancia residual, es el mismo criterio continuo que ya usa el
- * resto de esta funcion. */
+ * `zoom_dist` (D-245/D-246) es el `slide.distance` que produce el zoom
+ * de scroll -- calculado UNA vez por cuadro en aura_coverflow_draw()
+ * (ver zoom_distance()), no por tapa, para no repetir su division en
+ * cada una de las ~9 tapas visibles. A diferencia de angle/cx/fade
+ * (que SI se atenuan con t_center segun que tan lateral es cada tapa,
+ * para la coreografia normal de perspectiva), este valor se aplica TAL
+ * CUAL a todas las tapas por igual -- D-246: el dueno del producto
+ * pidio explicitamente que todo el carrusel se encoja junto, no solo
+ * la central, para que la sensacion sea de velocidad fluida del
+ * conjunto en vez de un efecto aislado en una sola tapa. */
 static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
-                                    int center_distance)
+                                    int zoom_dist)
 {
     aura_flow_slide_t slide;
     aura_flow_projection_t proj;
@@ -610,7 +616,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
      * offset==0 (sign==0) todo colapsa a angulo/cx cero, sin distorsion,
      * igual que antes. */
     slide.angle = -sign * aura_pattern_lerp(0, CF_ITILT, t_center);
-    slide.distance = aura_pattern_lerp(center_distance, 0, t_center);
+    slide.distance = zoom_dist;
     slide.cx = sign * (aura_pattern_lerp(0, CF_OFFSETX_R, t_center)
                         + (int)((long)CF_SLIDE_SPACING_R * extra_x256 / 256));
 
@@ -1013,7 +1019,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
      * carrusel de verdad termine de moverse). */
     if (pos_x256 == s_target_index * 256)
         zoom_trigger_settle();
-    zoom_dist = zoom_center_distance();
+    zoom_dist = zoom_distance();
 
     n = 0;
     for (i = -(CF_VISIBLE_RADIUS + 1); i <= CF_VISIBLE_RADIUS + 1; i++)

@@ -2914,4 +2914,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-246 — Cover Flow: el zoom de scroll se extiende a todas las tapas, no solo la central
+
+**Encargo**: tras ver D-245 andando en el simulador, el dueño del producto pidió que el encogimiento al scrollear no fuera solo de la tapa central, sino de todas las tapas visibles del carrusel juntas, para que la sensación fuera de velocidad fluida del conjunto.
+
+**Causa del alcance limitado de D-245**: `draw_slide_perspective()` interpolaba `slide.distance` con `aura_pattern_lerp(zoom_dist, 0, t_center)` -- la misma variable `t_center` que gradúa ángulo/posición/fade según qué tan lateral es cada tapa. Como diseño original era deliberado ("ninguna lateral queda con encogimiento residual"), pero era exactamente lo opuesto de lo que se terminó pidiendo.
+
+**Arreglo**: se quitó la atenuación por `t_center` específicamente para `distance` -- ahora `slide.distance = zoom_dist` se aplica idéntico a cada tapa visible del carrusel normal (central y laterales), calculado una sola vez por cuadro en `aura_coverflow_draw()`. Ángulo/posición/fade siguen graduándose con `t_center` igual que siempre, sin cambios -- solo la escala del zoom es ahora uniforme. La coreografía de vuelo de entrada/salida (`draw_carousel_sides()`, tapas apareciendo/desapareciendo por los bordes al abrir/cerrar Cover Flow) sigue explícitamente excluida, sin cambios -- es un movimiento distinto, no scroll dentro del carrusel. Renombrado `zoom_center_distance()`→`zoom_distance()` y el parámetro `center_distance`→`zoom_dist` en `draw_slide_perspective()`, para que el código ya no sugiera "solo la central". Magnitud, duraciones y curvas heredadas sin cambio de D-245 (240/256, ease-in 150ms / ease-out 220ms) -- la fórmula de `distance` no depende de qué tapa es, así que el porcentaje de encogimiento relativo es el mismo para todas.
+
+**Cambio directo, sin worktree**: a diferencia de D-245 (delegado a un fork por ser una animación nueva con varias piezas de estado), este fue un ajuste puntual y mecánico sobre código que yo mismo ya había revisado línea por línea al fusionar D-245 -- lo hice directamente en el checkout principal.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos que D-245 (sin lógica nueva que testear -- es una redistribución del mismo cálculo, no un cálculo nuevo). Capturas reales en el simulador: reposo idéntico a antes (sin drift), y el estado de asentamiento tras una ráfaga de scroll vuelve exacto a tamaño normal sin artefactos ni distorsión residual en ninguna tapa.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
