@@ -16,19 +16,30 @@ void aura_screens_handle_button(aura_nav_t *nav, long button);
  * con lista propia. */
 int aura_wheel_advance(int sel, int count, int direction);
 
-/* D-254: true mientras el temporizador de 3s de CoverDrift esta
- * contando (la seleccion se poso sobre una fila calificada pero
- * todavia no se cumplio el plazo) -- aura_main.c lo usa para pedir
- * cuadros a cadencia fina durante esa espera, igual que ya hace con
- * aura_coverdrift_animating() una vez montado. */
-bool aura_screens_coverdrift_arming(void);
+/* D-262: true mientras el panel derecho tiene algo PENDIENTE sin
+ * confirmar todavia -- la seleccion se movio a una fila con identidad
+ * distinta a la comprometida y todavia no se cumplen los
+ * AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS (o ya se cumplieron y el
+ * fundido esta corriendo). aura_main.c lo usa para pedir cuadros a
+ * cadencia media durante esa espera, igual que antes hacia con el
+ * temporizador de 3s especifico de CoverDrift (D-254, retirado --
+ * este reemplazo es general, cubre CoverDrift Y SelectionSummary/icono
+ * normal por igual). */
+bool aura_screens_right_panel_pending(void);
 
-/* D-259: true si CoverDrift estaba realmente MONTADO (armado Y ya
- * paso el retardo de 3s Y el pool tenia imagenes suficientes) para la
- * fila con destino `target`, en el ultimo cuadro dibujado -- para que
- * el manejador de SELECT decida que coreografia de transicion usar al
- * entrar a esa pantalla. Sin efectos secundarios (no reinicia ningun
- * temporizador). */
+/* D-262: true SOLO mientras el fundido real de 600ms del panel derecho
+ * esta corriendo (tras cumplirse el plazo de arriba) -- aura_main.c lo
+ * usa para pedir cuadros a cadencia FINA en ese tramo, igual que ya
+ * hace con aura_coverdrift_animating() para el movimiento ambiental en
+ * vivo. */
+bool aura_screens_right_panel_fading(void);
+
+/* D-259/D-262: true si CoverDrift estaba realmente MONTADO (comprometido
+ * en el panel derecho, no solo pendiente, y con el pool con imagenes
+ * suficientes) para la fila con destino `target`, en el ultimo cuadro
+ * dibujado -- para que el manejador de SELECT decida que coreografia
+ * de transicion usar al entrar a esa pantalla. Sin efectos secundarios
+ * (no reinicia ningun temporizador). */
 bool aura_screens_coverdrift_active_for(aura_screen_id_t target);
 
 #endif /* AURA_SCREENS_H */
