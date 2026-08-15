@@ -251,7 +251,8 @@ static void split_two_lines(const char *text, int max_width)
 static void draw_summary(int x, int width, const char *icon_name,
                           aura_selection_summary_icon_renderer_t renderer,
                           aura_category_t category,
-                          const char *top_text, const char *bottom_text)
+                          const char *top_text, const char *bottom_text,
+                          aura_selection_summary_bottom_renderer_t bottom_renderer)
 {
     int tile_x = x + (width - TILE_SIZE) / 2;
     int text_max_w = width - 2 * TEXT_PAD;
@@ -288,6 +289,15 @@ static void draw_summary(int x, int width, const char *icon_name,
         bottom_lines = s_bottom_line_buf[1][0] ? 2 : 1;
         lcd_getstringsize((const unsigned char *)s_bottom_line_buf[0], &w, &h);
         bottom_h = bottom_lines * h + TEXT_GAP;
+    }
+    else if (bottom_renderer)
+    {
+        /* Sin texto que medir -- reserva una franja fija (D-264, "Acerca
+         * de": grafico de almacenamiento). A26_SPACING_LG es la misma
+         * altura de barra que ya usa la pantalla completa de Acerca de
+         * (draw_about_storage(), aura_screens.c) para su barra segmentada
+         * -- consistente con el resto del sistema, no un numero suelto. */
+        bottom_h = A26_SPACING_LG + TEXT_GAP;
     }
 
     total_h = top_h + TILE_SIZE + bottom_h;
@@ -348,6 +358,9 @@ static void draw_summary(int x, int width, const char *icon_name,
     {
         s_bottom_overflowing[0] = 0;
         s_bottom_overflowing[1] = 0;
+        if (bottom_renderer)
+            bottom_renderer(text_x, tile_y + TILE_SIZE + TEXT_GAP, text_max_w,
+                             bottom_h - TEXT_GAP);
     }
 }
 
@@ -357,16 +370,17 @@ void aura_selection_summary_draw(int x, int width,
                                   const char *top_text,
                                   const char *bottom_text)
 {
-    draw_summary(x, width, icon_name, NULL, category, top_text, bottom_text);
+    draw_summary(x, width, icon_name, NULL, category, top_text, bottom_text, NULL);
 }
 
 void aura_selection_summary_draw_dynamic(int x, int width,
                                           aura_selection_summary_icon_renderer_t renderer,
                                           aura_category_t category,
                                           const char *top_text,
-                                          const char *bottom_text)
+                                          const char *bottom_text,
+                                          aura_selection_summary_bottom_renderer_t bottom_renderer)
 {
-    draw_summary(x, width, NULL, renderer, category, top_text, bottom_text);
+    draw_summary(x, width, NULL, renderer, category, top_text, bottom_text, bottom_renderer);
 }
 
 /* Reloj analogico (componentes/selection-summary.md, "Variante

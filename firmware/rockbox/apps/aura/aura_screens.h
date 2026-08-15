@@ -42,4 +42,12 @@ bool aura_screens_right_panel_fading(void);
  * (no reinicia ningun temporizador). */
 bool aura_screens_coverdrift_active_for(aura_screen_id_t target);
 
+/* D-264: equivalente a lo de arriba pero para la fila "Acerca de" --
+ * true si esa fila esta realmente comprometida (no solo pendiente) en
+ * el panel derecho en el ultimo cuadro dibujado. El dueno confirmo que
+ * el morph de entrada a Acerca de reusa el revelado de CoverDrift
+ * (D-259/D-261), asi que necesita la misma senal "estaba comprometido
+ * de verdad" pero para una pantalla que no es CoverDrift. */
+bool aura_screens_about_reveal_active(void);
+
 #endif /* AURA_SCREENS_H */

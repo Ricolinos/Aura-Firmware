@@ -63,11 +63,22 @@ void aura_selection_summary_draw(int x, int width,
  * componente solo le da el hueco ya centrado sobre el tile. */
 typedef void (*aura_selection_summary_icon_renderer_t)(int x, int y, int size);
 
+/* Renderer del slot INFERIOR (D-264, "Acerca de": grafico de
+ * almacenamiento en vez de texto) -- mismo espiritu que el renderer de
+ * icono de arriba (B-04: "debe ser una variante", no un componente
+ * nuevo), pero para el rectangulo de texto de abajo en vez del cuadro
+ * de icono. Solo se invoca cuando `bottom_text` es NULL y `bottom_renderer`
+ * no lo es -- si AMBOS son NULL, el slot simplemente no se dibuja (igual
+ * que hoy). `(x, y, width, height)` es el rectangulo completo reservado
+ * -- el renderer decide su propio contenido adentro. */
+typedef void (*aura_selection_summary_bottom_renderer_t)(int x, int y, int width, int height);
+
 void aura_selection_summary_draw_dynamic(int x, int width,
                                           aura_selection_summary_icon_renderer_t renderer,
                                           aura_category_t category,
                                           const char *top_text,
-                                          const char *bottom_text);
+                                          const char *bottom_text,
+                                          aura_selection_summary_bottom_renderer_t bottom_renderer);
 
 /* Primer renderer dinamico real (no un stub): reloj analogico con las
  * manecillas apuntando a la hora actual (get_time(), mismo dato real
