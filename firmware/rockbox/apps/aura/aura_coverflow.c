@@ -316,6 +316,19 @@ static int flip_progress_256(void)
     return aura_motion_linear(elapsed_ms, CF_FLIP_MS);
 }
 
+/* Solo la POSICION -- para el gate de SELECT (ver mas abajo), que
+ * necesita saber si la tapa objetivo ya esta en su lugar, no si el
+ * zoom (D-245) sigue interpolando de vuelta a tamano normal. Antes de
+ * D-245 esto era exactamente lo que hacia aura_coverflow_pending(); al
+ * sumarle zoom_animating() para la cadencia de render, el gate de
+ * SELECT habria heredado ~220ms extra de espera injustificada cada vez
+ * que se selecciona justo al terminar de scrollear. */
+static int position_pending(void)
+{
+    return anim_pos_x256() != s_target_index * 256
+        || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
+}
+
 int aura_coverflow_pending(void)
 {
     if (s_state == CF_STATE_SHOW_TRACKS)
@@ -1274,8 +1287,11 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
     case BUTTON_SELECT:
         /* Select solo cicla el carrusel a reposo exacto -- flipear a
          * mitad de un deslizamiento (target != posicion animada) se
-         * veria mal, la tapa objetivo todavia no esta en su lugar. */
-        if (s_album_count > 0 && !aura_coverflow_pending())
+         * veria mal, la tapa objetivo todavia no esta en su lugar.
+         * position_pending() (no aura_coverflow_pending()): el zoom de
+         * D-245 no debe añadir latencia a SELECT, solo la posicion
+         * importa aca -- ver comentario de position_pending(). */
+        if (s_album_count > 0 && !position_pending())
         {
             aura_music_select_album(s_albums[s_target_index].seek);
             s_track_count = aura_music_browse(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM,
