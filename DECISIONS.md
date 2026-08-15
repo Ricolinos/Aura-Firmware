@@ -2872,4 +2872,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+## D-243 — Bug real: las carátulas de álbum nunca llegaban a la carpeta correcta (ni en el simulador, ni en el dispositivo real)
+
+**Cómo se encontró**: el dueño pidió sincronizar el simulador con su biblioteca REAL de Aura Studio (`~/Documents/Aura Library`, no el iPod físico) para poder comparar comportamiento simulador-vs-hardware lado a lado. En vez de copiar archivos a mano, se reusó el motor de sync REAL de la app (`LibraryViewModel` + `LibrarySync`, la misma ruta de código que usa la app de verdad) para que el resultado fuera fiel a un sync real -- y al revisar por qué no aparecían carátulas en el simulador pese a que el catálogo real sí tenía datos de portada para 21 de las 24 pistas listas, apareció el bug real.
+
+**Causa**: `LibrarySync.writeAlbumCovers()` (`Services/LibrarySync.swift`) calculaba la carpeta de álbum así: `URL(fileURLWithPath: relative).deletingLastPathComponent().path`, con `relative` una ruta RELATIVA ("Music/Artista/Álbum/Canción.mp3"). `URL(fileURLWithPath:)` sin `relativeTo:` resuelve el string contra el **directorio de trabajo del proceso**, no lo deja "relativo" -- así que el resultado no era una carpeta de álbum, era una ruta absoluta ajena (el cwd de quien estuviera corriendo el sync en ese momento). Esa ruta bogus se pegaba después sobre `volumeRoot` con `appendingPathComponent`, produciendo una carpeta anidada sin sentido, nunca la carpeta real del álbum -- confirmado reproduciendo el cálculo exacto de forma aislada y viendo la ruta resultante. **Esto afecta cualquier sync, no solo el del simulador**: es el mismo código que corre cuando el dueño sincroniza al iPod real. Cero pruebas cubrían `writeAlbumCovers()` -- por eso nunca se detectó en ningún sync anterior.
+
+**Por qué en hardware "sí se veían" carátulas de todos modos**: probablemente por el mecanismo de respaldo real de `find_albumart()` del firmware (arte EMBEBIDO en el archivo, no el `cover.jpg` de carpeta) -- varias de las pistas de prueba son `.m4a`, formato que Aura nunca reescribe con `ID3Writer` (esa herramienta solo toca MP3), así que el arte original embebido por iTunes/lo que sea sobrevive intacto sin que este bug lo afecte. El `cover.jpg` de carpeta (pensado para pistas MP3 sin arte propio, `coverArtPolicy: .albumOnly`) simplemente nunca se escribía en ningún lado -- un hueco real, ahora cerrado.
+
+**Arreglo**: resolver `relative` contra `volumeRoot` PRIMERO (`volumeRoot.appendingPathComponent(relative)`), y recién ahí quitar el nombre de archivo (`.deletingLastPathComponent()`) para obtener la carpeta de álbum real. Prueba de regresión nueva (`testSyncWritesAlbumCoverInsideAlbumFolder`, `LibrarySyncTests.swift`) que verifica el `cover.jpg` aparece exactamente en `Music/<Artista>/<Álbum>/` y que nada se escribió por fuera del `volumeRoot` de la prueba.
+
+**Verificación**: `swift build`/`xcodebuild` limpios, `** BUILD SUCCEEDED **`. `swift test`: 191 pruebas (1 nueva), 189 pasan -- las 2 que fallan son la misma prueba de red real conocida, no relacionada. Confirmado en vivo contra la biblioteca real del dueño: tras el arreglo, `cover.jpg` aparece correctamente dentro de cada carpeta de álbum sincronizada (`Music/Gloria Estefan/Miss Little Havana/cover.jpg`, etc.), ya no en una ruta anidada sin sentido.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
