@@ -1675,45 +1675,35 @@ static unsigned category_flat_color(aura_category_t cat)
     return center;
 }
 
-/* Grafico de almacenamiento por color (D-264, "Acerca de" -- encargo
- * textual: "un grafico para mostrar el almacenamiento por colores (sin
- * numero), pero si que las barras tengan un porcentaje"). Extiende la
- * barra segmentada que YA existe en la pantalla completa de Acerca de
- * (draw_about_storage() arriba en este archivo, D-081) con dos
- * segmentos que esa version no tenia -- "Otros" y "Libre" -- via
- * volume_size() (firmware/export/mv.h), la API que el comentario
- * original de D-081 documentaba como pendiente ("necesitaria consultar
- * el espacio real de disco... sin precedente en este modulo"). Los
- * porcentajes aca son del DISCO TOTAL, no solo de la proporcion entre
- * Musica/Video/Fotos como en la pantalla completa -- lectura mas fiel
- * al encargo especifico de este componente ("que las barras tengan un
- * porcentaje"). Colores: acento para Musica (igual que el resto del
- * sistema), colores fijos de categoria para Video/Fotos, gris de
- * categoria (Ajustes) para "Otros" -- ninguno es un RGB nuevo, todos
- * ya existen en a26_palette/aura_category_gradient(). */
+/* Grafico de almacenamiento por color (D-264, extendido D-279 -- encargo
+ * textual: "dividir la barra en 4 segmentos por color: rosa = musica,
+ * azul = videos, verde = imagenes, amarillo = extras"). Verde para
+ * Fotos hubiera roto la jerarquia de color por categoria ya fija por
+ * encargo del dueno (D-250, `photos_hex` naranja, 2026-08-14) -- el
+ * dueno confirmo mantener el color de categoria vigente en toda la
+ * barra (PLAN-about-storage.md Q4) en vez de introducir un verde que
+ * seria la unica excepcion del sistema. "Extras" no tiene bytes medibles
+ * (ver about_storage_collect(), Q5): el cuarto segmento amarillo
+ * representa el residual "Otros" (firmware, playlists, cache, archivos
+ * sueltos) con el extremo amarillo de la categoria Extras
+ * (`extras_yellow_hex`, antes gris de Ajustes). Colores: acento
+ * configurable para Musica (Q2, sigue la misma regla que el resto del
+ * sistema), color fijo de categoria para Video/Fotos (Q3), amarillo fijo
+ * de Extras para "Otros" (Q5) -- ninguno es un RGB nuevo. */
 static void draw_about_storage_bars(int x, int y, int width, int height)
 {
-    const aura_manifest_t *m = cached_manifest();
-    sector_t vol_size = 0, vol_free = 0;
-    long long music_b = m ? m->music_bytes : 0;
-    long long video_b = m ? m->video_bytes : 0;
-    long long photo_b = m ? m->photo_bytes : 0;
-    long long total_b, other_b, free_b;
+    long long music_b, video_b, photo_b, other_b, free_b, total_b;
     int seg_x = x;
     int i;
     struct { long long bytes; unsigned color; } segs[5];
 
-    volume_size(IF_MV(0,) &vol_size, &vol_free);
-    total_b = (long long)vol_size * SECTOR_SIZE;
-    free_b = (long long)vol_free * SECTOR_SIZE;
-    other_b = total_b - free_b - music_b - video_b - photo_b;
-    if (other_b < 0)
-        other_b = 0;
+    about_storage_collect(false, &music_b, &video_b, &photo_b,
+                           &other_b, &free_b, &total_b);
 
     segs[0].bytes = music_b; segs[0].color = aura_accent();
     segs[1].bytes = video_b; segs[1].color = category_flat_color(AURA_CATEGORY_VIDEO);
     segs[2].bytes = photo_b; segs[2].color = category_flat_color(AURA_CATEGORY_PHOTOS);
-    segs[3].bytes = other_b; segs[3].color = category_flat_color(AURA_CATEGORY_SETTINGS);
+    segs[3].bytes = other_b; segs[3].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
     segs[4].bytes = free_b;  segs[4].color = a26_color(A26_PROGRESS_TRACK);
 
     /* D-277: esta barra vive SOBRE la imagen de fondo del panel derecho
@@ -1750,6 +1740,16 @@ static void draw_about_storage_bars(int x, int y, int width, int height)
     for (i = 0; i < 5; i++)
     {
         int seg_w = (int)((long long)width * segs[i].bytes / total_b);
+        if (segs[i].bytes <= 0)
+            continue;
+        /* D-279/Q9: bytes>0 pero proporcion diminuta no debe desaparecer
+         * -- ancho minimo visible (about.segment_min_px). Recortado
+         * contra lo que quede del ancho real de la barra para no pintar
+         * fuera de [x, x+width). */
+        if (seg_w < AURA_DS_METRICS_ABOUT_SEGMENT_MIN_PX)
+            seg_w = AURA_DS_METRICS_ABOUT_SEGMENT_MIN_PX;
+        if (seg_x + seg_w > x + width)
+            seg_w = (x + width) - seg_x;
         if (seg_w <= 0)
             continue;
         lcd_set_foreground(segs[i].color);
