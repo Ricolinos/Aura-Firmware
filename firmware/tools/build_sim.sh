@@ -63,6 +63,9 @@ cp "$ROOT_DIR"/design-system/out/icons/masks/*.bmp simdisk/.rockbox/icons/aura/m
 # Fondos del panel derecho de SelectionSummary por acento (D-267).
 mkdir -p simdisk/.rockbox/icons/aura/backgrounds
 cp "$ROOT_DIR"/design-system/out/icons/aura/backgrounds/*.bmp simdisk/.rockbox/icons/aura/backgrounds/
+# Iconos de tile a color completo, un solo consumidor cada uno (D-269).
+mkdir -p simdisk/.rockbox/icons/aura/tile-icons
+cp "$ROOT_DIR"/design-system/out/icons/aura/tile-icons/*.bmp simdisk/.rockbox/icons/aura/tile-icons/
 
 echo "==> Listo: $BUILD_DIR/rockboxui"
 

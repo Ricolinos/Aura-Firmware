@@ -162,46 +162,62 @@ static bool ensure_panel_background(const char *name)
     return s_bg_load_ok;
 }
 
-/* Sombra real bajo el tile flotante (D-267, mockup del dueno) --
- * compositing genuino contra lo que YA este dibujado (la imagen de
- * fondo, leida del framebuffer), no un color plano: sin primitiva de
- * blur en este LCD, se aproxima con un solo relleno semitransparente
- * (alpha fijo, sin caida gaussiana) recortado con la misma matematica de
- * distancia de esquina que ya usa stamp_corner()/a26_shell_isqrt256()
- * (apple2026_shell.c) para que el borde no se vea escalonado. Desplazada
- * `shadow_offset_y` px hacia abajo respecto al tile real -- el tile,
- * dibujado encima despues, tapa el centro y deja ver solo el borde
- * inferior de la sombra, el look clasico de icono flotante. */
-static void draw_tile_shadow(int x, int y, int w, int h, int radius, int alpha_256)
+/* Sombra real bajo el tile flotante, con barrido suave (D-270, correccion
+ * del dueno: "el dropshadow debe tener un barrido como desenfoque
+ * gausiano, como la sombra que refleja el leftpanel sobre el panel
+ * derecho"). Compositing genuino contra lo que YA este dibujado (D-267,
+ * sin cambio en eso), pero ya NO es un relleno de alpha fijo con un borde
+ * apenas antialiasado -- ahora usa un campo de distancia con signo (SDF)
+ * a un rectangulo redondeado (formula estandar: para cada pixel relativo
+ * al CENTRO del rectangulo, `q = abs(p) - (halfSize - radius)`; adentro
+ * de ambos ejes la distancia es el maximo de las dos componentes menos
+ * el radio, afuera es la distancia euclidiana al punto mas cercano del
+ * arco de esquina menos el radio) -- alpha maximo DENTRO del rectangulo
+ * (mayormente tapado por el tile real, dibujado encima despues), y cae
+ * LINEAL desde ese maximo hasta cero a lo largo de `blur_px` -- mismo
+ * principio de caida lineal ya usado por
+ * aura_shell_draw_left_panel_shadow_over_content() (la referencia que
+ * el dueno cito), aplicado en 2D en vez de en una sola columna. Esto
+ * produce un barrido continuo alrededor de TODO el perimetro (no solo
+ * antialias de 1px en el borde), el equivalente practico a un blur
+ * gaussiano en un LCD sin primitiva de blur real. */
+static void draw_tile_shadow(int x, int y, int w, int h, int radius,
+                              int blur_px, int max_alpha_256)
 {
+    int half_w = w / 2, half_h = h / 2;
+    int cx = x + half_w, cy = y + half_h;
     int px, py;
-    int r256 = radius * 256;
 
-    for (py = 0; py < h; py++)
+    for (py = -half_h - blur_px; py <= half_h + blur_px; py++)
     {
-        for (px = 0; px < w; px++)
+        int ay = py < 0 ? -py : py;
+        int qy = ay - (half_h - radius);
+
+        for (px = -half_w - blur_px; px <= half_w + blur_px; px++)
         {
-            int a = alpha_256;
-            int cx = -1, cy = -1;
+            int ax = px < 0 ? -px : px;
+            int qx = ax - (half_w - radius);
+            int dist; /* distancia con signo a la superficie, en px */
+            int a;
             fb_data *p;
 
-            if (px < radius && py < radius)             { cx = radius - 1; cy = radius - 1; }
-            else if (px >= w - radius && py < radius)     { cx = w - radius; cy = radius - 1; }
-            else if (px < radius && py >= h - radius)     { cx = radius - 1; cy = h - radius; }
-            else if (px >= w - radius && py >= h - radius) { cx = w - radius; cy = h - radius; }
-
-            if (cx >= 0)
+            if (qx <= 0 && qy <= 0)
+                dist = (qx > qy ? qx : qy) - radius;
+            else
             {
-                int dx = px - cx, dy = py - cy;
-                int dist256 = (int)a26_shell_isqrt256((unsigned)(dx * dx + dy * dy));
-                if (dist256 > r256 + 128)
-                    continue;
-                if (dist256 > r256 - 128)
-                    a = alpha_256 * (r256 + 128 - dist256) / 256;
+                int cqx = qx > 0 ? qx : 0;
+                int cqy = qy > 0 ? qy : 0;
+                dist = (int)(a26_shell_isqrt256((unsigned)(cqx * cqx + cqy * cqy)) >> 8) - radius;
             }
-            if (a <= 0)
+
+            if (dist <= 0)
+                a = max_alpha_256;
+            else if (dist >= blur_px)
                 continue;
-            p = FBADDR(x + px, y + py);
+            else
+                a = max_alpha_256 * (blur_px - dist) / blur_px;
+
+            p = FBADDR(cx + px, cy + py);
             *p = a26_shell_blend(*p, 0 /* negro */, a);
         }
     }
@@ -349,7 +365,20 @@ static void draw_summary(int x, int width, const char *icon_name,
     int text_max_w = width - 2 * TEXT_PAD;
     int text_x = x + TEXT_PAD;
     int top_h = 0, bottom_h = 0, bottom_lines = 0;
-    int total_h, tile_y, w, h;
+    /* D-270 (correccion del dueno, con capturas propias marcando el
+     * centro real del icono vs. el centro del panel): el tile/icono va
+     * SIEMPRE al centro EXACTO del panel derecho (vertical y
+     * horizontal), sin importar si hay texto arriba/abajo -- el texto
+     * NO forma un grupo con el tile para centrarse junto, vive aparte,
+     * anclado a los bordes del tile ya fijo. Antes (D-097/D-263)
+     * `tile_y` se calculaba centrando el BLOQUE completo
+     * (top_h+TILE_SIZE+bottom_h) como si fuera una sola unidad -- con
+     * top_h/bottom_h distintos entre filas, el tile terminaba
+     * desplazado del centro real del panel, exactamente la discrepancia
+     * que el dueno senalo con las dos flechas (centro del icono vs.
+     * centro del panel). */
+    const int tile_y = (A26_SCREEN_HEIGHT - TILE_SIZE) / 2;
+    int w, h;
     unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
 
     /* Fondo COMPLETO del panel (D-267, reemplaza el degradado diagonal
@@ -408,9 +437,6 @@ static void draw_summary(int x, int width, const char *icon_name,
         bottom_h = A26_SPACING_LG + TEXT_GAP;
     }
 
-    total_h = top_h + TILE_SIZE + bottom_h;
-    tile_y = (A26_SCREEN_HEIGHT - total_h) / 2 + top_h;
-
     /* Sombra + tile con esquinas redondeadas REALES (D-267): el fondo ya
      * no es un color plano conocido, asi que ni la sombra ni el recorte
      * de esquinas pueden pintar un color fijo (dejaria parches blancos
@@ -433,6 +459,7 @@ static void draw_summary(int x, int width, const char *icon_name,
 
         draw_tile_shadow(tile_x, tile_y + AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_OFFSET_Y,
                           TILE_SIZE, TILE_SIZE, TILE_RADIUS,
+                          AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_BLUR_PX,
                           256 * AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_ALPHA_PCT / 100);
 
         for (sy = 0; sy < TILE_SIZE; sy++)

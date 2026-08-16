@@ -3232,4 +3232,34 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+---
+
+## D-269 — Ícono real de Aura en el tile de "Acerca de" (badge aplanado de un bundle .icon de Icon Composer)
+
+**Encargo**: reemplazar el ícono "ipod" (D-263) del tile de SelectionSummary de "Acerca de" por el ícono real de Aura, compartido como `/Users/ricolinos/Documents/Aura iCon.icon` -- explícitamente SOLO en SelectionSummary, el ícono de la fila en la lista (`settings_entries[]`, "info") no cambia.
+
+**El archivo no es un ícono simple**: `.icon` es el formato nuevo de Icon Composer (macOS 26/Xcode 26) -- un paquete con `icon.json` (composición multicapa: grupos, blend modes, glass-specializations, blur-material, shadow) y seis SVG de capa individual en `Assets/`. Aura no tiene (ni puede tener, dado el LCD del dispositivo) un renderer de Icon Composer real -- sin blur, sin especular, sin translúcido en tiempo real. Investigué `iconutil`/`qlmanage`/`xcrun` buscando algo que lo aplanara por mí; ninguno funcionó (QuickLook se colgó, no hay CLI de Icon Composer instalada). Lo aplané a mano: leí `icon.json` para entender el layout real (dos círculos concéntricos con degradado + cuatro glifos -- "aura" arriba, "play/pausa" abajo, "atrás"/"adelante" a los lados -- literalmente la rueda de click del iPod reinterpretada como badge circular), rastericé las seis capas SVG con el mismo renderer Swift que ya soporta `svgPath` (D-263), y las compuse en Python con posiciones/escalas proporcionales a las del propio `icon.json` (sin replicar blur/especular, que no existen en este LCD).
+
+**Pipeline nuevo**: `generate_tile_icons()` (`generate.py`) -- distinto de `generate_panel_backgrounds()` (D-267, imágenes de fondo completo) y del pipeline de SF Symbols (glifos monocromos para teñir): este es un ícono de UN SOLO consumidor, a COLOR completo, horneado con la misma clave de transparencia magenta que el resto (D-010) pero el borde antialiasado se precompone contra un solo color CONOCIDO (el centro del degradado de Ajustes, `#8E8E93` -- el único fondo real posible detrás de este ícono específico), no contra un tema entero. Nuevo `aura_ds.metrics.tile_icons` en `tokens.json`. Fuente versionada en `design-system/assets/tile-icons/aura_badge-source.png`.
+
+**Runtime**: `draw_about_icon_renderer()` (`aura_screens.c`) ya no envuelve `aura_widgets_draw_icon_variant_selector("ipod", ...)` -- carga el BMP horneado una vez por sesión (mismo patrón `read_bmp_file()` que `ensure_panel_background()`, D-267) y lo dibuja con `lcd_bitmap_transparent()` (el badge es un círculo, sus esquinas deben dejar ver el degradado del tile detrás). Si el archivo no está (dispositivo real sin sincronizar todavía), cae de vuelta al ícono "ipod" -- degradación honesta, no pantalla rota.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos. Captura real confirmando el badge nuevo en el tile de Acerca de, legible incluso a 60px (texto "AURA", disco central, flechas de retroceso/avance), y el ícono de la fila en la lista sin cambio (sigue "info").
+
+---
+
+## D-270 — SelectionSummary: el ícono va al centro real del panel (no al centro del grupo con el texto), y la sombra del tile ahora tiene barrido suave
+
+**Encargo, con capturas propias marcando ambos centros**: "el ícono del selection summary y su soporte siempre estarán en la misma posición, centrados en el panel derecho... lo que observo que estás haciendo es que linkeas el ícono con el texto y sacas el centro de los dos elementos como grupo, pero no debería ser, el texto va separado del ícono." Y, aparte: "el dropshadow debe tener un barrido como desenfoque gausiano (como la sombra que refleja el leftpanel sobre el panel derecho)".
+
+**Diagnóstico del primer bug**: `draw_summary()` (`aura_selection_summary.c`) calculaba `tile_y` centrando el BLOQUE completo (`top_h + TILE_SIZE + bottom_h`) como una sola unidad desde D-097 -- con `top_h`/`bottom_h` distintos entre filas (según haya texto arriba, abajo, ninguno o los dos), el tile se desplazaba del centro real del panel. Exactamente la discrepancia que las dos flechas del dueño señalaban.
+
+**Arreglo**: `tile_y` pasa a ser una constante fija, `(A26_SCREEN_HEIGHT - TILE_SIZE) / 2` -- el centro geométrico real del panel, sin importar cuánto texto haya arriba o abajo. El texto se sigue anclando a los bordes del tile (ya fijo) exactamente igual que antes -- arriba en `tile_y - top_h`, abajo en `tile_y + TILE_SIZE + TEXT_GAP` -- pero ya no participa del cálculo de dónde vive el tile. Verificado con dos capturas reales, una con texto arriba y abajo (Acerca de) y otra con solo texto abajo (Fotos) -- el borde superior del tile cae en la MISMA fila de píxel exacta (y=75) en ambas, confirmando que el ícono ya no se mueve según el contenido de texto.
+
+**Segundo arreglo, la sombra**: la versión de D-267 rellenaba el tile con un alpha fijo (35%) y solo antialiaseaba 1px justo en el borde -- se leía como una sombra "dura", no un barrido. Reescribí `draw_tile_shadow()` con un campo de distancia con signo (SDF) real a un rectángulo redondeado (`q = abs(p) - (halfSize - radius)`, la fórmula estándar) -- alpha máximo dentro del rectángulo (mayormente tapado por el tile real, dibujado encima después), cayendo LINEAL desde ese máximo hasta cero a lo largo de `shadow_blur_px` (12px, nuevo en `tokens.json`) medido como distancia real a la superficie, no solo en el borde. Mismo principio de caída lineal que `aura_shell_draw_left_panel_shadow_over_content()` -- la sombra que el dueño citó como referencia -- aplicado en 2D alrededor de TODO el perímetro en vez de en una sola columna. No es un blur gaussiano real (no hay primitiva de blur en este LCD), pero reproduce el mismo efecto práctico: un barrido continuo, no un corte duro.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos. Capturas reales confirmando ambos arreglos -- posición del tile idéntica entre filas con distinto texto (medida a nivel de píxel), y sombra con caída visible alrededor de todo el tile, no solo en el borde inferior.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

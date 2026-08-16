@@ -14,6 +14,8 @@
 #include "misc.h"
 #include "mv.h"
 #include "fs_defines.h"
+#include "rbpaths.h"
+#include "recorder/bmp.h"
 
 #include "aura_screens.h"
 #include "aura_widgets.h"
@@ -1553,17 +1555,49 @@ static const char *clock_row_top_text(void)
     return buf;
 }
 
-/* Renderer de icono trivial (D-264, "Acerca de"): envuelve el icono
- * ESTATICO nuevo "ipod" (D-263, SVG propio) en la forma de renderer que
- * aura_selection_summary_draw_dynamic() espera -- necesario porque esa
- * funcion no recibe `icon_name` (solo el renderer), y Acerca de necesita
- * la variante dinamica de todos modos por su bottom_renderer (grafico de
- * almacenamiento). Convierte el centro (x,y) que pasa el componente al
- * origen top-left que espera aura_widgets_draw_icon_variant_selector(). */
+/* Badge real de Aura (D-269, encargo del dueno de producto): a color
+ * completo, NO un glifo monocromo para tenir -- reemplaza el "ipod"
+ * blanco de D-263/D-264 SOLO en el icono de SelectionSummary de "Acerca
+ * de" (el icono de la FILA en la lista, settings_entries[]="info", NO
+ * cambia -- el dueno lo pidio explicito: "el icono que aparece en el
+ * left panel no debe cambiar"). Horneado por design-system/generate.py
+ * (generate_tile_icons()) a partir de un bundle .icon de Icon Composer
+ * que el dueno compartio -- aplanado a mano (seis capas SVG
+ * individuales, compuestas segun su propio icon.json) porque Aura no
+ * tiene un renderer de Icon Composer real. Cargado UNA vez por sesion
+ * (cache por bandera, nunca cambia en tiempo de ejecucion) -- mismo
+ * patron read_bmp_file() que ensure_panel_background() en
+ * aura_selection_summary.c (D-267), pero con lcd_bitmap_transparent()
+ * (clave magenta, D-010) en vez de un blit opaco: el badge es un
+ * circulo, sus 4 esquinas deben dejar ver el degradado del tile
+ * detras. */
+static fb_data s_aura_badge_pixels[AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE
+                                    * AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE];
+static bool s_aura_badge_loaded = false;
+static bool s_aura_badge_ok = false;
+
 static void draw_about_icon_renderer(int cx, int cy, int size)
 {
-    aura_widgets_draw_icon_variant_selector("ipod", size,
-                                             cx - size / 2, cy - size / 2);
+    enum { SZ = AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE };
+
+    if (!s_aura_badge_loaded)
+    {
+        char path[MAX_PATH];
+        struct bitmap bm;
+        int ret;
+
+        s_aura_badge_loaded = true;
+        snprintf(path, sizeof(path), "%s/aura/tile-icons/aura_badge.bmp", ICON_DIR);
+        bm.data = (char *)s_aura_badge_pixels;
+        ret = read_bmp_file(path, &bm, sizeof(s_aura_badge_pixels), FORMAT_NATIVE, NULL);
+        s_aura_badge_ok = (ret > 0 && bm.width == SZ && bm.height == SZ);
+    }
+
+    if (s_aura_badge_ok)
+        lcd_bitmap_transparent(s_aura_badge_pixels, cx - SZ / 2, cy - SZ / 2, SZ, SZ);
+    else
+        aura_widgets_draw_icon_variant_selector("ipod", size,
+                                                 cx - size / 2, cy - size / 2);
 }
 
 /* Color solido representativo de una categoria -- el centro del

@@ -611,6 +611,54 @@ def generate_panel_backgrounds(tokens):
         print(f"   {name} ({panel_w}x{panel_h}) -> {name}.bmp")
 
 
+def generate_tile_icons(tokens):
+    """Iconos de un solo consumidor, a color completo (D-269, encargo del
+    dueno de producto: el badge real de Aura -- un bundle .icon de Icon
+    Composer, aplanado a mano por mi via los SVG de capa individuales,
+    ver DECISIONS.md) -- distinto del pipeline de SF Symbols de arriba:
+    no son un glifo monocromo para tenir por tema/variante, son una
+    imagen ya compuesta con su propio color. Mismo mecanismo de clave de
+    transparencia magenta que generate_icons() (D-010) pero la
+    composicion del BORDE se hace contra un solo color conocido (el
+    centro del degradado de la seccion donde vive ESTE icono especifico
+    -- hoy solo Ajustes/gris fijo, el unico consumidor), no contra un
+    tema completo.
+    """
+    from PIL import Image
+
+    print("==> Generando iconos de tile a color completo (out/icons/aura/tile-icons/*.bmp)")
+    cfg = tokens["aura_ds"]["metrics"]["tile_icons"]
+    src_dir = ROOT / "assets" / "tile-icons"
+    out_dir = OUT / "icons" / "aura" / "tile-icons"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    TRANSPARENT_RGB = (255, 0, 255)
+
+    for name, spec in cfg["items"].items():
+        src_path = src_dir / f"{name}-source.png"
+        if not src_path.exists():
+            die(f"falta {src_path} (icono de tile '{name}', declarado en "
+                f"aura_ds.metrics.tile_icons.items)")
+        size = spec["size"]
+        bg_rgb = hex_to_rgb(spec["compose_bg_hex"])
+
+        img = Image.open(src_path).convert("RGBA")
+        img = img.resize((size, size), Image.LANCZOS)
+
+        out_img = Image.new("RGB", (size, size), TRANSPARENT_RGB)
+        bg_img = Image.new("RGB", (size, size), bg_rgb)
+        alpha = img.split()[3]
+        composed = Image.composite(img.convert("RGB"), bg_img, alpha)
+        # Solo cobertura EXACTAMENTE cero se queda como clave de
+        # transparencia -- cualquier otra cosa (incluido el borde
+        # antialiasado) ya quedo pre-compuesta contra bg_rgb arriba.
+        zero_mask = alpha.point(lambda a: 255 if a == 0 else 0)
+        out_img.paste(composed, (0, 0))
+        out_img.paste(Image.new("RGB", (size, size), TRANSPARENT_RGB), (0, 0), zero_mask)
+
+        out_img.save(out_dir / f"{name}.bmp", format="BMP")
+        print(f"   {name} ({size}x{size}) -> {name}.bmp")
+
+
 def main():
     tokens = json.loads(TOKENS_PATH.read_text())
 
@@ -623,6 +671,7 @@ def main():
     generate_fonts(tokens)
     generate_icons(tokens)
     generate_panel_backgrounds(tokens)
+    generate_tile_icons(tokens)
 
     print("==> Pipeline completo. Salida en design-system/out/")
 
