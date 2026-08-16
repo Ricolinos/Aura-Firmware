@@ -401,9 +401,20 @@ void aura_main(void)
         aura_screens_draw(&nav);
         /* La hoja de vidrio del Modo 4 es CUADRADA: sobre ella no se
          * estampan las esquinas derechas de pantalla (se leian como
-         * esquinas redondeadas de la hoja, correccion 2026-08-12). */
-        if (aura_nav_current(&nav) == AURA_SCREEN_NOWPLAYING
-            && aura_nowplaying_sheet_active())
+         * esquinas redondeadas de la hoja, correccion 2026-08-12).
+         * D-268 (bug real reportado por el dueno, con capturas): mismo
+         * problema en cualquier pantalla SPLIT -- a26_shell_stamp_corners()
+         * recorta con un color PLANO (A26_SHELL_BG), invisible mientras
+         * el panel derecho era blanco liso, pero desde D-267 (fondo de
+         * imagen completa en SelectionSummary) y ya desde D-254
+         * (CoverDrift, carne llena el panel borde a borde) deja parches
+         * planos falsos en las esquinas superior/inferior derechas --
+         * exactamente el mismo defecto que la hoja de Modo 4 ya
+         * resolvia para su propio caso, aca generalizado a CUALQUIER
+         * panel derecho con contenido rico. */
+        if ((aura_nav_current(&nav) == AURA_SCREEN_NOWPLAYING
+                && aura_nowplaying_sheet_active())
+            || aura_widgets_split_active())
             a26_shell_stamp_corners_left_only();
         else
             a26_shell_stamp_corners();

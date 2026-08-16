@@ -3218,4 +3218,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+---
+
+## D-268 — Esquinas superior/inferior derechas de pantalla, redondeadas por error contra el fondo nuevo de SelectionSummary
+
+**Encargo**: el dueño señaló con capturas propias, flechas incluidas, que las esquinas superior derecha e inferior derecha de la pantalla completa aparecían redondeadas (recorte visible contra el fondo nuevo de D-267) -- no deberían estarlo.
+
+**Diagnóstico**: `a26_shell_stamp_corners()` (`apple2026_shell.c`) corre una vez por cuadro, después de `aura_screens_draw()`, y recorta las CUATRO esquinas físicas de la pantalla (320x240 completos) simulando el bisel redondeado del dispositivo -- pero lo hace con el mismo mecanismo de color PLANO que ya había causado dos bugs idénticos en esta sesión (D-258, la sombra del LeftPanel; D-267, las esquinas del tile): rellena con `a26_color(A26_SHELL_BG)`, invisible mientras el panel derecho era blanco liso, pero un parche plano falso en cuanto hay contenido rico detrás -- desde D-254 (CoverDrift, aunque menos notorio contra fotos) y sobre todo desde D-267 (imagen completa de acento, mucho más notorio). El sistema YA tenía precedente para exactamente este problema: `a26_shell_stamp_corners_left_only()` existe desde la corrección 2026-08-12 de la hoja de Modo 4 del reproductor (cuadrada, sin esquinas derechas estampadas encima) -- el mismo mecanismo, nunca generalizado al resto de los casos con panel derecho rico.
+
+**Arreglo**: en `aura_main.c` (el único call site real de este bug -- los otros dos usos de `a26_shell_stamp_corners()`, pantalla de bloqueo y progreso de precarga, son pantallas completas sin panel derecho, sin cambios ahí), la condición que ya elegía la variante `_left_only` para la hoja de Modo 4 se generaliza con un `|| aura_widgets_split_active()` -- CUALQUIER pantalla con layout dividido (panel derecho real, sea SelectionSummary o CoverDrift) deja de recortar sus esquinas derechas con un color plano falso; las esquinas izquierdas (sobre el LeftPanel, blanco liso, sin este problema) se siguen recortando igual que siempre.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (dibujo directo por cuadro, sin lógica pura nueva). Capturas reales confirmando ambas esquinas derechas ahora cuadradas (la imagen de fondo llega hasta el borde físico de la pantalla) y las dos esquinas izquierdas sin cambio (siguen redondeadas, comparación de franjas superior/inferior a nivel de píxel).
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
