@@ -12,7 +12,7 @@ titulada "Búsqueda". Confirmado 2026-08-13.
 | y=44, alto 34 | **Caja de búsqueda**: pastilla de **ACENTO** a todo el ancho útil, **radio 11** |
 | dentro, x+6 | **Campo** blanco de 84×24 con lo escrito y el cursor, **radio 6** |
 | dentro, tras el campo | **Tira** de caracteres deslizante |
-| y=92 en adelante | **Resultados en vivo** |
+| y=86 en adelante | **Resultados en vivo** (caja + 8px de separación; filas de 18px — D-159) |
 
 ## La tira
 
@@ -43,20 +43,21 @@ titulada "Búsqueda". Confirmado 2026-08-13.
 
 | Botón | Efecto |
 |---|---|
-| Rueda | Recorre la tira (con la dinámica de velocidad del sistema) |
+| Rueda | Recorre la tira **en loop** (con la dinámica de velocidad del sistema): es un ciclo cerrado, no una lista con extremos — de `A` hacia atrás cae en `_` (D-233) |
 | Select | Añade el carácter activo |
 | Forward | Espacio |
 | Backward (tap) | Borra un carácter |
 | **Backward (mantener)** | **Borra todo** |
 | Play | Confirma: abre los resultados a pantalla completa |
-| Menu | Sale **conservando lo escrito** |
+| Menu | Sin texto escrito, sale de inmediato. Con texto, la **primera** pulsación regresa el cursor al inicio de la tira y "arma" la salida; una **segunda** pulsación de Menu (sin otro botón en medio) sale **conservando lo escrito** — cualquier otro botón desarma la salida (D-233) |
 
 ## Persistencia (requisito duro)
 
 Lo escrito, la posición en la tira y los resultados **persisten mientras
-dure la sesión**: salir con Menu a cualquier profundidad y volver a
-entrar reanuda la búsqueda exactamente como estaba. Salir "sin querer"
-nunca cuesta el texto.
+la navegación no regrese al menú principal** (D-233): salir con Menu al
+submenú Música y volver a entrar reanuda la búsqueda exactamente como
+estaba; desandar toda la pila hasta el menú principal vacía la búsqueda.
+Salir "sin querer" nunca cuesta el texto.
 
 ## Resultados
 
