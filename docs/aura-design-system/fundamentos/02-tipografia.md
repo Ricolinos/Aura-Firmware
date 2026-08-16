@@ -1,6 +1,9 @@
 # Tipografía
 
-🟡 Parcial — primer token definido (`StatusBar`), resto pendiente.
+🟢 Todos los roles con consumidor real están definidos (11 roles en
+`type_scale_roles`, 9 estilos `ds_*`; resync 2026-08-16). Huecos: las
+pantallas sin token propio (`--font-body`/`--font-caption` de la tabla
+final) siguen usando estilos compartidos del sistema Apple2026 viejo.
 
 ## Tokens definidos
 
@@ -54,27 +57,51 @@ Familia SF Pro en todos:
 ## Tokens de LeftPanel (confirmados)
 
 **D-207 (2026-08-14):** `menu_item` subió de Regular a **Semibold** además de
-+2px -- único estilo Semibold del sistema (`A26_FONT_STYLE_DS_SEMIBOLD_14`,
-`SF-Pro-Text-Semibold.otf`), ocupando el único hueco de `MAXUSERFONTS=12`
-que quedaba realmente libre (`A26_FONT_STYLE_DS_BOLD_8`, sin consumidor
-real, confirmado por grep). Estilo EXCLUSIVO de `MenuList` -- no comparte
-slot con `np_album`/`np_artist`/`lyrics` (que se quedan en `DS_REG_12`), así
-que NowPlaying no cambia con esto.
++2px -- único estilo Semibold del sistema (`SF-Pro-Text-Semibold.otf`),
+ocupando en su momento el hueco de `MAXUSERFONTS` que quedaba libre
+(`A26_FONT_STYLE_DS_BOLD_8`, sin consumidor real, confirmado por grep).
+**D-267 (2026-08-15):** +1pt más, ahora `A26_FONT_STYLE_DS_SEMIBOLD_15`
+(renombrado desde `DS_SEMIBOLD_14`, mismo único consumidor). Estilo
+EXCLUSIVO de `MenuList` -- no comparte slot con `np_album`/`np_artist`/
+`lyrics` (que se quedan en `DS_REG_12`), así que NowPlaying no cambia con
+esto (el reproductor no se toca por encargo explícito del dueño).
 
 | Token | Tamaño | Peso | Uso |
 |---|---|---|---|
-| `--font-menu-item` | 14px (D-207, subido de 12px; 10px originalmente) | **Semibold** (D-207, antes Regular) | Texto de ítems en `MenuList` (SF Pro), incluye Ajustes y todos los submenús |
+| `--font-menu-item` | 15px (D-267 +1pt; antes 14px D-207, 12px D-195, 10px original) | **Semibold** (D-207, antes Regular) | Texto de ítems en `MenuList` (SF Pro), incluye Ajustes y todos los submenús |
+
+## Tokens de SelectionSummary (D-271, 2026-08-15)
+
+Medidos en píxeles contra un mockup pixel-exacto del dueño (161×240 ≈ el
+panel real de 160×240), no tomados de un número de punto sin verificar
+(D-267 había fijado 13/12pt, que resultaba más chico que el objetivo).
+Ambos en **blanco fijo** sobre la imagen de fondo del panel (D-267), no
+`A26_TEXT_PRIMARY`.
+
+| Token | Tamaño | Peso | Uso |
+|---|---|---|---|
+| `--font-selection-summary-top` | 18px (`ds_bold_18`) | Bold | Texto superior (título de la fila), 1 línea |
+| `--font-selection-summary-bottom` | 16px (`ds_medium_16`) | Medium | Texto inferior (descripción, hasta 2 líneas por palabra) — único consumidor de la cara Medium |
+
+## Presupuesto de fuentes (estado real)
+
+`MAXUSERFONTS` (`firmware/export/font.h`) **ya no es 12**: subió a 13
+(D-263, decisión del dueño para no comprometer un tamaño pedido) y a 14
+(D-267, neto -2/+3 estilos). Hoy: 5 fuentes Apple2026 + 9 estilos `ds_*`
+(`ds_reg_8`, `ds_reg_10`, `ds_bold_10`, `ds_reg_12`, `ds_bold_12`,
+`ds_bold_14`, `ds_semibold_15`, `ds_bold_18`, `ds_medium_16`) = 14/14, sin
+hueco libre. Cualquier estilo nuevo exige retirar uno o subir el límite.
 
 ## Listas de contenido completo (Música/Video/Fotos/Alarmas, `aura_widgets_draw_list`)
 
 **Nuevo 2026-08-14.** Sistema Apple2026 viejo (no `aura_ds`), sin doc propia
 todavía -- `A26_TYPE_BODY` (13px Regular, compartido con CoverFlow/NowPlaying/
-Fotos/Video) es el tamaño Regular más grande posible sin exceder
-`MAXUSERFONTS=12` (ver `design-system/tokens.json`, `comment_ds`). Para subir
-la legibilidad sin fuente nueva ni tocar lo compartido, el texto de cada fila
-pasó a reutilizar `DS_BOLD_14` (14px Bold, el mismo estilo `ds_*` ya cargado
-para `--font-lyrics-active`) -- 8% más grande y en negrita, sin agregar ningún
-`.fnt`.
+Fotos/Video) era el tamaño Regular más grande posible sin agregar un `.fnt`
+nuevo (ver `design-system/tokens.json`, `comment_ds`; el presupuesto de
+fuentes exacto está arriba). Para subir la legibilidad sin fuente nueva ni
+tocar lo compartido, el texto de cada fila pasó a reutilizar `DS_BOLD_14`
+(14px Bold, el mismo estilo `ds_*` ya cargado para `--font-lyrics-active`,
+D-205) -- 8% más grande y en negrita, sin agregar ningún `.fnt`.
 
 | Token | Tamaño | Peso | Uso |
 |---|---|---|---|
