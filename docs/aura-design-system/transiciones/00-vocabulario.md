@@ -166,9 +166,14 @@ desaparezca si sigues viendo/editando algo relacionado a fecha).
 
 ## Pendiente de definir
 
-- [ ] Timing/easing tokens (duración de cada fase, curva de animación) — aún
-      no se han fijado valores para `Push-and-Drop` ni `Shift-and-Reveal`.
-- [ ] `(full) → (split)`: ¿reversa simétrica de `Push-and-Drop` o patrón nuevo?
+- [ ] 🔴 Timing/easing tokens (duración de cada fase, curva de animación) —
+      no hay valores de diseño ratificados para `Push-and-Drop` /
+      `Lift-and-Push` ni `Shift-and-Reveal`. El código hoy usa cuadros
+      hardcodeados sin token (`aura_transitions.c`: push ≈8 cuadros a 60Hz,
+      drop ≈5 — 4/3 en modo reducido), pendientes de que el dueño confirme si
+      son el diseño o provisionales.
+- [x] `(full) → (split)`: resuelto — es `Lift-and-Push` (sección arriba,
+      2026-08-13; código `reveal_behind_panels_exit()`, D-267).
 - [ ] Duración de fade y tiempo de idle para `Fade-on-Idle`
 - [ ] ¿`Shift-and-Reveal` aplica solo cuando el elemento existente es un
       "ícono dinámico", o también cuando es un `SelectionSummary` estático?
@@ -266,3 +271,9 @@ puente visual.
 
 **Requisito de fidelidad:** el flip en sí debe verse como el del iPod
 original — es una réplica intencional, no una aproximación.
+
+**Duración del vuelo (fase 3): 500ms** — decisión del dueño (antes 350ms
+provisional), ver `aura_transition_flip_and_flow()` / `FLOW_MS` en
+`aura_transitions.c:678`. Vive como `#define` local, sin token en
+`design-system/tokens.json` todavía. Corre a 60 o 30 fps según el ajuste
+`animation_mode`.
