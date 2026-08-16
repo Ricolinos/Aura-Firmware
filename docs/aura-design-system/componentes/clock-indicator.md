@@ -2,22 +2,33 @@
 
 Nombre provisional. El elemento de hora dentro de `StatusBar`.
 
-## Visibilidad (configurable por el usuario)
+## Visibilidad (configurable por el usuario — D-108)
 
-Tres modos:
+Dos modos (un solo ajuste booleano, `clock_visible`):
 
 - **Persistente** — siempre visible.
-- **Auto-oculta / por atajo** — **confirmado: se oculta después de 10
-  segundos** de estar visible, sin importar cómo se haya mostrado
-  (por atajo o por el modo "auto-oculta" por defecto).
-- **Por atajo** — se revela manteniendo presionado el botón Select unos
-  segundos. ⚠️ Falta confirmar que este atajo no choque con otras funciones
-  que ya usen "mantener Select" presionado.
+- **Oculto, revelable por atajo** — no se muestra por defecto; se revela
+  **manteniendo presionado Select** (~300ms, el mismo umbral de repetición
+  del driver de botones) y **se oculta solo a los 10 segundos** de estar
+  visible.
+
+Resuelto en D-108 (cerrando B-01/B-02): el disparador de la revelación
+es el hold de Select — no hay un tercer modo "auto-oculta" con disparador
+distinto. La infraestructura de "mantener presionado" es general
+(`AURA_BUTTON_HOLD`), pero hoy `StatusBar` es la única dueña de ese gesto
+para Select. **No choca con las demás funciones de Select por
+construcción:** Aura despacha la pulsación corta al presionar (no al
+soltar), así que la acción normal ya ocurrió antes de que un hold pueda
+detectarse — no hay posibilidad de doble disparo. Limitación honesta
+(D-108): el gesto de hold no es verificable con el arnés de capturas
+automatizado; solo se confirma sosteniendo Select en el simulador
+interactivo o en el dispositivo.
 
 ## Dimensiones y formato
 
-- Alto: 10px
-- Ancho máximo: 40px
+- Alto: 12px (D-207; antes 10px)
+- Ancho máximo: 46px (D-207; antes 40px — ajustado al glifo de 12px para
+  que "HH:MM AM" quepa completo)
 - Formato: `HH:MM`, nunca segundos. 24 horas o AM/PM — configurable por el
   usuario.
 
@@ -54,9 +65,13 @@ intencional dado que en `(full)` interactúa con `DynamicTitle` y en
 
 ## Pendiente de definir
 
-- [ ] ¿Qué dispara la revelación inicial en modo "auto-oculta" si no es el
-      atajo manual? (el timing de ocultado — 10s — ya está confirmado para
-      ambos modos)
-- [ ] Confirmar que mantener Select no choca con otras funciones existentes
+- [x] ¿Qué dispara la revelación inicial en modo "auto-oculta"? — resuelto
+      en D-108 (B-01): es el mismo hold de Select; no existe un tercer modo
+- [x] Confirmar que mantener Select no choca con otras funciones — resuelto
+      en D-108 (B-02): sin choque por construcción (despacho en press,
+      StatusBar única dueña del gesto)
 - [ ] Confirmar que la diferencia vertical (`split`) vs. horizontal (`full`)
-      es intencional
+      es intencional (implementado así desde D-108, pendiente de
+      ratificación explícita del dueño)
+- [ ] Timing de `Drop-and-Lift`/`Push-and-Pull` (hoy 220ms provisional,
+      D-108)
