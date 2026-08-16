@@ -592,13 +592,21 @@ static int rail_slot(const char *label)
     return 0; /* digitos, acentuadas y simbolos: al grupo '#' (slot 0) */
 }
 
+/* El riel se monta desde index_rail.min_items -- con las 27 posiciones
+ * fijas (D-276) ya no hace falta la condicion vieja de "al menos dos
+ * iniciales distintas": el riel siempre tiene forma completa. */
+static int index_rail_shown(int count)
+{
+    return count >= AURA_DS_METRICS_INDEX_RAIL_MIN_ITEMS;
+}
+
 static void draw_index_rail(const aura_list_item_t *items, int count, int selected)
 {
     unsigned long present = 0; /* mascara de 27 bits: que iniciales tiene la lista */
     int i, y, step, h, w, sel_slot;
     int rail_w = AURA_DS_METRICS_INDEX_RAIL_WIDTH;
 
-    if (count < AURA_DS_METRICS_INDEX_RAIL_MIN_ITEMS)
+    if (!index_rail_shown(count))
         return;
 
     for (i = 0; i < count; i++)
@@ -756,11 +764,22 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     }
 
     if (split)
+    {
         draw_right_panel_debounced(count > 0 ? items[selected].icon_name : NULL);
-    else
+        draw_scrollbar(width, count, selected);
+    }
+    else if (index_rail_shown(count))
+    {
+        /* Convivencia (D-275/D-276, decision del dueno Q2a): cuando el
+         * riel A-Z esta montado, el ScrollIndicator NO se dibuja -- la
+         * letra en acento del riel ya comunica la posicion en tiempo
+         * real, y ambos vivian en la misma columna (el pulgar cruzaba
+         * las letras y les borraba pixeles). Con menos de 12 items no
+         * hay riel y el ScrollIndicator vuelve con su umbral de 10. */
         draw_index_rail(items, count, selected);
-
-    draw_scrollbar(width, count, selected);
+    }
+    else
+        draw_scrollbar(width, count, selected);
 }
 
 void aura_widgets_draw_toggle(int x, int y, int value, unsigned bg)

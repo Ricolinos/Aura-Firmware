@@ -66,7 +66,24 @@ día existe salto por letra, debe saltar solo entre presentes.
 
 ## Relación con ScrollIndicator (D-275/D-276, Q2)
 
-*(Se completa en la tarea 5 de PLAN-scroll-fix.md.)*
+**Son excluyentes**: cuando el riel está montado (lista de ≥ 12 elementos
+en `(full)`), el `ScrollIndicator` **no se dibuja**. Decisión del dueño
+(Q2, opción a): la letra en acento del riel ya comunica la posición en
+tiempo real — y con las 27 posiciones fijas lo hace de forma continua — y
+ambos vivían en la misma columna (el pulgar de 4px pasaba exactamente por
+el centro de las letras y les borraba píxeles al pintar sus esquinas). No
+había dónde reposicionar el pulgar sin robarle ancho al texto de las filas.
+
+| Elementos en la lista `(full)` | Qué se ve en la columna derecha |
+|---|---|
+| ≤ 10 | Nada |
+| 11 | `ScrollIndicator` (su umbral es > 10; el riel todavía no monta) |
+| ≥ 12 | `IndexRail` solo |
+
+En `(split)` no hay riel nunca; el `ScrollIndicator` sigue sus reglas
+normales. La condición vieja "y al menos dos iniciales distintas" (D-155)
+desapareció con las 27 posiciones fijas: el riel siempre tiene forma
+completa.
 
 ## Tokens
 

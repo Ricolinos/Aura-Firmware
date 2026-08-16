@@ -90,7 +90,7 @@ con las mismas dimensiones, color, umbral y comportamiento de arriba. Lo
 | Carril | Padding derecho del panel (4px) | Columna derecha de la pantalla, con **2px de margen** al borde (`scroll_indicator.inset_full`) |
 | Track vertical | Los 217px de las 7 filas del panel | Desde el tope de la lista (StatusBar + 4px) hasta el borde inferior |
 | Umbral | > 10 ítems | > 10 ítems (7 filas visibles, igual que `LeftPanel`) |
-| Convivencia con `IndexRail` | No aplica (el riel solo existe en `(full)`) | Ver `componentes/index-rail.md` |
+| Convivencia con `IndexRail` | No aplica (el riel solo existe en `(full)`) | **Excluyentes** (D-276, Q2a): con ≥ 12 elementos se monta el riel y el `ScrollIndicator` no se dibuja; con 11 se ve el indicador; con ≤ 10 nada. Detalle en `componentes/index-rail.md` |
 
 **Historia, para que nadie la reviva**: hasta D-275 estas listas dibujaban
 un scrollbar **propio del sistema viejo** (D-073, `docs/design/Reglas de
