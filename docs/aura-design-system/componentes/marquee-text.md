@@ -21,12 +21,20 @@ Texto que sí cabe se muestra estático, sin ningún comportamiento de
    fase de entrada separada)
 3. Se repite indefinidamente mientras el texto siga en pantalla
 
-## Separación entre vueltas (D-086, provisional G11)
+## Separación entre vueltas (D-086 G11, ratificado D-274)
 
 Entre el final de una vuelta del texto y el inicio de la siguiente hay un
 **gap de 24px** (`marquee.loop_gap` en `tokens.json`) — el texto no se
-repite pegado. Valor puesto bajo mandato autónomo (mismo orden de
-magnitud que otros espaciados del sistema); el dueño puede vetarlo.
+repite pegado. Propuesto bajo mandato autónomo en D-086 y **ratificado por
+el dueño el 2026-08-16 (D-274)**: ya no es provisional.
+
+## Interrupción al navegar (ratificado D-274)
+
+Si el usuario cambia de fila (o sale de la pantalla) a media vuelta, el
+loop **se interrumpe al instante** — el texto que se iba no termina su
+ciclo. Al volver a la misma fila, el `MarqueeText` **reinicia desde la
+fase estática de 2s**, no retoma donde iba. Confirmado por el dueño el
+2026-08-16 (D-274) como comportamiento definitivo.
 
 ## Difuminado en los bordes
 
@@ -46,7 +54,10 @@ abrupto.
 
 ## Pendiente de definir
 
-- [x] Espaciado/separador entre vueltas — resuelto: gap de 24px (D-086,
-      G11, provisional — ver "Separación entre vueltas")
-- [ ] Comportamiento si el usuario navega away a media vuelta — ¿se
-      interrumpe el loop instantáneo o termina el ciclo?
+- [x] Espaciado/separador entre vueltas — resuelto: gap de 24px (D-086
+      G11, ratificado por el dueño en D-274 — ver "Separación entre
+      vueltas")
+- [x] Comportamiento al navegar a media vuelta — resuelto (D-274): se
+      interrumpe al instante y reinicia desde la fase estática de 2s al
+      volver (ver "Interrupción al navegar"). Sin pendientes en este
+      componente.

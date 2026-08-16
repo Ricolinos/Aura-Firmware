@@ -16,7 +16,8 @@ salvo donde se indica. Todos los radios viven en `design-system/tokens.json`.
 | `aura_ds.metrics.cover_flow.corner_radius` | 8px | Carátula en carrusel, reverso, reproductor y vuelo | D-083, D-116 |
 | `aura_ds.metrics.search.pill_radius` | 11px (campo interior concéntrico: 6px) | Caja de búsqueda de 34px | encargo 2026-08-13 (`tokens.json`, `search.comment_radius`) |
 
-Grosores: `scroll_indicator.thickness` = 4px. Entre `LeftPanel` y el panel
-derecho no hay línea de borde: la separación la da la sombra
-(`efectos/01-sombras.md`). 🔴 Pendiente confirmar con el dueño si eso es
-diseño o falta un separador de 1px `SHELL_RAIL`.
+Grosores: `scroll_indicator.thickness` = 4px. **Confirmado (D-274,
+ratificado por el dueño 2026-08-16):** entre `LeftPanel` y el panel
+derecho **no hay línea de borde**; la separación la da únicamente la sombra
+(`efectos/01-sombras.md`). No hace falta separador. Sin pendientes en este
+documento.

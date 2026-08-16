@@ -54,6 +54,19 @@ diseñado y no un bug de layout.
 
 **Sentido inverso:** resuelto 2026-08-13 — ver `Lift-and-Push` abajo.
 
+**Timings (ratificados por el dueño 2026-08-16, D-274; tokens
+`aura_ds.metrics.push_and_drop.*` en `tokens.json`):**
+
+| Fase | Modo de animación completo | Modo reducido |
+|---|---|---|
+| Fase 1 — Push | 8 cuadros a 60Hz (≈133ms) | 4 cuadros a 45Hz (≈89ms) |
+| Fase 3 — Drop | 5 cuadros (≈83ms) | 3 cuadros |
+
+Se expresan en cuadros y no en milisegundos porque la coreografía avanza
+por cuadro dibujado (`aura_transitions.c`), no por reloj — el equivalente
+en ms es orientativo. Los mismos valores aplican a `Lift-and-Push` en
+inversa (Lift = mismos cuadros que Drop, Push = mismos que Push).
+
 ---
 
 ## `Lift-and-Push`
@@ -166,12 +179,12 @@ desaparezca si sigues viendo/editando algo relacionado a fecha).
 
 ## Pendiente de definir
 
-- [ ] 🔴 Timing/easing tokens (duración de cada fase, curva de animación) —
-      no hay valores de diseño ratificados para `Push-and-Drop` /
-      `Lift-and-Push` ni `Shift-and-Reveal`. El código hoy usa cuadros
-      hardcodeados sin token (`aura_transitions.c`: push ≈8 cuadros a 60Hz,
-      drop ≈5 — 4/3 en modo reducido), pendientes de que el dueño confirme si
-      son el diseño o provisionales.
+- [x] Timings de `Push-and-Drop` / `Lift-and-Push` — ratificados por el
+      dueño (D-274, 2026-08-16): push 8 cuadros @60Hz / 4 @45Hz, drop/lift
+      5 / 3 cuadros; tokenizados en `aura_ds.metrics.push_and_drop.*`. Ver
+      tabla en la sección `Push-and-Drop`.
+- [ ] Timing/easing de `Shift-and-Reveal` — sigue sin valores (el patrón
+      no está implementado todavía, ver `componentes/date-editor.md`).
 - [x] `(full) → (split)`: resuelto — es `Lift-and-Push` (sección arriba,
       2026-08-13; código `reveal_behind_panels_exit()`, D-267).
 - [ ] Duración de fade y tiempo de idle para `Fade-on-Idle`
@@ -223,6 +236,9 @@ usuario), sin que el resto del layout cambie de estado.
 **Usado por:** `ClockIndicator` (`componentes/clock-indicator.md`) en
 `(split)`.
 
+**Duración: 300ms** (`ClockIndicator`, D-274 — decisión del dueño
+2026-08-16; antes 220ms provisional de D-108).
+
 ---
 
 ## `Push-and-Pull`
@@ -243,6 +259,10 @@ ambas direcciones simétricamente, sin que haya un cambio de estado de
 pantalla de por medio.
 
 **Usado por:** `ClockIndicator` empujando a `DynamicTitle` en `(full)`.
+
+**Duración: 300ms** (`ClockIndicator`, D-274 — decisión del dueño
+2026-08-16; antes 220ms provisional de D-108). Misma que `Drop-and-Lift`:
+son el mismo gesto de reloj en dos ejes.
 
 ---
 

@@ -18,8 +18,8 @@ de contenido de 152px, usa el padding mismo como su track.
   — si todo cabe en la pantalla, no se renderiza en absoluto.
 
 - **Alto fijo: 24px** (`scroll_indicator.height` en `tokens.json` —
-  D-086, provisional G8, puesto bajo mandato autónomo; el dueño puede
-  vetarlo).
+  propuesto bajo mandato autónomo en D-086 G8 y **ratificado por el dueño
+  el 2026-08-16, D-274**; ya no es provisional).
 
 ## Color
 
@@ -47,6 +47,7 @@ diferencia de `Selector`, que salta directo sin animación.
 
 ## Pendiente de definir
 
-- [x] Alto exacto del indicador — resuelto: 24px (D-086, G8, provisional)
+- [x] Alto exacto del indicador — resuelto: 24px (D-086 G8, ratificado por
+      el dueño en D-274)
 - [x] Valor hex del gris neutro — resuelto: `SHELL_RAIL` del tema,
-      `#C6C6C8` / `#3A3A3C` (D-086, G8)
+      `#C6C6C8` / `#3A3A3C` (D-086 G8, ratificado en D-274)

@@ -111,7 +111,12 @@ coreografía:
 | `StatusBar` | Desde arriba (su Drop estándar) |
 | Barra de progreso | Desde abajo |
 
-🔴 Pendiente menor: orden exacto del stagger y duración de cada entrada.
+**Orden y duración (D-113, ratificado por el dueño 2026-08-16, D-274):**
+los tres grupos de contenido (textos, íconos de modos, barra de progreso)
+entran **en paralelo**, en los mismos cuadros — 8 cuadros en modo de
+animación completo, 4 en modo reducido — y la `StatusBar` cae **al final**,
+una vez que el contenido ya está en su lugar (consistente con
+`Push-and-Drop`, donde la barra siempre entra después del contenido).
 
 La carátula llega con el vuelo de media vuelta descrito en
 `componentes/cover-flow.md` ("Vuelo CoverFlow → reproductor", ~500ms):
@@ -358,8 +363,11 @@ En el Modo 4 (Letras), la barra se comprime a 122px de ancho (ver Modo 4).
 
 - [ ] Validar las medidas estimadas de la carátula (x≈10, y≈43, ≈135×135px)
       contra dispositivo/prototipo — el ángulo ya quedó fijado en 7°
-- [ ] Orden exacto del stagger de entrada y duración de cada grupo
-      (provisional vigente: los tres grupos de contenido en paralelo y
-      la StatusBar cae al final)
-- [ ] Umbrales definitivos de los silencios del `LyricsPanel` (los ≥8s /
-      3s actuales son provisionales, ver `componentes/lyrics-panel.md`)
+- [x] Orden y duración del stagger de entrada — ratificado por el dueño
+      (D-274, 2026-08-16): tres grupos de contenido en paralelo, 8 cuadros
+      (4 en modo reducido), `StatusBar` cae al final. Ver "Entrada desde
+      CoverFlow".
+- [x] Umbrales de los silencios del `LyricsPanel` — ratificados por el
+      dueño (D-274, 2026-08-16): ≥8s de hueco mínimo, ~3s de lectura de la
+      línea saliente. Ya no son provisionales (ver
+      `componentes/lyrics-panel.md`).

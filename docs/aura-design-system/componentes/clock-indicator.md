@@ -40,8 +40,9 @@ Centrada en la barra de estado, tanto horizontal como verticalmente.
 
 Entrada/salida: patrón `Drop-and-Lift`
 (`transiciones/00-vocabulario.md`) — entra cayendo desde arriba de la
-pantalla, sale subiendo hacia arriba. Se oculta automáticamente a los 10
-segundos de estar visible (ver arriba).
+pantalla, sale subiendo hacia arriba, **300ms** por movimiento (D-274,
+decisión del dueño 2026-08-16; antes 220ms provisional de D-108). Se
+oculta automáticamente a los 10 segundos de estar visible (ver arriba).
 
 ### `(full)`
 
@@ -56,12 +57,13 @@ A la izquierda de la barra de estado. Interactúa directamente con
   (patrón `Push-and-Pull`, ver vocabulario), empujando a `DynamicTitle`
   hacia el centro durante los 10 segundos que permanece visible. Al salir
   (hacia la izquierda), jala a `DynamicTitle` de regreso a su posición
-  alineada a la izquierda.
+  alineada a la izquierda. Misma duración que en `(split)`: **300ms**
+  (D-274).
 
-**Nota:** el comportamiento de entrada/salida en `(full)` (horizontal,
-empuja/jala) es distinto al de `(split)` (vertical, cae/sube) — parece
-intencional dado que en `(full)` interactúa con `DynamicTitle` y en
-`(split)` no, pero vale la pena confirmarlo explícitamente.
+**Confirmado (D-274, ratificado por el dueño 2026-08-16):** el
+comportamiento de entrada/salida en `(full)` (horizontal, empuja/jala) es
+distinto al de `(split)` (vertical, cae/sube) **a propósito** — en `(full)`
+interactúa con `DynamicTitle` y en `(split)` no.
 
 ## Pendiente de definir
 
@@ -70,8 +72,7 @@ intencional dado que en `(full)` interactúa con `DynamicTitle` y en
 - [x] Confirmar que mantener Select no choca con otras funciones — resuelto
       en D-108 (B-02): sin choque por construcción (despacho en press,
       StatusBar única dueña del gesto)
-- [ ] Confirmar que la diferencia vertical (`split`) vs. horizontal (`full`)
-      es intencional (implementado así desde D-108, pendiente de
-      ratificación explícita del dueño)
-- [ ] Timing de `Drop-and-Lift`/`Push-and-Pull` (hoy 220ms provisional,
-      D-108)
+- [x] Diferencia vertical (`split`) vs. horizontal (`full`) — ratificada
+      como intencional por el dueño (D-274, 2026-08-16)
+- [x] Timing de `Drop-and-Lift`/`Push-and-Pull`: **300ms** (D-274, decisión
+      del dueño 2026-08-16; sustituye los 220ms provisionales de D-108)

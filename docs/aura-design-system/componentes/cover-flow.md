@@ -200,6 +200,11 @@ desliza hacia abajo, agrandándose en proporción** con el zoom del giro
 (la tapa crece DURANTE la rotación, no en un corte). Al cerrar
 (`cover_out`), todo ocurre en inversa.
 
+**Giro al reverso (SELECT ↔ reverso, fases `cover_in`/`cover_out`):
+300ms por fase** (D-274, decisión del dueño 2026-08-16; antes 260ms
+provisional de D-104). Es un timing distinto del vuelo CoverFlow →
+reproductor de 500ms descrito abajo — son dos coreografías, no una.
+
 ## Transiciones (confirmadas 2026-08)
 
 ### Entrada a CoverFlow (desde el submenú Música)
@@ -281,5 +286,6 @@ un modelo de botón sostenido que Aura no tiene.
 
 ## Pendiente de definir
 
-- [ ] Sentido percibido del giro del vuelo (hoy continúa el sentido de la
-      apertura del flip; confirmar en vivo si se lee como antihorario)
+- [x] Sentido del giro del vuelo — confirmado por el dueño (D-274,
+      2026-08-16): continúa el mismo sentido que la apertura del flip.
+      Sin pendientes abiertos en este componente.

@@ -4,9 +4,10 @@
 (D-072, esquema de las guías "Apple 2026 design language" adoptado tal
 cual), el acento configurable, el color por categoría y el fondo del panel
 derecho por acento (D-267) viven en `design-system/tokens.json` y se
-generan a `apple2026_tokens.h` / `a26_palette`. Quedan abiertos, marcados
-🔴 abajo: la interfaz de selección del acento y la relación entre el acento
-del tema y el acento del usuario.
+generan a `apple2026_tokens.h` / `a26_palette`. Queda abierto, marcado
+🔴 abajo: la interfaz de selección del acento (el dueño lo definirá más
+adelante). La relación entre el acento del tema y el del usuario quedó
+resuelta en D-274.
 
 ## Paleta base (`color.light` / `color.dark`, D-072)
 
@@ -19,7 +20,7 @@ Estos son los tokens del sistema Apple2026 que consume `a26_palette`
 | `text_primary` | `#000000` | `#FFFFFF` | Texto principal |
 | `text_secondary` | `#6E6E73` | `#98989D` | Texto secundario |
 | `text_tertiary` | `#3C3C43` | `#C7C7CC` | Texto terciario |
-| `accent` | `#FF2D55` | `#FF456C` | Acento **del tema** (`A26_ACCENT`) — ver 🔴 abajo |
+| `accent` | `#FF2D55` | `#FF456C` | Acento **del tema** (`A26_ACCENT`). El valor claro es el mismo rosa de fábrica del usuario; el oscuro es su adaptación al tema oscuro (D-274, ver "Rosa de fábrica y acento del tema" abajo) |
 | `shell_rail` | `#C6C6C8` | `#3A3A3C` | Rieles, separadores, gris del `ScrollIndicator` (D-086) |
 | `progress_fill` | `#3C3C43` | `#E5E5EA` | Relleno de barras de progreso |
 | `progress_track` | `#E5E5EA` | `#48484A` | Pista de barras de progreso |
@@ -30,7 +31,21 @@ Estos son los tokens del sistema Apple2026 que consume `a26_palette`
 
 | Token | Valor por default | Uso | Notas |
 |---|---|---|---|
-| `--color-accent` | `#FF2D52` (`aura_ds.color.accent_default_hex`) | Texto/ícono/flecha del ítem seleccionado en el `Selector` (D-112 — la pastilla es gris `selection_fill`, no de acento), color de la categoría Música, y cualquier otro elemento de contraste/acento | **Configurable por el usuario desde Ajustes** — el hex es solo el valor por default, no un valor absoluto del sistema. Cualquier componente que use este token debe leerlo dinámicamente vía `aura_accent()`/`aura_accent_light()`/`aura_accent_dark()` (derivados ±25%, `accent_derived_lighten_pct`/`_darken_pct`, D-086), no asumirlo fijo. 🔴 **Interfaz de selección sin cerrar (D-087, provisional):** hoy son 6 presets con nombre (Rosa `#FF2D52`, Rojo `#FF3B30`, Naranja `#FF9500`, Verde `#34C759`, Azul `#007AFF`, Morado `#AF52DE`; `accent_presets_hex`) en una lista de elección — pendiente que el dueño confirme si es el diseño final o si sigue previsto un selector visual de swatches. 🔴 **Doble acento (D-086):** `A26_ACCENT` del tema (`#FF2D55`/`#FF456C`, tabla de arriba) y este acento del usuario coexisten como tokens distintos — pendiente documentar quién gana dónde o si se fusionan. |
+| `--color-accent` | `#FF2D55` (`aura_ds.color.accent_default_hex`, D-274) | Texto/ícono/flecha del ítem seleccionado en el `Selector` (D-112 — la pastilla es gris `selection_fill`, no de acento), color de la categoría Música, y cualquier otro elemento de contraste/acento | **Configurable por el usuario desde Ajustes** — el hex es solo el valor por default, no un valor absoluto del sistema. Cualquier componente que use este token debe leerlo dinámicamente vía `aura_accent()`/`aura_accent_light()`/`aura_accent_dark()` (derivados ±25%, `accent_derived_lighten_pct`/`_darken_pct`, D-086), no asumirlo fijo. 🔴 **Interfaz de selección sin cerrar (D-087, provisional):** hoy son 6 presets con nombre (Rosa `#FF2D55`, Rojo `#FF3B30`, Naranja `#FF9500`, Verde `#34C759`, Azul `#007AFF`, Morado `#AF52DE`; `accent_presets_hex`) en una lista de elección — pendiente que el dueño confirme si es el diseño final o si sigue previsto un selector visual de swatches (el dueño lo definirá más adelante — 2026-08-16, tiene varias cosas por definir). |
+
+### Rosa de fábrica y acento del tema (resuelto, D-274)
+
+El rosa de fábrica es **`#FF2D55`** (D-274, decisión del dueño 2026-08-16;
+antes `#FF2D52`) — mismo valor que `A26_ACCENT` del tema claro. El
+`#FF456C` de `A26_ACCENT` en tema oscuro es la **adaptación del mismo rosa
+al tema oscuro** (el mismo hex no se ve bien en ambos temas — explicación
+del dueño), no un segundo acento. `aura_accent()` (configurable) y
+`A26_ACCENT` (del tema) siguen siendo tokens distintos **por consumidor**:
+el primero es el que elige el usuario y lo consumen `Selector`, la
+categoría Música y todo el sistema nuevo; el segundo lo consumen todavía
+algunas pantallas heredadas (páginas de "Acerca de", el riel A-Z, diálogos
+de confirmación del sistema viejo). Al elegir "Rosa" en Ajustes, ambos
+coinciden en tema claro.
 
 ## Fondo del panel derecho por acento (D-267)
 
@@ -96,7 +111,7 @@ tokens de la paleta base de arriba y a `a26_palette`:
 | `--color-bg-panel-right` | imagen `right_panel_background` (split de menú, D-267) / `A26_SHELL_BG` (resto) | Panel derecho |
 | `--color-text-primary` | `text_primary` → `A26_TEXT_PRIMARY` | Texto principal |
 | `--color-text-secondary` | `text_secondary` → `A26_TEXT_SECONDARY` | Texto secundario |
-| `--color-accent` | `aura_ds.color.accent_default_hex` vía `aura_accent()` (usuario); `A26_ACCENT` es el del tema — ver 🔴 arriba | Acento |
+| `--color-accent` | `aura_ds.color.accent_default_hex` vía `aura_accent()` (usuario); `A26_ACCENT` es el del tema — relación resuelta en D-274, ver "Rosa de fábrica y acento del tema" | Acento |
 
 Nota: la pantalla del iPod Classic 6G es a color (QVGA 320×240), no hay
 restricción de escala de grises — pero sí hay restricción de paleta/gamut

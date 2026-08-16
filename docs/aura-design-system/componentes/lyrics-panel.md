@@ -65,8 +65,9 @@ se desvanecen del layout normal del reproductor renacen aquí.
   renglones** para leerse completa — aquí NO hay Marquee Loop.
 - **Líneas de contexto** (Regular 12): hasta 2 arriba y 2 abajo de la
   activa, **recortadas** al ancho del panel.
-- **Silencios**: cuando el hueco entre líneas es largo (provisional:
-  ≥8s, con ~3s de "lectura" de la línea saliente), el centro muestra
+- **Silencios**: cuando el hueco entre líneas es largo (**≥8s, con ~3s
+  de "lectura" de la línea saliente** — ratificado por el dueño el
+  2026-08-16, D-274; ya no es provisional), el centro muestra
   **3 puntos de 6px** que se **iluminan uno a uno** conforme avanza el
   silencio — los tres encendidos = la letra está por volver. Funciona
   también como intro instrumental antes de la primera línea. La última

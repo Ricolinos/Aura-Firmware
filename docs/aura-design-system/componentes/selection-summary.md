@@ -99,12 +99,9 @@ derivados del color de categoría vigente (`aura_category_gradient()`):
 - Aclarado/oscurecido: **25% hacia blanco / 25% hacia negro** del color
   base (D-086, G9 — `accent_derived_lighten_pct`/`darken_pct` en
   `tokens.json`), calculado en tiempo real, nunca fijo.
-- Dirección: claro arriba-izquierda → oscuro abajo-derecha (convención
-  "luz desde arriba", D-097).
-
-🔴 Pendiente: ratificar la dirección de la diagonal (arriba-izquierda
-claro → abajo-derecha oscuro es la convención provisional de D-097, no
-una decisión de diseño explícita).
+- Dirección: **claro arriba-izquierda → oscuro abajo-derecha** (convención
+  "luz desde arriba", propuesta en D-097 y ratificada por el dueño el
+  2026-08-16, D-274).
 
 ## Tipografía y color del texto (D-263, D-267, D-271)
 
@@ -291,4 +288,5 @@ actualizada, compartida con `CoverDrift`).
       dinámica"
 - [ ] Imágenes de fondo para los cinco presets de acento restantes (hoy
       solo `pink`, D-267)
-- [ ] Ratificar la dirección del degradado del tile (D-097, provisional)
+- [x] Dirección del degradado del tile — ratificada por el dueño
+      (D-274, 2026-08-16): claro arriba-izquierda → oscuro abajo-derecha

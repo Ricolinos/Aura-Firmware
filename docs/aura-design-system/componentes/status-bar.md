@@ -119,17 +119,17 @@ Los íconos no son texto, no usan estos tokens.
 
 ## Fondo
 
-Dos opciones documentadas, con recomendación:
+**Relleno sólido con `--color-bg-base`** (`SHELL_BG`, el mismo fondo del
+shell) — decisión del dueño, D-274 (2026-08-16), ratificando el valor que
+D-096 había puesto como provisional. No hay traslucencia ni blur.
 
-- **Traslucencia simple (alpha blend, sin blur) — recomendado por default.**
-  Viable en este hardware: es una mezcla de color sobre lo ya dibujado en una
-  franja de 320×20px (6,400px), operación barata incluso sin GPU.
-- **Blur real (frosted glass)** — técnicamente posible por ser una franja
-  chica, pero requiere recalcular el blur cada frame si algo se mueve debajo
-  (ej. `CoverDrift` si llega a pasar por esa zona). Marcado como mejora
-  opcional a evaluar después, no bloqueante para el primer prototipo.
-- Si ninguna traslucencia es viable en la práctica al implementarla, el
-  fallback es color sólido — valor exacto pendiente.
+Historia: la spec original recomendaba traslucencia simple (alpha blend
+sin blur, barata en una franja de 320×20px) con blur real como mejora
+opcional, y dejaba el color sólido solo como fallback "si ninguna
+traslucencia resultaba viable". En `(split)` la barra vive sobre el
+`LeftPanel` blanco, donde cualquier blend es indistinguible de un color
+sólido; en `(full)` sí hay contenido debajo (`NowPlaying`, `CoverFlow`),
+y aun así el dueño eligió el relleno sólido — queda cerrado.
 
 En ambos estados, `StatusBar` se ancla arriba — eso no cambia entre estados.
 
@@ -169,8 +169,8 @@ su cuenta.
       íconos (el 4px confirmado es solo entre íconos; la regla de "nunca
       chocar con la hora" ya está confirmada como restricción dura, pero
       no como valor numérico de gap)
-- [ ] Valor exacto del color sólido de fondo (fallback si la traslucencia no
-      resulta viable en la implementación real)
+- [x] Color de fondo: relleno sólido `--color-bg-base`, sin traslucencia —
+      ratificado por el dueño (D-274, 2026-08-16), ver "Fondo"
 - [ ] Decisión final: ¿SF Display real, o bitmap propio a 12px inspirado en
       ella? (ver nota de licencia y rendering en `fundamentos/02-tipografia.md`)
 - [ ] Timing exacto de las 3 fases del `Push-and-Drop` para este componente
