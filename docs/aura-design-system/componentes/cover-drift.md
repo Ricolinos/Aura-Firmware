@@ -21,16 +21,21 @@ del producto tras varias iteraciones de prueba en el simulador.
 `--layer-content`. **Opcional y condicional por fila** — solo reemplaza a
 `SelectionSummary` cuando (a) la fila resaltada del menú es una de las que
 califica (ver "Filas que califican" abajo), (b) hay imágenes suficientes
-disponibles, y (c) ya pasó el retardo de activación de 3s. Fuera de esas
+disponibles, y (c) se cumplió el debounce general del panel derecho (ver
+"Activación" abajo — D-262 retiró el retardo propio de 3s). Fuera de esas
 condiciones, `SelectionSummary` en `--layer-base` sigue siendo quien se
 muestra (`componentes/selection-summary.md`). Siempre por debajo de
 `LeftPanel` (`--layer-panel`) cuando este está montado.
 
-## Filas que califican (D-254, solo Música por ahora)
+## Filas que califican (D-254, ampliado D-266 — solo la categoría Música por ahora)
 
-- **Menú raíz**: solo cuando la fila resaltada es "Música". Videos y Fotos
-  quedan fuera de esta pasada a propósito — el dueño del producto pidió
-  validar el comportamiento en un solo lugar antes de replicarlo.
+- **Menú raíz**: cuando la fila resaltada es **"Música"**, **"Canciones
+  aleatorias"** o **"Ahora suena"** (D-266 — las tres resuelven a la
+  categoría Música, y el dueño pidió explícitamente que las dos filas de
+  reproducción también muestren la deriva de carátulas sin entrar a
+  ellas). Videos y Fotos quedan fuera de esta pasada a propósito — el
+  dueño del producto pidió validar el comportamiento en un solo lugar
+  antes de replicarlo.
 - **Submenú de Música**: Cover Flow, Listas de reproducción, Artistas,
   Álbumes, Recopilaciones, Canciones, Géneros, Autores, Búsqueda —
   **excepto Audiolibros** (fila inerte, sin contenido real detrás).
@@ -104,7 +109,7 @@ vertical ((320−240)/2) — la distancia máxima de deriva usa el MENOR de los
 dos (40px), así que en cualquiera de las 8 direcciones la imagen sigue
 cubriendo el panel completo en todo momento.
 
-## Activación (D-254, corregido D-260, unificado D-262)
+## Activación (D-254, corregido D-260, unificado D-262, asimétrico D-266)
 
 **Umbral de montaje: al menos 3 imágenes disponibles** (bajado de un valor
 provisional de 10 a pedido directo del dueño del producto). Con menos,
@@ -112,16 +117,25 @@ sigue `SelectionSummary`.
 
 **D-262 retira el temporizador de 3000ms propio de CoverDrift** — ya no
 existe como mecanismo separado. En su lugar, CoverDrift se rige por el
-mismo debounce/fundido GENERAL de todo el panel derecho de la Ruta A (ver
+mismo debounce GENERAL de todo el panel derecho de la Ruta A (ver
 `sistema/02-navegacion-menus-contenido.md` o el comentario grande junto a
 `render_panel_debounced()` en `aura_screens.c`): el panel se congela
-mientras se recorre el `LeftPanel`, y solo se actualiza (con un fundido
-real, no un corte) tras **2000ms** de estabilidad sobre la misma
-identidad — sea que esa identidad pase a ser CoverDrift, vuelva a
-`SelectionSummary`, o cambie de un ícono normal a otro. Encargo textual
-del dueño del producto al confirmar la relación entre ambos plazos: "El de
-2s reemplaza al de 3s — CoverDrift ya no necesita su propia espera de 3s
-aparte, se unifica en esta regla general más simple".
+mientras se recorre el `LeftPanel`, y solo se actualiza tras un tiempo de
+estabilidad sobre la misma identidad. Encargo textual del dueño del
+producto al confirmar la relación entre ambos plazos: "El de 2s reemplaza
+al de 3s — CoverDrift ya no necesita su propia espera de 3s aparte, se
+unifica en esta regla general más simple".
+
+**La espera y la forma del cambio dependen del DESTINO (D-266):**
+
+| Destino del cambio | Espera | Cómo cambia |
+|---|---|---|
+| Hacia `CoverDrift` (la fila empieza a calificar) | **2000ms** | **Fundido real de 600ms** |
+| Hacia `SelectionSummary` o de un ícono normal a otro (incluye dejar de calificar, p. ej. llegar a "Audiolibros") | **1000ms** | **Corte instantáneo**, sin fundido |
+
+Los 2s + fundido se reservan para la aparición de CoverDrift, que es lo
+que vale la pena "anunciar" con una transición; el resto del panel cambia
+más rápido y sin ceremonia, para que recorrer el menú no se sienta lento.
 
 **La identidad se compara por CATEGORÍA para CoverDrift, no por fila exacta
 (D-260, preservado por D-262)** — moverse entre filas que califican DENTRO
@@ -129,9 +143,8 @@ de la misma categoría (p. ej. de "Música" en el menú raíz a "Cover Flow" en
 el submenú de Música, o entre cualquier par de filas del submenú) NO cuenta
 como un cambio de identidad y por lo tanto NO dispara ningún fundido — es
 la misma sesión continua, siempre en vivo. Solo cuenta como cambio real
-dejar de calificar (p. ej. llegar a "Audiolibros") o cambiar de categoría —
-ahí sí aplican los 2000ms y el fundido de 600ms antes de reemplazar el
-contenido.
+dejar de calificar o cambiar de categoría — ahí aplica la cadencia de la
+tabla anterior según el destino.
 
 ## Memoria (D-254, actualizado D-256)
 
@@ -152,8 +165,10 @@ justifica una estrategia más compleja para este alcance.
 
 ## Transición con `SelectionSummary`
 
-Cross-fade al montarse/desmontarse — spec completo en
-`componentes/selection-summary.md`, sección "Transición con `CoverDrift`".
+Cross-fade de 600ms **al montarse** (tras 2000ms de estabilidad); **al
+desmontarse, corte instantáneo tras 1000ms**, sin fundido (D-266) — spec
+completo en `componentes/selection-summary.md`, sección "Transición con
+`CoverDrift`".
 
 ## Sombra de `LeftPanel` (D-258: compositing real, no aproximación)
 
