@@ -251,8 +251,9 @@ void aura_coverdrift_draw(int x, int width,
     int dx, dy;
     (void)count;
 
-    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
-    lcd_vline(x - 1, 0, A26_SCREEN_HEIGHT - 1);
+    /* D-277: sin linea de separador en la ultima columna del LeftPanel
+     * (fundamentos/04-bordes.md, D-274/C11: la separacion la da solo la
+     * sombra); ver la nota equivalente en aura_selection_summary.c. */
 
     if (margin_x < 0) margin_x = 0;
     if (margin_y < 0) margin_y = 0;

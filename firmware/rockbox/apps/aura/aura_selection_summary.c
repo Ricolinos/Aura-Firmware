@@ -396,13 +396,16 @@ static void draw_summary(int x, int width, const char *icon_name,
         lcd_fillrect(x, 0, width, A26_SCREEN_HEIGHT);
     }
 
-    /* Separador + sombra de LeftPanel (efectos/01-sombras.md, "SIEMPRE
-     * renderiza una sombra que simula que LeftPanel esta por encima de
-     * este componente" -- misma primitiva de T0.4, D-088). D-267: variante
-     * de COMPOSITING real (D-258), no la de color plano -- el fondo ya no
-     * es un color conocido, es la imagen que se acaba de dibujar. */
-    lcd_set_foreground(a26_color(A26_SHELL_RAIL));
-    lcd_vline(x - 1, 0, A26_SCREEN_HEIGHT - 1);
+    /* Sombra de LeftPanel (efectos/01-sombras.md, "SIEMPRE renderiza una
+     * sombra que simula que LeftPanel esta por encima de este componente"
+     * -- misma primitiva de T0.4, D-088). D-267: variante de COMPOSITING
+     * real (D-258), no la de color plano -- el fondo ya no es un color
+     * conocido, es la imagen que se acaba de dibujar. D-277: la linea de
+     * 1px SHELL_RAIL que se pintaba aqui en la ultima columna del panel
+     * izquierdo se retira -- fundamentos/04-bordes.md (D-274, C11): "entre
+     * LeftPanel y el panel derecho no hay linea de borde; la separacion la
+     * da unicamente la sombra". Ademas tapaba el casquete derecho del
+     * pulgar del ScrollIndicator (mismo gris), que vive en esa columna. */
     aura_shell_draw_left_panel_shadow_over_content(x, 0, A26_SCREEN_HEIGHT);
 
     /* Altura de cada slot de texto medida con la fuente real antes de

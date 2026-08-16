@@ -419,8 +419,7 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name)
      * ya diferido por el design system. */
     if (!icon_name)
     {
-        lcd_set_foreground(a26_color(A26_SHELL_RAIL));
-        lcd_vline(A26_LAYOUT_PANEL_LEFT_WIDTH - 1, 0, A26_SCREEN_HEIGHT - 1);
+        /* D-277: solo la sombra, sin linea de 1px (04-bordes.md, D-274/C11). */
         aura_shell_draw_left_panel_shadow(A26_LAYOUT_PANEL_LEFT_WIDTH, 0, A26_SCREEN_HEIGHT);
         return;
     }
@@ -844,19 +843,34 @@ void aura_widgets_draw_slider(const char *title, int fraction,
      * son tokens de progreso, no de separador/estado-activo (Fase 32,
      * D-081: el mismo error de token que D-073 ya habia corregido en
      * aura_widgets_draw_progress() se habia colado aca tambien, sin
-     * auditar -- Brillo y Limite volumen lo usan). Extremos redondeados
-     * con la misma primitiva compartida que el resto del sistema, radio
-     * "tarjeta" (8px, SS5.4) -- es una barra mas gruesa que la pastilla
-     * de progreso canonica (16px de alto vs 4px), no la misma pieza. */
-    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, A26_SPACING_XL,
-                                 A26_LAYOUT_CORNER_RADIUS_CARD,
-                                 a26_color(A26_PROGRESS_TRACK), a26_color(A26_SHELL_BG));
+     * auditar -- Brillo y Limite volumen lo usan).
+     *
+     * D-277: capsula REAL (radio = mitad del alto, subpixel), no
+     * fill_rounded_rect con radio "tarjeta" -- a 16px de alto el radio 8
+     * ya era h/2, pero stamp_corner no antialiasa y, peor, el relleno
+     * redondeaba su punta contra SHELL_BG en vez del color del carril,
+     * dejando muescas blancas dentro de la barra. Orden correcto: carril
+     * y relleno CUADRADOS; la punta final del relleno se curva contra el
+     * carril; y al final los dos extremos de la barra completa se curvan
+     * contra el fondo -- asi el extremo izquierdo (compartido por carril
+     * y relleno) se redondea una sola vez, contra lo que de verdad hay
+     * afuera. */
+    lcd_set_drawmode(DRMODE_SOLID);
+    lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
+    lcd_fillrect(bar_x, bar_y, bar_w, A26_SPACING_XL);
 
     fill_w = (bar_w * fraction) / 256;
     if (fill_w > 0)
-        a26_shell_fill_rounded_rect(bar_x, bar_y, fill_w, A26_SPACING_XL,
-                                     A26_LAYOUT_CORNER_RADIUS_CARD,
-                                     a26_color(A26_PROGRESS_FILL), a26_color(A26_SHELL_BG));
+    {
+        lcd_set_foreground(a26_color(A26_PROGRESS_FILL));
+        lcd_fillrect(bar_x, bar_y, fill_w, A26_SPACING_XL);
+        if (fill_w < bar_w)
+            a26_shell_capsule_tail_over_content(bar_x, bar_y, fill_w, A26_SPACING_XL,
+                                                a26_color(A26_PROGRESS_TRACK));
+    }
+    lcd_set_drawmode(DRMODE_FG);
+    a26_shell_capsule_ends_over_content(bar_x, bar_y, bar_w, A26_SPACING_XL,
+                                        a26_color(A26_SHELL_BG));
 
     if (value_text)
     {

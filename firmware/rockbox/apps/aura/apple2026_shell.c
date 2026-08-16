@@ -252,19 +252,41 @@ void a26_shell_clear_screen(void)
  * para `v` entero simple (distancias al cuadrado de radios <=16px --
  * cabe holgado en 32 bits: 512*512*65536 no se alcanza nunca aca).
  * Newton con semilla burda, converge en <6 iteraciones a estos rangos. */
-unsigned a26_shell_isqrt256(unsigned v)
+static unsigned isqrt_u32(unsigned v)
 {
     unsigned x, prev;
 
     if (v == 0)
         return 0;
-    v <<= 16; /* sqrt(v * 2^16) = sqrt(v) * 256 */
     x = v / 2 + 1;
     do {
         prev = x;
         x = (x + v / x) / 2;
     } while (x < prev);
     return prev;
+}
+
+unsigned a26_shell_isqrt256(unsigned v)
+{
+    /* D-277: el `v <<= 16` original desbordaba en 32 bits para
+     * v > 65535 -- las distancias al cuadrado en 1/32 px de un casquete
+     * de 16px de grosor llegan a 240^2 + 240^2 = 115200, y el resultado
+     * basura (mas chico que el real) hacia que los pixeles EXTERIORES
+     * del casquete se trataran como interiores y quedaran sin recortar
+     * (visto en el slider de Brillo al migrarlo a capsula real; la unica
+     * capsula anterior del sistema, la barra del reproductor de 7px,
+     * nunca pasaba de 18432). Ahora se usa el mayor desplazamiento PAR
+     * que quepa sin desbordar y se compensa a la salida:
+     * sqrt(v * 2^s) = sqrt(v) * 2^(s/2), y falta multiplicar por
+     * 2^((16-s)/2) para llegar a sqrt(v) * 256. Para v <= 65535 es
+     * identico al comportamiento anterior (s = 16). */
+    int s = 16;
+
+    if (v == 0)
+        return 0;
+    while (s > 0 && v > (0xFFFFFFFFu >> s))
+        s -= 2;
+    return isqrt_u32(v << s) << ((16 - s) / 2);
 }
 
 /* Mascara de cuarto de circulo con ANTIALIAS por cobertura (correccion
@@ -436,6 +458,91 @@ void a26_shell_fill_capsule_over(int x, int y, int w, int h,
             row[px] = a26_shell_blend(row[px], fill, cov * alpha_256 / 256);
         }
     }
+}
+
+/* Ver apple2026_shell.h. Solo se recorren los dos casquetes (2*half
+ * columnas o filas), no el interior -- el costo es el mismo que el de
+ * fill_capsule para el mismo tamano. En una barra vertical se
+ * intercambian los ejes: el "radio" es w/2 y los casquetes viven en las
+ * primeras/ultimas `half` filas. */
+/* Nucleo compartido de las dos mascaras de capsula: `saved` == NULL ->
+ * fondo plano `bg`; si no, el fondo de cada pixel se lee del snapshot
+ * (w*h pixeles, stride `saved_w`, capturado por el llamador ANTES de
+ * pintar la barra), igual que stamp_corner_restore() para el tile. */
+#define CAP_START 1
+#define CAP_END   2
+static void capsule_ends(int x, int y, int w, int h, unsigned bg,
+                         const fb_data *saved, int saved_w, int which)
+{
+    int thick, len, half, r32, c32, i, j;
+    bool vertical;
+
+    if (w <= 0 || h <= 0)
+        return;
+
+    vertical = h > w;
+    thick = vertical ? w : h;   /* lado corto: define el radio */
+    len   = vertical ? h : w;   /* lado largo: donde viven los casquetes */
+    half  = (thick + 1) / 2;
+    if (len < thick)
+        half = (len + 1) / 2;
+    r32 = thick * 16;
+    c32 = (thick - 1) * 16;
+
+    /* i recorre el eje corto (0..thick-1), j el eje largo dentro del
+     * casquete (0..half-1); el casquete opuesto se espeja en `len`. */
+    for (i = 0; i < thick; i++)
+    {
+        int di32 = i * 32 - c32;
+
+        for (j = 0; j < half; j++)
+        {
+            int dj32 = j * 32 - c32;
+            unsigned d32 = a26_shell_isqrt256((unsigned)(dj32 * dj32 + di32 * di32)) >> 8;
+            int cov = (r32 + 16 - (int)d32) * 8;
+            int ax, ay, bx, by;
+            fb_data *pa, *pb;
+            unsigned bga, bgb;
+
+            if (cov >= 256)
+                continue;   /* dentro del semicirculo: se queda como esta */
+            if (cov < 0)
+                cov = 0;
+
+            if (vertical) { ax = i; ay = j; bx = i; by = len - 1 - j; }
+            else          { ax = j; ay = i; bx = len - 1 - j; by = i; }
+
+            /* cov = cuanto de la barra sobrevive; el resto es fondo. */
+            if (which & CAP_START)
+            {
+                pa = FBADDR(x + ax, y + ay);
+                bga = saved ? saved[ay * saved_w + ax] : bg;
+                *pa = a26_shell_blend(bga, *pa, cov);
+            }
+            if (which & CAP_END)
+            {
+                pb = FBADDR(x + bx, y + by);
+                bgb = saved ? saved[by * saved_w + bx] : bg;
+                *pb = a26_shell_blend(bgb, *pb, cov);
+            }
+        }
+    }
+}
+
+void a26_shell_capsule_ends_over_content(int x, int y, int w, int h, unsigned bg)
+{
+    capsule_ends(x, y, w, h, bg, NULL, 0, CAP_START | CAP_END);
+}
+
+void a26_shell_capsule_tail_over_content(int x, int y, int w, int h, unsigned bg)
+{
+    capsule_ends(x, y, w, h, bg, NULL, 0, CAP_END);
+}
+
+void a26_shell_capsule_ends_restore(int x, int y, int w, int h,
+                                    const fb_data *saved, int saved_w)
+{
+    capsule_ends(x, y, w, h, 0, saved, saved_w, CAP_START | CAP_END);
 }
 
 void a26_shell_fill_rounded_rect(int x, int y, int w, int h, int radius,

@@ -242,4 +242,30 @@ void a26_shell_fill_capsule(int x, int y, int w, int h, unsigned fill, unsigned 
  * alpha global -- pildora del indicador y su sombra. */
 void a26_shell_fill_capsule_over(int x, int y, int w, int h, unsigned fill, int alpha_256);
 
+/* Mascara de capsula SOBRE contenido ya dibujado (D-277): recorta los
+ * extremos del rectangulo x,y,w,h a semicirculos exactos (radio = mitad
+ * del lado CORTO, subpixel, misma matematica que a26_shell_fill_capsule)
+ * mezclando cada pixel del casquete hacia `bg` por cobertura real. Se
+ * auto-orienta: barra horizontal (w >= h) -> casquetes izquierdo y
+ * derecho; barra vertical (h > w) -> casquetes arriba y abajo. Sirve
+ * para lo que fill_capsule no puede: barras cuyo interior no es de un
+ * solo color (segmentos de almacenamiento) o piezas verticales (pulgar
+ * del ScrollIndicator). El interior no se toca. `bg` = color plano real
+ * que rodea la barra. */
+void a26_shell_capsule_ends_over_content(int x, int y, int w, int h, unsigned bg);
+
+/* Solo el extremo FINAL (derecho en horizontal, inferior en vertical):
+ * para el relleno de una barra de progreso, cuya punta inicial coincide
+ * con la del carril (y la redondea la mascara de la barra completa) pero
+ * cuya punta final debe curvarse contra el color del carril. */
+void a26_shell_capsule_tail_over_content(int x, int y, int w, int h, unsigned bg);
+
+/* Misma mascara, pero el fondo de cada pixel se restaura desde `saved`
+ * (snapshot de w*h pixeles con stride `saved_w`, capturado ANTES de
+ * pintar la barra) -- para barras sobre fondo NO plano (imagen del
+ * panel derecho, D-267), mismo contrato que
+ * a26_shell_round_bitmap_corners_over_content(). */
+void a26_shell_capsule_ends_restore(int x, int y, int w, int h,
+                                    const fb_data *saved, int saved_w);
+
 #endif /* APPLE2026_SHELL_H */

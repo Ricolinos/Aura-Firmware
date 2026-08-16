@@ -114,8 +114,17 @@ void aura_scroll_indicator_draw(int x, int track_y, int track_h,
      * mecanismo que ya probo el scrollbar del sistema viejo (D-073). */
     color = a26_shell_blend(bg, ink, alpha_256);
 
-    a26_shell_fill_rounded_rect(x - thumb_w, thumb_y, thumb_w, thumb_h,
-                                 thumb_w / 2, color, bg);
+    /* Capsula VERTICAL real (D-277): relleno plano + mascara de
+     * casquetes subpixel. Antes: fill_rounded_rect con radio thumb_w/2
+     * -- a 4px de grosor, stamp_corner (cuarto de circulo entero, sin
+     * antialias) apenas quitaba un pixel por esquina y el pulgar se leia
+     * cuadrado. Ahora los extremos son semicirculos exactos de radio 2,
+     * como la barra del reproductor. */
+    lcd_set_drawmode(DRMODE_SOLID);
+    lcd_set_foreground(color);
+    lcd_fillrect(x - thumb_w, thumb_y, thumb_w, thumb_h);
+    lcd_set_drawmode(DRMODE_FG);
+    a26_shell_capsule_ends_over_content(x - thumb_w, thumb_y, thumb_w, thumb_h, bg);
 }
 
 int aura_scroll_indicator_pending(long idle_elapsed_ms)

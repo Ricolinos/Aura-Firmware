@@ -15,7 +15,15 @@ de contenido de 152px, usa el padding mismo como su track.
 
 - **Grosor: 4px** — coincide exacto con el ancho del padding derecho que
   ocupa.
-- **Puntas redondeadas** (tipo pill/cápsula).
+- **Puntas redondeadas** (tipo pill/cápsula) — **cápsula vertical real desde
+  D-277**: semicírculos exactos de radio 2px (mitad del grosor) con
+  antialias subpíxel, vía `a26_shell_capsule_ends_over_content()`. Antes,
+  `fill_rounded_rect` con radio 2 solo quitaba un píxel por esquina y a 4px
+  de grosor se leía cuadrado. Regla general de barras en
+  `fundamentos/04-bordes.md`. En `LeftPanel` el casquete derecho quedaba
+  además tapado por una línea de 1px del mismo gris en la última columna del
+  panel — retirada en D-277 (la doc ya decía desde D-274 que ahí no hay
+  línea, solo sombra).
 - **Tamaño fijo** (no proporcional al contenido visible/total como un
   scrollbar estándar). Solo aparece si la lista tiene **más de 10 ítems**
   — si todo cabe en la pantalla, no se renderiza en absoluto.

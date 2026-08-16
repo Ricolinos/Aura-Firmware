@@ -1651,14 +1651,36 @@ static void draw_about_storage_bars(int x, int y, int width, int height)
     segs[3].bytes = other_b; segs[3].color = category_flat_color(AURA_CATEGORY_SETTINGS);
     segs[4].bytes = free_b;  segs[4].color = a26_color(A26_PROGRESS_TRACK);
 
-    /* Radio = mitad del alto, mismo criterio de "extremos totalmente
-     * redondeados" que ya usa draw_about_storage() para su propia
-     * barra. */
-    a26_shell_fill_rounded_rect(x, y, width, height, height / 2,
-                                 a26_color(A26_PROGRESS_TRACK), a26_color(A26_SHELL_BG));
+    /* D-277: esta barra vive SOBRE la imagen de fondo del panel derecho
+     * (D-267), no sobre SHELL_BG -- redondear contra un color plano
+     * pintaba esquinas blancas encima de la imagen (defecto latente desde
+     * D-267). Se captura el fondo real ANTES de pintar (mismo contrato
+     * que el tile, a26_shell_round_bitmap_corners_over_content) y al
+     * final la mascara de capsula restaura esos pixeles en los
+     * casquetes. El buffer cubre el ancho maximo del panel derecho por
+     * el alto maximo razonable de la barra. */
+    static fb_data saved_bar[(A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH) * 24];
+    bool restore = width > 0 && height > 0
+                && width <= (A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH)
+                && height <= 24;
+    if (restore)
+    {
+        int sy;
+        for (sy = 0; sy < height; sy++)
+            memcpy(&saved_bar[sy * width], FBADDR(x, y + sy), width * sizeof(fb_data));
+    }
+
+    lcd_set_drawmode(DRMODE_SOLID);
+    lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
+    lcd_fillrect(x, y, width, height);
+    lcd_set_drawmode(DRMODE_FG);
 
     if (total_b <= 0)
+    {
+        if (restore)
+            a26_shell_capsule_ends_restore(x, y, width, height, saved_bar, width);
         return;
+    }
 
     for (i = 0; i < 5; i++)
     {
@@ -1674,6 +1696,14 @@ static void draw_about_storage_bars(int x, int y, int width, int height)
         }
         seg_x += seg_w;
     }
+
+    /* D-277: los segmentos rectangulares tapaban las esquinas que el
+     * carril traia redondeadas -- la barra terminaba cuadrada. La
+     * mascara de capsula recorta los DOS extremos del compuesto
+     * (multicolor) con semicirculos exactos, restaurando la imagen de
+     * fondo real en los casquetes. */
+    if (restore)
+        a26_shell_capsule_ends_restore(x, y, width, height, saved_bar, width);
 }
 
 /* Punto de entrada unico (D-264): llamado por draw_nav_list() para
@@ -2089,12 +2119,15 @@ static void draw_about_storage(const aura_manifest_t *m)
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
     lcd_putsxy(bar_x, ABOUT_CONTENT_Y, (const unsigned char *)aura_str(AURA_STR_ABOUT_STORAGE));
 
-    /* Radio = mitad del alto (SS5.4: extremos totalmente redondeados de
-     * una barra fina, misma derivacion que el resto de las barras de
-     * progreso del sistema -- no un radio suelto). */
-    a26_shell_fill_rounded_rect(bar_x, bar_y, bar_w, A26_SPACING_LG,
-                                 A26_SPACING_LG / 2, a26_color(A26_PROGRESS_TRACK),
-                                 a26_color(A26_SHELL_BG));
+    /* Carril plano; los extremos se redondean AL FINAL con la mascara de
+     * capsula (D-277), porque los segmentos rectangulares que se pintan
+     * encima tapaban las esquinas que fill_rounded_rect ya habia
+     * redondeado -- la barra terminaba cuadrada. Radio = mitad del alto
+     * (SS5.4: extremos totalmente redondeados de una barra fina). */
+    lcd_set_drawmode(DRMODE_SOLID);
+    lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
+    lcd_fillrect(bar_x, bar_y, bar_w, A26_SPACING_LG);
+    lcd_set_drawmode(DRMODE_FG);
 
     for (i = 0; i < 3 && total > 0; i++)
     {
@@ -2114,6 +2147,8 @@ static void draw_about_storage(const aura_manifest_t *m)
         }
         seg_x += seg_w;
     }
+    a26_shell_capsule_ends_over_content(bar_x, bar_y, bar_w, A26_SPACING_LG,
+                                        a26_color(A26_SHELL_BG));
 
     for (i = 0; i < 3; i++)
     {
