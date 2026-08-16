@@ -41,8 +41,10 @@ tenerlo.
 
 La hora de cada ciudad es `local + (huso_ciudad − huso_local)`, donde
 el huso local es un ajuste propio (`tz_local_quarters`, por defecto
-UTC−6). Ese mismo dato alimentará la pantalla de Zona horaria de
-Ajustes cuando exista.
+UTC−6). Ese mismo dato alimenta **Ajustes → Fecha y hora → Zona
+horaria** (D-164): una sola tabla de husos/ciudades en todo el firmware —
+la pantalla de Ajustes fija `tz_local_quarters` con la misma lista de 40
+ciudades que este componente usa para añadir relojes.
 
 ## Interacción
 
