@@ -93,22 +93,22 @@ haya.
 | Elemento | Posición | Tamaño |
 |---|---|---|
 | Ícono | 14px desde el borde izquierdo del panel (= 10px desde el borde del padding interno) | Máximo 20×20px (D-195, antes 14×14px — escalado en la misma proporción que la fila) |
-| Texto | 4px después del ícono | SF Pro Regular, 12px (D-195, antes 10px), alineado a la izquierda |
-| Elemento opcional derecho | Lado derecho del ítem | Ver tabla abajo — dimensiones individuales pendientes |
+| Texto | 4px después del ícono | SF Pro **Semibold, 15px** (D-195: 12px Regular → D-207: Semibold 14px → D-267: 15px, +1pt), alineado a la izquierda |
+| Elemento opcional derecho | Lado derecho del ítem | Ver tabla abajo — switch y checkmark confirmados; texto y carga siguen diferidos |
 
 **Elementos opcionales del lado derecho** (según la naturaleza de cada
 opción — no todos los ítems llevan uno):
 
-| Elemento | Para qué sirve |
-|---|---|
-| Switch | Valores booleanos |
-| Checkmark | Confirmación/selección múltiple |
-| Ícono de tache (X) | — |
-| Texto alineado a la derecha | Mostrar distintos parámetros/valores |
-| Ícono de carga (animado) | Comunicar que la opción está cargando |
+| Elemento | Para qué sirve | Dimensiones |
+|---|---|---|
+| Switch | Valores booleanos | **Confirmado (D-165/D-167):** pista de 28×14px en cápsula; perilla de 15×10px, también en cápsula (más ancha que alta, no un círculo), con margen de 2px dentro de la pista — nunca la desborda. Encendido: pista del color de acento y perilla en un tono muy claro del propio acento. Apagado: pista gris con contraste y perilla casi blanca. Mismos colores sobre fila en reposo y sobre el `Selector`. |
+| Checkmark | Confirmación/selección múltiple | Ícono de 14px, mismo lenguaje que los íconos de fila (D-111) |
+| Ícono de tache (X) | — | Pendiente |
+| Texto alineado a la derecha | Mostrar distintos parámetros/valores | Pendiente |
+| Ícono de carga (animado) | Comunicar que la opción está cargando | Pendiente — sin consumidor real todavía |
 
-🟢 **Elementos opcionales del lado derecho:** catalogados arriba, sus
-dimensiones individuales se definen más adelante cuando lleguemos a las
+🟢 **Elementos opcionales del lado derecho:** switch (D-165/D-167) y
+checkmark (D-111) ya confirmados; el resto se define cuando lleguemos a las
 pantallas específicas que los usan — diferido a propósito, no bloqueante.
 
 **Ítems no seleccionados:** siguen exactamente la misma lógica y
@@ -133,7 +133,11 @@ Barra de desplazamiento que **aparece cuando el usuario se mueve dentro de
 `MenuList`** y **se desvanece cuando el input está inactivo (idle)**. Usa un
 patrón nuevo — ver `Fade-on-Idle` en `transiciones/00-vocabulario.md`.
 
-## Pendiente de definir
+## Entrada y salida
 
-- [ ] ¿`LeftPanel` tiene su propia entrada/salida en `(full) → (split)`
-      además de ser "empujado" en `(split) → (full)`?
+**Resuelto (D-267):** no, `LeftPanel` no tiene animación de entrada/salida
+propia. En `(full) → (split)` entra empujado desde el borde izquierdo junto
+con su `StatusBar (split)` — es la fase 3 de `Lift-and-Push` (o su variante
+de revelado cuando la ida fue por revelado, ver
+`transiciones/00-vocabulario.md`). En `(split) → (full)` sale empujado de la
+misma forma, en sentido inverso.
