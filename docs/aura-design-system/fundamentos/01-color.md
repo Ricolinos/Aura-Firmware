@@ -1,13 +1,50 @@
 # Color
 
-🟡 Pendiente — traer valores desde las guías "Apple 2026 design language"
-que ya construimos en este chat, y formalizarlos aquí como tokens.
+🟢 Definido (resync 2026-08-16) — la paleta base de 9 tokens × 2 temas
+(D-072, esquema de las guías "Apple 2026 design language" adoptado tal
+cual), el acento configurable, el color por categoría y el fondo del panel
+derecho por acento (D-267) viven en `design-system/tokens.json` y se
+generan a `apple2026_tokens.h` / `a26_palette`. Quedan abiertos, marcados
+🔴 abajo: la interfaz de selección del acento y la relación entre el acento
+del tema y el acento del usuario.
+
+## Paleta base (`color.light` / `color.dark`, D-072)
+
+Estos son los tokens del sistema Apple2026 que consume `a26_palette`
+(`A26_SHELL_BG`, `A26_TEXT_PRIMARY`, …); varían con el tema claro/oscuro.
+
+| Token (`tokens.json`) | Claro | Oscuro | Uso |
+|---|---|---|---|
+| `shell_bg` | `#FFFFFF` | `#1C1C1E` | Fondo base de pantalla y de `LeftPanel` |
+| `text_primary` | `#000000` | `#FFFFFF` | Texto principal |
+| `text_secondary` | `#6E6E73` | `#98989D` | Texto secundario |
+| `text_tertiary` | `#3C3C43` | `#C7C7CC` | Texto terciario |
+| `accent` | `#FF2D55` | `#FF456C` | Acento **del tema** (`A26_ACCENT`) — ver 🔴 abajo |
+| `shell_rail` | `#C6C6C8` | `#3A3A3C` | Rieles, separadores, gris del `ScrollIndicator` (D-086) |
+| `progress_fill` | `#3C3C43` | `#E5E5EA` | Relleno de barras de progreso |
+| `progress_track` | `#E5E5EA` | `#48484A` | Pista de barras de progreso |
+| `selection_fill` | `#E5E5EA` | `#2C2C2E` | Pastilla del `Selector` (D-112) |
+| `white_constant` | `#FFFFFF` | `#FFFFFF` | Blanco que no cambia con el tema |
 
 ## Tokens definidos
 
 | Token | Valor por default | Uso | Notas |
 |---|---|---|---|
-| `--color-accent` | `#FF2D52` | `Selector` (`componentes/selector.md`) y cualquier otro elemento de contraste/acento | **Configurable por el usuario desde Ajustes** — el hex es solo el valor por default, no un valor absoluto del sistema. Cualquier componente que use este token debe leerlo dinámicamente, no asumirlo fijo. |
+| `--color-accent` | `#FF2D52` (`aura_ds.color.accent_default_hex`) | Texto/ícono/flecha del ítem seleccionado en el `Selector` (D-112 — la pastilla es gris `selection_fill`, no de acento), color de la categoría Música, y cualquier otro elemento de contraste/acento | **Configurable por el usuario desde Ajustes** — el hex es solo el valor por default, no un valor absoluto del sistema. Cualquier componente que use este token debe leerlo dinámicamente vía `aura_accent()`/`aura_accent_light()`/`aura_accent_dark()` (derivados ±25%, `accent_derived_lighten_pct`/`_darken_pct`, D-086), no asumirlo fijo. 🔴 **Interfaz de selección sin cerrar (D-087, provisional):** hoy son 6 presets con nombre (Rosa `#FF2D52`, Rojo `#FF3B30`, Naranja `#FF9500`, Verde `#34C759`, Azul `#007AFF`, Morado `#AF52DE`; `accent_presets_hex`) en una lista de elección — pendiente que el dueño confirme si es el diseño final o si sigue previsto un selector visual de swatches. 🔴 **Doble acento (D-086):** `A26_ACCENT` del tema (`#FF2D55`/`#FF456C`, tabla de arriba) y este acento del usuario coexisten como tokens distintos — pendiente documentar quién gana dónde o si se fusionan. |
+
+## Fondo del panel derecho por acento (D-267)
+
+En `split` de menú, el fondo del panel derecho (detrás de
+`SelectionSummary`) ya **no** es `shell_bg` plano ni un degradado calculado:
+es una **imagen horneada de 160×240 por preset de acento**
+(`aura_ds.metrics.right_panel_background.presets`, fuente versionada en
+`design-system/assets/panel-backgrounds/<preset>-source.png` →
+`out/icons/aura/backgrounds/<preset>.bmp`). Sigue el **acento** del
+usuario, no la categoría de la fila (confirmado por mockup del dueño: fila
+Fotos con tile naranja de categoría sobre fondo rosa de acento). Estado
+interino: solo existe `pink`; cualquier acento sin imagen propia cae a
+`pink`, y si el archivo falta se rellena `shell_bg`. Los otros cinco
+presets quedan pendientes de que el dueño comparta sus imágenes.
 
 ## Color por categoría del Menú principal (confirmado 2026-08-14)
 
@@ -47,16 +84,19 @@ ningún ítem — el dueño pidió refinar cuáles quedan afuera más adelante,
 no es una pantalla vacía de este encargo) y el mapeo pantalla→categoría
 completo: `sistema/04-color-por-categoria.md`.
 
-## Estructura sugerida (a llenar)
+## Roles semánticos → tokens reales (D-072, resync 2026-08-16)
 
-| Token | Valor | Uso |
+Los roles CSS-style de esta tabla no tienen macro 1:1 propia — mapean a los
+tokens de la paleta base de arriba y a `a26_palette`:
+
+| Rol | Token real | Uso |
 |---|---|---|
-| `--color-bg-base` | — | |
-| `--color-bg-panel-left` | — | |
-| `--color-bg-panel-right` | — | |
-| `--color-text-primary` | — | |
-| `--color-text-secondary` | — | |
-| `--color-accent` | — | |
+| `--color-bg-base` | `shell_bg` → `A26_SHELL_BG` | Fondo de pantalla |
+| `--color-bg-panel-left` | `shell_bg` → `A26_SHELL_BG` | `LeftPanel` |
+| `--color-bg-panel-right` | imagen `right_panel_background` (split de menú, D-267) / `A26_SHELL_BG` (resto) | Panel derecho |
+| `--color-text-primary` | `text_primary` → `A26_TEXT_PRIMARY` | Texto principal |
+| `--color-text-secondary` | `text_secondary` → `A26_TEXT_SECONDARY` | Texto secundario |
+| `--color-accent` | `aura_ds.color.accent_default_hex` vía `aura_accent()` (usuario); `A26_ACCENT` es el del tema — ver 🔴 arriba | Acento |
 
 Nota: la pantalla del iPod Classic 6G es a color (QVGA 320×240), no hay
 restricción de escala de grises — pero sí hay restricción de paleta/gamut
