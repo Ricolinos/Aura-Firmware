@@ -17,13 +17,17 @@ de contenido de 152px, usa el padding mismo como su track.
   scrollbar estándar). Solo aparece si la lista tiene **más de 10 ítems**
   — si todo cabe en la pantalla, no se renderiza en absoluto.
 
-🔴 Pendiente: alto exacto en px del indicador (sabemos que es de tamaño
-fijo, falta el valor).
+- **Alto fijo: 24px** (`scroll_indicator.height` en `tokens.json` —
+  D-086, provisional G8, puesto bajo mandato autónomo; el dueño puede
+  vetarlo).
 
 ## Color
 
 **Gris neutro** — no usa `--color-accent` (a diferencia de `Selector`).
-Valor hex exacto pendiente (ver `fundamentos/01-color.md`).
+Reutiliza el gris de riel ya definido en la paleta, `SHELL_RAIL`
+(`fundamentos/01-color.md`): **`#C6C6C8`** en tema claro, **`#3A3A3C`** en
+tema oscuro (D-086, G8 — no se inventó un segundo gris; es el gris neutro
+real del sistema).
 
 ## Comportamiento
 
@@ -43,5 +47,6 @@ diferencia de `Selector`, que salta directo sin animación.
 
 ## Pendiente de definir
 
-- [ ] Alto exacto del indicador (tamaño fijo, falta el valor en px)
-- [ ] Valor hex del gris neutro
+- [x] Alto exacto del indicador — resuelto: 24px (D-086, G8, provisional)
+- [x] Valor hex del gris neutro — resuelto: `SHELL_RAIL` del tema,
+      `#C6C6C8` / `#3A3A3C` (D-086, G8)
