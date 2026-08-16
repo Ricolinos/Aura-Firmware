@@ -372,6 +372,63 @@ static void split_two_lines(const char *text, int max_width)
  * real ya no quedaba color que fundir, solo el icono se movia. Con la
  * categoria tambien congelada, ambos (color e icono) cambian juntos,
  * en el mismo fundido. */
+/* Tile de TILE_SIZE x TILE_SIZE en (x,y) -- sombra, degradado por
+ * categoria y simbolo/renderer centrado. Extraido de draw_summary()
+ * (D-278/D-279) para que la pantalla FULL-CARRY expandida de "Acerca
+ * de" (aura_screens.c) pueda dibujar el MISMO tile a la izquierda, sin
+ * duplicar shadow/degradado/recorte de esquinas -- es el elemento que
+ * viaja con aura_transition_shift_and_reveal(): el cuadro final de esa
+ * animacion tiene que coincidir pixel a pixel con lo que esta funcion ya
+ * dibuja ahi, o se notaria un salto. Ver el comentario largo mas abajo
+ * (D-267) para el porque del orden sombra/guardado/relleno/recorte. */
+void aura_selection_summary_draw_tile(int x, int y, aura_category_t category,
+                                       const char *icon_name,
+                                       aura_selection_summary_icon_renderer_t renderer)
+{
+    /* Sombra + tile con esquinas redondeadas REALES (D-267): el fondo ya
+     * no es un color plano conocido, asi que ni la sombra ni el recorte
+     * de esquinas pueden pintar un color fijo (dejaria parches blancos
+     * visibles contra la imagen -- exactamente el defecto que el dueno
+     * senalo). Orden: (1) sombra offset, compositing real contra el
+     * fondo ya dibujado; (2) SALVAR los pixeles del recuadro del tile
+     * (fondo+sombra, lo que debe quedar visible en las esquinas
+     * recortadas); (3) rellenar el tile COMPLETO (cuadrado, tapa la
+     * sombra en su centro); (4) restaurar las 4 esquinas con los pixeles
+     * salvados (a26_shell_round_bitmap_corners_over_content(), D-267) --
+     * mismo antialias por distancia que la version de color plano, pero
+     * compositing real. El tile en si sigue coloreado por CATEGORIA
+     * (componentes/selection-summary.md, encargo del dueno 2026-08-14) --
+     * eso NO cambio, solo el fondo detras dejo de ser el degradado y paso
+     * a ser la imagen de acento. */
+    unsigned tile_a, tile_center, tile_b;
+    static fb_data saved_tile[TILE_SIZE * TILE_SIZE];
+    int sy;
+
+    draw_tile_shadow(x, y + AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_OFFSET_Y,
+                      TILE_SIZE, TILE_SIZE, TILE_RADIUS,
+                      AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_BLUR_PX,
+                      256 * AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_ALPHA_PCT / 100);
+
+    for (sy = 0; sy < TILE_SIZE; sy++)
+        memcpy(&saved_tile[sy * TILE_SIZE], FBADDR(x, y + sy),
+               TILE_SIZE * sizeof(fb_data));
+
+    aura_category_gradient(category, &tile_a, &tile_center, &tile_b);
+    draw_diagonal_gradient(x, y, TILE_SIZE, tile_a, tile_center, tile_b);
+
+    a26_shell_round_bitmap_corners_over_content(x, y, TILE_SIZE, TILE_SIZE,
+                                                  TILE_RADIUS, saved_tile, TILE_SIZE);
+
+    /* Simbolo: estatico (icono horneado, variante "-selector" blanco
+     * constante, G5/T2.2) o dinamico (renderer real, B-04) -- mismo
+     * hueco centrado sobre el tile para los dos casos. */
+    if (icon_name)
+        aura_widgets_draw_icon_variant_selector(icon_name, SYMBOL_SIZE,
+            x + (TILE_SIZE - SYMBOL_SIZE) / 2, y + (TILE_SIZE - SYMBOL_SIZE) / 2);
+    else if (renderer)
+        renderer(x + TILE_SIZE / 2, y + TILE_SIZE / 2, SYMBOL_SIZE);
+}
+
 static void draw_summary(int x, int width, const char *icon_name,
                           aura_selection_summary_icon_renderer_t renderer,
                           aura_category_t category,
@@ -460,50 +517,7 @@ static void draw_summary(int x, int width, const char *icon_name,
         bottom_h = AURA_DS_METRICS_ABOUT_BAR_H;
     }
 
-    /* Sombra + tile con esquinas redondeadas REALES (D-267): el fondo ya
-     * no es un color plano conocido, asi que ni la sombra ni el recorte
-     * de esquinas pueden pintar un color fijo (dejaria parches blancos
-     * visibles contra la imagen -- exactamente el defecto que el dueno
-     * senalo). Orden: (1) sombra offset, compositing real contra el
-     * fondo ya dibujado; (2) SALVAR los pixeles del recuadro del tile
-     * (fondo+sombra, lo que debe quedar visible en las esquinas
-     * recortadas); (3) rellenar el tile COMPLETO (cuadrado, tapa la
-     * sombra en su centro); (4) restaurar las 4 esquinas con los pixeles
-     * salvados (a26_shell_round_bitmap_corners_over_content(), D-267) --
-     * mismo antialias por distancia que la version de color plano, pero
-     * compositing real. El tile en si sigue coloreado por CATEGORIA
-     * (componentes/selection-summary.md, encargo del dueno 2026-08-14) --
-     * eso NO cambio, solo el fondo detras dejo de ser el degradado y paso
-     * a ser la imagen de acento. */
-    {
-        unsigned tile_a, tile_center, tile_b;
-        static fb_data saved_tile[TILE_SIZE * TILE_SIZE];
-        int sy;
-
-        draw_tile_shadow(tile_x, tile_y + AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_OFFSET_Y,
-                          TILE_SIZE, TILE_SIZE, TILE_RADIUS,
-                          AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_BLUR_PX,
-                          256 * AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_ALPHA_PCT / 100);
-
-        for (sy = 0; sy < TILE_SIZE; sy++)
-            memcpy(&saved_tile[sy * TILE_SIZE], FBADDR(tile_x, tile_y + sy),
-                   TILE_SIZE * sizeof(fb_data));
-
-        aura_category_gradient(category, &tile_a, &tile_center, &tile_b);
-        draw_diagonal_gradient(tile_x, tile_y, TILE_SIZE, tile_a, tile_center, tile_b);
-
-        a26_shell_round_bitmap_corners_over_content(tile_x, tile_y, TILE_SIZE, TILE_SIZE,
-                                                      TILE_RADIUS, saved_tile, TILE_SIZE);
-    }
-
-    /* Simbolo: estatico (icono horneado, variante "-selector" blanco
-     * constante, G5/T2.2) o dinamico (renderer real, B-04) -- mismo
-     * hueco centrado sobre el tile para los dos casos. */
-    if (icon_name)
-        aura_widgets_draw_icon_variant_selector(icon_name, SYMBOL_SIZE,
-            tile_x + (TILE_SIZE - SYMBOL_SIZE) / 2, tile_y + (TILE_SIZE - SYMBOL_SIZE) / 2);
-    else if (renderer)
-        renderer(tile_x + TILE_SIZE / 2, tile_y + TILE_SIZE / 2, SYMBOL_SIZE);
+    aura_selection_summary_draw_tile(tile_x, tile_y, category, icon_name, renderer);
 
     /* Texto SIEMPRE blanco fijo (D-267) -- ya no A26_TEXT_PRIMARY (ese
      * token varia por tema claro/oscuro; el fondo nuevo es siempre

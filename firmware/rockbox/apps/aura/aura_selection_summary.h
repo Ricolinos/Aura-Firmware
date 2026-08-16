@@ -101,4 +101,16 @@ int aura_selection_summary_animating(void);
  * de centrado (D-270) en otro archivo. */
 void aura_selection_summary_tile_rect_split(int *x, int *y, int *w, int *h);
 
+/* Dibuja el tile (sombra + degradado por categoria + simbolo/renderer
+ * centrado) en (x,y), tamano fijo TILE_SIZE (90px). Extraido de
+ * aura_selection_summary_draw()/_draw_dynamic() (D-278/D-279) para que
+ * otras pantallas (hoy: el estado expandido de "Acerca de") puedan
+ * dibujar el MISMO tile fuera del panel derecho -- necesario para que
+ * aura_transition_shift_and_reveal() tenga un elemento identico en
+ * ambos extremos del viaje. `icon_name` o `renderer`, nunca los dos
+ * (mismo contrato que el resto del componente). */
+void aura_selection_summary_draw_tile(int x, int y, aura_category_t category,
+                                       const char *icon_name,
+                                       aura_selection_summary_icon_renderer_t renderer);
+
 #endif /* AURA_SELECTION_SUMMARY_H */

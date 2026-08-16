@@ -1690,15 +1690,19 @@ static unsigned category_flat_color(aura_category_t cat)
  * configurable para Musica (Q2, sigue la misma regla que el resto del
  * sistema), color fijo de categoria para Video/Fotos (Q3), amarillo fijo
  * de Extras para "Otros" (Q5) -- ninguno es un RGB nuevo. */
-static void draw_about_storage_bars(int x, int y, int width, int height)
+/* Carril + segmentos, sin fondo/capsula -- el llamador decide como tapar
+ * los extremos segun lo que haya DETRAS (D-279): imagen del panel
+ * derecho en split (restore, ver abajo) o SHELL_BG plano en la pantalla
+ * expandida (over_content, mas simple, sin snapshot). Compartido para no
+ * duplicar el calculo de anchos/colores/minimo visible en dos sitios. */
+static void draw_storage_segments(int x, int y, int width, int height,
+                                   long long music_b, long long video_b,
+                                   long long photo_b, long long other_b,
+                                   long long free_b, long long total_b)
 {
-    long long music_b, video_b, photo_b, other_b, free_b, total_b;
     int seg_x = x;
     int i;
     struct { long long bytes; unsigned color; } segs[5];
-
-    about_storage_collect(false, &music_b, &video_b, &photo_b,
-                           &other_b, &free_b, &total_b);
 
     segs[0].bytes = music_b; segs[0].color = aura_accent();
     segs[1].bytes = video_b; segs[1].color = category_flat_color(AURA_CATEGORY_VIDEO);
@@ -1706,36 +1710,13 @@ static void draw_about_storage_bars(int x, int y, int width, int height)
     segs[3].bytes = other_b; segs[3].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
     segs[4].bytes = free_b;  segs[4].color = a26_color(A26_PROGRESS_TRACK);
 
-    /* D-277: esta barra vive SOBRE la imagen de fondo del panel derecho
-     * (D-267), no sobre SHELL_BG -- redondear contra un color plano
-     * pintaba esquinas blancas encima de la imagen (defecto latente desde
-     * D-267). Se captura el fondo real ANTES de pintar (mismo contrato
-     * que el tile, a26_shell_round_bitmap_corners_over_content) y al
-     * final la mascara de capsula restaura esos pixeles en los
-     * casquetes. El buffer cubre el ancho maximo del panel derecho por
-     * el alto maximo razonable de la barra. */
-    static fb_data saved_bar[(A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH) * 24];
-    bool restore = width > 0 && height > 0
-                && width <= (A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH)
-                && height <= 24;
-    if (restore)
-    {
-        int sy;
-        for (sy = 0; sy < height; sy++)
-            memcpy(&saved_bar[sy * width], FBADDR(x, y + sy), width * sizeof(fb_data));
-    }
-
     lcd_set_drawmode(DRMODE_SOLID);
     lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
     lcd_fillrect(x, y, width, height);
     lcd_set_drawmode(DRMODE_FG);
 
     if (total_b <= 0)
-    {
-        if (restore)
-            a26_shell_capsule_ends_restore(x, y, width, height, saved_bar, width);
         return;
-    }
 
     for (i = 0; i < 5; i++)
     {
@@ -1761,6 +1742,40 @@ static void draw_about_storage_bars(int x, int y, int width, int height)
         }
         seg_x += seg_w;
     }
+}
+
+static void draw_about_storage_bars(int x, int y, int width, int height)
+{
+    long long music_b, video_b, photo_b, other_b, free_b, total_b;
+
+    /* D-277: esta barra vive SOBRE la imagen de fondo del panel derecho
+     * (D-267), no sobre SHELL_BG -- redondear contra un color plano
+     * pintaba esquinas blancas encima de la imagen (defecto latente desde
+     * D-267). Se captura el fondo real ANTES de pintar (mismo contrato
+     * que el tile, a26_shell_round_bitmap_corners_over_content) y al
+     * final la mascara de capsula restaura esos pixeles en los
+     * casquetes. El buffer cubre el ancho maximo del panel derecho por
+     * el alto maximo razonable de la barra -- NO sirve para la barra
+     * expandida de la pantalla completa (D-279, mas ancha que el panel
+     * derecho): esa usa draw_about_storage_bar_expanded() mas abajo,
+     * contra SHELL_BG plano, sin snapshot. */
+    static fb_data saved_bar[(A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH) * 24];
+    bool restore = width > 0 && height > 0
+                && width <= (A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH)
+                && height <= 24;
+
+    about_storage_collect(false, &music_b, &video_b, &photo_b,
+                           &other_b, &free_b, &total_b);
+
+    if (restore)
+    {
+        int sy;
+        for (sy = 0; sy < height; sy++)
+            memcpy(&saved_bar[sy * width], FBADDR(x, y + sy), width * sizeof(fb_data));
+    }
+
+    draw_storage_segments(x, y, width, height, music_b, video_b, photo_b,
+                          other_b, free_b, total_b);
 
     /* D-277: los segmentos rectangulares tapaban las esquinas que el
      * carril traia redondeadas -- la barra terminaba cuadrada. La
@@ -2159,71 +2174,116 @@ static void draw_about_dots(void)
     }
 }
 
-/* Pagina 1: barra de espacio usado por categoria (doc: "espacio de
- * almacenamiento usado, por categoria: Audio, Video, Fotos, Otros").
- * Sin "Otros": necesitaria consultar el espacio real de disco (fat_size)
- * ademas del manifiesto de Aura Studio, una API nueva sin precedente en
- * este modulo -- se muestra la proporcion entre las tres categorias
- * reales que Aura si conoce, simplificacion documentada (D-081). */
-static void draw_about_storage(const aura_manifest_t *m)
+/* Una fila de la pantalla expandida (D-279): punto de color + etiqueta
+ * (DS_REG_12, secundaria) a la izquierda, cifra + porcentaje del disco
+ * (DS_BOLD_12, primaria) alineada al borde derecho de `w` -- Q12: mismo
+ * formato que ya usaba esta pantalla (output_dyn_value con byte_units,
+ * MiB/GiB binarios), con el porcentaje que componentes/selection-summary.md
+ * ya prometia ("con porcentaje real del disco", D-264) y que la version
+ * anterior de esta pagina nunca calculaba. */
+static void draw_about_storage_row(int x, int y, int w, unsigned dot_color,
+                                    aura_str_id_t label_id,
+                                    long long bytes, long long total_b)
 {
-    int bar_x = A26_SPACING_XXL;
-    int bar_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
-    int bar_y = ABOUT_CONTENT_Y + A26_SPACING_XXL;
-    long long total = m->music_bytes + m->video_bytes + m->photo_bytes;
-    int seg_x = bar_x;
-    int i;
-    struct { long long bytes; aura_str_id_t label; } cats[3] = {
-        { m->music_bytes, AURA_STR_ABOUT_MUSIC },
-        { m->video_bytes, AURA_STR_ABOUT_VIDEOS },
-        { m->photo_bytes, AURA_STR_ABOUT_PHOTOS },
-    };
-    int label_y = bar_y + A26_SPACING_LG + A26_SPACING_SM;
+    char size_buf[16], line[32];
+    int pct = total_b > 0 ? (int)((bytes * 100) / total_b) : 0;
+    const int dot = A26_SPACING_SM + A26_SPACING_XS;
+    int tw, th;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    a26_shell_fill_rounded_rect(x, y + (A26_TYPE_BODY - dot) / 2, dot, dot,
+                                 dot / 2, dot_color, a26_color(A26_SHELL_BG));
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-    lcd_putsxy(bar_x, ABOUT_CONTENT_Y, (const unsigned char *)aura_str(AURA_STR_ABOUT_STORAGE));
+    lcd_putsxy(x + dot + A26_SPACING_SM, y, (const unsigned char *)aura_str(label_id));
 
-    /* Carril plano; los extremos se redondean AL FINAL con la mascara de
-     * capsula (D-277), porque los segmentos rectangulares que se pintan
-     * encima tapaban las esquinas que fill_rounded_rect ya habia
-     * redondeado -- la barra terminaba cuadrada. Radio = mitad del alto
-     * (SS5.4: extremos totalmente redondeados de una barra fina). */
-    lcd_set_drawmode(DRMODE_SOLID);
-    lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
-    lcd_fillrect(bar_x, bar_y, bar_w, A26_SPACING_LG);
-    lcd_set_drawmode(DRMODE_FG);
+    output_dyn_value(size_buf, sizeof(size_buf), bytes, byte_units, 4, true);
+    snprintf(line, sizeof(line), "%s \xC2\xB7 %d%%", size_buf, pct);
 
-    for (i = 0; i < 3 && total > 0; i++)
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+    lcd_getstringsize((const unsigned char *)line, &tw, &th);
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    lcd_putsxy(x + w - tw, y, (const unsigned char *)line);
+}
+
+/* Barra expandida sobre SHELL_BG plano (a diferencia de
+ * draw_about_storage_bars(), que vive sobre la imagen del panel derecho
+ * y necesita el snapshot/restore de D-277) -- mas simple, sin buffer de
+ * respaldo, misma mascara de capsula que ya usaba esta pagina antes del
+ * rediseño. */
+static void draw_about_storage_bar_expanded(int x, int y, int width, int height,
+                                             long long music_b, long long video_b,
+                                             long long photo_b, long long other_b,
+                                             long long free_b, long long total_b)
+{
+    draw_storage_segments(x, y, width, height, music_b, video_b, photo_b,
+                          other_b, free_b, total_b);
+    a26_shell_capsule_ends_over_content(x, y, width, height, a26_color(A26_SHELL_BG));
+}
+
+/* Pagina 1, FULL-CARRY (D-278/D-279 -- encargo del dueno: "el
+ * SelectionSummary pasa a pantalla completa, con el icono de Aura
+ * desplazandose a la izquierda y la barra expandiendose... en estado
+ * expandido aparecen textos mostrando el espacio que ocupa cada tipo de
+ * archivo"). Reemplaza la version anterior (D-081, barra de 3 colores
+ * uniformes sin "Otros" -- limitacion resuelta ahora por
+ * about_storage_collect(), D-279). El tile es el MISMO que viaja con
+ * aura_transition_shift_and_reveal() (D-278): misma funcion de dibujo
+ * (aura_selection_summary_draw_tile()) y mismo eje Y que en split
+ * (aura_selection_summary_tile_rect_split()), solo cambia X -- el cuadro
+ * final de la transicion tiene que coincidir pixel a pixel con esto. */
+static void draw_about_storage_expanded(void)
+{
+    long long music_b, video_b, photo_b, other_b, free_b, total_b;
+    aura_category_t cat = aura_category_for_screen(AURA_SCREEN_SETTINGS_ABOUT);
+    int split_x, tile_y, tile_w, tile_h;
+    int text_x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;
+    int text_w = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_RIGHT - text_x;
+    int bar_x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;
+    int bar_w = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_RIGHT - bar_x;
+    int bar_h = AURA_DS_METRICS_ABOUT_BAR_H;
+    int row_h, y, bar_y, region_top;
+    int i;
+    struct { long long bytes; unsigned color; aura_str_id_t label; } rows[4];
+
+    /* Q1: recarga fresca del manifiesto (no el cache de una vez por
+     * sesion que usa el bottom_renderer de split) -- coherente con que
+     * draw_about() YA releia aura_manifest_load() en cada cuadro antes
+     * del rediseño, no es un costo nuevo. */
+    about_storage_collect(true, &music_b, &video_b, &photo_b,
+                          &other_b, &free_b, &total_b);
+
+    aura_selection_summary_tile_rect_split(&split_x, &tile_y, &tile_w, &tile_h);
+    aura_selection_summary_draw_tile(AURA_DS_METRICS_ABOUT_EXPANDED_TILE_X, tile_y,
+                                     cat, NULL, draw_about_icon_renderer);
+
+    rows[0].bytes = music_b; rows[0].color = aura_accent();
+    rows[0].label = AURA_STR_ABOUT_MUSIC;
+    rows[1].bytes = video_b; rows[1].color = category_flat_color(AURA_CATEGORY_VIDEO);
+    rows[1].label = AURA_STR_ABOUT_VIDEOS;
+    rows[2].bytes = photo_b; rows[2].color = category_flat_color(AURA_CATEGORY_PHOTOS);
+    rows[2].label = AURA_STR_ABOUT_PHOTOS;
+    rows[3].bytes = other_b; rows[3].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
+    rows[3].label = AURA_STR_ABOUT_OTHER;
+
+    row_h = (AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_BOTTOM_Y
+             - AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y) / 4;
+    y = AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y;
+    for (i = 0; i < 4; i++)
     {
-        int seg_w = (int)(bar_w * cats[i].bytes / total);
-        if (seg_w <= 0)
-            continue;
-        /* Segmentos separados por una linea de 1px (SHELL_RAIL) en vez
-         * de color por categoria -- Aura no tiene paleta por categoria
-         * (D-075: "el acento se gana, nunca decoracion de superficie"),
-         * asi que la distincion es geometrica, no cromatica. */
-        lcd_set_foreground(a26_color(A26_PROGRESS_FILL));
-        lcd_fillrect(seg_x, bar_y, seg_w, A26_SPACING_LG);
-        if (seg_x > bar_x)
-        {
-            lcd_set_foreground(a26_color(A26_SHELL_BG));
-            lcd_vline(seg_x, bar_y, bar_y + A26_SPACING_LG - 1);
-        }
-        seg_x += seg_w;
+        draw_about_storage_row(text_x, y, text_w, rows[i].color, rows[i].label,
+                               rows[i].bytes, total_b);
+        y += row_h;
     }
-    a26_shell_capsule_ends_over_content(bar_x, bar_y, bar_w, A26_SPACING_LG,
-                                        a26_color(A26_SHELL_BG));
 
-    for (i = 0; i < 3; i++)
-    {
-        char line[48], size_buf[16];
-        output_dyn_value(size_buf, sizeof(size_buf), cats[i].bytes, byte_units, 4, true);
-        snprintf(line, sizeof(line), "%s: %s", aura_str(cats[i].label), size_buf);
-        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
-        lcd_putsxy(bar_x, label_y, (const unsigned char *)line);
-        label_y += A26_TYPE_BODY + A26_SPACING_SM;
-    }
+    /* Mismo eje vertical que en split (Q11): centrada en el margen
+     * inferior del tile, misma formula que D-272/D-279 usan para el
+     * texto/barra en el panel derecho. */
+    region_top = tile_y + tile_h;
+    bar_y = region_top + (A26_SCREEN_HEIGHT - region_top - bar_h) / 2;
+    draw_about_storage_bar_expanded(bar_x, bar_y, bar_w, bar_h,
+                                    music_b, video_b, photo_b, other_b,
+                                    free_b, total_b);
 }
 
 /* Pagina 2: contador de archivos (doc: "Canciones, Videos, Podcast,
@@ -2294,7 +2354,7 @@ static void draw_about(void)
     }
     else switch (s_about_page)
     {
-    case ABOUT_PAGE_STORAGE: draw_about_storage(&manifest); break;
+    case ABOUT_PAGE_STORAGE: draw_about_storage_expanded(); break;
     case ABOUT_PAGE_COUNTS:  draw_about_counts(&manifest); break;
     case ABOUT_PAGE_DEVICE:  draw_about_device(); break;
     default: break;

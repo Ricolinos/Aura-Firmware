@@ -278,6 +278,11 @@ typedef enum {
 
     AURA_STR_ABOUT_MY_IPOD,
 
+    /* D-279: cuarto segmento de la barra de almacenamiento (encargo del
+     * dueno) -- residual "Otros" (firmware, listas, cache, sueltos), no
+     * una categoria de contenido real como las otras tres. */
+    AURA_STR_ABOUT_OTHER,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 
