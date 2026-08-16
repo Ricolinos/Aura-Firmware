@@ -1,6 +1,9 @@
 # ScrollIndicator
 
-Barra de desplazamiento dentro de `LeftPanel` (`componentes/left-panel.md`).
+Barra de desplazamiento de las listas de Aura: dentro de `LeftPanel`
+(`componentes/left-panel.md`) y, desde D-275, **el mismo componente** en las
+listas de contenido a pantalla completa (ver "En listas a pantalla completa"
+abajo), en el reverso de `CoverFlow` y en las listas de álbumes/playlists.
 
 ## Posición
 
@@ -74,6 +77,31 @@ Antes de D-275 un solo valor (`fade_duration_ms = 500`) gobernaba ambos
 sentidos: la barra tardaba medio segundo en verse tras cada movimiento —
 el "ligero delay" que reportó el dueño. La doc siempre pidió "lenta" solo
 para el desvanecido; el código lo había aplicado también a la aparición.
+
+## En listas a pantalla completa (LISTA-COMPLETA) — D-275
+
+Las listas de contenido a pantalla completa (canciones, artistas, Ajustes
+en `(full)`… — `aura_widgets_draw_list()`) usan **este mismo componente**,
+con las mismas dimensiones, color, umbral y comportamiento de arriba. Lo
+único que cambia es el carril:
+
+| | `LeftPanel` `(split)` | LISTA-COMPLETA `(full)` |
+|---|---|---|
+| Carril | Padding derecho del panel (4px) | Columna derecha de la pantalla, con **2px de margen** al borde (`scroll_indicator.inset_full`) |
+| Track vertical | Los 217px de las 7 filas del panel | Desde el tope de la lista (StatusBar + 4px) hasta el borde inferior |
+| Umbral | > 10 ítems | > 10 ítems (7 filas visibles, igual que `LeftPanel`) |
+| Convivencia con `IndexRail` | No aplica (el riel solo existe en `(full)`) | Ver `componentes/index-rail.md` |
+
+**Historia, para que nadie la reviva**: hasta D-275 estas listas dibujaban
+un scrollbar **propio del sistema viejo** (D-073, `docs/design/Reglas de
+diseño Apple2026 (v2).md` §5.3): 3px, cápsula r1.5, alto **proporcional**
+con mínimo 24px, fundido 150ms/~800ms/330ms, y umbral `count > filas
+visibles` (7) — por eso una lista de 8-10 ítems mostraba barra aunque
+esta doc siempre dijo "más de 10" (el bug que reportó el dueño), y por
+eso su timing y grosor no coincidían con esta spec. Esa versión **quedó
+reemplazada** por este componente; sus valores ya no existen en el
+código ni en `tokens.json`. Ante cualquier conflicto entre §5.3 de la
+base histórica y este archivo, gana este archivo.
 
 ## Pendiente de definir
 

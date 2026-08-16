@@ -18,6 +18,7 @@
 #include "aura_motion.h"
 #include "aura_selection_summary.h"
 #include "aura_category.h"
+#include "aura_scroll_indicator.h"
 
 /* Layout: barra de estado arriba (Fase 13, PLAN-UX.md), filas de lista
  * debajo. Pantalla dividida izquierda/derecha (Fase 15, L2): en
@@ -435,120 +436,53 @@ void aura_widgets_draw_right_panel_icon(const char *icon_name)
                                  icon_name, aura_category_current(), NULL, NULL);
 }
 
-/* Barra de deslizamiento (doc SS5.3): aparece/persiste/desvanece segun
- * actividad de scroll, nunca fija en pantalla. Sin compositor alfa en
- * este LCD, el fundido se simula interpolando el color del trazo entre
- * el fondo y SHELL_RAIL con a26_shell_blend() -- visualmente equivalente
- * a variar la opacidad, calculado una vez por cuadro. Estado global
- * (una sola lista visible a la vez, mismo patron que el debounce del
- * panel derecho de arriba); se reinicia si cambia la lista mostrada. */
-#define SCROLLBAR_W          3
-#define SCROLLBAR_INSET      2
-#define SCROLLBAR_MIN_H      24
-#define SCROLLBAR_RADIUS     1
-#define SCROLLBAR_FADE_IN_TICKS  (HZ * 150 / 1000)
-#define SCROLLBAR_HOLD_TICKS     (HZ * 800 / 1000)
-#define SCROLLBAR_FADE_OUT_TICKS (HZ * 330 / 1000)
-
+/* ScrollIndicator de las listas de contenido a pantalla completa (D-275):
+ * el mismo componente v2 (aura_scroll_indicator.c, componentes/
+ * scroll-indicator.md) que MenuList/LeftPanel -- 4px, alto fijo 24px,
+ * SHELL_RAIL, umbral de 10 items, fundido 150/1500/500 y deslizamiento
+ * por item. Reemplaza al scrollbar propio del sistema viejo (D-073: 3px,
+ * alto proporcional, fundido 150/800/330, `count > visible` como umbral
+ * -- por eso una lista de 8-10 items mostraba barra, bug reportado por
+ * el dueno). Solo queda aca el reloj de actividad de la lista (una sola
+ * lista visible a la vez, mismo patron que el debounce del panel
+ * derecho) -- se reinicia si cambia la lista mostrada o la seleccion. */
 static const aura_list_item_t *s_scrollbar_items;
 static const char *s_scrollbar_title;
 static int s_scrollbar_selected = -1;
 static long s_scrollbar_activity_since;
 
-static int scrollbar_alpha_256(void)
+static long scrollbar_idle_ms(void)
 {
     long elapsed = current_tick - s_scrollbar_activity_since;
-
-    if (elapsed < 0)
-        elapsed = 0;
-
-    if (elapsed < SCROLLBAR_FADE_IN_TICKS)
-        return (int)(elapsed * 256 / SCROLLBAR_FADE_IN_TICKS);
-
-    if (elapsed < SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS)
-        return 256;
-
-    elapsed -= SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS;
-    if (elapsed < SCROLLBAR_FADE_OUT_TICKS)
-        return 256 - (int)(elapsed * 256 / SCROLLBAR_FADE_OUT_TICKS);
-
-    return 0;
+    return (elapsed < 0 ? 0 : elapsed) * 1000L / HZ;
 }
 
 int aura_widgets_scrollbar_pending(void)
 {
-    /* No alcanza con "alpha > 0": justo al reiniciar la actividad
-     * (elapsed=0) el fundido de entrada arranca en alpha=0 -- si
-     * pending() mirara solo el alpha actual, el bucle principal nunca
-     * pediria un timeout corto para el SIGUIENTE cuadro y la barra se
-     * quedaria congelada invisible hasta el proximo boton real. Lo que
-     * importa es si falta seguir animando: toda la ventana
-     * entrada+persistencia+salida, no el valor de un instante. Cadencia
-     * gruesa (HZ/4, aura_main.c) -- ver aura_widgets_scrollbar_animating()
-     * para cuando hace falta la cadencia fina de 20fps. */
-    long elapsed = current_tick - s_scrollbar_activity_since;
-    if (elapsed < 0)
-        elapsed = 0;
-    return elapsed < SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS + SCROLLBAR_FADE_OUT_TICKS;
+    /* Ventana ENTERA entrada+persistencia+salida (o deslizamiento en
+     * curso), no solo "alpha > 0": justo al reiniciar la actividad el
+     * alpha arranca en 0 y si pending() mirara solo el instante, el
+     * bucle nunca pediria el SIGUIENTE cuadro (D-074). Cadencia gruesa. */
+    return aura_scroll_indicator_pending(scrollbar_idle_ms());
 }
 
 int aura_widgets_scrollbar_animating(void)
 {
-    /* Distinto de pending(): true SOLO durante los dos tramos donde el
-     * alpha realmente cambia cuadro a cuadro (entrada y salida) -- NO
-     * durante la persistencia (alpha=256 fijo, nada que redibujar). Bug
-     * real encontrado tras un crash del simulador interactivo
-     * (queue_post ovf, D-074): la version anterior pedia la cadencia de
-     * 20fps (HZ/20, 5 ticks) durante TODA la ventana de ~1.3s, incluida
-     * la persistencia -- con el usuario hojeando listas largas rapido
-     * (Ajustes navegado sin pausas), eso mantenia el bucle principal
-     * redibujando a 20fps de forma casi continua, compitiendo por CPU
-     * con el bombeo de eventos de teclado de SDL hasta desbordar la cola
-     * de botones. Ahora pending() (cadencia HZ/4, la misma que ya prueba
-     * segura el debounce del panel derecho) cubre el tramo de
-     * persistencia solo para notar cuando termina, y esta funcion pide
-     * la cadencia fina unicamente en los ~480ms reales de fundido. */
-    long elapsed = current_tick - s_scrollbar_activity_since;
-    if (elapsed < 0)
-        elapsed = 0;
-
-    if (elapsed < SCROLLBAR_FADE_IN_TICKS)
-        return 1;
-
-    elapsed -= SCROLLBAR_FADE_IN_TICKS + SCROLLBAR_HOLD_TICKS;
-    return elapsed >= 0 && elapsed < SCROLLBAR_FADE_OUT_TICKS;
+    /* Cadencia fina SOLO en los tramos que cambian cuadro a cuadro
+     * (fundidos y deslizamiento), nunca en la persistencia -- pedir
+     * 20fps de mas ahi desbordo la cola de botones (D-074). */
+    return aura_scroll_indicator_animating(scrollbar_idle_ms());
 }
 
-static void draw_scrollbar(int width, int visible, int count, int first)
+static void draw_scrollbar(int width, int count, int selected)
 {
-    int alpha;
-    int track_top = LIST_TOP;
-    int track_h = A26_SCREEN_HEIGHT - LIST_TOP;
-    int thumb_h, thumb_y, x;
-    unsigned color;
-
-    if (count <= visible)
-        return;
-
-    alpha = scrollbar_alpha_256();
-    if (alpha <= 0)
-        return;
-
-    thumb_h = track_h * visible / count;
-    if (thumb_h < SCROLLBAR_MIN_H)
-        thumb_h = SCROLLBAR_MIN_H;
-    if (thumb_h > track_h)
-        thumb_h = track_h;
-
-    thumb_y = (count > visible)
-        ? track_top + (track_h - thumb_h) * first / (count - visible)
-        : track_top;
-
-    x = width - SCROLLBAR_INSET - SCROLLBAR_W;
-    color = a26_shell_blend(a26_color(A26_SHELL_BG), a26_color(A26_SHELL_RAIL), alpha);
-
-    a26_shell_fill_rounded_rect(x, thumb_y, SCROLLBAR_W, thumb_h,
-                                 SCROLLBAR_RADIUS, color, a26_color(A26_SHELL_BG));
+    /* Columna derecha de la pantalla, con el inset propio de LISTA-
+     * COMPLETA (2px, scroll_indicator.inset_full) -- en LeftPanel el
+     * carril es el padding de 4px del panel, aca no hay panel. */
+    aura_scroll_indicator_draw(width - AURA_DS_METRICS_SCROLL_INDICATOR_INSET_FULL,
+                                LIST_TOP, A26_SCREEN_HEIGHT - LIST_TOP,
+                                selected, count, scrollbar_idle_ms(),
+                                a26_color(A26_SHELL_BG), a26_color(A26_SHELL_RAIL));
 }
 
 /* Pastilla de seleccion animada (doc SS6/SS9.2, Fase 28): antes saltaba
@@ -823,7 +757,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
     else
         draw_index_rail(items, count, selected);
 
-    draw_scrollbar(width, visible, count, first);
+    draw_scrollbar(width, count, selected);
 }
 
 void aura_widgets_draw_toggle(int x, int y, int value, unsigned bg)
