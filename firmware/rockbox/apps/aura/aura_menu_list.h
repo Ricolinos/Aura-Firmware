@@ -12,11 +12,13 @@
 /* Elementos opcionales del lado derecho (componentes/left-panel.md,
  * "Elementos opcionales del lado derecho": switch para booleanos,
  * checkmark para confirmacion/seleccion multiple, flecha del Selector
- * para destinos de pantalla completa -- componentes/selector.md). Sus
- * dimensiones individuales estan explicitamente diferidas en el
- * documento ("se definen mas adelante... no bloqueante"); las de esta
- * implementacion se derivan del propio sistema (alto max 12px y gap de
- * 4px del indicador del Selector) -- TODO(pendiente-doc). */
+ * para destinos de pantalla completa -- componentes/selector.md).
+ * Switch confirmado por el dueno con referencia visual (D-165/D-167):
+ * pista de 28x14 en capsula, perilla de 15x10 en capsula con margen 2;
+ * encendido = pista de acento + perilla en tono claro del acento,
+ * apagado = pista gris con contraste + perilla casi blanca. Checkmark:
+ * icono de 14px (D-111). Icono de carga: sin implementar (sin
+ * consumidor real, ver aura_selector.h). */
 typedef struct {
     const char *label;
     const char *icon_name;  /* NULL = sin icono */

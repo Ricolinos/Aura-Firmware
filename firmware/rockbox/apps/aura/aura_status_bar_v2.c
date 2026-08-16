@@ -43,7 +43,7 @@
  * real de (split) existe todavia (mismo caso que el resto del
  * sistema), implementado por completitud/consistencia con el
  * documento, no verificado visualmente. */
-#define AURA_SB2_CLOCK_ANIM_MS 220 /* TODO(pendiente-doc): timing de Drop-and-Lift/Push-and-Pull no confirmado, ver DECISIONS.md D-108 */
+#define AURA_SB2_CLOCK_ANIM_MS AURA_DS_METRICS_CLOCK_INDICATOR_ANIM_MS /* 300ms, decision del dueno (D-274; antes 220 provisional, D-108) */
 #define AURA_SB2_CLOCK_VISIBLE_MS AURA_DS_METRICS_CLOCK_INDICATOR_AUTO_HIDE_AFTER_MS /* 10000, ya confirmado */
 
 static int s_clock_target = 0;      /* 0 = oculto, 256 = revelado */
@@ -124,14 +124,12 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
         clock_progress = clock_progress_now();
     }
 
-    /* Fondo: traslucencia simple sobre lo ya dibujado es la opcion
-     * recomendada por el documento, pero sin contenido detras de la
-     * barra todavia (SelectionSummary/CoverDrift, T2.8/T2.9 aun no
-     * existen) un blend real seria indistinguible de un color solido.
-     * "Valor exacto del color solido de fondo" tambien esta marcado
-     * pendiente -- se usa SHELL_BG (el mismo fondo del shell) como
-     * fallback provisional. TODO(pendiente-doc), ver DECISIONS.md
-     * D-096. */
+    /* Fondo: relleno SOLIDO con SHELL_BG (el mismo fondo del shell).
+     * Es la decision FINAL del dueno (2026-08-16, D-274), no un
+     * fallback: la traslucencia que el documento sugeria como opcion
+     * quedo descartada aun ahora que si hay contenido detras de la
+     * barra en (full) (NowPlaying/CoverFlow). Nacio provisional en
+     * D-096, cuando SelectionSummary/CoverDrift aun no existian. */
     lcd_set_foreground(bg);
     lcd_fillrect(x, 0, width, AURA_DS_METRICS_STATUSBAR_HEIGHT);
 

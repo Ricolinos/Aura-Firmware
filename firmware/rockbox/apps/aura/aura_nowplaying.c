@@ -108,8 +108,8 @@
 /* Letras (correccion 2026-08-12): sin loop continuo -- las lineas no
  * activas se recortan; la ACTIVA se divide en los renglones necesarios
  * para verse completa. Silencios largos entre lineas: 3 puntos que se
- * iluminan conforme avanza el silencio (valores provisionales,
- * propuestos como decision de diseno en DECISIONS.md). */
+ * iluminan conforme avanza el silencio (8s/3s ratificados por el
+ * dueno 2026-08-16, D-274; nacieron provisionales en D-136..D-148). */
 #define LYR_WRAP_MAX_ROWS  3
 #define LYR_SILENCE_MIN_MS 8000 /* hueco minimo entre lineas = silencio */
 #define LYR_LINE_READ_MS   3000 /* la linea activa "se lee" antes del silencio */

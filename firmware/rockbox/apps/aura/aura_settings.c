@@ -27,7 +27,7 @@ static const aura_settings_t aura_settings_defaults = {
     .show_photos = true,
     .show_nowplaying = true,
     /* AURA_DS_COLOR_ACCENT_DEFAULT_RGB24 (design-system/tokens.json,
-     * generado -- 0xFF2D52, fundamentos/01-color.md). */
+     * generado -- 0xFF2D55 desde D-274, fundamentos/01-color.md). */
     .accent_rgb24 = AURA_DS_COLOR_ACCENT_DEFAULT_RGB24,
     /* "Maxima fidelidad primero" (00-INDICE.md): la sombra activada ES
      * el comportamiento base documentado, el toggle solo la apaga. */

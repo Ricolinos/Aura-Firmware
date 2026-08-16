@@ -75,13 +75,12 @@ static long s_activity_since = 0;
  * documentada (SS9.2, Fase 28), no algo que este encargo haya tocado. */
 
 /* Switch inline v2 (left-panel.md, "Switch -- valores booleanos"):
- * dimensiones derivadas del indicador del Selector (alto max 12px,
- * selector.md) con proporcion ~1.8:1 -- el documento difiere las
- * medidas exactas de los elementos derechos, TODO(pendiente-doc).
- * Mismos colores sobre fila en reposo y sobre el Selector (pastilla
- * GRIS, no de acento): pista de acento encendida / riel apagada,
- * perilla del fondo del shell -- solo cambia el color de las esquinas
- * redondeadas segun el fondo real debajo. */
+ * medidas confirmadas por el dueno con referencia visual (D-165/D-167;
+ * la primera version, D-111, las derivaba del indicador del Selector
+ * porque el documento aun las diferia -- ya no). Mismos colores sobre
+ * fila en reposo y sobre el Selector (pastilla GRIS, no de acento) --
+ * solo cambia el color de las esquinas redondeadas segun el fondo
+ * real debajo. */
 /* Switch (referencia visual del dueno del diseno, 2026-08-13): pista en
  * capsula y perilla tambien en CAPSULA -- mas ancha que alta, no un
  * circulo -- que vive DENTRO de la pista con un margen minimo, no

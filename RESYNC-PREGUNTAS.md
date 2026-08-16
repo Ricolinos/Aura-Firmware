@@ -1,5 +1,7 @@
 # RESYNC-PREGUNTAS — Decisiones pendientes del dueño (tipo C)
 
+> **RESPONDIDO 2026-08-16 — ver D-274 en `DECISIONS.md`.** Resultado: C1, C2, C3, C5, C6, C8, C11, C12, C13, C14 → **ratificados** tal cual (🔴 cerrados en doc, TODO retirados del código). C4 → **300ms** (nuevo, antes 220). C7 → **300ms** (nuevo, antes 260). C10 → rosa unificado en **#FF2D55**. **C9 sigue pendiente** por decisión del dueño ("tengo que definir varias cosas"). **C15 sigue abierta**: el dueño pidió explicación con ejemplos en el simulador antes de responder (explicación dada en la conversación; propuesta: (1) "estrictamente 0 o 1 por ahora", (2) "sí, siempre vía el debounce del panel derecho, nunca por transición de capa").
+
 **Fecha: 2026-08-16.** Salida de la Fase 2 del resync doc↔código (ver `RESYNC-PLAN.md`). Cada punto es una divergencia o un valor provisional donde **no hay D-XXX ni encargo registrado** que diga si fue decisión o accidente — no se decidió por cuenta propia. La doc conserva el 🔴/pendiente correspondiente hasta que se responda.
 
 Para cada respuesta: si ratificas el valor actual → en una pasada posterior se cierra el 🔴 en la doc y se quita el `TODO(pendiente-doc)` del código (si lo hay). Si lo cambias → se registra como D-XXX nuevo y se aplica al código.

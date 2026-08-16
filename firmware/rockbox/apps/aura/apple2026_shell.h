@@ -56,11 +56,10 @@ typedef enum {
      * documentados comparten un mismo estilo (np_album/np_artist/
      * lyrics son los tres 12px Regular = DS_REG_12) y cargar un
      * archivo repetido en mas de un slot desperdiciaria presupuesto de
-     * MAXUSERFONTS (12 exacto con estas 7 + las 5 de arriba, ver
-     * D-086 -- D-263 subio el limite real a 13 para el octavo estilo
-     * ds_*, ds_bold_16 (RETIRADO en D-267, ver abajo), el primer
-     * aumento de MAXUSERFONTS de toda la migracion; D-267 lo subio de
-     * nuevo a 14). El mapeo rol->estilo vive en
+     * MAXUSERFONTS (hoy 14 = 9 estilos ds_* + las 5 de arriba, sin
+     * hueco libre: nacio en 12 con D-086, D-263 lo subio a 13 para el
+     * octavo estilo ds_bold_16 -- RETIRADO en D-267, ver abajo -- y
+     * D-267 lo subio de nuevo a 14). El mapeo rol->estilo vive en
      * design-system/tokens.json -> aura_ds.type_scale_roles,
      * documentacion para humanos; el codigo C usa el estilo
      * directamente. */

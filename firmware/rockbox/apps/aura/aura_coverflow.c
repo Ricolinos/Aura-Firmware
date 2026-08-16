@@ -160,7 +160,7 @@ static cf_slot_t s_slots[CF_CACHE_SLOTS];
  * redirigir sin salto si el usuario sigue girando la rueda antes de que
  * el paso anterior termine de asentarse -- mismo patron ya usado en
  * CoverDrift/T2.9 y el morph de NowPlaying/T3.1c). */
-#define CF_SCROLL_ANIM_MS 220 /* TODO(pendiente-doc): el documento no da un timing de "snap con aceleracion", ver DECISIONS.md D-103 */
+#define CF_SCROLL_ANIM_MS 220 /* confirmado en cover-flow.md (D-103; ancla del ease del zoom, D-245/D-249) */
 static int s_target_index = 0;
 static int s_anim_from_x256 = 0;
 static long s_anim_since = 0;
@@ -317,7 +317,7 @@ typedef enum {
     CF_STATE_COVER_OUT,
 } cf_state_t;
 
-#define CF_FLIP_MS 260 /* TODO(pendiente-doc): "Timing de cada fase de Flip-and-Flow" no definido, ver DECISIONS.md D-104 */
+#define CF_FLIP_MS AURA_DS_METRICS_COVER_FLOW_FLIP_MS /* 300ms por fase cover_in/cover_out, decision del dueno (D-274; antes 260 provisional, D-104) */
 
 static cf_state_t s_state = CF_STATE_IDLE;
 static long s_state_since = 0;
@@ -1190,8 +1190,7 @@ static void jump_albums(int delta)
  * la confirmacion visual). Si la tapa enfocada ES el album que este
  * mismo carrusel ya puso a sonar, PLAY alterna pausa/reanudar
  * (semantica natural de play/pausa; sin esto no habria forma de pausar
- * dentro del Cover Flow) -- provisional razonable, el encargo solo
- * define el caso "reproducir", TODO(pendiente-doc). */
+ * dentro del Cover Flow) -- ratificado en cover-flow.md (D-115). */
 static int32_t s_playing_album_seek = -1;
 
 static void play_or_toggle_focused_album(void)

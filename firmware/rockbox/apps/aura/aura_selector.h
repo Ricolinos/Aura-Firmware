@@ -1,7 +1,9 @@
 /* Selector (PLAN.md T2.2, componentes/selector.md): highlight del item
- * seleccionado en MenuList del sistema nuevo. Reemplaza la pastilla
- * SELECTION_FILL gris + texto en acento del sistema viejo -- aca la
- * PASTILLA MISMA es del color de acento (runtime, aura_accent()), sin
+ * seleccionado en MenuList del sistema nuevo. La PASTILLA es gris
+ * (SELECTION_FILL, varia por tema) y el ACENTO configurable
+ * (aura_accent(), runtime) tine el TEXTO, el ICONO (variante -on) y la
+ * flecha del item seleccionado -- correccion directa del dueno, D-112
+ * (T2.2 la habia dibujado con la pastilla misma de acento). Sin
  * animacion al moverse entre filas (decision cerrada en el documento:
  * "ya se probo una version animada y no dio buen resultado").
  */

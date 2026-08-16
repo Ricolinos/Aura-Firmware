@@ -278,13 +278,13 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
 
     if (aura_settings.animation_mode == AURA_ANIM_ALL)
     {
-        frames = 8;
-        frame_delay = HZ / 60;
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_ALL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_ALL;
     }
     else /* AURA_ANIM_MINIMAL */
     {
-        frames = 4;
-        frame_delay = HZ / 45;
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_MINIMAL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_MINIMAL;
     }
 
     /* D-261: la coreografia de "revelado detras" (D-259, generalizada
@@ -356,7 +356,9 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
         if (!old_split)
         {
             /* Fase 1 de Lift-and-Push: la barra (full) sube y se va. */
-            int lift_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+            int lift_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
+                ? AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_ALL
+                : AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_MINIMAL;
 
             for (i = 1; i <= lift_frames; i++)
             {
@@ -464,7 +466,9 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
      * arriba una vez que el empuje termino por completo. */
     if (bar_changes && old_split)
     {
-        int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+        int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
+                ? AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_ALL
+                : AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_MINIMAL;
 
         for (i = 1; i <= drop_frames; i++)
         {
@@ -524,13 +528,13 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
 
     if (aura_settings.animation_mode == AURA_ANIM_ALL)
     {
-        frames = 8;
-        frame_delay = HZ / 60;
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_ALL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_ALL;
     }
     else /* AURA_ANIM_MINIMAL */
     {
-        frames = 4;
-        frame_delay = HZ / 45;
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_MINIMAL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_MINIMAL;
     }
 
     /* D-259/D-261: captura EXACTA de lo que hay en pantalla ahora mismo
@@ -631,7 +635,9 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
      * asomando desde el borde superior). IDENTICA en ambos casos, sin
      * cambios. */
     {
-        int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+        int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
+                ? AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_ALL
+                : AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_MINIMAL;
 
         for (i = 1; i <= drop_frames; i++)
         {
@@ -849,11 +855,11 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
      *   barra de progreso            -> desde abajo
      *   StatusBar                    -> desde arriba (su Drop estandar)
      *
-     * El orden exacto del stagger y la duracion por grupo siguen
-     * marcados como pendiente menor en el documento -- provisional:
-     * los tres grupos de contenido entran EN PARALELO (mismos cuadros)
-     * y la barra cae AL FINAL, consistente con Push-and-Drop, donde la
-     * barra siempre entra despues del contenido. TODO(pendiente-doc).
+     * Orden y duracion del stagger RATIFICADOS por el dueno
+     * (2026-08-16, D-274; nacieron provisionales en D-113): los tres
+     * grupos de contenido entran EN PARALELO (mismos cuadros) y la
+     * barra cae AL FINAL, consistente con Push-and-Drop, donde la
+     * barra siempre entra despues del contenido.
      *
      * Mecanica: NowPlaying completo se renderiza UNA vez al offscreen
      * (la caratula ahi es identica a la ya dibujada -- requisito duro
@@ -939,7 +945,9 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
         /* StatusBar (full) cayendo desde arriba, al final -- mismo Drop
          * que la entrada a Cover Flow. */
         {
-            int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 5 : 3;
+            int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
+                ? AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_ALL
+                : AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_MINIMAL;
 
             for (i = 1; i <= drop_frames; i++)
             {

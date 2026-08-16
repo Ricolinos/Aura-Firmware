@@ -99,11 +99,11 @@ int aura_selection_summary_animating(void)
 
 /* Degradado diagonal de 3 puntos (componentes/selection-summary.md):
  * `color_a` en la esquina superior izquierda, `color_center` (acento) a
- * la mitad del recorrido, `color_b` en la esquina inferior derecha --
- * direccion exacta de la diagonal es un pendiente del documento
- * (TODO(pendiente-doc), ver DECISIONS.md D-097; claro arriba-izquierda,
- * oscuro abajo-derecha elegido por ser la convencion mas comun de "luz
- * desde arriba"). Se dibuja como `size` lineas anti-diagonales (x+y
+ * la mitad del recorrido, `color_b` en la esquina inferior derecha.
+ * Direccion RATIFICADA por el dueno (2026-08-16, D-274): claro
+ * arriba-izquierda, oscuro abajo-derecha -- nacio en D-097 como la
+ * convencion mas comun de "luz desde arriba", ya no es provisional.
+ * Se dibuja como `size` lineas anti-diagonales (x+y
  * constante) en vez de por-pixel -- mismo color en toda la linea,
  * mucho mas barato que 8100 lcd_drawpixel en un LCD sin GPU. */
 static void draw_diagonal_gradient(int x, int y, int size,

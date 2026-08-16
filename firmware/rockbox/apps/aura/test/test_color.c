@@ -14,11 +14,11 @@ static int checks = 0;
 
 static void test_rgb24_roundtrip(void)
 {
-    aura_rgb_t c = aura_color_from_rgb24(0xFF2D52);
+    aura_rgb_t c = aura_color_from_rgb24(0xFF2D55);
     CHECK(c.r == 0xFF);
     CHECK(c.g == 0x2D);
-    CHECK(c.b == 0x52);
-    CHECK(aura_color_to_rgb24(c) == 0xFF2D52u);
+    CHECK(c.b == 0x55);
+    CHECK(aura_color_to_rgb24(c) == 0xFF2D55u);
 
     c = aura_color_from_rgb24(0x000000);
     CHECK(c.r == 0 && c.g == 0 && c.b == 0);
@@ -29,7 +29,7 @@ static void test_rgb24_roundtrip(void)
 
 static void test_blend_extremes(void)
 {
-    aura_rgb_t accent = aura_color_from_rgb24(0xFF2D52);
+    aura_rgb_t accent = aura_color_from_rgb24(0xFF2D55);
     aura_rgb_t white = aura_color_from_rgb24(0xFFFFFF);
     aura_rgb_t black = aura_color_from_rgb24(0x000000);
 
@@ -60,7 +60,7 @@ static void test_blend_darken_lighten_are_symmetric_in_pct(void)
     /* AURA_DS_COLOR_ACCENT_DERIVED_LIGHTEN_PCT y _DARKEN_PCT son ambos
      * 25 (D-086) -- la distancia recorrida desde el acento hacia blanco
      * y hacia negro debe ser la misma magnitud de porcentaje. */
-    aura_rgb_t accent = aura_color_from_rgb24(0xFF2D52);
+    aura_rgb_t accent = aura_color_from_rgb24(0xFF2D55);
     aura_rgb_t white = aura_color_from_rgb24(0xFFFFFF);
     aura_rgb_t black = aura_color_from_rgb24(0x000000);
 
@@ -78,7 +78,7 @@ static void test_blend_darken_lighten_are_symmetric_in_pct(void)
 
 static void test_pct_clamped(void)
 {
-    aura_rgb_t accent = aura_color_from_rgb24(0xFF2D52);
+    aura_rgb_t accent = aura_color_from_rgb24(0xFF2D55);
     aura_rgb_t white = aura_color_from_rgb24(0xFFFFFF);
 
     aura_rgb_t over = aura_color_blend_pct(accent, white, 150);

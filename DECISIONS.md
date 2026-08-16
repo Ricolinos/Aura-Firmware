@@ -3308,4 +3308,32 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 **Verificación**: `swift build` limpio. `swift test`: 191 pruebas, 1 falla (`LiveEnrichmentIntegrationTests.testCoverArtArchiveFetchesRealCover`, integración contra una API externa real, no relacionada con este cambio -- falla por red/disponibilidad del servicio, no por este código). Sin verificación en hardware real todavía -- pendiente que el dueño reintente la actualización y confirme que el botón de rescate aparece y lo saca del atasco.
 
+## D-274 — Cierre de las preguntas del resync doc↔código: 13 de 15 ratificadas o resueltas por el dueño, tres valores nuevos, TODOs retirados
+
+**Contexto**: tras la pasada de resincronización (RESYNC-PLAN.md, 19 commits de docs solo tipo A el 2026-08-16), quedaron 15 preguntas tipo C en `RESYNC-PREGUNTAS.md` -- valores provisionales o divergencias sin D-XXX ni encargo que dijera si eran decisión o accidente. El dueño respondió las 15 el mismo día. Esta entrada registra las respuestas y lo que se aplicó en código y doc; es la primera pasada de esta sesión que toca código desde el resync (que fue solo docs por regla).
+
+**Ratificados tal cual (el valor provisional pasa a definitivo, se retira el `TODO(pendiente-doc)` y el 🔴 en la doc)**:
+- C1: dirección del degradado del tile de SelectionSummary, claro arriba-izquierda → oscuro abajo-derecha (D-097 lo tenía como convención sin ratificar).
+- C2: fondo de la StatusBar = `SHELL_BG` **sólido**, decisión final -- la traslucencia que el documento "recomendaba" desde D-096 queda descartada aunque hoy sí haya contenido detrás en `(full)`.
+- C3: ClockIndicator con Drop-and-Lift vertical en `(split)` y Push-and-Pull horizontal en `(full)` es intencional (D-108 lo implementó sin ratificarlo).
+- C5: stagger de entrada a NowPlaying desde CoverFlow -- tres grupos en paralelo, StatusBar al final, 8 cuadros (4 en modo reducido) (D-113).
+- C6: silencios del LyricsPanel, 8s de hueco mínimo / 3s de lectura (`LYR_SILENCE_MIN_MS`/`LYR_LINE_READ_MS`).
+- C8: el vuelo CoverFlow→reproductor gira en el mismo sentido que la apertura del flip.
+- C11: entre LeftPanel y el panel derecho no hay línea de borde; la separación la da únicamente la sombra.
+- C12: timings de Push-and-Drop/Lift-and-Push son el diseño -- **tokenizados**: nuevo bloque `aura_ds.metrics.push_and_drop` (`push_frames_all/minimal` 8/4, `push_fps_all/minimal` 60/45, `drop_frames_all/minimal` 5/3); `aura_transitions.c` deja de tener esos conteos hardcodeados (2 bloques de push y 4 de drop/lift ahora leen los macros).
+- C13/C14 + G8: gap de 24px entre vueltas de MarqueeText, comportamiento de interrupción al navegar (corta al instante, reinicia desde los 2s estáticos al volver), alto 24px y gris `SHELL_RAIL` del ScrollIndicator -- todos los "provisional G*" de D-086 que la doc había heredado quedan ratificados en bloque.
+
+**Cambiados por el dueño (valor nuevo, tokenizado)**:
+- C4: Drop-and-Lift/Push-and-Pull del ClockIndicator, **220 → 300ms**. Nuevo token `clock_indicator.anim_ms` (`AURA_DS_METRICS_CLOCK_INDICATOR_ANIM_MS`); `AURA_SB2_CLOCK_ANIM_MS` deja de ser un `#define` con literal.
+- C7: giro SELECT↔reverso en CoverFlow (`cover_in`/`cover_out`), **260 → 300ms por fase**. Nuevo token `cover_flow.flip_ms` (`AURA_DS_METRICS_COVER_FLOW_FLIP_MS`). Distinto del vuelo CoverFlow→reproductor, que sigue en 500ms (`FLOW_MS`).
+- C10: el rosa de fábrica se unifica en **`#FF2D55`** -- `accent_default_hex` y el preset "Rosa" pasan de `#FF2D52` a `#FF2D55`, el mismo valor que `color.light.accent` (`A26_ACCENT` del tema claro). Explicación del dueño: la discrepancia existía porque el mismo hex no se ve bien en ambos temas; el `#FF456C` de `color.dark.accent` es la adaptación de ese mismo rosa al tema oscuro, no un segundo acento -- se conserva. `aura_accent()` (configurable) y `A26_ACCENT` (del tema, todavía consumido por ~11 sitios heredados: páginas de Acerca de, riel A-Z, diálogos sí/no) siguen siendo tokens distintos por consumidor. `test/test_color.c` actualizado (5 aserciones relativas al hex del acento).
+
+**Pendientes explícitos del dueño (no se tocan)**:
+- C9: interfaz de selección de acento (6 presets con nombre vs. swatches) -- "aún quedará pendiente, tengo que definir varias cosas". Los dos `TODO(pendiente-doc)` de D-087 (`aura_screens.c:467`, `tokens.json` `comment_presets`) se quedan, con nota en `01-color.md`.
+- C15: las dos preguntas de `sistema/01-capas-y-jerarquia.md` -- el dueño pidió que se le explicara con ejemplos en el simulador antes de responder. Sin cambio en esa doc.
+
+**Limpieza de deuda de comentarios, ya que se tocaba código** (RESYNC-GAPS.md): retirados los `TODO(pendiente-doc)` que la doc ya había resuelto (`CF_SCROLL_ANIM_MS` D-103, PLAY alterna pausa D-115, switch 22×12 de D-111 en `aura_menu_list.h/.c` -- descrito ahora con la realidad 28×14 / perilla 15×10 de D-165/D-167); comentarios falsos corregidos (`aura_selector.h` "la pastilla misma es del color de acento", falso desde D-112; `apple2026_shell.h` "MAXUSERFONTS 12 exacto", es 14 desde D-267; `tokens.json` `selector.comment_tint` describía un consumidor que ya no existe). Quedan exactamente 3 `TODO(pendiente-doc)` en todo el árbol: los dos de C9 y el del ícono de carga del Selector (`aura_selector.h:13`, hueco B sin consumidor).
+
+**Verificación**: `build_sim.sh` limpio (regenera tokens y compila el simulador). Build ARM limpio salvo un `-Wtype-limits` en `apple2026_shell.c:48` (`style < 0` sobre enum sin signo) que **es preexistente** -- el archivo es idéntico a HEAD, verificado; no es de esta pasada y no se enmascara aquí. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos (test_color 20/20 con el hex nuevo). Los cambios de valor (300ms ×2, hex del rosa) no se verificaron con captura del simulador en esta pasada -- son cambios de un número en un token ya cableado, sin ruta de código nueva; el simulador queda abierto para que el dueño los vea en vivo.
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
