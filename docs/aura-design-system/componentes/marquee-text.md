@@ -21,6 +21,13 @@ Texto que sí cabe se muestra estático, sin ningún comportamiento de
    fase de entrada separada)
 3. Se repite indefinidamente mientras el texto siga en pantalla
 
+## Separación entre vueltas (D-086, provisional G11)
+
+Entre el final de una vuelta del texto y el inicio de la siguiente hay un
+**gap de 24px** (`marquee.loop_gap` en `tokens.json`) — el texto no se
+repite pegado. Valor puesto bajo mandato autónomo (mismo orden de
+magnitud que otros espaciados del sistema); el dueño puede vetarlo.
+
 ## Difuminado en los bordes
 
 El área visible tiene un difuminado de **4px** en cada extremo (izquierdo y
@@ -39,7 +46,7 @@ abrupto.
 
 ## Pendiente de definir
 
-- [ ] Espaciado/separador entre el final de una vuelta del texto y el
-      inicio de la siguiente (¿hay un gap o el texto se repite pegado?)
+- [x] Espaciado/separador entre vueltas — resuelto: gap de 24px (D-086,
+      G11, provisional — ver "Separación entre vueltas")
 - [ ] Comportamiento si el usuario navega away a media vuelta — ¿se
       interrumpe el loop instantáneo o termina el ciclo?
