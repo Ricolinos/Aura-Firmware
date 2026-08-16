@@ -3544,7 +3544,7 @@ static void draw_album_list(aura_nav_t *nav, aura_screen_id_t screen)
     }
 
     aura_scroll_indicator_draw(A26_SCREEN_WIDTH, ALBUM_LIST_TOP,
-                                ALBUM_VISIBLE * ALBUM_ROW_H, first, count, visible,
+                                ALBUM_VISIBLE * ALBUM_ROW_H, selected, count,
                                 (current_tick - s_album_activity_since) * 1000L / HZ,
                                 a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
 }
@@ -3699,7 +3699,7 @@ static void draw_playlist_list(aura_nav_t *nav)
     }
 
     aura_scroll_indicator_draw(A26_SCREEN_WIDTH, ALBUM_LIST_TOP,
-                                ALBUM_VISIBLE * ALBUM_ROW_H, first, count, visible,
+                                ALBUM_VISIBLE * ALBUM_ROW_H, selected, count,
                                 (current_tick - s_playlist_activity_since) * 1000L / HZ,
                                 a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
 }

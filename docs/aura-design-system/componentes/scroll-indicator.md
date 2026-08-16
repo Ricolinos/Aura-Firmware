@@ -43,6 +43,24 @@ para este componente (`scroll_indicator.idle_before_fade_ms = 1500`).
 hace de forma **animada/suave, siguiendo el scroll en tiempo real** — a
 diferencia de `Selector`, que salta directo sin animación.
 
+**Cómo se mueve (D-275)** — dos reglas, ambas necesarias para que se lea
+como el iPod Classic:
+
+1. **La posición es proporcional al ítem seleccionado**, no a la ventana
+   visible: `thumb_y = track_y + (track_h − 24) × selected ⁄ (count − 1)`.
+   Antes seguía a `first` (el primer ítem visible), que con 7 filas
+   visibles no cambia mientras la selección recorre las primeras 3 ni las
+   últimas 3 — el pulgar se quedaba quieto arriba, luego saltaba, luego
+   se quedaba quieto abajo (el "estático" que reportó el dueño).
+2. **Entre una posición y la siguiente se desliza**, lineal, en
+   **150ms** (`scroll_indicator.slide_ms` — contenido, no control, así que
+   fundido lineal, sin resorte; misma cadencia que el fade-in). Patrón
+   "redirigir sin salto": si la rueda vuelve a girar a mitad del recorrido,
+   el pulgar arranca desde donde iba. El estado del deslizamiento vive
+   dentro del componente; se planta sin animar cuando cambia el carril
+   (otra lista/pantalla) o cuando el indicador acaba de reaparecer tras
+   desvanecerse — nunca "vuela" desde una posición que el usuario no vio.
+
 **Fundido asimétrico (D-275)** — como en el iPod Classic, la barra
 **aparece rápido y se va lento**:
 

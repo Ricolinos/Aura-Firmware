@@ -261,7 +261,7 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
     {
         long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
         aura_scroll_indicator_draw(x + panel_w, y, visible * ROW_H,
-                                    first, count, visible, idle_elapsed_ms,
+                                    selected, count, idle_elapsed_ms,
                                     a26_color(A26_SHELL_BG), a26_color(A26_SHELL_RAIL));
     }
 }
@@ -275,23 +275,13 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
 int aura_menu_list_scroll_indicator_pending(void)
 {
     long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
-    long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS
-                    + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS
-                    + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_OUT_MS;
-    return s_last_selected >= 0 && idle_elapsed_ms < window_ms;
+    return s_last_selected >= 0 && aura_scroll_indicator_pending(idle_elapsed_ms);
 }
 
 int aura_menu_list_scroll_indicator_animating(void)
 {
+    /* Delegado al componente (D-275): el deslizamiento del pulgar es
+     * estado interno suyo y tambien exige la cadencia fina. */
     long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
-
-    if (s_last_selected < 0)
-        return 0;
-    if (idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS)
-        return 1; /* apareciendo */
-
-    idle_elapsed_ms -= AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS
-                      + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS;
-    return idle_elapsed_ms >= 0
-        && idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_OUT_MS; /* desvaneciendo */
+    return s_last_selected >= 0 && aura_scroll_indicator_animating(idle_elapsed_ms);
 }

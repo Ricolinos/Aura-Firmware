@@ -361,10 +361,7 @@ int aura_coverflow_pending(void)
         if (s_track_count > CF_BACK_VISIBLE_ROWS)
         {
             long idle_ms = (current_tick - s_track_activity_since) * 1000L / HZ;
-            long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS
-                            + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS
-                            + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_OUT_MS;
-            if (idle_ms < window_ms)
+            if (aura_scroll_indicator_pending(idle_ms))
                 return 1;
         }
     }
@@ -961,7 +958,7 @@ static void draw_tracklist_panel(void)
         long idle_ms = (current_tick - s_track_activity_since) * 1000L / HZ;
         aura_scroll_indicator_draw(panel_x + CF_BACK_SIZE - pad,
                                     list_y, visible * CF_TRACK_ROW_H,
-                                    first, s_track_count, visible, idle_ms,
+                                    s_track_sel, s_track_count, idle_ms,
                                     panel_bg, a26_color(A26_SHELL_RAIL));
     }
 }
