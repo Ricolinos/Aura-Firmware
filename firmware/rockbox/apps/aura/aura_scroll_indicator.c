@@ -17,10 +17,14 @@ void aura_scroll_indicator_draw(int x, int track_y, int track_h,
     if (count <= AURA_DS_METRICS_SCROLL_INDICATOR_MIN_ITEMS_TO_SHOW)
         return;
 
+    /* Fundido asimetrico (D-275): entrada rapida (150ms), persistencia
+     * mientras haya actividad, salida lenta (500ms) -- como el iPod
+     * Classic. Antes el mismo valor servia de entrada y salida y la
+     * barra tardaba medio segundo en verse tras cada movimiento. */
     alpha_256 = aura_pattern_fade_on_idle_alpha_256(idle_elapsed_ms,
-        AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS,
+        AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS,
         AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS,
-        AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS);
+        AURA_DS_METRICS_SCROLL_INDICATOR_FADE_OUT_MS);
     if (alpha_256 <= 0)
         return;
 

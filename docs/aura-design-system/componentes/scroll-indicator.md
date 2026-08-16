@@ -37,13 +37,25 @@ está condicionado a que la lista realmente se desplace.
 
 **Se desvanece tras 1.5 segundos de inactividad (idle)** — patrón
 `Fade-on-Idle` (`transiciones/00-vocabulario.md`), timing ya confirmado
-para este componente.
+para este componente (`scroll_indicator.idle_before_fade_ms = 1500`).
 
 **Se desliza/mueve indicando la posición actual dentro de la lista**, y lo
 hace de forma **animada/suave, siguiendo el scroll en tiempo real** — a
 diferencia de `Selector`, que salta directo sin animación.
 
-**Duración del fade (aparecer/desaparecer): lenta, ~500ms o más.**
+**Fundido asimétrico (D-275)** — como en el iPod Classic, la barra
+**aparece rápido y se va lento**:
+
+| Tramo | Duración | Token |
+|---|---|---|
+| Aparición (fade-in) | **150ms** — la cadencia estándar de fundido lineal del sistema | `scroll_indicator.fade_in_ms` |
+| Persistencia | mientras haya movimiento, y 1.5s después del último | `scroll_indicator.idle_before_fade_ms` |
+| Desvanecido (fade-out) | **500ms** — "lenta, ~500ms" | `scroll_indicator.fade_out_ms` |
+
+Antes de D-275 un solo valor (`fade_duration_ms = 500`) gobernaba ambos
+sentidos: la barra tardaba medio segundo en verse tras cada movimiento —
+el "ligero delay" que reportó el dueño. La doc siempre pidió "lenta" solo
+para el desvanecido; el código lo había aplicado también a la aparición.
 
 ## Pendiente de definir
 

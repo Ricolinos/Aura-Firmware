@@ -361,9 +361,9 @@ int aura_coverflow_pending(void)
         if (s_track_count > CF_BACK_VISIBLE_ROWS)
         {
             long idle_ms = (current_tick - s_track_activity_since) * 1000L / HZ;
-            long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS
+            long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS
                             + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS
-                            + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS;
+                            + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_OUT_MS;
             if (idle_ms < window_ms)
                 return 1;
         }

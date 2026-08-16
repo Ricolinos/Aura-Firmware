@@ -275,9 +275,9 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
 int aura_menu_list_scroll_indicator_pending(void)
 {
     long idle_elapsed_ms = (current_tick - s_activity_since) * 1000L / HZ;
-    long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS
+    long window_ms = AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS
                     + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS
-                    + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS;
+                    + AURA_DS_METRICS_SCROLL_INDICATOR_FADE_OUT_MS;
     return s_last_selected >= 0 && idle_elapsed_ms < window_ms;
 }
 
@@ -287,11 +287,11 @@ int aura_menu_list_scroll_indicator_animating(void)
 
     if (s_last_selected < 0)
         return 0;
-    if (idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS)
+    if (idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS)
         return 1; /* apareciendo */
 
-    idle_elapsed_ms -= AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS
+    idle_elapsed_ms -= AURA_DS_METRICS_SCROLL_INDICATOR_FADE_IN_MS
                       + AURA_DS_METRICS_SCROLL_INDICATOR_IDLE_BEFORE_FADE_MS;
     return idle_elapsed_ms >= 0
-        && idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_DURATION_MS; /* desvaneciendo */
+        && idle_elapsed_ms < AURA_DS_METRICS_SCROLL_INDICATOR_FADE_OUT_MS; /* desvaneciendo */
 }
