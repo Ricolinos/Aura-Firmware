@@ -16,6 +16,8 @@
 #include "fs_defines.h"
 #include "rbpaths.h"
 #include "recorder/bmp.h"
+#include "file.h"
+#include "dir.h"
 
 #include "aura_screens.h"
 #include "aura_widgets.h"
@@ -1450,6 +1452,69 @@ static const aura_manifest_t *cached_manifest(void)
         s_manifest_has_data = aura_manifest_load(&s_manifest_cache);
     }
     return s_manifest_has_data ? &s_manifest_cache : NULL;
+}
+
+/* D-279: suma real de bytes de una carpeta PLANA (sin subcarpetas) --
+ * mismo costo que aura_video_draw()/aura_photos_draw() ya pagan al
+ * listar /Videos y /Photos (dir_get_info() lee el tamano de la entrada
+ * FAT, sin stat() extra). Nunca recursivo -- ver PLAN-about-storage.md
+ * S0: un recorrido recursivo de /Music (miles de archivos) es el unico
+ * costo real identificado, por eso Musica sigue viniendo del manifiesto
+ * de Aura Studio, no de aca. */
+static long long sum_dir_bytes(const char *path)
+{
+    DIR *d = opendir(path);
+    struct DIRENT *entry;
+    long long total = 0;
+
+    if (!d)
+        return 0;
+    while ((entry = readdir(d)) != NULL)
+    {
+        struct dirinfo info = dir_get_info(d, entry);
+        if (info.attribute & ATTR_DIRECTORY)
+            continue;
+        total += info.size;
+    }
+    closedir(d);
+    return total;
+}
+
+/* Recoleccion unica del dato de almacenamiento para la barra de "Acerca
+ * de" (D-279), compartida entre el bottom_renderer de SelectionSummary
+ * (split) y la pantalla expandida (full) -- reemplaza el calculo
+ * duplicado que antes vivia suelto dentro de draw_about_storage_bars().
+ * Video y Fotos NO salen del manifiesto: se prefiere la suma real de su
+ * carpeta (arriba) para reflejar copias hechas a mano por Finder, que el
+ * manifiesto (solo se actualiza en cada sync desde Aura Studio) no
+ * vería hasta la siguiente sincronizacion -- Musica si depende del
+ * manifiesto, ver el comentario de sum_dir_bytes(). `force_reload`
+ * relee sync_summary.cfg del disco en vez de usar el cache de una vez
+ * por sesion (cached_manifest()) -- solo hace falta al ENTRAR al estado
+ * expandido (Q1: "recargar el manifest al expandir, no solo una vez por
+ * sesion"); el bottom_renderer de split, que corre cada cuadro, sigue
+ * con el cache barato. */
+static void about_storage_collect(bool force_reload,
+                                   long long *music_b, long long *video_b,
+                                   long long *photo_b, long long *other_b,
+                                   long long *free_b, long long *total_b)
+{
+    aura_manifest_t fresh;
+    const aura_manifest_t *m = force_reload
+        ? (aura_manifest_load(&fresh) ? &fresh : NULL)
+        : cached_manifest();
+    sector_t vol_size = 0, vol_free = 0;
+
+    *music_b = m ? m->music_bytes : 0;
+    *video_b = sum_dir_bytes("/Videos");
+    *photo_b = sum_dir_bytes("/Photos");
+
+    volume_size(IF_MV(0,) &vol_size, &vol_free);
+    *total_b = (long long)vol_size * SECTOR_SIZE;
+    *free_b  = (long long)vol_free * SECTOR_SIZE;
+    *other_b = *total_b - *free_b - *music_b - *video_b - *photo_b;
+    if (*other_b < 0)
+        *other_b = 0;
 }
 
 /* Cuenta real (no cacheada -- ver ensure_drift_album_pool() arriba en
