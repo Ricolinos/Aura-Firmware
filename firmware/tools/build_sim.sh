@@ -60,6 +60,9 @@ done
 # solo set para ambos temas, la tinta se decide al dibujar.
 mkdir -p simdisk/.rockbox/icons/aura/masks
 cp "$ROOT_DIR"/design-system/out/icons/masks/*.bmp simdisk/.rockbox/icons/aura/masks/
+# Fondos del panel derecho de SelectionSummary por acento (D-267).
+mkdir -p simdisk/.rockbox/icons/aura/backgrounds
+cp "$ROOT_DIR"/design-system/out/icons/aura/backgrounds/*.bmp simdisk/.rockbox/icons/aura/backgrounds/
 
 echo "==> Listo: $BUILD_DIR/rockboxui"
 

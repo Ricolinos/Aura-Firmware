@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 
+#include "lcd.h"
 #include "aura_category.h"
 
 typedef enum {
@@ -57,8 +58,9 @@ typedef enum {
      * archivo repetido en mas de un slot desperdiciaria presupuesto de
      * MAXUSERFONTS (12 exacto con estas 7 + las 5 de arriba, ver
      * D-086 -- D-263 subio el limite real a 13 para el octavo estilo
-     * ds_*, ds_bold_16, el primer aumento de MAXUSERFONTS de toda la
-     * migracion). El mapeo rol->estilo vive en
+     * ds_*, ds_bold_16 (RETIRADO en D-267, ver abajo), el primer
+     * aumento de MAXUSERFONTS de toda la migracion; D-267 lo subio de
+     * nuevo a 14). El mapeo rol->estilo vive en
      * design-system/tokens.json -> aura_ds.type_scale_roles,
      * documentacion para humanos; el codigo C usa el estilo
      * directamente. */
@@ -71,13 +73,14 @@ typedef enum {
      * componentes sin agregar fuente nueva -- D-195 y ese mismo encargo
      * documentan cada reutilizacion en su propio punto de uso. */
     A26_FONT_STYLE_DS_REG_8,      /* riel A-Z, calendario, busqueda */
-    A26_FONT_STYLE_DS_SEMIBOLD_14, /* menu_item (MenuList/LeftPanel) -- unico estilo Semibold del sistema, encargo 2026-08-14; ocupa el hueco que dejo DS_BOLD_8 sin consumidor */
-    A26_FONT_STYLE_DS_REG_10,     /* alarmas, selection_summary, algunas pantallas de aura_screens.c */
+    A26_FONT_STYLE_DS_SEMIBOLD_15, /* menu_item (MenuList/LeftPanel) -- unico estilo Semibold del sistema. D-267: renombrado de DS_SEMIBOLD_14 (mismo unico consumidor, +1pt) */
+    A26_FONT_STYLE_DS_REG_10,     /* alarmas, algunas pantallas de aura_screens.c -- ya NO selection_summary (D-267, ver DS_MEDIUM_12) */
     A26_FONT_STYLE_DS_BOLD_10,    /* np_counter */
     A26_FONT_STYLE_DS_REG_12,     /* np_album, np_artist, lyrics, statusbar_time (encargo 2026-08-14, +2px reusando este estilo) */
     A26_FONT_STYLE_DS_BOLD_12,    /* np_title, statusbar_title (encargo 2026-08-14, +2px reusando este estilo) */
     A26_FONT_STYLE_DS_BOLD_14,    /* lyrics_active, filas de listas de contenido (D-205) */
-    A26_FONT_STYLE_DS_BOLD_16,    /* selection_summary texto superior (D-263) -- unico consumidor, SF Pro Bold 16pt exacto pedido por el dueno, subio MAXUSERFONTS a 13 */
+    A26_FONT_STYLE_DS_BOLD_13,    /* selection_summary texto superior (D-267, reemplaza DS_BOLD_16 de D-263 -- 16pt se veia demasiado grande contra el fondo nuevo del panel) */
+    A26_FONT_STYLE_DS_MEDIUM_12,  /* selection_summary texto inferior (D-267, reemplaza DS_REG_10 -- primer consumidor real de la cara Medium) */
     A26_FONT_STYLE_COUNT,
 } a26_font_style_t;
 
@@ -197,6 +200,16 @@ void a26_shell_fill_rounded_rect(int x, int y, int w, int h, int radius,
  * suena.md" SS3, radio 8px -- AUDITORIA-01 A-07). */
 void a26_shell_round_bitmap_corners(int x, int y, int w, int h, int radius,
                                      unsigned bg);
+
+/* Variante de compositing REAL de la de arriba (D-267): en vez de un
+ * color plano `bg`, restaura los pixeles REALES capturados en `saved`
+ * (instantanea de w x h, fila-mayor, stride=w, tomada ANTES de dibujar
+ * el bitmap encima) -- para cuando lo que rodea al bitmap es una imagen
+ * rica, no un fondo solido conocido (mismo problema que D-258 resolvio
+ * para la sombra del LeftPanel, aca para esquinas redondeadas). */
+void a26_shell_round_bitmap_corners_over_content(int x, int y, int w, int h,
+                                                   int radius,
+                                                   const fb_data *saved, int saved_w);
 
 /* Igual que a26_shell_fill_rounded_rect(), con un borde de 1px encima
  * (radio interior = radio-1, misma jerarquia concentrica que pide SS5.4

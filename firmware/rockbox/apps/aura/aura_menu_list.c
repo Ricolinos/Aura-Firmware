@@ -163,14 +163,12 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
     /* D-195 (encargo del dueno, 2026-08-13): filas de MenuList ~140%
      * mas altas para que se lean menos apretadas. Encargo 2026-08-14
      * (tipografia mas grande/pesada, "lista de menus y elementos"):
-     * DS_SEMIBOLD_14 -- +2px sobre el DS_REG_12 de D-195 Y peso
-     * Semibold en vez de Regular, el UNICO estilo Semibold del sistema
-     * (ver apple2026_shell.h: reusa el hueco que dejo DS_BOLD_8 sin
-     * consumidor, MAXUSERFONTS=12 sigue en su limite exacto). Estilo
-     * EXCLUSIVO de MenuList -- no se comparte con Now Playing (a
-     * diferencia del DS_REG_12 anterior), asi que el reproductor no se
-     * ve afectado por este cambio. */
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_SEMIBOLD_14));
+     * +2px sobre el DS_REG_12 de D-195 Y peso Semibold en vez de
+     * Regular, el UNICO estilo Semibold del sistema. D-267 (2026-08-15,
+     * segunda ronda): sube 1pt mas (14->15, DS_SEMIBOLD_15, renombrado)
+     * -- sigue EXCLUSIVO de MenuList, no se comparte con Now Playing, el
+     * reproductor no se ve afectado por este cambio. */
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_SEMIBOLD_15));
     /* Alto real de la fuente activa para centrar verticalmente el texto
      * de cada fila -- ya no un "10" hardcodeado que asumia DS_REG_10
      * (D-195: el tamano de fuente ahora es una eleccion de diseno que

@@ -4319,13 +4319,30 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
              * reusa el revelado de CoverDrift"). Acotado a ESTE origen/
              * destino exacto -- Musica mas alla de Cover Flow, Canciones
              * aleatorias, Video, Fotos siguen sin conectar, trabajo
-             * aparte. `depth_after > depth_before`: el revelado solo
-             * tiene sentido ENTRANDO, nunca al salir. */
-            bool about_reveal = depth_after > depth_before
-                && to == AURA_SCREEN_SETTINGS_ABOUT
-                && aura_screens_about_reveal_active();
+             * aparte.
+             * D-267 (encargo del dueno: "la transicion... deberia ser
+             * exactamente la misma pero invertida cuando retrocedamos,
+             * por ejemplo, al salir del coverflow"): el revelado ahora
+             * TAMBIEN se activa al SALIR de Cover Flow, si CoverDrift
+             * seguia genuinamente comprometido para la fila a la que se
+             * vuelve -- s_panel_committed (D-262) no cambia mientras se
+             * esta DENTRO de Cover Flow (esa pantalla no pasa por
+             * render_panel_debounced(), es su propio camino de dibujo),
+             * asi que aura_screens_coverdrift_active_for(to) sigue
+             * leyendo el mismo estado valido que tenia al entrar --
+             * mismo criterio, sin necesidad de guardar nada aparte.
+             * aura_transition_slide() decide la geometria exacta
+             * (revelado de entrada vs de salida) por el signo de
+             * `direction`, ver reveal_behind_panels_exit() en
+             * aura_transitions.c. */
+            bool use_reveal = (depth_after > depth_before
+                                    && to == AURA_SCREEN_SETTINGS_ABOUT
+                                    && aura_screens_about_reveal_active())
+                            || (depth_after < depth_before
+                                    && is_coverflow_screen(screen)
+                                    && aura_screens_coverdrift_active_for(to));
             aura_transition_slide(nav, depth_after > depth_before ? 1 : -1,
-                                  width, about_reveal);
+                                  width, use_reveal);
         }
     }
 }

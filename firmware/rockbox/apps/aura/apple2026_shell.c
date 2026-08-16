@@ -18,13 +18,14 @@ void a26_shell_init(void)
         [A26_FONT_STYLE_HEADER]  = FONT_DIR "/" A26_FONT_HEADER,
         [A26_FONT_STYLE_MICRO]   = FONT_DIR "/" A26_FONT_MICRO,
         [A26_FONT_STYLE_DS_REG_8]      = FONT_DIR "/" A26_FONT_DS_REG_8,
-        [A26_FONT_STYLE_DS_SEMIBOLD_14] = FONT_DIR "/" A26_FONT_DS_SEMIBOLD_14,
+        [A26_FONT_STYLE_DS_SEMIBOLD_15] = FONT_DIR "/" A26_FONT_DS_SEMIBOLD_15,
         [A26_FONT_STYLE_DS_REG_10]  = FONT_DIR "/" A26_FONT_DS_REG_10,
         [A26_FONT_STYLE_DS_BOLD_10] = FONT_DIR "/" A26_FONT_DS_BOLD_10,
         [A26_FONT_STYLE_DS_REG_12]  = FONT_DIR "/" A26_FONT_DS_REG_12,
         [A26_FONT_STYLE_DS_BOLD_12] = FONT_DIR "/" A26_FONT_DS_BOLD_12,
         [A26_FONT_STYLE_DS_BOLD_14] = FONT_DIR "/" A26_FONT_DS_BOLD_14,
-        [A26_FONT_STYLE_DS_BOLD_16] = FONT_DIR "/" A26_FONT_DS_BOLD_16,
+        [A26_FONT_STYLE_DS_BOLD_13] = FONT_DIR "/" A26_FONT_DS_BOLD_13,
+        [A26_FONT_STYLE_DS_MEDIUM_12] = FONT_DIR "/" A26_FONT_DS_MEDIUM_12,
     };
     int i;
 
@@ -473,6 +474,77 @@ void a26_shell_round_bitmap_corners(int x, int y, int w, int h, int radius,
     stamp_corner(x + w - 1, y,         -1,  1, radius, bg); /* superior derecha   */
     stamp_corner(x,         y + h - 1,  1, -1, radius, bg); /* inferior izquierda */
     stamp_corner(x + w - 1, y + h - 1, -1, -1, radius, bg); /* inferior derecha   */
+}
+
+/* Version REAL de compositing de stamp_corner() (D-267, "SelectionSummary
+ * sobre fondo rico": a26_shell_round_bitmap_corners() solo sabe restaurar
+ * un color PLANO -- correcto cuando lo que rodea al bitmap es un fondo
+ * solido conocido (A26_SHELL_BG), pero pinta parches planos falsos si lo
+ * que rodea es una imagen (mismo problema que D-258 ya resolvio para la
+ * sombra del LeftPanel, aca aplicado a esquinas redondeadas). En vez de
+ * un color `bg` unico, el llamador pasa una instantanea `saved` de los
+ * pixeles REALES que habia ANTES de dibujar el bitmap encima (capturada
+ * con un memcpy directo del framebuffer, mismo patron que
+ * start_panel_fade() en aura_screens.c) -- misma matematica de distancia
+ * y antialias que stamp_corner(), pero restaurando el pixel real de
+ * `saved` en vez de un plano. `saved` cubre el rectangulo COMPLETO
+ * `w`x`h` (fila-mayor, stride = w) aunque solo se lean los 4 recortes de
+ * esquina -- mas simple para el llamador que 4 buffers separados. */
+static void stamp_corner_restore(int corner_x, int corner_y, int step_x, int step_y,
+                                  int radius, const fb_data *saved, int saved_w,
+                                  int saved_corner_x, int saved_corner_y)
+{
+    int dx, dy;
+    int r256 = radius * 256;
+
+    for (dy = 0; dy < radius; dy++)
+    {
+        for (dx = 0; dx < radius; dx++)
+        {
+            int rx = radius - 1 - dx;
+            int ry = radius - 1 - dy;
+            int dist256 = (int)a26_shell_isqrt256((unsigned)(rx * rx + ry * ry));
+            int px = corner_x + dx * step_x;
+            int py = corner_y + dy * step_y;
+            int sx = saved_corner_x + dx * step_x;
+            int sy = saved_corner_y + dy * step_y;
+            fb_data bg = saved[sy * saved_w + sx];
+            fb_data *p;
+
+            if (dist256 <= r256 - 128)
+                continue; /* dentro del arco: se queda lo dibujado */
+
+            p = FBADDR(px, py);
+            if (dist256 >= r256 + 128)
+                *p = bg; /* fuera del arco: fondo real pleno */
+            else
+            {
+                int t = dist256 - (r256 - 128);
+                *p = a26_shell_blend(*p, bg, t);
+            }
+        }
+    }
+}
+
+void a26_shell_round_bitmap_corners_over_content(int x, int y, int w, int h,
+                                                   int radius,
+                                                   const fb_data *saved, int saved_w)
+{
+    if (radius > w / 2)
+        radius = w / 2;
+    if (radius > h / 2)
+        radius = h / 2;
+    if (radius <= 0)
+        return;
+
+    stamp_corner_restore(x,         y,          1,  1, radius,
+                          saved, saved_w, 0,         0);
+    stamp_corner_restore(x + w - 1, y,         -1,  1, radius,
+                          saved, saved_w, w - 1,     0);
+    stamp_corner_restore(x,         y + h - 1,  1, -1, radius,
+                          saved, saved_w, 0,         h - 1);
+    stamp_corner_restore(x + w - 1, y + h - 1, -1, -1, radius,
+                          saved, saved_w, w - 1,     h - 1);
 }
 
 void a26_shell_outline_rounded_rect(int x, int y, int w, int h, int radius,

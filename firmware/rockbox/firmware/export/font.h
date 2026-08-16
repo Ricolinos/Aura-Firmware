@@ -55,8 +55,13 @@ enum {
  * para reusar, asi que se sube el limite en vez de comprometer la
  * especificacion. Costo real: un slot estatico mas en
  * skin_parser.c:skinfonts[]/id_array[] -- estas son fuentes bitmap
- * chicas, no un costo de memoria significativo en este target. */
-#define MAXUSERFONTS 13
+ * chicas, no un costo de memoria significativo en este target.
+ * 14 (D-267, misma fecha, segunda ronda): SelectionSummary cambio de
+ * spec otra vez (D-263 pedia Bold 16pt arriba/Regular 10pt abajo, ahora
+ * Bold 13pt/Medium 12pt) -- se retiran ds_semibold_14 (renombrado a
+ * ds_semibold_15, +1pt en MenuList) y ds_bold_16 (sin otro consumidor)
+ * y se agregan ds_semibold_15/ds_bold_13/ds_medium_12, neto +1. */
+#define MAXUSERFONTS 14
 
 /* SYSFONT, FONT_UI, FONT_UI_REMOTE + MAXUSERFONTS fonts in skins */
 #define MAXFONTS (FONT_FIRSTUSERFONT + MAXUSERFONTS)

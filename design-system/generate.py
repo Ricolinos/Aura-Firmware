@@ -564,6 +564,53 @@ def generate_icons(tokens):
     shutil.rmtree(shapes_dir)
 
 
+def generate_panel_backgrounds(tokens):
+    """Fondos completos del panel derecho de SelectionSummary, uno por
+    preset de acento (D-267, encargo del dueno de producto: 'el
+    background del selection summary va a cambiar dependiendo del color
+    de acento seleccionado'). Fuente: design-system/assets/panel-backgrounds/
+    <nombre>-source.png (foto/gradiente propio del dueno, cualquier
+    tamano) -> recorte centrado + reduccion exacta a las dimensiones
+    reales del panel (aura_ds.metrics.left_panel, 160x240 hoy) -> BMP de
+    24 bits sin transparencia (se dibuja opaco, cubre TODO el panel, no
+    hay lcd_bitmap_transparent involucrado).
+    """
+    from PIL import Image
+
+    print("==> Generando fondos del panel derecho (out/icons/aura/backgrounds/*.bmp)")
+    cfg = tokens["aura_ds"]["metrics"]["right_panel_background"]
+    panel = tokens["aura_ds"]["metrics"]["left_panel"]
+    panel_w, panel_h = panel["width"], panel["height"]
+    src_dir = ROOT / "assets" / "panel-backgrounds"
+    out_dir = OUT / "icons" / "aura" / "backgrounds"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for name in cfg["presets"]:
+        src_path = src_dir / f"{name}-source.png"
+        if not src_path.exists():
+            die(f"falta {src_path} (fondo de panel '{name}', declarado en "
+                f"aura_ds.metrics.right_panel_background.presets)")
+        img = Image.open(src_path).convert("RGB")
+
+        # Recorte centrado a la proporcion del panel antes de reducir --
+        # evita deformar el gradiente (un resize directo sin recortar
+        # estiraria la imagen si la proporcion fuente no coincide).
+        target_ratio = panel_w / panel_h
+        src_ratio = img.width / img.height
+        if src_ratio > target_ratio:
+            new_w = int(img.height * target_ratio)
+            x0 = (img.width - new_w) // 2
+            img = img.crop((x0, 0, x0 + new_w, img.height))
+        elif src_ratio < target_ratio:
+            new_h = int(img.width / target_ratio)
+            y0 = (img.height - new_h) // 2
+            img = img.crop((0, y0, img.width, y0 + new_h))
+
+        img = img.resize((panel_w, panel_h), Image.LANCZOS)
+        img.save(out_dir / f"{name}.bmp", format="BMP")
+        print(f"   {name} ({panel_w}x{panel_h}) -> {name}.bmp")
+
+
 def main():
     tokens = json.loads(TOKENS_PATH.read_text())
 
@@ -575,6 +622,7 @@ def main():
     generate_swift_palette(tokens)
     generate_fonts(tokens)
     generate_icons(tokens)
+    generate_panel_backgrounds(tokens)
 
     print("==> Pipeline completo. Salida en design-system/out/")
 

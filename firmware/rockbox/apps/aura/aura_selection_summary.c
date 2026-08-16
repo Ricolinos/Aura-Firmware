@@ -1,9 +1,13 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "lcd.h"
 #include "timefuncs.h"
 #include "tick.h"
 #include "string-extra.h"
+#include "rbpaths.h"
+#include "fs_defines.h"
+#include "recorder/bmp.h"
 
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
@@ -16,6 +20,15 @@
 
 #define TILE_SIZE   AURA_DS_METRICS_SELECTION_SUMMARY_TILE_SIZE
 #define TILE_RADIUS AURA_DS_METRICS_SELECTION_SUMMARY_TILE_CORNER_RADIUS
+/* Panel completo (D-267, fondo de imagen por acento) -- mismas
+ * dimensiones que el resto del sistema ya asume para el panel derecho
+ * (AURA_DS_METRICS_LEFT_PANEL_WIDTH=160, A26_SCREEN_HEIGHT=240), pero
+ * expresadas aca como constantes propias porque el buffer estatico de
+ * carga necesita un tamano de COMPILACION, no el `width` en tiempo de
+ * ejecucion que ya recibe draw_summary() (siempre el mismo valor en la
+ * practica, este componente no tiene otro llamador con otro ancho). */
+#define BG_W (A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH)
+#define BG_H A26_SCREEN_HEIGHT
 /* A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL (pipeline de iconos, T2.8), no
  * AURA_DS_METRICS_SELECTION_SUMMARY_SYMBOL_SIZE (documentacion de
  * layout) -- mismo valor (60) pero es el define que garantiza que
@@ -113,6 +126,84 @@ static void draw_diagonal_gradient(int x, int y, int size,
 
         lcd_set_foreground(c);
         lcd_drawline(x + x0, y + y0, x + x1, y + y1);
+    }
+}
+
+/* Fondo completo del panel derecho, por preset de acento (D-267,
+ * encargo del dueno de producto: "el background del selection summary
+ * va a cambiar dependiendo del color de acento seleccionado"). Horneado
+ * por design-system/generate.py (generate_panel_backgrounds()) a las
+ * dimensiones EXACTAS del panel (BG_W x BG_H) -- se dibuja opaco con
+ * lcd_bitmap() de un tiro, sin transparencia ni escalado en tiempo real.
+ * Cache por nombre (comparacion por puntero, mismo patron que el resto
+ * del archivo -- los nombres de preset son literales estables) --
+ * recarga solo si cambia el preset pedido, no cada cuadro. Mientras
+ * falten los otros 5 presets (el dueno solo compartio 'pink' para
+ * probar), CUALQUIER nombre pedido cae a "pink" -- interino explicito,
+ * documentado en tokens.json (aura_ds.metrics.right_panel_background). */
+static fb_data s_bg_pixels[BG_W * BG_H];
+static const char *s_bg_loaded_name = NULL;
+static bool s_bg_load_ok = false;
+
+static bool ensure_panel_background(const char *name)
+{
+    char path[MAX_PATH];
+    struct bitmap bm;
+    int ret;
+
+    if (name == s_bg_loaded_name)
+        return s_bg_load_ok;
+
+    s_bg_loaded_name = name;
+    snprintf(path, sizeof(path), "%s/aura/backgrounds/%s.bmp", ICON_DIR, name);
+    bm.data = (char *)s_bg_pixels;
+    ret = read_bmp_file(path, &bm, sizeof(s_bg_pixels), FORMAT_NATIVE, NULL);
+    s_bg_load_ok = (ret > 0 && bm.width == BG_W && bm.height == BG_H);
+    return s_bg_load_ok;
+}
+
+/* Sombra real bajo el tile flotante (D-267, mockup del dueno) --
+ * compositing genuino contra lo que YA este dibujado (la imagen de
+ * fondo, leida del framebuffer), no un color plano: sin primitiva de
+ * blur en este LCD, se aproxima con un solo relleno semitransparente
+ * (alpha fijo, sin caida gaussiana) recortado con la misma matematica de
+ * distancia de esquina que ya usa stamp_corner()/a26_shell_isqrt256()
+ * (apple2026_shell.c) para que el borde no se vea escalonado. Desplazada
+ * `shadow_offset_y` px hacia abajo respecto al tile real -- el tile,
+ * dibujado encima despues, tapa el centro y deja ver solo el borde
+ * inferior de la sombra, el look clasico de icono flotante. */
+static void draw_tile_shadow(int x, int y, int w, int h, int radius, int alpha_256)
+{
+    int px, py;
+    int r256 = radius * 256;
+
+    for (py = 0; py < h; py++)
+    {
+        for (px = 0; px < w; px++)
+        {
+            int a = alpha_256;
+            int cx = -1, cy = -1;
+            fb_data *p;
+
+            if (px < radius && py < radius)             { cx = radius - 1; cy = radius - 1; }
+            else if (px >= w - radius && py < radius)     { cx = w - radius; cy = radius - 1; }
+            else if (px < radius && py >= h - radius)     { cx = radius - 1; cy = h - radius; }
+            else if (px >= w - radius && py >= h - radius) { cx = w - radius; cy = h - radius; }
+
+            if (cx >= 0)
+            {
+                int dx = px - cx, dy = py - cy;
+                int dist256 = (int)a26_shell_isqrt256((unsigned)(dx * dx + dy * dy));
+                if (dist256 > r256 + 128)
+                    continue;
+                if (dist256 > r256 - 128)
+                    a = alpha_256 * (r256 + 128 - dist256) / 256;
+            }
+            if (a <= 0)
+                continue;
+            p = FBADDR(x + px, y + py);
+            *p = a26_shell_blend(*p, 0 /* negro */, a);
+        }
     }
 }
 
@@ -259,32 +350,49 @@ static void draw_summary(int x, int width, const char *icon_name,
     int text_x = x + TEXT_PAD;
     int top_h = 0, bottom_h = 0, bottom_lines = 0;
     int total_h, tile_y, w, h;
+    unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
+
+    /* Fondo COMPLETO del panel (D-267, reemplaza el degradado diagonal
+     * detras del tile de D-097) -- imagen por preset de acento, opaca,
+     * un solo lcd_bitmap(). Si el archivo no esta (dispositivo real sin
+     * los assets sincronizados todavia, o un preset que aun no existe),
+     * cae a un relleno solido conocido en vez de dejar basura de memoria
+     * en pantalla. */
+    if (ensure_panel_background("pink"))
+        lcd_bitmap(s_bg_pixels, x, 0, BG_W, BG_H);
+    else
+    {
+        lcd_set_foreground(a26_color(A26_SHELL_BG));
+        lcd_fillrect(x, 0, width, A26_SCREEN_HEIGHT);
+    }
 
     /* Separador + sombra de LeftPanel (efectos/01-sombras.md, "SIEMPRE
      * renderiza una sombra que simula que LeftPanel esta por encima de
-     * este componente" -- misma primitiva de T0.4, ya provisional y
-     * documentada ahi, D-088). Antes de todo lo demas, igual que el
-     * panel derecho viejo: nunca debe tapar el contenido real. */
+     * este componente" -- misma primitiva de T0.4, D-088). D-267: variante
+     * de COMPOSITING real (D-258), no la de color plano -- el fondo ya no
+     * es un color conocido, es la imagen que se acaba de dibujar. */
     lcd_set_foreground(a26_color(A26_SHELL_RAIL));
     lcd_vline(x - 1, 0, A26_SCREEN_HEIGHT - 1);
-    aura_shell_draw_left_panel_shadow(x, 0, A26_SCREEN_HEIGHT);
+    aura_shell_draw_left_panel_shadow_over_content(x, 0, A26_SCREEN_HEIGHT);
 
     /* Altura de cada slot de texto medida con la fuente real antes de
      * calcular el centrado vertical del conjunto -- mismo criterio ya
      * usado en aura_statusbar.c (centrado por altura medida, no un
-     * numero magico). Slot superior: SF Pro Bold 16pt (D-263, DS_BOLD_16,
-     * unica linea -- "valor" o titulo corto, nunca se envuelve). Slot
-     * inferior: DS_REG_10 sin cambios, hasta DOS lineas por palabra
+     * numero magico). D-267 (corrige D-263): slot superior SF Pro Bold
+     * 13pt (DS_BOLD_13, 16pt se veia demasiado grande contra el fondo
+     * nuevo), unica linea -- "valor" o titulo corto, nunca se envuelve.
+     * Slot inferior SF Pro Medium 12pt (DS_MEDIUM_12, sube de Regular a
+     * Medium y de 10 a 12pt), hasta DOS lineas por palabra
      * (split_two_lines()). */
     if (top_text && top_text[0])
     {
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_16));
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_13));
         lcd_getstringsize((const unsigned char *)top_text, &w, &h);
         top_h = h + TEXT_GAP;
     }
     if (bottom_text && bottom_text[0])
     {
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_12));
         split_two_lines(bottom_text, text_max_w);
         bottom_lines = s_bottom_line_buf[1][0] ? 2 : 1;
         lcd_getstringsize((const unsigned char *)s_bottom_line_buf[0], &w, &h);
@@ -303,21 +411,40 @@ static void draw_summary(int x, int width, const char *icon_name,
     total_h = top_h + TILE_SIZE + bottom_h;
     tile_y = (A26_SCREEN_HEIGHT - total_h) / 2 + top_h;
 
-    /* Tile con degradado por CATEGORIA de la seccion activa
-     * (componentes/selection-summary.md, encargo del dueno 2026-08-14):
-     * Musica sigue siendo el acento (aura_accent_light/_dark, sin cambio
-     * de comportamiento), pero Ajustes/Video/Fotos/Extras tienen su
-     * propio color en cascada -- congelado junto con el icono desde
-     * D-263, ver comentario grande arriba. Ver aura_category_gradient()
-     * (apple2026_shell.h) para los 3 puntos del degradado. */
+    /* Sombra + tile con esquinas redondeadas REALES (D-267): el fondo ya
+     * no es un color plano conocido, asi que ni la sombra ni el recorte
+     * de esquinas pueden pintar un color fijo (dejaria parches blancos
+     * visibles contra la imagen -- exactamente el defecto que el dueno
+     * senalo). Orden: (1) sombra offset, compositing real contra el
+     * fondo ya dibujado; (2) SALVAR los pixeles del recuadro del tile
+     * (fondo+sombra, lo que debe quedar visible en las esquinas
+     * recortadas); (3) rellenar el tile COMPLETO (cuadrado, tapa la
+     * sombra en su centro); (4) restaurar las 4 esquinas con los pixeles
+     * salvados (a26_shell_round_bitmap_corners_over_content(), D-267) --
+     * mismo antialias por distancia que la version de color plano, pero
+     * compositing real. El tile en si sigue coloreado por CATEGORIA
+     * (componentes/selection-summary.md, encargo del dueno 2026-08-14) --
+     * eso NO cambio, solo el fondo detras dejo de ser el degradado y paso
+     * a ser la imagen de acento. */
     {
         unsigned tile_a, tile_center, tile_b;
+        static fb_data saved_tile[TILE_SIZE * TILE_SIZE];
+        int sy;
+
+        draw_tile_shadow(tile_x, tile_y + AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_OFFSET_Y,
+                          TILE_SIZE, TILE_SIZE, TILE_RADIUS,
+                          256 * AURA_DS_METRICS_SELECTION_SUMMARY_SHADOW_ALPHA_PCT / 100);
+
+        for (sy = 0; sy < TILE_SIZE; sy++)
+            memcpy(&saved_tile[sy * TILE_SIZE], FBADDR(tile_x, tile_y + sy),
+                   TILE_SIZE * sizeof(fb_data));
 
         aura_category_gradient(category, &tile_a, &tile_center, &tile_b);
         draw_diagonal_gradient(tile_x, tile_y, TILE_SIZE, tile_a, tile_center, tile_b);
+
+        a26_shell_round_bitmap_corners_over_content(tile_x, tile_y, TILE_SIZE, TILE_SIZE,
+                                                      TILE_RADIUS, saved_tile, TILE_SIZE);
     }
-    a26_shell_round_bitmap_corners(tile_x, tile_y, TILE_SIZE, TILE_SIZE, TILE_RADIUS,
-                                    a26_color(A26_SHELL_BG));
 
     /* Simbolo: estatico (icono horneado, variante "-selector" blanco
      * constante, G5/T2.2) o dinamico (renderer real, B-04) -- mismo
@@ -328,18 +455,23 @@ static void draw_summary(int x, int width, const char *icon_name,
     else if (renderer)
         renderer(tile_x + TILE_SIZE / 2, tile_y + TILE_SIZE / 2, SYMBOL_SIZE);
 
-    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    /* Texto SIEMPRE blanco fijo (D-267) -- ya no A26_TEXT_PRIMARY (ese
+     * token varia por tema claro/oscuro; el fondo nuevo es siempre
+     * oscuro/saturado sin importar el tema, blanco es la unica opcion
+     * legible en los dos). Mismo blanco constante que ya usa el icono
+     * "-selector" y el reloj analogico sobre el tile de acento. */
+    lcd_set_foreground(white);
 
     if (top_h)
     {
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_16));
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_13));
         draw_text_slot(text_x, tile_y - top_h, text_max_w, top_text,
                         &s_top_shown, &s_top_since, &s_top_overflowing);
     }
     else
         s_top_overflowing = 0;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_12));
     if (bottom_lines >= 1)
     {
         int line_h = (bottom_h - TEXT_GAP) / bottom_lines;

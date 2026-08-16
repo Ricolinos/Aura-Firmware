@@ -188,6 +188,63 @@ static void reveal_behind_panels(int panel_w, int bar_h, unsigned bg,
     }
 }
 
+/* Espejo temporal EXACTO de reveal_behind_panels() (D-267, encargo del
+ * dueno de producto: "la transicion... deberia ser exactamente la misma
+ * transicion, pero invertida cuando retrocedamos, por ejemplo, al salir
+ * del coverflow"). Roles de los dos buffers INTERCAMBIADOS respecto a la
+ * version de entrada: aca `s_push_fb` ya tiene el DESTINO (split, la
+ * pantalla a la que se vuelve -- lo pre-renderiza el paso 1 de
+ * aura_transition_slide(), IGUAL que para cualquier otro llamador, sin
+ * cambio) y `s_outgoing_fb` tiene lo SALIENTE (full, capturado en vivo
+ * por capture_outgoing_split_frame() antes de pre-renderizar el
+ * destino). En vez de que los paneles ENCOJAN revelando una base fija
+ * (la version de entrada), aca CRECEN desde sus propios bordes de
+ * pantalla, cubriendo progresivamente la base fija (lo saliente) hasta
+ * formar el split completo -- por eso la lectura de origen NO se
+ * desplaza con `d` (a diferencia de la version de entrada, que si
+ * recorta una ventana movil del panel que se encoge): el destino ya
+ * esta fijo en su posicion FINAL en `s_push_fb`, solo se revela mas
+ * porcion de esa misma imagen fija segun avanza el cuadro. */
+static void reveal_behind_panels_exit(int panel_w, int bar_h, unsigned bg,
+                                       int frames, int frame_delay)
+{
+    int i, y;
+
+    for (i = 1; i <= frames; i++)
+    {
+        int d = panel_w - eased_offset(panel_w, i, frames);
+        int left_w = panel_w - d;
+        int right_w = panel_w - d;
+
+        /* Base: lo saliente (p.ej. Cover Flow), pantalla completa. */
+        lcd_bitmap_part(s_outgoing_fb, 0, bar_h, A26_SCREEN_WIDTH,
+                         0, bar_h, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT - bar_h);
+        for (y = 0; y < bar_h; y++)
+        {
+            fb_data *row = FBADDR(0, y);
+            int gx;
+            for (gx = 0; gx < A26_SCREEN_WIDTH; gx++)
+                row[gx] = bg;
+        }
+
+        /* Paneles del destino, ya fijos en s_push_fb -- revelados directo
+         * desde sus propios bordes de pantalla, creciendo hacia el
+         * centro (sin desplazamiento de origen: el destino no se mueve,
+         * solo se revela mas de el). */
+        if (left_w > 0)
+            lcd_bitmap_part(s_push_fb, 0, 0, A26_SCREEN_WIDTH,
+                             0, 0, left_w, A26_SCREEN_HEIGHT);
+        if (right_w > 0)
+            lcd_bitmap_part(s_push_fb, A26_SCREEN_WIDTH - right_w, 0, A26_SCREEN_WIDTH,
+                             A26_SCREEN_WIDTH - right_w, 0, right_w, A26_SCREEN_HEIGHT);
+
+        lcd_update();
+        drain_button_queue_if_full();
+        if (i < frames)
+            sleep(frame_delay);
+    }
+}
+
 void aura_transition_slide(aura_nav_t *nav, int direction, int width,
                             bool cover_drift_was_active)
 {
@@ -326,11 +383,21 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
      * cover_drift_was_active=true cuando el origen era SPLIT), asi que
      * reveal_behind_panels() reproduce exactamente el mismo hueco de
      * barra que el push clasico ya dejaba para este caso -- ningun
-     * comportamiento de barra distinto entre ambos caminos. */
+     * comportamiento de barra distinto entre ambos caminos.
+     * D-267 (encargo del dueno, "la transicion deberia ser exactamente
+     * la misma pero invertida al retroceder"): `direction` distingue
+     * entrada (paneles ENCOGEN revelando el destino) de salida (paneles
+     * CRECEN cubriendo lo saliente) -- mismo hueco de barra en ambos
+     * casos (la Fase 1 de Lift-and-Push arriba ya corrio identica),
+     * distinta unicamente la geometria del contenido. */
     if (use_reveal)
     {
-        reveal_behind_panels(AURA_DS_METRICS_LEFT_PANEL_WIDTH, bar_h,
-                              shell_bg, frames, frame_delay);
+        if (direction > 0)
+            reveal_behind_panels(AURA_DS_METRICS_LEFT_PANEL_WIDTH, bar_h,
+                                  shell_bg, frames, frame_delay);
+        else
+            reveal_behind_panels_exit(AURA_DS_METRICS_LEFT_PANEL_WIDTH, bar_h,
+                                       shell_bg, frames, frame_delay);
     }
     else
     {
