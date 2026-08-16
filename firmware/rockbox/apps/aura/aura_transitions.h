@@ -96,4 +96,30 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek);
  * el carrusel en reposo. */
 void aura_transition_flow_return(aura_nav_t *nav);
 
+/* `Shift-and-Reveal` (D-278, transiciones/00-vocabulario.md): un
+ * elemento del panel derecho (icono/tile) NUNCA sale de pantalla -- se
+ * reposiciona hacia la izquierda mientras LeftPanel sale empujado (su
+ * comportamiento estandar) y el resto de la pantalla FULL-CARRY destino
+ * aparece en el hueco liberado a la derecha. Primer consumidor: "Acerca
+ * de" (D-279); disenada para que DateEditor la reuse despues sin
+ * reescribirla -- solo cambia `carry`.
+ *
+ * `carry` describe el rect del elemento persistente en AMBOS extremos,
+ * siempre en el mismo orden sin importar `direction`:
+ *   from_* = posicion/tamano del elemento en la pantalla dividida (split)
+ *   to_*   = posicion/tamano del MISMO elemento en la pantalla completa
+ * `direction` > 0: split -> full (entrar), el elemento viaja from -> to.
+ * `direction` < 0: full -> split (Menu, inversa exacta), el elemento
+ * viaja to -> from. Sin escalado: `from_w/h` y `to_w/h` deben coincidir
+ * en la primera version del consumidor (si algun dia hace falta que el
+ * elemento cambie de tamano durante el viaje, es una extension a
+ * documentar aca, no algo que hoy se intente adivinar). */
+typedef struct {
+    int from_x, from_y, from_w, from_h;
+    int to_x,   to_y,   to_w,   to_h;
+} aura_shift_rect_t;
+
+void aura_transition_shift_and_reveal(aura_nav_t *nav, int direction,
+                                      const aura_shift_rect_t *carry);
+
 #endif /* AURA_TRANSITIONS_H */

@@ -245,6 +245,248 @@ static void reveal_behind_panels_exit(int panel_w, int bar_h, unsigned bg,
     }
 }
 
+/* -- Shift-and-Reveal (D-278, transiciones/00-vocabulario.md) --------
+ *
+ * Primer consumidor: "Acerca de" (D-279) -- ícono/tile de
+ * SelectionSummary que se reposiciona a la izquierda mientras el resto
+ * de la pantalla completa (FULL-CARRY) aparece en el hueco liberado a
+ * la derecha, con LeftPanel saliendo empujado en paralelo. Diseñada
+ * para servir tambien a DateEditor (componentes/date-editor.md) sin
+ * reescribirse -- solo cambia el `carry` que le pasa el llamador.
+ *
+ * Sin callbacks de dibujo, misma convencion que el resto de este
+ * archivo: el elemento persistente se CAPTURA como bitmap de un
+ * framebuffer ya renderizado (s_outgoing_fb) en vez de pedirle al
+ * llamador que sepa dibujarlo en (x,y) -- el llamador solo declara
+ * DONDE vive el elemento en cada extremo (`aura_shift_rect_t`), nunca
+ * COMO se ve. El destino completo se prerrenderiza una vez con
+ * aura_screens_draw() al offscreen `s_push_fb`, igual que las demas
+ * transiciones -- el cuadro final coincide exacto con esa imagen fija
+ * (mismo "requisito de continuidad" que ya exige el vuelo de caratula),
+ * porque el rect `to` del destino YA tiene ahi dibujado el mismo
+ * elemento que el bitmap capturado reproduce encima durante el
+ * recorrido.
+ *
+ * `direction` > 0: split -> full (entrar). `carry` siempre describe
+ * {from = posicion en split, to = posicion en full} sin importar la
+ * direccion -- la funcion decide sola hacia donde viaja el elemento y
+ * que buffer usar como fuente segun el signo. */
+static void shift_and_reveal_enter(aura_nav_t *nav, const aura_shift_rect_t *carry,
+                                    int frames, int frame_delay, int bar_h)
+{
+    unsigned bg = a26_color(A26_SHELL_BG);
+    const int panel_w = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+    int i, x, y;
+    (void)nav;
+
+    for (i = 1; i <= frames; i++)
+    {
+        int prog = eased_offset(256, i, frames);
+        int d = eased_offset(panel_w, i, frames);
+        int left_w = panel_w - d;
+        int ex, ey;
+
+        /* 1. Base: el destino aparece con fade-in en el hueco que se va
+         * liberando -- "el nuevo componente aparece en el espacio que
+         * se libera a la derecha" (doc). Se pinta el ancho completo: la
+         * franja que todavia cubre LeftPanel se sobreescribe en el paso
+         * 2, es mas simple que recortar la fuente por columna. */
+        for (y = bar_h; y < A26_SCREEN_HEIGHT; y++)
+        {
+            fb_data *dst = FBADDR(0, y);
+            const fb_data *src = &s_push_fb[y * A26_SCREEN_WIDTH];
+
+            for (x = 0; x < A26_SCREEN_WIDTH; x++)
+                dst[x] = a26_shell_blend(bg, src[x], prog);
+        }
+        /* Hueco de barra durante el empuje (Push-and-Drop estandar,
+         * mismo criterio que reveal_behind_panels()): la StatusBar(full)
+         * no existe todavia, cae al final. */
+        lcd_set_foreground(bg);
+        for (y = 0; y < bar_h; y++)
+            lcd_hline(0, A26_SCREEN_WIDTH - 1, y);
+
+        /* 2. LeftPanel + su StatusBar(split) salen empujados -- mismo
+         * remanente que reveal_behind_panels(), sin espejo del panel
+         * derecho (aca no hay panel derecho que crecer, es un elemento
+         * puntual, no CoverDrift). */
+        if (left_w > 0)
+            lcd_bitmap_part(s_outgoing_fb, d, 0, A26_SCREEN_WIDTH,
+                             0, 0, left_w, A26_SCREEN_HEIGHT);
+
+        /* 3. Elemento persistente: capturado de lo que YA estaba en
+         * pantalla (s_outgoing_fb, rect `from`), viajando hacia `to`,
+         * encima de todo -- los textos auxiliares que rodeaban al
+         * elemento en split no estan en este rect, asi que desaparecen
+         * desde el primer cuadro (quedan tapados por la base del
+         * destino), cumpliendo la regla del documento. */
+        ex = aura_pattern_lerp(carry->from_x, carry->to_x, prog);
+        ey = aura_pattern_lerp(carry->from_y, carry->to_y, prog);
+        lcd_bitmap_part(s_outgoing_fb, carry->from_x, carry->from_y, A26_SCREEN_WIDTH,
+                         ex, ey, carry->from_w, carry->from_h);
+
+        lcd_update();
+        drain_button_queue_if_full();
+        if (i < frames)
+            sleep(frame_delay);
+    }
+
+    /* Drop de StatusBar(full) al final, como pide la doc viva (no
+     * "simultaneo" como el original de 2008 -- date-editor.md ya lo
+     * confirma para el otro consumidor previsto). */
+    {
+        int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
+            ? AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_ALL
+            : AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_MINIMAL;
+
+        for (i = 1; i <= drop_frames; i++)
+        {
+            int dd = eased_offset(bar_h, i, drop_frames);
+
+            if (dd > 0)
+                lcd_bitmap_part(s_push_fb, 0, bar_h - dd, A26_SCREEN_WIDTH,
+                                0, 0, A26_SCREEN_WIDTH, dd);
+            lcd_update_rect(0, 0, A26_SCREEN_WIDTH, bar_h);
+            drain_button_queue_if_full();
+            if (i < drop_frames)
+                sleep(frame_delay);
+        }
+    }
+}
+
+/* Inversa exacta (Menu, direction < 0): full -> split. Lift de la
+ * StatusBar(full) PRIMERO (fase 1 de Lift-and-Push, D-267), despues el
+ * contenido saliente se desvanece mientras LeftPanel entra empujado
+ * (crece desde su propio borde, mismo mecanismo de
+ * reveal_behind_panels_exit()) y el elemento persistente viaja
+ * to -> from -- semejante a como Lift-and-Push ya es la inversa
+ * temporal exacta de Push-and-Drop en aura_transition_slide(). */
+static void shift_and_reveal_exit(aura_nav_t *nav, const aura_shift_rect_t *carry,
+                                   int frames, int frame_delay, int bar_h)
+{
+    unsigned bg = a26_color(A26_SHELL_BG);
+    const int panel_w = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+    int i, x, y;
+    (void)nav;
+
+    {
+        int lift_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
+            ? AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_ALL
+            : AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_MINIMAL;
+
+        for (i = 1; i <= lift_frames; i++)
+        {
+            int dd = eased_offset(bar_h, i, lift_frames);
+
+            for (y = 0; y + dd < bar_h; y++)
+                memcpy(FBADDR(0, y), FBADDR(0, y + dd),
+                       A26_SCREEN_WIDTH * sizeof(fb_data));
+            lcd_set_foreground(bg);
+            for (y = bar_h - dd; y < bar_h; y++)
+                lcd_hline(0, A26_SCREEN_WIDTH - 1, y);
+            lcd_update_rect(0, 0, A26_SCREEN_WIDTH, bar_h);
+            drain_button_queue_if_full();
+            if (i < lift_frames)
+                sleep(frame_delay);
+        }
+    }
+
+    for (i = 1; i <= frames; i++)
+    {
+        int prog = eased_offset(256, i, frames);
+        int left_w = eased_offset(panel_w, i, frames);
+        int ex, ey;
+
+        /* 1. Base: lo saliente (full, capturado en s_outgoing_fb antes
+         * de prerrenderizar el destino) se desvanece hacia el fondo. */
+        for (y = bar_h; y < A26_SCREEN_HEIGHT; y++)
+        {
+            fb_data *dst = FBADDR(0, y);
+            const fb_data *src = &s_outgoing_fb[y * A26_SCREEN_WIDTH];
+
+            for (x = 0; x < A26_SCREEN_WIDTH; x++)
+                dst[x] = a26_shell_blend(bg, src[x], 256 - prog);
+        }
+        lcd_set_foreground(bg);
+        for (y = 0; y < bar_h; y++)
+            lcd_hline(0, A26_SCREEN_WIDTH - 1, y);
+
+        /* 2. LeftPanel + su StatusBar(split), ya fijos en el destino
+         * (s_push_fb), entran creciendo desde el borde izquierdo --
+         * mismo criterio que reveal_behind_panels_exit(). */
+        if (left_w > 0)
+            lcd_bitmap_part(s_push_fb, 0, 0, A26_SCREEN_WIDTH,
+                             0, 0, left_w, A26_SCREEN_HEIGHT);
+
+        /* 3. Elemento persistente: capturado de lo saliente (rect `to`,
+         * su posicion en full), viajando de vuelta hacia `from`. */
+        ex = aura_pattern_lerp(carry->to_x, carry->from_x, prog);
+        ey = aura_pattern_lerp(carry->to_y, carry->from_y, prog);
+        lcd_bitmap_part(s_outgoing_fb, carry->to_x, carry->to_y, A26_SCREEN_WIDTH,
+                         ex, ey, carry->to_w, carry->to_h);
+
+        lcd_update();
+        drain_button_queue_if_full();
+        if (i < frames)
+            sleep(frame_delay);
+    }
+    /* Sin Drop aparte para la StatusBar(split): viaja PEGADA a su panel
+     * en el paso 2 (igual que reveal_behind_panels_exit()), no cae por
+     * separado como la de pantalla completa. */
+}
+
+void aura_transition_shift_and_reveal(aura_nav_t *nav, int direction,
+                                      const aura_shift_rect_t *carry)
+{
+    int frames, frame_delay;
+    const int bar_h = A26_LAYOUT_STATUSBAR_HEIGHT;
+    struct viewport vp;
+    struct viewport *saved;
+    long start_tick = current_tick;
+
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE || direction == 0)
+        return;
+
+    /* Mismos tokens de Push-and-Drop (D-274) -- ratificado por el dueno
+     * (PLAN-about-storage.md Q6): el empuje de LeftPanel que ocurre en
+     * paralelo ya va a este ritmo, dos velocidades simultaneas se
+     * verian desacopladas. Shift-and-Reveal no tiene timing propio en
+     * la doc ("[ ] Timing/easing... sigue sin valores"). */
+    if (aura_settings.animation_mode == AURA_ANIM_ALL)
+    {
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_ALL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_ALL;
+    }
+    else
+    {
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_MINIMAL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_MINIMAL;
+    }
+
+    /* Captura ANTES de prerrenderizar el destino -- mismo orden que el
+     * resto del archivo, imprescindible aca ademas para el elemento
+     * persistente (su bitmap fuente sale de este buffer en los dos
+     * sentidos). */
+    capture_outgoing_split_frame();
+
+    viewport_set_defaults(&vp, SCREEN_MAIN);
+    vp.x = 0;
+    vp.y = 0;
+    vp.width = A26_SCREEN_WIDTH;
+    vp.height = A26_SCREEN_HEIGHT;
+    viewport_set_buffer(&vp, &s_push_buffer, SCREEN_MAIN);
+    saved = lcd_set_viewport(&vp);
+    aura_screens_draw(nav);
+    lcd_set_viewport(saved);
+
+    if (direction > 0)
+        shift_and_reveal_enter(nav, carry, frames, frame_delay, bar_h);
+    else
+        shift_and_reveal_exit(nav, carry, frames, frame_delay, bar_h);
+
+    TRANSITION_LOG("shift-and-reveal", frames, start_tick);
+}
+
 void aura_transition_slide(aura_nav_t *nav, int direction, int width,
                             bool cover_drift_was_active)
 {
