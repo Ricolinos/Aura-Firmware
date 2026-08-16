@@ -3262,4 +3262,18 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+---
+
+## D-271 — SelectionSummary: tamaño real del texto, medido en píxeles contra el mockup (no un número de punto sin verificar)
+
+**Encargo**: "necesito que te apegues a esta referencia: analiza las proporciones del texto porque te había dicho que 13 puntos, pero quizá en el código necesites otro valor... revisa a qué alturas están los textos y configúralos de esa forma."
+
+**Por qué 13pt/12pt (D-267) no coincidía**: el mockup que el dueño compartió resultó ser una imagen de **161×240 px -- casi exactamente el tamaño real del panel derecho (160×240)**, así que pude medir directamente en píxeles de dispositivo, sin conversión. Medí las bandas de texto reales (`Título` = 13px de alto con acento, `Información`/`A dos renglones` = 12-14px) y las comparé contra capturas reales del build actual: `DS_BOLD_13` (13pt) rendía solo ~8px de altura de mayúscula en "Repetir" -- confirmé con un segundo punto de referencia real (`DS_BOLD_14`, ya usado en listas de contenido, D-205) que también daba ~8px, estableciendo una relación empírica de ~0.6px por punto para esta cara/peso en este rasterizador (`convttf`) -- muy distinta de cómo "13 puntos" se mide en una herramienta de diseño. Con esa relación, el tamaño que sí cae dentro del rango medido (~10-11px de mayúscula real, descontando el acento) es **18pt Bold** (~10.8px) para arriba y **16pt Medium** (~9.3px) para abajo -- no 13/12.
+
+**Arreglo**: `ds_bold_13`/`ds_medium_12` (D-267) se retiran, reemplazados por `ds_bold_18`/`ds_medium_16` -- mismos dos consumidores únicos (texto superior/inferior de SelectionSummary), así que el cambio es **neto cero** en conteo de fuentes -- `MAXUSERFONTS` se queda en 14, sin subir esta vez.
+
+**Verificación real, no solo cálculo en papel**: tras implementar, tomé capturas reales y medí el resultado con el mismo método -- "Mi iPod" (top, 18pt Bold) midió 11px de alto, dentro del rango objetivo (~10-11px); "Sin fotos todavía" (bottom, 16pt Medium, con acento) midió 10px contra el objetivo de ~12px del mockup -- razonablemente cerca, una mejora clara sobre los 7px que rendía 12pt antes. Build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

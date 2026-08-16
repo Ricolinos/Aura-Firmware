@@ -407,21 +407,20 @@ static void draw_summary(int x, int width, const char *icon_name,
     /* Altura de cada slot de texto medida con la fuente real antes de
      * calcular el centrado vertical del conjunto -- mismo criterio ya
      * usado en aura_statusbar.c (centrado por altura medida, no un
-     * numero magico). D-267 (corrige D-263): slot superior SF Pro Bold
-     * 13pt (DS_BOLD_13, 16pt se veia demasiado grande contra el fondo
-     * nuevo), unica linea -- "valor" o titulo corto, nunca se envuelve.
-     * Slot inferior SF Pro Medium 12pt (DS_MEDIUM_12, sube de Regular a
-     * Medium y de 10 a 12pt), hasta DOS lineas por palabra
-     * (split_two_lines()). */
+     * numero magico). D-271 (medido contra un mockup pixel-exacto,
+     * corrige el tamano de D-267): slot superior SF Pro Bold 18pt
+     * (DS_BOLD_18), unica linea -- "valor" o titulo corto, nunca se
+     * envuelve. Slot inferior SF Pro Medium 16pt (DS_MEDIUM_16), hasta
+     * DOS lineas por palabra (split_two_lines()). */
     if (top_text && top_text[0])
     {
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_13));
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_18));
         lcd_getstringsize((const unsigned char *)top_text, &w, &h);
         top_h = h + TEXT_GAP;
     }
     if (bottom_text && bottom_text[0])
     {
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_12));
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_16));
         split_two_lines(bottom_text, text_max_w);
         bottom_lines = s_bottom_line_buf[1][0] ? 2 : 1;
         lcd_getstringsize((const unsigned char *)s_bottom_line_buf[0], &w, &h);
@@ -491,14 +490,14 @@ static void draw_summary(int x, int width, const char *icon_name,
 
     if (top_h)
     {
-        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_13));
+        lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_18));
         draw_text_slot(text_x, tile_y - top_h, text_max_w, top_text,
                         &s_top_shown, &s_top_since, &s_top_overflowing);
     }
     else
         s_top_overflowing = 0;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_12));
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_16));
     if (bottom_lines >= 1)
     {
         int line_h = (bottom_h - TEXT_GAP) / bottom_lines;

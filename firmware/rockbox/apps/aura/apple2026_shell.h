@@ -74,13 +74,13 @@ typedef enum {
      * documentan cada reutilizacion en su propio punto de uso. */
     A26_FONT_STYLE_DS_REG_8,      /* riel A-Z, calendario, busqueda */
     A26_FONT_STYLE_DS_SEMIBOLD_15, /* menu_item (MenuList/LeftPanel) -- unico estilo Semibold del sistema. D-267: renombrado de DS_SEMIBOLD_14 (mismo unico consumidor, +1pt) */
-    A26_FONT_STYLE_DS_REG_10,     /* alarmas, algunas pantallas de aura_screens.c -- ya NO selection_summary (D-267, ver DS_MEDIUM_12) */
+    A26_FONT_STYLE_DS_REG_10,     /* alarmas, algunas pantallas de aura_screens.c -- ya NO selection_summary (D-267/D-271, ver DS_MEDIUM_16) */
     A26_FONT_STYLE_DS_BOLD_10,    /* np_counter */
     A26_FONT_STYLE_DS_REG_12,     /* np_album, np_artist, lyrics, statusbar_time (encargo 2026-08-14, +2px reusando este estilo) */
     A26_FONT_STYLE_DS_BOLD_12,    /* np_title, statusbar_title (encargo 2026-08-14, +2px reusando este estilo) */
     A26_FONT_STYLE_DS_BOLD_14,    /* lyrics_active, filas de listas de contenido (D-205) */
-    A26_FONT_STYLE_DS_BOLD_13,    /* selection_summary texto superior (D-267, reemplaza DS_BOLD_16 de D-263 -- 16pt se veia demasiado grande contra el fondo nuevo del panel) */
-    A26_FONT_STYLE_DS_MEDIUM_12,  /* selection_summary texto inferior (D-267, reemplaza DS_REG_10 -- primer consumidor real de la cara Medium) */
+    A26_FONT_STYLE_DS_BOLD_18,    /* selection_summary texto superior (D-271, medido contra un mockup pixel-exacto -- reemplaza DS_BOLD_13 de D-267, que resultaba mas chico que el objetivo real) */
+    A26_FONT_STYLE_DS_MEDIUM_16,  /* selection_summary texto inferior (D-271, reemplaza DS_MEDIUM_12 de D-267 por el mismo motivo -- primer consumidor real de la cara Medium desde D-267) */
     A26_FONT_STYLE_COUNT,
 } a26_font_style_t;
 
