@@ -434,12 +434,13 @@ static void draw_summary(int x, int width, const char *icon_name,
     }
     else if (bottom_renderer)
     {
-        /* Sin texto que medir -- reserva una franja fija (D-264, "Acerca
-         * de": grafico de almacenamiento). A26_SPACING_LG es la misma
-         * altura de barra que ya usa la pantalla completa de Acerca de
-         * (draw_about_storage(), aura_screens.c) para su barra segmentada
-         * -- consistente con el resto del sistema, no un numero suelto. */
-        bottom_h = A26_SPACING_LG + TEXT_GAP;
+        /* Sin texto que medir -- reserva una franja fija, hoy la barra de
+         * almacenamiento de "Acerca de" (D-264). D-279: alto propio del
+         * componente (about.bar_h) en vez de tomar prestado A26_SPACING_LG
+         * de otra pantalla -- mismo valor (12), pero ya no es un numero
+         * ajeno. Sin + TEXT_GAP: la franja se centra en el margen completo
+         * (ver mas abajo), no se ancla al borde del tile. */
+        bottom_h = AURA_DS_METRICS_ABOUT_BAR_H;
     }
 
     /* Sombra + tile con esquinas redondeadas REALES (D-267): el fondo ya
@@ -538,8 +539,21 @@ static void draw_summary(int x, int width, const char *icon_name,
         s_bottom_overflowing[0] = 0;
         s_bottom_overflowing[1] = 0;
         if (bottom_renderer)
-            bottom_renderer(text_x, tile_y + TILE_SIZE + TEXT_GAP, text_max_w,
-                             bottom_h - TEXT_GAP);
+        {
+            /* D-279 (encargo del dueno: "la barra debe quedar exactamente
+             * en la misma posicion vertical que el texto inferior del
+             * SelectionSummary"): misma formula de centrado que D-272 usa
+             * para el texto -- centrada en el margen completo
+             * [tile_y+TILE_SIZE, A26_SCREEN_HEIGHT), no pegada al borde del
+             * tile (bottom_h ya no lleva + TEXT_GAP, ver arriba). Antes:
+             * y = tile_y+TILE_SIZE+TEXT_GAP (pegada, ~27px mas arriba que
+             * el centro real de ese margen). */
+            int region_top = tile_y + TILE_SIZE;
+            int renderer_y = region_top
+                            + (A26_SCREEN_HEIGHT - region_top - bottom_h) / 2;
+
+            bottom_renderer(text_x, renderer_y, text_max_w, bottom_h);
+        }
     }
 }
 
