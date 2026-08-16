@@ -56,9 +56,11 @@ Mismos 5 elementos en ambos estados, pero en **orden distinto**:
 
 ⚠️ **Nota de espacio en `(split)`:** el ancho útil tras padding es
 160 − (4×2) = **152px**. Con `DynamicTitle` en máximo 60-80px y
-`ClockIndicator` en máximo 40px, el espacio restante para los 3 íconos +
-sus separaciones es ajustado pero parece viable — falta el tamaño exacto de
-cada ícono para confirmarlo con certeza (ver Pendientes).
+`ClockIndicator` en máximo 46px (D-207, subido de 40 al crecer la
+tipografía a 12px), el espacio restante para los 3 íconos + sus
+separaciones es ajustado pero viable — confirmado en la práctica: la
+batería de 21px es exactamente el máximo que no choca contra el reloj
+persistente en el peor caso (ver "Reglas de íconos").
 
 ## Reglas de íconos (candado, play/pause, batería)
 
@@ -100,15 +102,18 @@ cruza. Ver `icon.battery_icon` en `design-system/tokens.json` y
 
 ## Tipografía
 
-**Corregido:** el 12px original era una referencia al máximo/cap-height, no
-el tamaño de fuente real. El tamaño real es **8px**. Título y hora usan
-pesos y opacidades distintas — dos tokens separados (ver
-`fundamentos/02-tipografia.md`):
+El tamaño real es **12px** (D-207). Historia: la spec original decía 8px;
+D-205 lo subió a 10px y D-207 a 12px el mismo día (2026-08-14), por
+encargo directo del dueño ("en la barra el texto casi no se nota, ayúdame
+a hacerlo 2px más grande"). Los 12px reutilizan estilos ya cargados
+(`ds_bold_12` / `ds_reg_12`, compartidos con el reproductor) sin consumir
+presupuesto de fuentes. Título y hora usan pesos y opacidades distintas —
+dos tokens separados (ver `fundamentos/02-tipografia.md`):
 
 | Elemento | Token | Familia/Peso | Tamaño | Opacidad |
 |---|---|---|---|---|
-| `DynamicTitle` | `--font-statusbar-title` | SF Pro Bold | 8px (máx. 12px) | 60% |
-| `ClockIndicator` | `--font-statusbar-time` | SF Pro Regular | 8px (máx. 12px) | 80% |
+| `DynamicTitle` | `--font-statusbar-title` | SF Pro Bold | 12px | 60% |
+| `ClockIndicator` | `--font-statusbar-time` | SF Pro Regular | 12px | 80% |
 
 Los íconos no son texto, no usan estos tokens.
 
