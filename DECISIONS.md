@@ -3276,4 +3276,20 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 ---
 
+---
+
+## D-272 — SelectionSummary: el texto se centra en su margen completo, no pegado al borde del tile
+
+**Encargo, con guías verdes propias**: "el centro donde se cruzan debe ser el centro horizontal y vertical de los textos... ayúdame a arreglar su posición."
+
+**Medición**: el dueño compartió una captura de pantalla completa (320×240, exacta al dispositivo) con dos cruces verdes -- uno sobre el texto superior, otro sobre el inferior, ambos en la misma columna (x=240, el centro horizontal real del panel derecho). Medí las dos filas horizontales: y≈38 (texto superior) y y≈200 (texto inferior). Con el tile ya fijo en el centro real del panel desde D-270 (`tile_y=75`, `TILE_SIZE=90`, tile de `[75,165]`), esos dos valores coinciden EXACTO con el centro geométrico de cada margen completo: `(0+75)/2 = 37.5` arriba, `(165+240)/2 = 202.5` abajo.
+
+**Diagnóstico**: `draw_summary()` seguía anclando el texto pegado al borde del tile (`tile_y - top_h` arriba, `tile_y + TILE_SIZE + TEXT_GAP` abajo, herencia de D-097/D-267) -- correcto cuando el texto vivía inmediatamente junto al tile, pero no era lo que las guías del dueño pedían: el texto debe centrarse en TODO el margen disponible entre el borde del panel y el borde del tile, no solo pegarse a este último.
+
+**Arreglo**: el texto superior se centra en la región `[0, tile_y)`; el inferior (una o dos líneas) se centra como bloque en la región `[tile_y+TILE_SIZE, A26_SCREEN_HEIGHT)`. El centrado horizontal ya era correcto desde antes (sin cambio). El efecto de MarqueeText para texto que no cabe (2s de pausa + 5s de recorrido, `AURA_DS_METRICS_MARQUEE_STATIC_MS`/`_SCROLL_MS`) ya estaba implementado desde antes de esta sesión y sigue intacto -- verificado con una prueba temporal de texto deliberadamente largo que confirmó ambas fases (estático los primeros ~2s, en movimiento después) siguen funcionando con la tipografía y posición nuevas.
+
+**Verificación**: build ARM real y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test`: 8/8 suites, mismos conteos. Capturas reales medidas con el mismo método que las guías del dueño: centro del texto superior en y=37.0 (objetivo ~38), centro del texto inferior en y=201.5 (objetivo ~200) -- ambos dentro de 1px del objetivo medido.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*

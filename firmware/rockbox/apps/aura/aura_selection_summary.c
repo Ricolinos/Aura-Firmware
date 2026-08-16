@@ -365,6 +365,7 @@ static void draw_summary(int x, int width, const char *icon_name,
     int text_max_w = width - 2 * TEXT_PAD;
     int text_x = x + TEXT_PAD;
     int top_h = 0, bottom_h = 0, bottom_lines = 0;
+    int top_line_h = 0, bottom_line_h = 0;
     /* D-270 (correccion del dueno, con capturas propias marcando el
      * centro real del icono vs. el centro del panel): el tile/icono va
      * SIEMPRE al centro EXACTO del panel derecho (vertical y
@@ -416,6 +417,7 @@ static void draw_summary(int x, int width, const char *icon_name,
     {
         lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_18));
         lcd_getstringsize((const unsigned char *)top_text, &w, &h);
+        top_line_h = h;
         top_h = h + TEXT_GAP;
     }
     if (bottom_text && bottom_text[0])
@@ -424,6 +426,7 @@ static void draw_summary(int x, int width, const char *icon_name,
         split_two_lines(bottom_text, text_max_w);
         bottom_lines = s_bottom_line_buf[1][0] ? 2 : 1;
         lcd_getstringsize((const unsigned char *)s_bottom_line_buf[0], &w, &h);
+        bottom_line_h = h;
         bottom_h = bottom_lines * h + TEXT_GAP;
     }
     else if (bottom_renderer)
@@ -490,8 +493,21 @@ static void draw_summary(int x, int width, const char *icon_name,
 
     if (top_h)
     {
+        /* D-272 (correccion del dueno, guias verdes propias marcando el
+         * centro real de cada texto): el texto ya NO se ancla pegado al
+         * borde del tile (`tile_y - top_h`, D-097/D-267) -- se centra,
+         * vertical Y horizontal, dentro del margen COMPLETO disponible
+         * entre el borde del panel y el borde del tile (region [0,
+         * tile_y) arriba, [tile_y+TILE_SIZE, A26_SCREEN_HEIGHT) abajo).
+         * Confirmado con las guias del dueno: cruce arriba en el centro
+         * de [0, tile_y), cruce abajo en el centro de [tile_y+TILE_SIZE,
+         * A26_SCREEN_HEIGHT) -- coincide exacto con esta formula. El
+         * centrado HORIZONTAL (texto dentro de [x, x+width)) ya era
+         * correcto desde antes, sin cambio aca. */
+        int top_y = (tile_y - top_line_h) / 2;
+
         lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_18));
-        draw_text_slot(text_x, tile_y - top_h, text_max_w, top_text,
+        draw_text_slot(text_x, top_y, text_max_w, top_text,
                         &s_top_shown, &s_top_since, &s_top_overflowing);
     }
     else
@@ -500,13 +516,15 @@ static void draw_summary(int x, int width, const char *icon_name,
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_16));
     if (bottom_lines >= 1)
     {
-        int line_h = (bottom_h - TEXT_GAP) / bottom_lines;
+        int region_top = tile_y + TILE_SIZE;
+        int content_h = bottom_lines * bottom_line_h;
+        int bottom_y = region_top + (A26_SCREEN_HEIGHT - region_top - content_h) / 2;
 
-        draw_text_slot(text_x, tile_y + TILE_SIZE + TEXT_GAP, text_max_w,
+        draw_text_slot(text_x, bottom_y, text_max_w,
                         s_bottom_line_buf[0],
                         &s_bottom_shown[0], &s_bottom_since[0], &s_bottom_overflowing[0]);
         if (bottom_lines == 2)
-            draw_text_slot(text_x, tile_y + TILE_SIZE + TEXT_GAP + line_h, text_max_w,
+            draw_text_slot(text_x, bottom_y + bottom_line_h, text_max_w,
                             s_bottom_line_buf[1],
                             &s_bottom_shown[1], &s_bottom_since[1], &s_bottom_overflowing[1]);
         else
