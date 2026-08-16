@@ -31,6 +31,22 @@ vive y bajo qué condición se monta.
    componente. `--layer-panel` no existe (no se dibuja, no ocupa presupuesto
    de frame) cuando estamos en pantalla completa — no es que esté oculta,
    es que no está montada.
+5. **`--layer-content` tiene estrictamente 0 o 1 elemento** (decisión del
+   dueño, D-274, 2026-08-16). `SelectionSummary` y `CoverDrift` no se apilan:
+   se **reemplazan** — cuando uno está montado el otro no existe. Si algún
+   día hiciera falta un segundo elemento encima (un badge, un aviso flotante
+   sobre CoverDrift), eso requiere reabrir esta regla aquí primero, no
+   dibujarlo por encima "porque cabe".
+6. **`--layer-base` sí cambia de contenido sin transición de capa** — y
+   siempre a través del **debounce del panel derecho** (D-262/D-266), nunca
+   por `Push-and-Drop`/`Lift-and-Push` (decisión del dueño, D-274). Ejemplo
+   canónico: en el menú principal, mover la selección de Ajustes a Fotos a
+   Música cambia lo que muestra el panel derecho (SelectionSummary →
+   SelectionSummary → CoverDrift) con los paneles quietos; el cambio lo
+   gobierna la espera de 1000ms + corte (destino SelectionSummary) o 2000ms +
+   fundido (destino CoverDrift), no una coreografía de capas. Las
+   transiciones de capa quedan reservadas para cambios de **estado de
+   pantalla** (`split` ⇄ `full`), no de contenido dentro de un estado.
 
 ## Por qué esto importa para Rockbox
 
@@ -41,7 +57,5 @@ montada en `(full)`, el renderer ni siquiera evalúa esa región en el frame.
 
 ## Pendiente de definir
 
-- [ ] ¿`--layer-content` puede tener más de un elemento apilado, o es
-      estrictamente 0 o 1 elemento?
-- [ ] ¿Existen casos donde `--layer-base` mismo cambia de contenido sin pasar
-      por una transición de capa (ej. scroll dentro del panel derecho)?
+Sin pendientes — las dos preguntas originales quedaron resueltas como las
+reglas 5 y 6 de arriba (D-274).
