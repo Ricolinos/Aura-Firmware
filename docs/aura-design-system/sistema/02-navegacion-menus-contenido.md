@@ -84,12 +84,15 @@ visibles**. La carátula reutiliza el mismo pipeline y caché en disco
 gris) si no — sin costo de decodificación JPEG en redibujados
 posteriores. Aplica a las 3 pantallas que listan álbumes (Álbumes,
 Álbumes por artista, Álbumes por autor).
-- **Riel A-Z indexado** pegado al borde derecho (columna de 10px): las
-  **iniciales presentes** en la lista (los números y símbolos se agrupan
-  bajo `#`), la del elemento seleccionado en **acento** y el resto en
-  tinta terciaria. Se dibuja solo desde **12 elementos** — en una lista
-  corta sería decoración — y nunca si hay una sola inicial.
-- `ScrollIndicator` (Fade-on-Idle) como en cualquier lista larga.
+- **`IndexRail`** (`componentes/index-rail.md`, D-276): riel A-Z pegado al
+  borde derecho (columna de 10px) con las **27 posiciones fijas `#`+A–Z**
+  siempre visibles — la del elemento seleccionado en **acento**, las
+  presentes en tinta terciaria, las sin contenido en `SHELL_RAIL`
+  (deshabilitadas). Se dibuja solo desde **12 elementos** — en una lista
+  corta sería decoración.
+- `ScrollIndicator` (`componentes/scroll-indicator.md`, Fade-on-Idle) como
+  en cualquier lista larga — su convivencia con `IndexRail` está definida
+  en `index-rail.md`.
 - **Orden alfabético** siempre (sin distinguir mayúsculas, números
   primero), salvo las canciones de un álbum, que van en el orden del
   disco. El playlist de reproducción usa **el mismo criterio** que la

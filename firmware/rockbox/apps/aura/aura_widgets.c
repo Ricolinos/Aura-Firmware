@@ -561,16 +561,24 @@ int aura_widgets_pill_animating(void)
         && elapsed >= 0 && elapsed < PILL_SPRING_TICKS;
 }
 
-/* Riel A-Z indexado de las listas de ELEMENTOS a pantalla completa
- * (encargo 2026-08-13, ya especificado en la Fase 27). Columna estrecha
- * pegada al borde derecho con las iniciales presentes en la lista; la
- * del elemento seleccionado va en acento, el resto en tinta terciaria.
- * Solo se dibuja si la lista es lo bastante larga para que saltar
- * signifique algo -- en una lista de 5 filas seria decoracion. */
-#define RAIL_W          10
-#define RAIL_MIN_ITEMS  12
+/* IndexRail -- riel A-Z de las listas de ELEMENTOS a pantalla completa
+ * (componentes/index-rail.md; D-155 lo construyo, D-276 lo redefine).
+ * Columna estrecha pegada al borde derecho con las 27 posiciones FIJAS
+ * `#` + A-Z (D-276, encargo del dueno: "todas las letras siempre
+ * visibles"): la inicial del elemento seleccionado va en acento, las
+ * iniciales presentes en la lista en tinta terciaria, y las que NO
+ * tienen contenido en SHELL_RAIL (deshabilitadas -- y no seleccionables:
+ * hoy el riel es un indicador pasivo, sin salto por letra). Antes solo
+ * se dibujaban las iniciales presentes, asi que la barra cambiaba de
+ * forma con cada lista y las letras se estiraban para llenar el alto.
+ * Solo se dibuja si la lista es lo bastante larga para que indexar
+ * signifique algo (index_rail.min_items). Fuente: la de 7px de SF Pro
+ * (A26_FONT_STYLE_MICRO, glifo de 8px de alto) -- 27 x 8 = 216px, el
+ * alto util exacto bajo la StatusBar; con DS_REG_8 (9px) las ultimas
+ * tres letras no cabian. */
+#define RAIL_SLOTS 27
 
-static char rail_initial(const char *label)
+static int rail_slot(const char *label)
 {
     unsigned char c;
 
@@ -580,52 +588,47 @@ static char rail_initial(const char *label)
     if (c >= 'a' && c <= 'z')
         c -= 32;
     if (c >= 'A' && c <= 'Z')
-        return (char)c;
-    if (c >= '0' && c <= '9')
-        return '#';
-    return (c >= 0x80) ? '#' : '#'; /* acentuadas y simbolos: al grupo '#' */
+        return 1 + (c - 'A');
+    return 0; /* digitos, acentuadas y simbolos: al grupo '#' (slot 0) */
 }
 
 static void draw_index_rail(const aura_list_item_t *items, int count, int selected)
 {
-    char letters[27];
-    int n = 0, i, y, step, h, w;
-    char sel_letter;
+    unsigned long present = 0; /* mascara de 27 bits: que iniciales tiene la lista */
+    int i, y, step, h, w, sel_slot;
+    int rail_w = AURA_DS_METRICS_INDEX_RAIL_WIDTH;
 
-    if (count < RAIL_MIN_ITEMS)
+    if (count < AURA_DS_METRICS_INDEX_RAIL_MIN_ITEMS)
         return;
 
-    /* Iniciales presentes, en el orden en que aparecen: la lista ya
-     * viene ordenada, asi que basta con no repetir la anterior. */
-    for (i = 0; i < count && n < (int)sizeof(letters); i++)
-    {
-        char c = rail_initial(items[i].label);
-        if (n == 0 || letters[n - 1] != c)
-            letters[n++] = c;
-    }
-    if (n < 2)
-        return; /* una sola inicial: no hay nada que indexar */
+    for (i = 0; i < count; i++)
+        present |= 1UL << rail_slot(items[i].label);
 
-    sel_letter = (selected >= 0 && selected < count)
-        ? rail_initial(items[selected].label) : '\0';
+    sel_slot = (selected >= 0 && selected < count) ? rail_slot(items[selected].label) : -1;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_8));
+    lcd_setfont(a26_font(A26_FONT_STYLE_MICRO));
     lcd_getstringsize((const unsigned char *)"A", &w, &h);
-    step = (A26_SCREEN_HEIGHT - LIST_TOP) / n;
+    step = (A26_SCREEN_HEIGHT - LIST_TOP) / RAIL_SLOTS;
     if (step < h)
         step = h; /* si no caben todas, se recortan por abajo antes que encimarse */
 
-    for (i = 0; i < n; i++)
+    for (i = 0; i < RAIL_SLOTS; i++)
     {
-        char buf[2] = { letters[i], '\0' };
+        char buf[2] = { (char)(i == 0 ? '#' : 'A' + (i - 1)), '\0' };
+        unsigned color;
 
         y = LIST_TOP + i * step;
         if (y + h > A26_SCREEN_HEIGHT)
             break;
+        if (i == sel_slot)
+            color = a26_color(A26_ACCENT);
+        else if (present & (1UL << i))
+            color = a26_color(A26_TEXT_TERTIARY);
+        else
+            color = a26_color(A26_SHELL_RAIL); /* deshabilitada */
         lcd_getstringsize((const unsigned char *)buf, &w, &h);
-        lcd_set_foreground(letters[i] == sel_letter ? a26_color(A26_ACCENT)
-                                                     : a26_color(A26_TEXT_TERTIARY));
-        lcd_putsxy(A26_SCREEN_WIDTH - RAIL_W + (RAIL_W - w) / 2, y,
+        lcd_set_foreground(color);
+        lcd_putsxy(A26_SCREEN_WIDTH - rail_w + (rail_w - w) / 2, y,
                    (const unsigned char *)buf);
     }
 }
@@ -723,7 +726,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
         {
             struct viewport vp = *lcd_current_viewport;
             struct viewport *saved;
-            int text_w = width - text_x - (split ? ROW_PAD_X : RAIL_W + A26_SPACING_XS);
+            int text_w = width - text_x - (split ? ROW_PAD_X : AURA_DS_METRICS_INDEX_RAIL_WIDTH + A26_SPACING_XS);
 
             vp.x = text_x;
             vp.y = row_y + A26_SPACING_SM;

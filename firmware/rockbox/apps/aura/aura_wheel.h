@@ -26,9 +26,11 @@
 int aura_wheel_step(int velocity_deg_s);
 
 /* True si la velocidad supera el umbral de hojeo por letras. Sin
- * consumidor real todavia -- Aura no tiene ninguna lista indexada A-Z
- * (el riel de Fase 27 quedo diferido, D-073, por falta de una lista así
- * hoy); la deteccion queda lista para cuando exista una. */
+ * consumidor real todavia: el riel A-Z (IndexRail, componentes/
+ * index-rail.md -- construido en D-155, redefinido en D-276) es hoy un
+ * indicador pasivo sin salto por letra, por decision del dueno (D-276,
+ * encargo aparte). La deteccion queda lista para cuando ese salto se
+ * construya -- debe saltar solo entre letras presentes en la lista. */
 int aura_wheel_should_hop_letters(int velocity_deg_s);
 
 #endif /* AURA_WHEEL_H */

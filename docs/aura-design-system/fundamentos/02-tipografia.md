@@ -106,6 +106,7 @@ D-205) -- 8% más grande y en negrita, sin agregar ningún `.fnt`.
 | Token | Tamaño | Peso | Uso |
 |---|---|---|---|
 | `--font-content-list-row` | 14px (subido de 13px, reusa `ds_bold_14`) | Bold | Texto de fila en listas de pantalla completa |
+| `--font-index-rail` | **7px** (`type_scale.micro`, `a26-micro-7.fnt` — SF Pro Regular, glifo de 8px de alto) | Regular | Letras del `IndexRail` (`componentes/index-rail.md`, D-276). Es la fuente que la base histórica reservó desde el principio para el riel ("7 px SF Pro") y **ya estaba cargada** en la escala Apple2026: cerrar "todas las letras visibles" (27 × 8 = 216px exactos) **no costó ningún slot** — `MAXUSERFONTS` sigue en 14/14. Antes el riel usaba `ds_reg_8` (glifo 9px), con el que 27 letras no caben |
 
 ## Estructura sugerida (resto, a llenar)
 
