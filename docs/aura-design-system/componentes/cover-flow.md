@@ -267,10 +267,19 @@ una transición se ignoran hasta soltarlo (nunca navegaciones en cadena).
 | `CoverLabel` | Las dos líneas de texto (álbum Bold + artista Regular) bajo el central |
 | `TrackList` (de CoverFlow) | El reverso de 200px con cabecera, lista numerada y ScrollIndicator |
 
+## Curva de aceleración del scroll (confirmada, D-077/D-103)
+
+La rueda entrega **velocidad angular real** (°/s) y el carrusel usa el
+mismo `aura_wheel_step()` que las listas de menú: **paso = 1** a velocidad
+baja o cero (precisión absoluta), crece con **v²** en la franja intermedia
+y **tope ×3** antes del umbral de hojeo de **420°/s**. No existe un "giro
+sostenido" como gesto propio: el clickwheel emite eventos discretos de giro,
+no un botón mantenido, así que `scrolling` se define como "la posición
+animada todavía no alcanza el álbum objetivo" e `idle` como "ya coinciden"
+— mismo resultado observable que el PictureFlow original, sin depender de
+un modelo de botón sostenido que Aura no tiene.
+
 ## Pendiente de definir
 
-- [ ] Umbral exacto del "giro sostenido" para el salto acelerado de la
-      rueda (la aceleración por velocidad ya funciona; falta formalizar la
-      curva como valor de diseño)
 - [ ] Sentido percibido del giro del vuelo (hoy continúa el sentido de la
       apertura del flip; confirmar en vivo si se lee como antihorario)
