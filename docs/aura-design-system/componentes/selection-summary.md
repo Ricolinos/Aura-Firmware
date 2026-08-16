@@ -225,8 +225,10 @@ Consumidores reales hoy (D-264):
   corriendo aunque el panel esté congelado por el debounce), etiqueta abajo.
 - **Ajustes → Acerca de**: badge de Aura (D-269) como ícono, "Mi iPod"
   arriba, y un gráfico de barras de almacenamiento abajo
-  (`bottom_renderer`: Música / Video / Fotos / Otros con porcentaje real
-  del disco, colores de categoría existentes).
+  (`bottom_renderer`: Música / Video / Fotos / Otros / Libre, colores de
+  categoría vigente, D-279). Al pulsar SELECT expande a una pantalla
+  `FULL-CARRY` propia vía `Shift-and-Reveal` (D-278) — el tile viaja a la
+  izquierda en vez de desaparecer. Detalle completo en `componentes/about.md`.
 - **Repetir** (fila en línea, sin pantalla propia): ícono `repeat` /
   `repeat-1` + "Desactivado" / "Repetir todo" / "Repetir una", cambia in
   situ al pulsar SELECT.

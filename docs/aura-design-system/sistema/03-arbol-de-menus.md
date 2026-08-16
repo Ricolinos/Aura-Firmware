@@ -111,7 +111,7 @@ agrupación, como en el original:
 
 | Sección | Filas |
 |---|---|
-| Información | Acerca de ✅ (3 modos) |
+| Información | Acerca de ✅ `[FULL-CARRY]` (3 páginas, D-279 — el tile de `SelectionSummary` viaja con `Shift-and-Reveal`, D-278; ver `componentes/about.md`) |
 | Reproducción | Aleatorio ✅ · Repetir ✅ · Menú principal ✅ |
 | Apariencia (propios de Aura) | Tema ✅ · Color de acento ✅ · Animaciones ✅ · Gráficos ✅ · Mostrar sombras ✅ · Mostrar iconos ✅ |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |

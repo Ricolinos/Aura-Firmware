@@ -1137,7 +1137,13 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
         lcd_set_viewport(msaved);
 
         mode_y = aura_nowplaying_last_mode_row_y();
-        morph_frames = (aura_settings.animation_mode == AURA_ANIM_ALL) ? 8 : 4;
+        /* D-279 (limpieza P8): mismo timing de Push-and-Drop que ya
+         * gobierna `frame_delay` mas arriba en esta misma funcion (el
+         * vuelo que precede a este morph) -- 8/4 cuadros eran identicos
+         * a los tokens desde D-274, solo sin usarlos por nombre. */
+        morph_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
+            ? AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_ALL
+            : AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_MINIMAL;
 
         for (i = 1; i <= morph_frames; i++)
         {

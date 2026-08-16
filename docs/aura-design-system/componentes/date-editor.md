@@ -48,9 +48,15 @@ internacional, Select avanza hora → minuto y confirma, Menu cancela.
 - **Confirmado: usa el patrón `Shift-and-Reveal`.** El ícono nunca sale de
   pantalla — es el mismo elemento que se reacomoda y se adapta a la nueva
   interfaz (persistente, no una salida + entrada de un elemento distinto).
-  Spec completo del patrón en `transiciones/00-vocabulario.md`. Hoy la
-  pantalla entra por la transición estándar de pantalla completa; el patrón
-  sigue sin implementarse.
+  Spec completo del patrón en `transiciones/00-vocabulario.md`. **La
+  utilidad ya existe** (`aura_transition_shift_and_reveal()`, D-278,
+  `aura_transitions.c/.h`) — primer consumidor real: `componentes/about.md`
+  (pantalla "Acerca de"). DateEditor puede conectarla sin reescribirla: solo
+  necesita el `carry` (rect del ícono en `split` y en `full`) y engancharla
+  en el manejador de botones, mismo patrón que `about.md` documenta. Hoy la
+  pantalla sigue entrando por la transición estándar de pantalla completa —
+  la CONEXIÓN de este consumidor especifico, no la utilidad, es lo que
+  sigue pendiente.
 - En paralelo, `LeftPanel` sí sigue el comportamiento estándar: sale hacia
   la izquierda, como empujado.
 - Los textos auxiliares (hora arriba del ícono, otro texto abajo) desaparecen

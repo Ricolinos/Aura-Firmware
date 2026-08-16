@@ -157,11 +157,19 @@ en Now Playing).
 
 **Tipo:** Coreografiado, 2 fases simultáneas.
 
-**Confirmado.** Observado en el flujo Ajustes → Fecha y Hora → Fecha
-(`componentes/date-editor.md`). Se diferencia de `Push-and-Drop` en que el
-elemento existente **nunca sale de pantalla** — es el mismo elemento que se
-reposiciona y se adapta a la nueva interfaz, no una salida seguida de una
-entrada de un elemento distinto.
+**Implementado (D-278, 2026-08-16)** — `aura_transition_shift_and_reveal()`
+(`aura_transitions.c/.h`), utilidad reutilizable siguiendo la convención del
+resto del archivo (sin callbacks de dibujo: el elemento persistente se
+captura como bitmap de un framebuffer ya renderizado, no se le pide al
+llamador que sepa dibujarlo). Primer consumidor real: `componentes/about.md`
+(la pantalla "Acerca de", tile de `SelectionSummary` viajando a la
+izquierda) — confirma que el patrón SÍ aplica a un `SelectionSummary`
+estático, no solo a un ícono dinámico (ver pendiente cerrado abajo).
+`componentes/date-editor.md` queda como segundo consumidor previsto, listo
+para conectar sin reescribir la utilidad. Se diferencia de `Push-and-Drop`
+en que el elemento existente **nunca sale de pantalla** — es el mismo
+elemento que se reposiciona y se adapta a la nueva interfaz, no una salida
+seguida de una entrada de un elemento distinto.
 
 1. El elemento existente del lado derecho (ej. el ícono de calendario) se
    reacomoda hacia la izquierda dentro del nuevo layout — persiste como el
@@ -183,13 +191,21 @@ desaparezca si sigues viendo/editando algo relacionado a fecha).
       dueño (D-274, 2026-08-16): push 8 cuadros @60Hz / 4 @45Hz, drop/lift
       5 / 3 cuadros; tokenizados en `aura_ds.metrics.push_and_drop.*`. Ver
       tabla en la sección `Push-and-Drop`.
-- [ ] Timing/easing de `Shift-and-Reveal` — sigue sin valores (el patrón
-      no está implementado todavía, ver `componentes/date-editor.md`).
+- [x] Timing/easing de `Shift-and-Reveal` — resuelto (D-278, 2026-08-16,
+      ratificado por el dueño vía `PLAN-about-storage.md` Q6): mismos
+      tokens de `Push-and-Drop` (`push_and_drop.*`) que ya gobiernan el
+      empuje de `LeftPanel` que ocurre en paralelo — dos velocidades
+      simultáneas se verían desacopladas. Sin token propio nuevo.
 - [x] `(full) → (split)`: resuelto — es `Lift-and-Push` (sección arriba,
-      2026-08-13; código `reveal_behind_panels_exit()`, D-267).
+      2026-08-13; código `reveal_behind_panels_exit()`, D-267). Para
+      `Shift-and-Reveal` la inversa exacta vive en la misma utilidad
+      (`aura_transition_shift_and_reveal()`, `direction < 0`), simétrica.
 - [ ] Duración de fade y tiempo de idle para `Fade-on-Idle`
-- [ ] ¿`Shift-and-Reveal` aplica solo cuando el elemento existente es un
-      "ícono dinámico", o también cuando es un `SelectionSummary` estático?
+- [x] ¿`Shift-and-Reveal` aplica solo a un ícono dinámico, o también a un
+      `SelectionSummary` estático? — resuelto (D-278/D-279): SÍ aplica a
+      un `SelectionSummary` estático — "Acerca de" es la prueba real, el
+      elemento que viaja es el tile completo con su badge, no un ícono
+      dinámico como el reloj de Fecha y Hora.
 
 ---
 
