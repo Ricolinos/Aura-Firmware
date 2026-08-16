@@ -13,12 +13,22 @@ está seleccionado actualmente.
   interno** — pero solo el margen de arriba y abajo, nunca los costados
   (ver `componentes/left-panel.md`, "Excepción de padding vertical").
 
-## Color
+## Color (precisado por el dueño — D-112, 2026-08-12)
 
-El ítem seleccionado es el único con color distinto: usa `--color-accent`
-(`fundamentos/01-color.md`), default `#FF2D52`. **Configurable por el
-usuario desde Ajustes** — nunca tratar este valor como fijo/absoluto en la
-implementación, siempre leerlo del ajuste actual.
+**La pastilla es gris** (`SELECTION_FILL`, varía por tema — no es el
+acento). El `--color-accent` (`fundamentos/01-color.md`, default
+`#FF2D52`) tiñe el **contenido** del ítem seleccionado: su **texto**, su
+**ícono** (variante `-on`) y la **flecha** del indicador dinámico — no el
+fondo del `Selector`. Una primera lectura de este documento había pintado
+la pastilla misma de acento; el dueño lo corrigió en vivo: "el color de
+acento sobre el elemento seleccionado aplica al texto y al ícono, no al
+seleccionador; el seleccionador debe ser de un color gris". Es el mismo
+lenguaje de selección que ya usaban las listas de contenido — un solo
+lenguaje en toda la app.
+
+El acento sigue siendo **configurable por el usuario desde Ajustes** —
+nunca tratar este valor como fijo/absoluto en la implementación, siempre
+leerlo del ajuste actual.
 
 ## Movimiento entre ítems
 
