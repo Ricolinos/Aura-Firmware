@@ -4420,6 +4420,44 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
              * transicion correcta es el morph, no empujar la pantalla
              * del reproductor desde la derecha. */
         }
+        else if ((depth_after > depth_before && to == AURA_SCREEN_SETTINGS_ABOUT
+                      && aura_screens_about_reveal_active())
+                 || (depth_after < depth_before && screen == AURA_SCREEN_SETTINGS_ABOUT))
+        {
+            /* D-278/D-279 (encargo del dueno: "el SelectionSummary pasa a
+             * pantalla completa, con el icono de Aura desplazandose a la
+             * izquierda y la barra expandiendose"): Shift-and-Reveal
+             * reemplaza el revelado tras paneles (D-264, que hacia
+             * DESAPARECER el badge) para esta fila -- ahora el tile VIAJA,
+             * no se pierde. Misma guarda de evidencia que antes usaba
+             * `use_reveal` para la entrada (aura_screens_about_reveal_active():
+             * el panel derecho ya comprometio la variante de Acerca de,
+             * no una fila intermedia a medio debounce); la salida no
+             * tenia guarda antes (use_reveal jamas cubria este caso, caia
+             * al push generico) -- ahora tambien es la inversa exacta,
+             * simetrica con como D-267 ya trato la salida de Cover Flow.
+             * `carry` es el mismo rect en los dos sentidos (el tile en
+             * split, el tile en full) -- aura_transition_shift_and_reveal()
+             * decide sola hacia donde viaja segun el signo de `direction`. */
+            int split_x, split_y, split_w, split_h;
+            aura_shift_rect_t carry;
+
+            aura_selection_summary_tile_rect_split(&split_x, &split_y, &split_w, &split_h);
+            carry.from_x = split_x;
+            carry.from_y = split_y;
+            carry.from_w = split_w;
+            carry.from_h = split_h;
+            carry.to_x = AURA_DS_METRICS_ABOUT_EXPANDED_TILE_X;
+            carry.to_y = split_y;   /* mismo eje vertical (Q11): solo cambia X */
+            carry.to_w = split_w;
+            carry.to_h = split_h;
+
+            if (depth_after < depth_before)
+                aura_widgets_panel_force_next();
+
+            aura_transition_shift_and_reveal(nav, depth_after > depth_before ? 1 : -1,
+                                             &carry);
+        }
         else
         {
             /* T1 vs T3 segun los DOS extremos de la navegacion (L4):

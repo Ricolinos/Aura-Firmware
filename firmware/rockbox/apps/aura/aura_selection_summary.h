@@ -96,4 +96,9 @@ void aura_selection_summary_render_analog_clock(int x, int y, int size);
 int aura_selection_summary_pending(void);
 int aura_selection_summary_animating(void);
 
+/* Geometria real del tile en (split) -- D-278/D-279, para construir el
+ * `carry` de aura_transition_shift_and_reveal() sin duplicar la formula
+ * de centrado (D-270) en otro archivo. */
+void aura_selection_summary_tile_rect_split(int *x, int *y, int *w, int *h);
+
 #endif /* AURA_SELECTION_SUMMARY_H */

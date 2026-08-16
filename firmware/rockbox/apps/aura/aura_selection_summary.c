@@ -97,6 +97,23 @@ int aura_selection_summary_animating(void)
     return 0;
 }
 
+/* D-278/D-279: geometria REAL del tile en (split), para que
+ * aura_screens.c pueda armar el `carry` de aura_transition_shift_and_reveal()
+ * sin duplicar la formula de tile_x/tile_y de draw_summary() (D-270: el
+ * tile va al centro EXACTO del panel derecho, constante, sin importar el
+ * texto). Un solo punto de verdad -- si el panel derecho o el tile
+ * cambian de tamano algun dia, esto no se desincroniza en silencio. */
+void aura_selection_summary_tile_rect_split(int *x, int *y, int *w, int *h)
+{
+    const int panel_x = AURA_DS_METRICS_LEFT_PANEL_WIDTH;
+    const int panel_w = A26_SCREEN_WIDTH - panel_x;
+
+    *x = panel_x + (panel_w - TILE_SIZE) / 2;
+    *y = (A26_SCREEN_HEIGHT - TILE_SIZE) / 2;
+    *w = TILE_SIZE;
+    *h = TILE_SIZE;
+}
+
 /* Degradado diagonal de 3 puntos (componentes/selection-summary.md):
  * `color_a` en la esquina superior izquierda, `color_center` (acento) a
  * la mitad del recorrido, `color_b` en la esquina inferior derecha.
