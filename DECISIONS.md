@@ -3425,4 +3425,62 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 **Verificación**: build ARM y de simulador limpios tras cada una de las 6 tareas de código (compiló sin warnings al primer intento en todas, incluida la utilidad de transición); `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos en cada paso. Capturas en `docs/screenshots/about-storage/`: barra reposicionada en split (medida y=196..208), estado expandido con las 4 filas de categoría + porcentajes + barra completa (medida: tile en x≈16-21 con el borde suave de la sombra), y confirmación de que la salida con MENU regresa limpio a split sin colgarse. El "740 GiB" visible en "Otros" en las capturas del simulador es un artefacto del disco virtual grande del simulador (no del código -- la aritmética es real: `total − libre − música − video − fotos`), en un iPod real con ~150GB el residual sería mucho menor. Sin verificación en hardware real.
 
+## D-280 — "Acerca de": corregidos los porcentajes de almacenamiento (bug real de ×2) y la música ahora se mide en vivo
+
+**Encargo**: correcciones sobre D-278/D-279 -- "música, video e imágenes no están reflejando bien su espacio usado". Plan en `PLAN-about-fixes.md`, aprobado con todas las recomendaciones (Q1-Q9).
+
+**Causa raíz, confirmada leyendo Rockbox, no asumida**: `about_storage_collect()` (`aura_screens.c`) multiplicaba el resultado de `volume_size()`/`fat_size()` por `SECTOR_SIZE` (512) -- pero `fat_size()` (`firmware/common/fat.c`) devuelve **KiB**, no sectores; Rockbox mismo lo formatea con `kibyte_units` (`apps/menus/main_menu.c`). El error venía de D-264 y nunca se revisó. Efecto: `total_b`/`free_b` a la mitad de lo real → todos los porcentajes de contenido salían **duplicados** y "Otros" distorsionado. Corregido a `*1024`.
+
+**Q1, presentación**: el porcentaje entero truncado mostraba "0%" para cualquier categoría bajo el 1% del disco (común con discos grandes, como el del simulador). `pct_x10` en décimas, sin float -- bajo 10.0% muestra un decimal.
+
+**Q2, música en vivo**: `about_storage_collect()` intenta un recorrido recursivo de `/Music` (`sum_dir_bytes_recursive()`, misma API que ya usaban `/Videos`/`/Photos`) cuando `dircache_ready()` confirma que `readdir` se sirve de RAM; si no, cae al manifiesto de Studio como antes (en el simulador `HAVE_DIRCACHE` no existe, así que ahí el comportamiento no cambió). Refleja copias hechas por Finder que el manifiesto no ve hasta el siguiente sync.
+
+**Bug de rendimiento encontrado y arreglado de paso**: `draw_about_storage_expanded()` recargaba el manifiesto Y recorría las tres carpetas en **cada cuadro** mientras la pantalla estaba visible. `s_about_needs_reload` limita la recarga a una vez por entrada al estado (se arma de nuevo al salir con Menu).
+
+**Verificación**: build ARM y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos.
+
+---
+
+## D-281 — Fondo variante del SelectionSummary: degradado gris→blanco solo en "Acerca de", parametrizado (no caso especial)
+
+**Encargo**: reemplazar la imagen de fondo rosa del SelectionSummary por un degradado de grises a blanco, únicamente en "Acerca de" -- razón del dueño: transición más fluida al estado expandido.
+
+**Mecanismo, verificado el costo antes de elegir**: nuevo enum `aura_ss_background_t` (`AURA_SS_BG_ACCENT_IMAGE` default / `AURA_SS_BG_NEUTRAL_FADE`), parametrizado vía `panel_identity_t.background` -- **incluido en `panel_identity_equal()`**, porque cambiar de variante debe contar como cambio de identidad para el debounce del panel derecho (D-262/D-266), algo que un caso especial hardcodeado dentro del componente no hubiera respetado sin más código. Costo real medido en Fase 1: ~40 líneas parametrizado vs. ~15 hardcodeado, pero el hardcodeado rompía la dirección de dependencia del componente (B-04/D-108) y el debounce -- se descartó pese a ser más corto.
+
+**Q3, dirección**: horizontal, en runtime (`progress_track → shell_bg` en tema claro, `shell_rail → shell_bg` en tema oscuro -- **sin hex nuevo**, resuelto por tema automáticamente vía tokens de paleta existentes). Elegida porque la franja derecha del split ya termina en el mismo color que el estado expandido (`SHELL_BG` plano), así que el Shift-and-Reveal no cambia de fondo en la zona visible -- la transición se siente continua sin tocar el expandido.
+
+**Conflicto encontrado y resuelto**: el texto superior "Mi iPod" era blanco fijo (D-267, justificado porque el fondo "siempre es saturado") -- sobre el degradado nuevo, ilegible (1:1). La tinta ahora depende de la variante: `ACCENT_IMAGE` conserva blanco fijo, `NEUTRAL_FADE` usa `A26_TEXT_PRIMARY`.
+
+**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8.
+
+---
+
+## D-282 — Categoría "Sistema" separada de "Otros" (6 segmentos) y contorno de contraste en la barra
+
+**Encargo**: separar "Sistema" (espacio del firmware) de "Otros" (archivos misceláneos reales), verificando primero qué es medible desde Rockbox.
+
+**Q5, qué es "Sistema"**: de las dos particiones del iPod 6G, la de firmware de Apple **ya no existe en el iPod del dueño** (D-185/D-186: el formateo de una sola partición la eliminó) y, aunque existiera, no sería espacio de Aura. "Sistema" = bytes de `/.rockbox/` en la partición de datos (recorrido recursivo con `dircache_ready()`, mismo mecanismo que D-280 para música, pero con **caché de sesión completa** en vez de por-entrada -- `/.rockbox/` casi no cambia mientras el dispositivo está encendido, a diferencia de la música). Color: gris de Ajustes (`AURA_DS_COLOR_CATEGORY_SETTINGS_GRAY`, ya fijado en D-250) -- Sistema es semánticamente Ajustes, sin hex nuevo. "Otros" conserva el amarillo de Extras y ahora es el residual real (playlists, caché de carátulas, sueltos, holgura de clusters) sin la parte que ya se distingue como Sistema. String nueva `AURA_STR_ABOUT_SYSTEM` en ambos idiomas.
+
+**Q4, contraste**: verificado con la fórmula WCAG antes de tocar nada -- amarillo (1.5:1) y naranja (2.2:1) fallaban el umbral 3:1 para elementos gráficos sobre el fondo casi-blanco que D-281 acababa de introducir, y **ningún tono de amarillo más oscuro pasa 3:1 sin dejar de leerse como amarillo**. Arreglo: contorno de 1px (`about.segment_outline_pct = 30`) en los 6 segmentos de la barra y en los puntos de color de las filas expandidas -- blend hacia negro (tema claro) o blanco (tema oscuro), una sola regla para los 6 colores en vez de tocar los tokens de categoría (que son globales y ya fijados por encargos anteriores).
+
+**Limitación real del simulador, no bug**: sin `HAVE_DIRCACHE`, Sistema siempre muestra 0B ahí -- a diferencia de Música, Sistema nunca tuvo un fallback al manifiesto porque nunca vivió en él.
+
+**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8.
+
+---
+
+## D-283 — Estado 2 de "Acerca de": conteos detallados por categoría, con Video/Fotos clasificados desde Aura Studio
+
+**Encargo**: añadir conteos detallados (canciones/artistas/listas de Música; película/videoclip/serie de Video; IA/fondos/fotografía de Fotos) -- con la advertencia explícita del dueño de no simular datos donde no exista fuente real.
+
+**Viabilidad verificada antes de construir la UI (Q6)**: Rockbox no tiene base de datos de video ni parser EXIF -- no puede clasificar nada por sí solo. Pero **Aura Studio ya clasifica** cada video (Videos/Series/Películas, `MediaCategory`) y cada foto (Imágenes/Fotos/IA, `MediaCategoryHeuristics.classifyPhoto`) al importar. Se extendió el mismo canal que ya existía (`sync_summary.cfg`, `LibrarySync.sync()`/`CatalogSummaryWriter`) con 6 líneas nuevas de conteo por categoría -- ningún dato inventado, "fondos de pantalla" se descartó del encargo (no existe como categoría en Studio; las categorías reales de foto son Imágenes/Fotos/IA). `video_clips_count` = la categoría `.videos` sin clasificar (lo que el encargo original llamaba "videoclips"). `swift build` limpio, `swift test`: 191 pruebas, 1 falla conocida de red (no relacionada).
+
+**Lectura en firmware**: `aura_manifest.c` lee los 6 campos nuevos con `has_video_categories`/`has_photo_categories` para distinguir "manifiesto viejo sin este dato" de "el conteo real es cero" -- un sync anterior a esta sesión nunca tuvo estas líneas, y mostrar "0 películas" en ese caso sería tan engañoso como inventar el dato. Música: canciones/listas del manifiesto (igual que antes); **artistas contados EN VIVO de tagcache** (`aura_music_count_artists()`, nuevo en `aura_music.c` -- mismo patrón `tagcache_search`+`set_uniqbuf` que ya usa el navegador de Artistas, sin el límite `AURA_MUSIC_MAX_ITEMS` que ahí existe para listas, no para un conteo). Video/Fotos: si el manifiesto trae los campos nuevos se muestran; si no, aviso "Sincroniza con Aura Studio para ver el detalle" en vez de un 0 engañoso.
+
+**Q8**: el tile de Aura ahora **persiste en las 3 páginas** (antes solo en Almacenamiento) -- `draw_about_persistent_tile()` nueva, reutilizada también por Créditos.
+
+**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8.
+
+---
+
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
