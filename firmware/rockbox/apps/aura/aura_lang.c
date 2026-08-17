@@ -96,6 +96,8 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_EMPTY_MUSIC]        = "Sin música todavía",
     [AURA_STR_EMPTY_VIDEOS]       = "Sin videos todavía",
     [AURA_STR_EMPTY_PHOTOS]       = "Sin fotos todavía",
+    [AURA_STR_EMPTY_PHOTOS_HINT]  = "Sincroniza fotos desde Aura Studio",
+    [AURA_STR_LIST_MORE_FMT]      = "…y %d más",
     [AURA_STR_NOTHING_PLAYING]    = "Nada sonando",
 
     [AURA_STR_MUSIC_ARTISTS]      = "Artistas",
@@ -324,6 +326,8 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_EMPTY_MUSIC]        = "No music yet",
     [AURA_STR_EMPTY_VIDEOS]       = "No videos yet",
     [AURA_STR_EMPTY_PHOTOS]       = "No photos yet",
+    [AURA_STR_EMPTY_PHOTOS_HINT]  = "Sync photos from Aura Studio",
+    [AURA_STR_LIST_MORE_FMT]      = "…and %d more",
     [AURA_STR_NOTHING_PLAYING]    = "Nothing playing",
 
     [AURA_STR_MUSIC_ARTISTS]      = "Artists",

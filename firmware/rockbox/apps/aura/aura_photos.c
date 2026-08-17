@@ -23,12 +23,15 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <stdlib.h>
+
 #include "lcd.h"
 #include "font.h"
 #include "button.h"
 #include "file.h"
 #include "dir.h"
 #include "string-extra.h"
+#include "strnatcmp.h"
 #include "recorder/bmp.h"
 #include "recorder/jpeg_load.h"
 
@@ -42,8 +45,12 @@
 #include "aura_status_bar_v2.h"
 
 #define PHOTOS_DIR      "/Photos"
-#define MAX_PHOTOS      200
-#define PHOTO_NAME_LEN  64
+/* D-291: 200 -> 500 (limite del contrato Photos/ con Aura Studio,
+ * PLAN-image-viewer.md §6.5); si hay mas, la lista muestra una fila
+ * final inerte "...y N mas" en vez de truncar en silencio. */
+#define MAX_PHOTOS      500
+/* D-291: 64 -> 96 (contrato §6.4: nombres de hasta 95 bytes + '\0'). */
+#define PHOTO_NAME_LEN  96
 
 /* FORMAT_RESIZE necesita bastante mas que el bitmap final (D-026 en
  * DECISIONS.md); a pantalla completa (320x240x2) mas margen de sobra. */
@@ -56,7 +63,13 @@ typedef struct {
 } photo_item_t;
 
 static photo_item_t s_photos[MAX_PHOTOS];
+/* Entradas realmente almacenadas en s_photos[] (<= MAX_PHOTOS). */
 static int s_photo_count = -1;
+/* D-291: total de imagenes listables en /Photos, SIN el tope de
+ * MAX_PHOTOS -- puede ser mayor que s_photo_count. Es lo que reporta
+ * aura_photos_count() (el panel derecho del menu solo necesita saber
+ * si hay 0 o mas) y lo que decide la fila final "...y N mas". */
+static int s_photo_total_count = -1;
 static int s_current_index = 0;
 
 static unsigned char s_view_scratch[VIEW_SCRATCH_SIZE];
@@ -96,6 +109,17 @@ static void strip_ext_for_display(const char *filename, char *out, size_t outsz)
         *dot = '\0';
 }
 
+/* D-291: orden natural insensible a mayusculas ("Foto 2" antes que
+ * "Foto 10") sobre el nombre de display -- el orden fisico de la FAT
+ * que readdir() daba antes no tenia relacion con lo que el usuario
+ * espera ver. strnatcasecmp ya vive en firmware/common/, usado por
+ * filetree.c/tagtree.c -- no es una dependencia nueva. */
+static int compare_photo_display(const void *a, const void *b)
+{
+    const photo_item_t *pa = a, *pb = b;
+    return strnatcasecmp(pa->display, pb->display);
+}
+
 static void ensure_photo_list(void)
 {
     DIR *d;
@@ -105,32 +129,39 @@ static void ensure_photo_list(void)
         return;
 
     s_photo_count = 0;
+    s_photo_total_count = 0;
     d = opendir(PHOTOS_DIR);
     if (!d)
         return;
 
-    while (s_photo_count < MAX_PHOTOS && (entry = readdir(d)) != NULL)
+    while ((entry = readdir(d)) != NULL)
     {
         if (!is_listable_image(entry->d_name))
             continue;
+        s_photo_total_count++;
+        if (s_photo_count >= MAX_PHOTOS)
+            continue; /* se sigue contando para el total, sin guardar */
         strlcpy(s_photos[s_photo_count].filename, entry->d_name, PHOTO_NAME_LEN);
         strip_ext_for_display(entry->d_name, s_photos[s_photo_count].display, PHOTO_NAME_LEN);
         s_photos[s_photo_count].supported = is_supported_image(entry->d_name);
         s_photo_count++;
     }
     closedir(d);
+
+    qsort(s_photos, s_photo_count, sizeof(s_photos[0]), compare_photo_display);
 }
 
 void aura_photos_invalidate(void)
 {
     s_photo_count = -1;
+    s_photo_total_count = -1;
     s_loaded_index = -1;
 }
 
 int aura_photos_count(void)
 {
     ensure_photo_list();
-    return s_photo_count;
+    return s_photo_total_count;
 }
 
 static void draw_message(aura_str_id_t msg_id)
@@ -143,10 +174,50 @@ static void draw_message(aura_str_id_t msg_id)
                (const unsigned char *)aura_str(msg_id));
 }
 
+/* D-291: variante de draw_message() con una segunda linea de ayuda,
+ * mas chica y mas atenuada, debajo del mensaje principal -- para el
+ * vacio de Fotos, que ahora dice donde resolverlo (AURA_STR_EMPTY_
+ * PHOTOS_HINT) en vez de solo describir el vacio. */
+static void draw_message_with_hint(aura_str_id_t msg_id, aura_str_id_t hint_id)
+{
+    int w1, h1, w2, h2, total_h, top;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_getstringsize((const unsigned char *)aura_str(msg_id), &w1, &h1);
+    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    lcd_getstringsize((const unsigned char *)aura_str(hint_id), &w2, &h2);
+
+    total_h = h1 + A26_SPACING_SM + h2;
+    top = (A26_SCREEN_HEIGHT - total_h) / 2;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    lcd_putsxy((A26_SCREEN_WIDTH - w1) / 2, top, (const unsigned char *)aura_str(msg_id));
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
+    lcd_putsxy((A26_SCREEN_WIDTH - w2) / 2, top + h1 + A26_SPACING_SM,
+               (const unsigned char *)aura_str(hint_id));
+}
+
+/* D-291: hay mas imagenes en /Photos de las que caben en MAX_PHOTOS --
+ * se dice explicitamente en vez de truncar en silencio (ver contrato
+ * §6.5 en PLAN-image-viewer.md). */
+static bool has_more_row(void)
+{
+    return s_photo_total_count > s_photo_count;
+}
+
+static int display_row_count(void)
+{
+    return s_photo_count + (has_more_row() ? 1 : 0);
+}
+
 void aura_photos_draw(aura_nav_t *nav)
 {
     int i;
-    static aura_list_item_t items[MAX_PHOTOS];
+    static aura_list_item_t items[MAX_PHOTOS + 1];
+    static char s_more_label[48];
 
     ensure_photo_list();
 
@@ -157,7 +228,7 @@ void aura_photos_draw(aura_nav_t *nav)
          * sistema sin ella. */
         a26_shell_clear_screen();
         aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_PHOTOS));
-        draw_message(AURA_STR_EMPTY_PHOTOS);
+        draw_message_with_hint(AURA_STR_EMPTY_PHOTOS, AURA_STR_EMPTY_PHOTOS_HINT);
         return;
     }
 
@@ -173,7 +244,17 @@ void aura_photos_draw(aura_nav_t *nav)
         items[i].toggle = -1;
         items[i].dimmed = 0;
     }
-    aura_widgets_draw_list(aura_str(AURA_STR_PHOTOS), items, s_photo_count,
+    if (has_more_row())
+    {
+        snprintf(s_more_label, sizeof(s_more_label), aura_str(AURA_STR_LIST_MORE_FMT),
+                  s_photo_total_count - s_photo_count);
+        items[i].label = s_more_label;
+        items[i].icon_name = NULL;
+        items[i].checked = 0;
+        items[i].toggle = -1;
+        items[i].dimmed = 1; /* fila presente pero inerte, no elegible */
+    }
+    aura_widgets_draw_list(aura_str(AURA_STR_PHOTOS), items, display_row_count(),
                             aura_nav_get_selection(nav));
 }
 
@@ -184,7 +265,7 @@ void aura_photos_handle_button(aura_nav_t *nav, long button)
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < s_photo_count - 1)
+        if (sel < display_row_count() - 1)
             aura_nav_set_selection(nav, sel + 1);
         break;
     case BUTTON_SCROLL_BACK:
@@ -192,7 +273,9 @@ void aura_photos_handle_button(aura_nav_t *nav, long button)
             aura_nav_set_selection(nav, sel - 1);
         break;
     case BUTTON_SELECT:
-        if (s_photo_count > 0)
+        /* sel == s_photo_count solo puede ser la fila inerte "...y N
+         * mas" (has_more_row()) -- nunca abre el visor. */
+        if (sel >= 0 && sel < s_photo_count)
         {
             s_current_index = sel;
             aura_nav_push(nav, AURA_SCREEN_PHOTO_VIEWER);

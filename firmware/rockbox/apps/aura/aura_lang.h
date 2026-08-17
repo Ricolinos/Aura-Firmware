@@ -114,6 +114,13 @@ typedef enum {
     AURA_STR_EMPTY_MUSIC,
     AURA_STR_EMPTY_VIDEOS,
     AURA_STR_EMPTY_PHOTOS,
+    /* D-291: linea de ayuda bajo AURA_STR_EMPTY_PHOTOS -- honesta, sin
+     * jerga (Principio 7), le dice al usuario DONDE resolver el vacio. */
+    AURA_STR_EMPTY_PHOTOS_HINT,
+    /* D-291: fila final inerte de la lista de Fotos/Videos cuando hay
+     * mas archivos de los que caben en MAX_PHOTOS/MAX_VIDEOS -- un
+     * solo %d (la cantidad restante). */
+    AURA_STR_LIST_MORE_FMT,
     AURA_STR_NOTHING_PLAYING,
 
     AURA_STR_MUSIC_ARTISTS,
