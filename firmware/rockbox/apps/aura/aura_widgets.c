@@ -34,6 +34,7 @@
 #include "apple2026_shell.h"
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
+#include "aura_style.h"
 #include "aura_statusbar.h"
 #include "aura_status_bar_v2.h"
 #include "aura_lang.h"
@@ -159,15 +160,17 @@ static unsigned variant_ink(const char *suffix)
 static int draw_icon_mask_2(const char *name, int size, int x, int y,
                              unsigned ink_a, unsigned ink_b, int extra_alpha_256)
 {
-    char path[MAX_PATH];
+    char rel[MAX_PATH];
     struct bitmap bm;
     int ret, row, col, max_d;
     const fb_data *mask;
 
-    snprintf(path, sizeof(path), "%s/aura/masks/%s-%d.bmp", ICON_DIR, name, size);
+    /* D-289: la mascara vive bajo el estilo activo, con fallback por
+     * archivo al default si el tema no la trae -- ver aura_style.c. */
+    snprintf(rel, sizeof(rel), "masks/%s-%d.bmp", name, size);
 
     bm.data = (char *)icon_buf;
-    ret = read_bmp_file(path, &bm, sizeof(icon_buf), FORMAT_NATIVE, NULL);
+    ret = aura_style_read_icon_bmp(rel, &bm, sizeof(icon_buf));
     if (ret <= 0)
         return 0;
 
@@ -233,7 +236,7 @@ static int draw_icon_mask(const char *name, int size, int x, int y,
 static int draw_icon_variant(const char *name, int size, int x, int y,
                               const char *suffix)
 {
-    char path[MAX_PATH];
+    char rel[MAX_PATH];
     struct bitmap bm;
     int ret;
 
@@ -255,11 +258,13 @@ static int draw_icon_variant(const char *name, int size, int x, int y,
     if (ret > 0)
         return ret;
 
-    snprintf(path, sizeof(path), "%s/aura/%s/%s-%d%s.bmp",
-              ICON_DIR, theme_dir_name(), name, size, suffix);
+    /* Fallback (D-010, sin mascaras en disco): bmp pre-compuesto por
+     * tema/variante -- D-289 lo resuelve contra el estilo activo, con
+     * el mismo fallback por archivo al default. */
+    snprintf(rel, sizeof(rel), "%s/%s-%d%s.bmp", theme_dir_name(), name, size, suffix);
 
     bm.data = (char *)icon_buf;
-    ret = read_bmp_file(path, &bm, sizeof(icon_buf), FORMAT_NATIVE, NULL);
+    ret = aura_style_read_icon_bmp(rel, &bm, sizeof(icon_buf));
     if (ret <= 0)
         return 0;
 

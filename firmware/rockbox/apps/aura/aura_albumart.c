@@ -40,6 +40,7 @@
 #include "aura_albumart.h"
 #include "apple2026_shell.h"
 #include "apple2026_tokens.h"
+#include "aura_style.h"
 #include "aura_art.h"
 #include "aura_music.h" /* AURA_MUSIC_ITEM_LEN, mismo tope que aura_music_list_playlists() */
 
@@ -281,7 +282,7 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
      * ningun color suelto nuevo. */
     unsigned ink = a26_shell_blend(a26_color(A26_SHELL_RAIL),
                                     a26_color(A26_TEXT_SECONDARY), 128);
-    char path[MAX_PATH];
+    char rel[MAX_PATH];
     struct bitmap bm;
     int i, row, col, ret, ox, oy;
     const fb_data *mask;
@@ -289,10 +290,11 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
     for (i = 0; i < size * size; i++)
         buf[i] = tile;
 
-    snprintf(path, sizeof(path), "%s/aura/masks/music-%d.bmp",
-              ICON_DIR, default_tile_icon_size(size));
+    /* D-289: mascara del estilo activo, con fallback por archivo al
+     * default -- ver aura_style.c. */
+    snprintf(rel, sizeof(rel), "masks/music-%d.bmp", default_tile_icon_size(size));
     bm.data = (char *)s_decode_scratch;
-    ret = read_bmp_file(path, &bm, sizeof(s_decode_scratch), FORMAT_NATIVE, NULL);
+    ret = aura_style_read_icon_bmp(rel, &bm, sizeof(s_decode_scratch));
     if (ret <= 0)
         return; /* tile plano sin nota -- mejor que nada si faltara el asset */
 

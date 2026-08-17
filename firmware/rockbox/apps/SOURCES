@@ -346,6 +346,8 @@ aura/aura_settings.c
 aura/aura_splash_lang.c
 aura/aura_statusbar.c
 aura/apple2026_shell.c
+aura/aura_style.c
+aura/aura_style_manifest.c
 aura/aura_transitions.c
 aura/aura_video.c
 aura/aura_widgets.c

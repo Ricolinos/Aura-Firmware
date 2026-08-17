@@ -38,6 +38,7 @@
 #include "aura_flow.h"
 #include "aura_category.h"
 #include "aura_settings.h"
+#include "aura_style.h"
 
 #include "aura_selection_summary.h"
 
@@ -183,21 +184,28 @@ static void draw_diagonal_gradient(int x, int y, int size,
  * documentado en tokens.json (aura_ds.metrics.right_panel_background). */
 static fb_data s_bg_pixels[BG_W * BG_H];
 static const char *s_bg_loaded_name = NULL;
+static unsigned s_bg_loaded_generation = 0;
 static bool s_bg_load_ok = false;
 
 static bool ensure_panel_background(const char *name)
 {
-    char path[MAX_PATH];
+    char rel[MAX_PATH];
     struct bitmap bm;
     int ret;
+    unsigned generation = aura_style_generation();
 
-    if (name == s_bg_loaded_name)
+    /* D-289: la generacion del estilo activo entra en la clave de
+     * cache -- sin esto, cambiar de tema (o revertir uno invalido) no
+     * invalidaria este buffer aunque el `name` pedido sea el mismo
+     * literal de siempre ("pink"). */
+    if (name == s_bg_loaded_name && generation == s_bg_loaded_generation)
         return s_bg_load_ok;
 
     s_bg_loaded_name = name;
-    snprintf(path, sizeof(path), "%s/aura/backgrounds/%s.bmp", ICON_DIR, name);
+    s_bg_loaded_generation = generation;
+    snprintf(rel, sizeof(rel), "backgrounds/%s.bmp", name);
     bm.data = (char *)s_bg_pixels;
-    ret = read_bmp_file(path, &bm, sizeof(s_bg_pixels), FORMAT_NATIVE, NULL);
+    ret = aura_style_read_icon_bmp(rel, &bm, sizeof(s_bg_pixels));
     s_bg_load_ok = (ret > 0 && bm.width == BG_W && bm.height == BG_H);
     return s_bg_load_ok;
 }

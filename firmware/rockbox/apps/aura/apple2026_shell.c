@@ -28,34 +28,19 @@
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
 #include "aura_color.h"
+#include "aura_style.h"
 
-static int font_ids[A26_FONT_STYLE_COUNT];
-
+/* D-289 (sistema de temas): la carga de las 14 fuentes y la tabla de
+ * paleta viven ahora en aura_style.c -- el estilo activo (el default
+ * compilado, o un paquete de tema instalado) decide QUE se carga; esta
+ * capa solo pide. a26_font() tambien se movio alla (junto al arreglo
+ * font_ids que respalda, ver aura_style.c) porque cambiar de estilo en
+ * caliente necesita descargar/recargar esas 14 fuentes -- mantenerlas
+ * en dos archivos distintos habria significado exponer el arreglo o
+ * duplicar el estado. Ver CONTRATO-formato-tema.md. */
 void a26_shell_init(void)
 {
-    static const char *const paths[A26_FONT_STYLE_COUNT] = {
-        [A26_FONT_STYLE_TITLE]   = FONT_DIR "/" A26_FONT_TITLE,
-        [A26_FONT_STYLE_BODY]    = FONT_DIR "/" A26_FONT_BODY,
-        [A26_FONT_STYLE_CAPTION] = FONT_DIR "/" A26_FONT_CAPTION,
-        [A26_FONT_STYLE_HEADER]  = FONT_DIR "/" A26_FONT_HEADER,
-        [A26_FONT_STYLE_MICRO]   = FONT_DIR "/" A26_FONT_MICRO,
-        [A26_FONT_STYLE_DS_REG_8]      = FONT_DIR "/" A26_FONT_DS_REG_8,
-        [A26_FONT_STYLE_DS_SEMIBOLD_15] = FONT_DIR "/" A26_FONT_DS_SEMIBOLD_15,
-        [A26_FONT_STYLE_DS_REG_10]  = FONT_DIR "/" A26_FONT_DS_REG_10,
-        [A26_FONT_STYLE_DS_BOLD_10] = FONT_DIR "/" A26_FONT_DS_BOLD_10,
-        [A26_FONT_STYLE_DS_REG_12]  = FONT_DIR "/" A26_FONT_DS_REG_12,
-        [A26_FONT_STYLE_DS_BOLD_12] = FONT_DIR "/" A26_FONT_DS_BOLD_12,
-        [A26_FONT_STYLE_DS_BOLD_14] = FONT_DIR "/" A26_FONT_DS_BOLD_14,
-        [A26_FONT_STYLE_DS_BOLD_18] = FONT_DIR "/" A26_FONT_DS_BOLD_18,
-        [A26_FONT_STYLE_DS_MEDIUM_16] = FONT_DIR "/" A26_FONT_DS_MEDIUM_16,
-    };
-    int i;
-
-    for (i = 0; i < A26_FONT_STYLE_COUNT; i++)
-    {
-        int id = font_load(paths[i]);
-        font_ids[i] = (id >= 0) ? id : FONT_SYSFIXED;
-    }
+    aura_style_boot();
 
     /* Aura pinta su propio fondo solido por tema; el backdrop del tema
      * de Rockbox por defecto (cabbiev2.bmp) se ve "a traves" de
@@ -65,48 +50,33 @@ void a26_shell_init(void)
 #endif
 }
 
-int a26_font(a26_font_style_t style)
-{
-    if (style < 0 || style >= A26_FONT_STYLE_COUNT)
-        return FONT_SYSFIXED;
-    return font_ids[style];
-}
-
 unsigned a26_color(a26_token_t token)
 {
     int dark = (aura_settings.theme == AURA_THEME_DARK);
 
-    switch (token)
-    {
-    case A26_SHELL_BG:
-        return dark ? A26_COLOR_DARK_SHELL_BG : A26_COLOR_LIGHT_SHELL_BG;
-    case A26_TEXT_PRIMARY:
-        return dark ? A26_COLOR_DARK_TEXT_PRIMARY : A26_COLOR_LIGHT_TEXT_PRIMARY;
-    case A26_TEXT_SECONDARY:
-        return dark ? A26_COLOR_DARK_TEXT_SECONDARY : A26_COLOR_LIGHT_TEXT_SECONDARY;
-    case A26_TEXT_TERTIARY:
-        return dark ? A26_COLOR_DARK_TEXT_TERTIARY : A26_COLOR_LIGHT_TEXT_TERTIARY;
-    case A26_ACCENT:
+    if (token == A26_ACCENT)
         /* El acento es CONFIGURABLE por el usuario (T0.3) -- resolver
-         * el token al ajuste vivo, no al default del tema compilado.
-         * Antes cada consumidor debia acordarse de llamar aura_accent()
-         * en vez del token; los que no (texto seleccionado de listas de
+         * el token al ajuste vivo, no al del tema activo. Antes cada
+         * consumidor debia acordarse de llamar aura_accent() en vez
+         * del token; los que no (texto seleccionado de listas de
          * contenido, tracklist de Cover Flow, toggles viejos) se
          * quedaban en el rosa default aunque el usuario eligiera otro
          * color -- inconsistencia real vista en el simulador con acento
          * azul (2026-08-12). Un solo punto de verdad aca la elimina
-         * para todos. */
+         * para todos. D-289 (sistema de temas): un tema puede declarar
+         * `accent_default`/`accent_presets` en su manifiesto, pero v1
+         * NO los cablea a ningun lado del firmware todavia -- quedan
+         * reservados en el formato (CONTRATO-formato-tema.md SS8) para
+         * cuando el selector de acento (AURA_SCREEN_SETTINGS_ACCENT)
+         * los lea; hasta entonces el acento sigue siendo 100% el
+         * ajuste del usuario, con el mismo default compilado de
+         * siempre. */
         return aura_accent();
-    case A26_SHELL_RAIL:
-        return dark ? A26_COLOR_DARK_SHELL_RAIL : A26_COLOR_LIGHT_SHELL_RAIL;
-    case A26_PROGRESS_FILL:
-        return dark ? A26_COLOR_DARK_PROGRESS_FILL : A26_COLOR_LIGHT_PROGRESS_FILL;
-    case A26_PROGRESS_TRACK:
-        return dark ? A26_COLOR_DARK_PROGRESS_TRACK : A26_COLOR_LIGHT_PROGRESS_TRACK;
-    case A26_SELECTION_FILL:
-        return dark ? A26_COLOR_DARK_SELECTION_FILL : A26_COLOR_LIGHT_SELECTION_FILL;
-    }
-    return dark ? A26_COLOR_DARK_TEXT_PRIMARY : A26_COLOR_LIGHT_TEXT_PRIMARY;
+
+    /* D-289: resuelto contra el estilo activo (hereda del default
+     * compilado lo que el tema no traiga) -- aura_style.c es el UNICO
+     * lugar que sabe si hay un tema instalado o no. */
+    return aura_style_palette_color((int)token, dark);
 }
 
 unsigned aura_accent(void)
@@ -153,23 +123,29 @@ void aura_category_gradient(aura_category_t cat,
     switch (cat)
     {
     case AURA_CATEGORY_SETTINGS:
-        base_rgb24 = AURA_DS_COLOR_CATEGORY_SETTINGS_GRAY_RGB24;
+        /* D-289: rgb24 resuelto contra el estilo activo (hereda del
+         * default compilado si el tema no trae `category_*`). */
+        base_rgb24 = aura_style_category_settings_gray_rgb24();
         break;
     case AURA_CATEGORY_VIDEO:
-        base_rgb24 = AURA_DS_COLOR_CATEGORY_VIDEO_RGB24;
+        base_rgb24 = aura_style_category_video_rgb24();
         break;
     case AURA_CATEGORY_PHOTOS:
-        base_rgb24 = AURA_DS_COLOR_CATEGORY_PHOTOS_RGB24;
+        base_rgb24 = aura_style_category_photos_rgb24();
         break;
     case AURA_CATEGORY_EXTRAS:
+    {
         /* Unico caso de degradado entre DOS TONOS (amarillo -> acento),
          * no luz/sombra de un solo color -- el "centro" es el punto
          * medio real entre ambos, no un tercer tono independiente. */
-        *color_a = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
+        unsigned yellow_rgb24 = aura_style_category_extras_yellow_rgb24();
+        aura_rgb_t yellow = aura_color_from_rgb24(yellow_rgb24);
+
+        *color_a = LCD_RGBPACK(yellow.r, yellow.g, yellow.b);
         *color_b = aura_accent();
-        *color_center = fixed_toward(AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW_RGB24,
-                                      aura_settings.accent_rgb24, 50);
+        *color_center = fixed_toward(yellow_rgb24, aura_settings.accent_rgb24, 50);
         return;
+    }
     case AURA_CATEGORY_MUSIC:
     case AURA_CATEGORY_NONE:
     default:

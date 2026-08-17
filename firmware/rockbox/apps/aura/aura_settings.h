@@ -167,6 +167,17 @@ typedef struct {
      * clave nueva, nunca reusar la vieja en silencio. */
     bool screen_lock_enabled;
     bool screen_lock_active;
+    /* D-289 (sistema de temas): id del paquete de tema activo, o
+     * cadena vacia = el default compilado ("Aura"). 33 = 32 + NUL,
+     * ver AURA_STYLE_ID_LEN en aura_style.h (CONTRATO-formato-tema.md
+     * fija el maximo de un <id> en 32 caracteres). Persiste como la
+     * clave "theme_id" en aura.cfg -- ese nombre, no "style_id", es el
+     * del contrato con Aura Studio; el campo se llama distinto aca
+     * para no confundirse con `theme` (arriba, claro/oscuro, sin
+     * relacion con esto). aura_style.c es quien de verdad carga/
+     * aplica el paquete -- este campo es solo la persistencia del
+     * ajuste. */
+    char style_id[33];
 } aura_settings_t;
 
 /* Instancia unica en memoria, cargada por aura_settings_load(). */

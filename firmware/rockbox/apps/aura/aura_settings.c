@@ -30,9 +30,11 @@
 #include "settings.h"
 #include "eq.h"
 #include "backlight.h"
+#include "string-extra.h"
 
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
+#include "aura_style.h"
 
 #define AURA_DIR       ROCKBOX_DIR "/aura"
 #define AURA_CFG_PATH  AURA_DIR "/aura.cfg"
@@ -269,6 +271,16 @@ void aura_settings_load(void)
                 aura_settings.screen_lock_enabled = (v != 0);
             else if (!strcmp(name, "screen_lock_active"))
                 aura_settings.screen_lock_active = (v != 0);
+            else if (!strcmp(name, "theme_id"))
+                /* D-289: nombre de clave "theme_id" (no "style_id") a
+                 * proposito -- es el que fija CONTRATO-formato-tema.md
+                 * para que Aura Studio escriba/lea el mismo campo. */
+                strlcpy(aura_settings.style_id, value, sizeof(aura_settings.style_id));
+            /* "theme_format_supported" es de SOLO ESCRITURA (este
+             * archivo la escribe para que Aura Studio la lea del
+             * iPod montado, ver aura_settings_save() abajo) -- el
+             * firmware nunca la lee de vuelta, se ignora aca junto con
+             * cualquier otra clave desconocida. */
         }
         close(fd);
 
@@ -316,6 +328,14 @@ void aura_settings_save(void)
     fdprintf(fd, "screen_lock_configured: %d\n", (int)aura_settings.screen_lock_configured);
     fdprintf(fd, "screen_lock_enabled: %d\n", (int)aura_settings.screen_lock_enabled);
     fdprintf(fd, "screen_lock_active: %d\n", (int)aura_settings.screen_lock_active);
+    fdprintf(fd, "theme_id: %s\n", aura_settings.style_id);
+    /* D-289: informativa para Aura Studio -- le permite saber, leyendo
+     * el iPod montado, si el firmware instalado entiende el sistema de
+     * temas y que version de formato acepta, sin tener que adivinar
+     * por numero de version del firmware (que hoy no existe en ningun
+     * lado visible, ver PLAN-themes-impl.md SS1.0). El firmware nunca
+     * lee esta clave de vuelta. */
+    fdprintf(fd, "theme_format_supported: %d\n", AURA_STYLE_FORMAT_SUPPORTED);
 
     close(fd);
 }

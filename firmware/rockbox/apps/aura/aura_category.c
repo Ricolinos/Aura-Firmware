@@ -100,6 +100,9 @@ aura_category_t aura_category_for_screen(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_CLOCK24:
     case AURA_SCREEN_SETTINGS_CLOCK_TITLE:
     case AURA_SCREEN_SETTINGS_THEME:
+    /* D-289: "Estilo" es hermana de "Tema" en Apariencia -- misma
+     * categoria que el resto del grupo. */
+    case AURA_SCREEN_SETTINGS_STYLE:
     case AURA_SCREEN_SETTINGS_ANIMATIONS:
     case AURA_SCREEN_SETTINGS_GRAPHICS:
     case AURA_SCREEN_SETTINGS_EQ:
