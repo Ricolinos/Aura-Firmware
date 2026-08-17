@@ -200,9 +200,8 @@ def generate_aura_ds_defines(tokens):
     return lines
 
 
-STUDIO_GENERATED = (
-    ROOT.parent / "studio" / "AuraStudio" / "Sources" / "AuraStudio" / "Generated"
-)
+STUDIO_PROJECT = ROOT.parent / "studio" / "AuraStudio"
+STUDIO_GENERATED = STUDIO_PROJECT / "Sources" / "AuraStudio" / "Generated"
 
 
 def generate_swift_palette(tokens):
@@ -214,7 +213,18 @@ def generate_swift_palette(tokens):
     el arbol de fuentes de Studio (no en out/) porque Studio se compila
     con SwiftPM/Xcode, que no tienen un paso de instalacion de assets
     como build_sim.sh.
+
+    D-286 (separacion de repositorios, 2026-08-16): Aura Studio vive
+    ahora en un repositorio aparte, ya no como `studio/` hermano de
+    este. Si ese arbol no esta presente (el caso normal en un checkout
+    de este repo, que es solo firmware), no hay a donde escribir esto
+    -- se omite en vez de crear un `studio/` huerfano sin dueno. Si
+    alguna vez se necesita este archivo desde el otro repositorio, hay
+    que copiarlo/publicarlo explicitamente, no asumir un arbol hermano.
     """
+    if not STUDIO_PROJECT.exists():
+        print("==> Aura Studio no esta presente como hermano de este repo -- se omite AuraPalette.swift")
+        return
     print("==> Generando la paleta de Aura Studio (Generated/AuraPalette.swift)")
     lines = [
         "// Generado por design-system/generate.py a partir de tokens.json.",
