@@ -59,9 +59,27 @@ Esto **sí** es un acoplamiento permanente por diseño: ambos lados leen/escribe
 | `.rockbox/icons/aura/` | Instalador (parte de `rockbox.zip`) | Firmware | — |
 | `.rockbox/fonts/a26-title-20.fnt` | Instalador (parte de `rockbox.zip`) | Studio (`InstallerViewModel`, sentinela frágil de "árbol instalado") | Candidato a reemplazo por `.rockbox/aura/VERSION` explícito — no implementado en esta pasada |
 | `Playlists/` | Studio (`PlaylistExporter`) | Firmware | — |
-| `Music/`, `Photos/`, `Videos/` | Studio (sync) | Firmware | 3 layouts posibles para `Music/` (Artista/Álbum, Álbum, Artista) — configurable en Studio |
+| `Music/`, `Videos/` | Studio (sync) | Firmware | 3 layouts posibles para `Music/` (Artista/Álbum, Álbum, Artista) — configurable en Studio |
+| `Photos/` | Studio (sync) | Firmware (`aura_photos.c`) | D-291. Contrato detallado en **D.1** abajo — formato, resolución, nombres |
 
 Cualquier cambio de ruta o de formato en esta tabla sube un `contract_version` (clave nueva a introducir en `sync_summary.cfg` y `aura.cfg` — no implementada todavía) y se registra en el diario de ambos repos (`D-NNN` en el firmware, `ST-NNN` en Studio), citándose cruzado.
+
+### D.1 — `Photos/` en detalle (D-291)
+
+Plano (sin subcarpetas — el firmware no recorre subdirectorios de `/Photos/`), un archivo por foto, nombre único dentro del directorio.
+
+| Campo | Regla |
+|---|---|
+| Formato | JPEG baseline (SOF0/SOF1), Huffman, 8 bits, 3 componentes YCbCr (4:2:0 o 4:4:4) o 1 componente gris. Extensión `.jpg` (`.jpeg` también se acepta). **Nunca**: progresivo/aritmético, PNG, GIF, HEIC/HEIF, WebP, TIFF, BMP — Studio convierte todo a JPEG antes de copiar (`ImageResizer`, ya lo hace hoy) |
+| Resolución | Lado mayor ≤ 640px ("Versión HD") o ≤ 320px ("Optimizar espacio"). Nunca escalar hacia arriba una fuente más chica. 640px es el valor recomendado: decodifica a 320×240 sin remuestreo posterior (IDCT a 1/2 exacto) |
+| Orientación | Horneada en los píxeles al exportar (EXIF Orientation no se lee) |
+| Espacio de color | sRGB; sin perfil ICC (el dispositivo muestra RGB565, 16 bits) |
+| Nombre de archivo | UTF-8, ≤ 95 bytes incluyendo `.jpg` (recomendado ≤ 60 caracteres). **Único dentro de `/Photos/`** — dos fuentes homónimas de carpetas distintas no pueden colisionar en el mismo nombre de destino (ver hallazgo lateral en `PLAN-image-viewer.md` §9, pendiente del lado Studio) |
+| Cantidad | El firmware lista hasta 500, ordenadas por nombre (natural, insensible a mayúsculas); con más, la fila final dice "…y N más". Studio no necesita limitar la copia |
+| Miniaturas | Las genera y cachea el firmware (`.rockbox/aura/photocache/`) — Studio no genera ni escribe nada ahí |
+| `sync_summary.cfg` | Sin cambio de formato por esto — `photo_count`/`photo_bytes` se siguen escribiendo igual (los lee "Acerca de"); el estado vacío de la lista de Fotos ya no depende de este archivo, lee `/Photos/` directo |
+
+Detalle completo, hallazgos y justificación en `PLAN-image-viewer.md` (raíz de este repo).
 
 ## E — Compatibilidad de versiones
 

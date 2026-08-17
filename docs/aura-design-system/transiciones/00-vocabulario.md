@@ -234,6 +234,11 @@ timing que `Push-and-Drop`/`Shift-and-Reveal` (`push_and_drop.*`, D-274) —
 sin timing propio documentado hasta esta variante, igual que
 `Shift-and-Reveal` no lo tenía.
 
+**Segundo consumidor (D-291):** `PhotoViewer` (`componentes/photo-viewer.md`)
+entre fotos dentro del visor — región = pantalla completa (sin `StatusBar`
+que excluir, esa pantalla no tiene). A diferencia de "Acerca de" no hay
+elemento persistente ni puntos de paginación: toda la región es la foto.
+
 ---
 
 ## `Scroll-Slide`
