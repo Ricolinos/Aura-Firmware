@@ -219,7 +219,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_REPEAT_SUMMARY_ALL]     = "Repetir todo",
     [AURA_STR_REPEAT_SUMMARY_ONE]     = "Repetir una",
 
-    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreado por Ricardo Gomez.\n\nBasado en Rockbox\nRockbox y sus colaboradores. Se distribuye bajo la Licencia Publica General de GNU version 2 (GPL v2), y Aura hereda esa licencia.\nCodigo fuente:\ngithub.com/Ricolinos/Aura-Proyect\n\nSobre el hardware\niPod e iPod Classic son marcas de Apple Inc. Aura no esta afiliado, patrocinado ni respaldado por Apple.",
+    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreado por Ricardo Gómez.\n\nBasado en Rockbox\nRockbox y sus colaboradores. Se distribuye bajo la Licencia Pública General de GNU versión 2 (GPL v2), y Aura hereda esa licencia.\nCódigo fuente:\ngithub.com/Ricolinos/Aura-Proyect\n\nSobre el hardware\niPod e iPod Classic son marcas de Apple Inc. Aura no está afiliado, patrocinado ni respaldado por Apple.",
     [AURA_STR_ABOUT_MY_IPOD]          = "Mi iPod",
     [AURA_STR_ABOUT_OTHER]            = "Otros",
     [AURA_STR_ABOUT_SYSTEM]           = "Sistema",
