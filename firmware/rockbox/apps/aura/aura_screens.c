@@ -517,17 +517,18 @@ static const aura_str_id_t accent_choice_labels[] = {
  * que accent_choice_labels arriba. */
 static const unsigned accent_choice_rgb24[] = AURA_DS_COLOR_ACCENT_PRESETS_HEX_RGB24_VALUES;
 
-/* AURA_SCREEN_SETTINGS_REPEAT (D-264): dejo de ser una pantalla de
- * eleccion navegable -- ahora es una fila en linea (SELECT cicla el
- * valor, ver aura_screens_handle_button()), igual que Aleatorio/
- * Clicker. Retirada de esta funcion y de get_choice_table()/
- * get_choice_current()/apply_choice() abajo -- codigo confirmado sin
- * otro consumidor real (grep completo contra el arbol, D-264) antes de
- * borrarlo, no dejado como ruta muerta. */
+/* AURA_SCREEN_SETTINGS_REPEAT (D-264) y AURA_SCREEN_SETTINGS_THEME
+ * (D-292, "Modo"): dejaron de ser pantallas de eleccion navegables --
+ * ahora son filas en linea (SELECT cicla el valor, ver
+ * aura_screens_handle_button()), igual que Aleatorio/Clicker. Retirada
+ * de esta funcion y de get_choice_table()/get_choice_current()/
+ * apply_choice() abajo -- codigo confirmado sin otro consumidor real
+ * (grep completo contra el arbol) antes de borrarlo, no dejado como
+ * ruta muerta. `theme_choice_labels[]` SI se conserva: "Modo" la usa
+ * para el texto del valor inline y del panel derecho. */
 static int is_choice_screen(aura_screen_id_t screen)
 {
-    return screen == AURA_SCREEN_SETTINGS_THEME
-        || screen == AURA_SCREEN_SETTINGS_ANIMATIONS
+    return screen == AURA_SCREEN_SETTINGS_ANIMATIONS
         || screen == AURA_SCREEN_SETTINGS_GRAPHICS
         || screen == AURA_SCREEN_SETTINGS_EQ
         || screen == AURA_SCREEN_SETTINGS_LANGUAGE
@@ -540,9 +541,6 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
 {
     switch (screen)
     {
-    case AURA_SCREEN_SETTINGS_THEME:
-        *out = theme_choice_labels;
-        return sizeof(theme_choice_labels) / sizeof(theme_choice_labels[0]);
     case AURA_SCREEN_SETTINGS_ANIMATIONS:
         *out = animation_choice_labels;
         return sizeof(animation_choice_labels) / sizeof(animation_choice_labels[0]);
@@ -574,7 +572,6 @@ static int get_choice_current(aura_screen_id_t screen)
 {
     switch (screen)
     {
-    case AURA_SCREEN_SETTINGS_THEME:      return (int)aura_settings.theme;
     case AURA_SCREEN_SETTINGS_ANIMATIONS: return (int)aura_settings.animation_mode;
     case AURA_SCREEN_SETTINGS_GRAPHICS:   return (int)aura_settings.graphics_mode;
     case AURA_SCREEN_SETTINGS_EQ:       return (int)aura_settings.eq_preset;
@@ -626,9 +623,6 @@ static void apply_choice(aura_screen_id_t screen, int index)
 
     switch (screen)
     {
-    case AURA_SCREEN_SETTINGS_THEME:
-        aura_settings.theme = (aura_theme_id_t)index;
-        break;
     case AURA_SCREEN_SETTINGS_ANIMATIONS:
         aura_settings.animation_mode = (aura_anim_mode_t)index;
         break;
@@ -2033,6 +2027,26 @@ static void compute_panel_content(aura_screen_id_t screen, aura_screen_id_t targ
             *panel_desc = aura_str(AURA_STR_SETTINGS_DATETIME);
             return;
         }
+        if (target == AURA_SCREEN_SETTINGS_THEME)
+        {
+            /* D-292 ("Modo"): el icono del panel refleja el VALOR
+             * activo, mapeo 1:1 -- mismo criterio que Repetir arriba
+             * (repeat/repeat-1 segun el modo). */
+            *panel_icon = (aura_settings.theme == AURA_THEME_DARK)
+                ? "theme-dark" : "theme-light";
+            *panel_top = aura_str(AURA_STR_SETTINGS_THEME);
+            *panel_desc = aura_str(theme_choice_labels[aura_settings.theme]);
+            return;
+        }
+        if (target == AURA_SCREEN_SETTINGS_STYLE)
+        {
+            /* D-292: aclara la relacion Modo<->Temas (ortogonales,
+             * PLAN-personalizacion.md §3) -- un tema instalado SIEMPRE
+             * trae paleta clara y oscura, nunca depende de cual este
+             * activo. */
+            *panel_desc = aura_str(AURA_STR_STYLE_MODE_NOTE);
+            return;
+        }
         if (target == AURA_SCREEN_SETTINGS_ABOUT)
         {
             *icon_renderer = draw_about_icon_renderer;
@@ -2062,18 +2076,25 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].icon_name = entries[i].icon_name;
         items[i].checked = 0;
         items[i].toggle = settings_row_toggle_value(entries[i].target);
-        items[i].value = NULL; /* D-292: filas InlineValue lo pisan mas abajo */
+        /* D-292: "Modo" es el primer consumidor real del patron
+         * InlineValue -- a diferencia de "Repetir" (cuyo valor solo
+         * aparece en el panel derecho), el valor de Modo vive EN LA
+         * FILA. theme_choice_labels[] ya existia para la pantalla de
+         * eleccion retirada; se reusa aca como texto del valor. */
+        items[i].value = (entries[i].target == AURA_SCREEN_SETTINGS_THEME)
+            ? aura_str(theme_choice_labels[aura_settings.theme])
+            : NULL;
         /* Flecha del Selector (selector.md) solo para destinos
-         * navegables de pantalla completa -- un toggle inline no navega
-         * a ningun lado, la regla de exclusion del documento ya lo
-         * cubre pero se evita marcarlo siquiera. */
+         * navegables de pantalla completa -- un toggle inline o un
+         * valor inline no navegan a ningun lado, la regla de exclusion
+         * del documento ya lo cubre pero se evita marcarlo siquiera. */
         items[i].indent = 0;
-        /* Repetir (D-264): fila en linea igual que Aleatorio/Clicker
-         * (SELECT cicla el valor, nunca navega) -- pero NO es un
-         * toggle booleano (`toggle` se queda en -1, 3 estados, sin
-         * pastilla de switch propia), asi que necesita su propia
-         * exclusion aca ademas de la que ya cubre `toggle < 0`. */
-        items[i].full_screen_target = (items[i].toggle < 0)
+        /* Repetir (D-264) y Modo (D-292): filas en linea igual que
+         * Aleatorio/Clicker (SELECT cicla el valor, nunca navega) --
+         * pero ninguna de las dos es un toggle booleano (`toggle` se
+         * queda en -1), asi que necesitan su propia exclusion aca
+         * ademas de la que ya cubre `toggle < 0`. */
+        items[i].full_screen_target = (items[i].toggle < 0) && !items[i].value
             && entries[i].target != AURA_SCREEN_SETTINGS_REPEAT
             && !screen_uses_split_layout(entries[i].target);
         /* Filas del arbol del original sin contenido propio todavia. */
@@ -2269,15 +2290,13 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
     for (i = 0; i < count; i++)
     {
         items[i].label = aura_str(labels[i]);
-        /* Iconos canonicos del doc de diseno SS4 ("sun.max.circle /
-         * moon.circle = temas") -- unica lista de eleccion con icono
-         * propio por fila hoy: el resto (Graficos/EQ/Idioma/Repetir) son
-         * niveles o presets abstractos sin un simbolo 1:1 natural, y
-         * forzar uno repetido violaria "hermanos se distinguen" mas de
-         * lo que ayudaria (D-075). */
-        items[i].icon_name = (screen == AURA_SCREEN_SETTINGS_THEME)
-            ? (i == 0 ? "theme-light" : "theme-dark")
-            : NULL;
+        /* D-292: "Tema" (Claro/Oscuro) salio de esta pantalla de
+         * eleccion -- ahora es "Modo", fila InlineValue (D-075/SS4
+         * "sun.max.circle / moon.circle = temas" sigue vigente, pero
+         * aplicado al icono del panel derecho de esa fila, ver
+         * compute_panel_content()). El resto (Graficos/EQ/Idioma) son
+         * niveles o presets abstractos sin un simbolo 1:1 natural. */
+        items[i].icon_name = NULL;
         items[i].checked = (i == current);
         items[i].toggle = -1;
         items[i].value = NULL;
@@ -4706,6 +4725,16 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
         {
             global_settings.repeat_mode = (global_settings.repeat_mode + 1) % 3;
             settings_save();
+            break;
+        }
+        /* Modo (D-292, ex-"Tema"): fila InlineValue -- SELECT alterna
+         * entre las 2 opciones (regla del patron: con 2 opciones
+         * alterna, con N>2 cicla, ver componentes/left-panel.md). */
+        if (entries[sel].target == AURA_SCREEN_SETTINGS_THEME)
+        {
+            aura_settings.theme = (aura_settings.theme == AURA_THEME_LIGHT)
+                ? AURA_THEME_DARK : AURA_THEME_LIGHT;
+            aura_settings_save();
             break;
         }
         /* "Canciones aleat." (menu de inicio del original) es una

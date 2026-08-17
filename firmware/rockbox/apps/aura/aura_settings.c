@@ -224,6 +224,12 @@ void aura_settings_load(void)
                 continue;
 
             int v = atoi(value);
+            /* D-292: la fila de Ajustes se renombro "Tema"->"Modo", pero
+             * la CLAVE en disco se queda "theme" -- renombrarla
+             * reseteria el modo claro/oscuro de cualquier dispositivo ya
+             * instalado (aura.cfg es clave:valor por nombre, no por
+             * indice). El nombre en disco es contrato de facto, no el
+             * texto de UI. */
             if (!strcmp(name, "theme"))
                 aura_settings.theme = clamp_enum(v, AURA_THEME_COUNT);
             else if (!strcmp(name, "animation_mode"))

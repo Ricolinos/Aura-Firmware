@@ -363,6 +363,11 @@ typedef enum {
      * pantalla de eleccion de estilo instalado. */
     AURA_STR_SETTINGS_STYLE,
 
+    /* D-292: panel derecho de la fila "Temas" (ex-"Estilo") en Ajustes
+     * -- aclara que un tema respeta el Modo activo (claro/oscuro), no
+     * lo reemplaza. */
+    AURA_STR_STYLE_MODE_NOTE,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

@@ -30,8 +30,12 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_NOWPLAYING]         = "Ahora suena",
     [AURA_STR_SETTINGS]           = "Ajustes",
 
-    [AURA_STR_SETTINGS_THEME]       = "Tema",
-    [AURA_STR_SETTINGS_STYLE]       = "Estilo",
+    /* D-292: "Tema"->"Modo" (Claro/Oscuro, ahora fila InlineValue) y
+     * "Estilo"->"Temas" (paquetes instalables, D-289) -- la clave
+     * `theme:` de aura.cfg NO cambia, solo el texto de UI (ver
+     * aura_settings.c). */
+    [AURA_STR_SETTINGS_THEME]       = "Modo",
+    [AURA_STR_SETTINGS_STYLE]       = "Temas",
     [AURA_STR_SETTINGS_ANIMATIONS]  = "Animaciones",
     [AURA_STR_SETTINGS_GRAPHICS]    = "Gráficos",
     [AURA_STR_SETTINGS_EQ]          = "Ecualizador",
@@ -254,6 +258,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_DRIVE_HDD]        = "Disco duro",
     [AURA_STR_ABOUT_DRIVE_UNKNOWN]    = "Unidad de almacenamiento",
     [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Disco simulado",
+    [AURA_STR_STYLE_MODE_NOTE]        = "Se ve en modo claro y oscuro",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -263,8 +268,8 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_NOWPLAYING]         = "Now Playing",
     [AURA_STR_SETTINGS]           = "Settings",
 
-    [AURA_STR_SETTINGS_THEME]       = "Theme",
-    [AURA_STR_SETTINGS_STYLE]       = "Style",
+    [AURA_STR_SETTINGS_THEME]       = "Mode",
+    [AURA_STR_SETTINGS_STYLE]       = "Themes",
     [AURA_STR_SETTINGS_ANIMATIONS]  = "Animations",
     [AURA_STR_SETTINGS_GRAPHICS]    = "Graphics",
     [AURA_STR_SETTINGS_EQ]          = "Equalizer",
@@ -486,6 +491,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_DRIVE_HDD]        = "Hard disk drive",
     [AURA_STR_ABOUT_DRIVE_UNKNOWN]    = "Storage drive",
     [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Simulated disk",
+    [AURA_STR_STYLE_MODE_NOTE]        = "Works in light and dark mode",
 };
 
 const char *aura_str(aura_str_id_t id)
