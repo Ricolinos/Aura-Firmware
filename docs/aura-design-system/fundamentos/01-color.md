@@ -58,19 +58,31 @@ algunas pantallas heredadas (páginas de "Acerca de", el riel A-Z, diálogos
 de confirmación del sistema viejo). Al elegir "Rosa" en Ajustes, ambos
 coinciden en tema claro.
 
-## Fondo del panel derecho por acento (D-267)
+**Pendiente (D-292, no resuelto en esta pasada):** el acento **libre**
+(cualquiera de los 6 presets, o un color fuera de la lista) no tiene hoy
+una adaptación por Modo como la que D-274 le dio al rosa de fábrica
+(`#FF2D55` claro → `#FF456C` oscuro) — `aura_accent()` devuelve el mismo
+hex sin importar el Modo activo. Si se decide extender esa adaptación al
+acento configurable, la fórmula propuesta es la misma idea de D-274
+(+10% hacia blanco en Modo oscuro, a falta de una hecha a mano por color
+como la del rosa), calculada en `aura_accent()`, no hardcodeada por
+preset.
+
+## Fondo del panel derecho por acento (D-267, D-292)
 
 En `split` de menú, el fondo del panel derecho (detrás de
-`SelectionSummary`) ya **no** es `shell_bg` plano ni un degradado calculado:
-es una **imagen horneada de 160×240 por preset de acento**
+`SelectionSummary`) no es `shell_bg` plano: es una **imagen horneada de
+160×240 por preset de acento**
 (`aura_ds.metrics.right_panel_background.presets`, fuente versionada en
 `design-system/assets/panel-backgrounds/<preset>-source.png` →
-`out/icons/aura/backgrounds/<preset>.bmp`). Sigue el **acento** del
-usuario, no la categoría de la fila (confirmado por mockup del dueño: fila
-Fotos con tile naranja de categoría sobre fondo rosa de acento). Estado
-interino: solo existe `pink`; cualquier acento sin imagen propia cae a
-`pink`, y si el archivo falta se rellena `shell_bg`. Los otros cinco
-presets quedan pendientes de que el dueño comparta sus imágenes.
+`out/icons/aura/backgrounds/<preset>.bmp`) cuando el acento activo
+coincide con uno de los 6 presets con imagen, o un **degradado calculado
+desde el acento** (D-292: `aura_accent_dark()` → `aura_accent()` →
+`aura_accent_light()`) cuando no. Sigue el **acento** del usuario, no la
+categoría de la fila (confirmado por mockup del dueño: fila Fotos con
+tile naranja de categoría sobre fondo rosa de acento). Detalle completo
+(correspondencia, procedencia de las 6 fotos, por qué el fallback nunca
+es un color plano) en `componentes/selection-summary.md`.
 
 ## Color por categoría del Menú principal (confirmado 2026-08-14)
 

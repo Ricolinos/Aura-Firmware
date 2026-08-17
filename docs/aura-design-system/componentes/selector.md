@@ -43,7 +43,10 @@ del `Selector`:
 - **Flecha de selección** — indica que ese ítem lleva a otro nivel de
   navegación. Se muestra **solo** cuando el ítem no tiene ya otro elemento
   opcional del lado derecho (ver tabla en `componentes/left-panel.md`) **y**
-  cuando lleva a un componente de pantalla completa.
+  cuando lleva a un componente de pantalla completa. Regla dura (D-292,
+  confirmada explícitamente al sumar `InlineValue`): un ítem con switch,
+  checkmark **o valor inline** nunca lleva flecha — la flecha significa
+  "esto abre un submenú", y ninguno de esos tres navega a ningún lado.
 - **Ícono de carga** — sustituye a la flecha cuando el destino está
   cargando. Mismo espacio, mismas reglas de aparición.
 

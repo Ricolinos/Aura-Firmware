@@ -106,21 +106,40 @@ opción — no todos los ítems llevan uno):
 | Switch | Valores booleanos | **Confirmado (D-165/D-167):** pista de 28×14px en cápsula; perilla de 15×10px, también en cápsula (más ancha que alta, no un círculo), con margen de 2px dentro de la pista — nunca la desborda. Encendido: pista del color de acento y perilla en un tono muy claro del propio acento. Apagado: pista gris con contraste y perilla casi blanca. Mismos colores sobre fila en reposo y sobre el `Selector`. |
 | Checkmark | Confirmación/selección múltiple | Ícono de 14px, mismo lenguaje que los íconos de fila (D-111) |
 | Ícono de tache (X) | — | Pendiente |
-| Texto alineado a la derecha | Mostrar distintos parámetros/valores | Pendiente |
+| `InlineValue` (valor enumerado) | Ajustes con 2+ valores con nombre — ver spec propia abajo | **Confirmado (D-292)** |
 | Ícono de carga (animado) | Comunicar que la opción está cargando | Pendiente — sin consumidor real todavía |
+
+### `InlineValue` — fila con valor visible, sin submenú (D-292)
+
+Patrón para ajustes de 2+ valores con nombre donde SELECT cambia el valor
+**en el sitio**, sin abrir una pantalla nueva — primer consumidor: "Modo"
+(Claro/Oscuro), `sistema/05-temas.md`.
+
+| Propiedad | Valor |
+|---|---|
+| Texto | Mismo tamaño/peso que la etiqueta de la fila (SF Pro Semibold 15px, D-267) |
+| Tinta | **`--color-text-secondary`, SIEMPRE** — incluso con la fila seleccionada. La etiqueta sí pasa a `--color-accent` al seleccionarse (como cualquier fila); el valor no, a propósito: es un **dato**, no la acción que SELECT va a tomar. Si ambos fueran acento la fila se leería como un solo texto largo |
+| Posición | Alineado a la derecha, mismo borde de 4px del `Selector` que ya usan switch/checkmark/flecha (`selector.md`) |
+| Presupuesto de ancho | 60px (`menu_list.inline_value_max_w`, ~40% de los 152px útiles del panel) — el valor consume solo lo que mide de verdad, nunca el presupuesto completo si es corto |
+| Regla de truncado | La **etiqueta cede primero** (se recorta con "…", mismo mecanismo que el resto de `LeftPanel`); el valor **no se recorta** salvo que él mismo exceda el presupuesto — caso límite, no esperado con las enumeraciones actuales |
+| Flecha del `Selector` | **Mutuamente excluyente** — igual que switch/checkmark. Regla dura: "la flecha significa 'esto abre un submenú'; una fila con valor no navega, así que no puede llevarla" (`selector.md`) |
+| Semántica de SELECT | 2 valores → **alterna**. N > 2 valores → **cicla** en el orden de la tabla (mismo criterio que "Repetir", D-264, aunque Repetir no muestra su valor en la fila — solo en el panel derecho) |
+| Transición al cambiar | **Ninguna** — instantáneo. Un cambio de "Modo" repinta la paleta completa; el vocabulario de transiciones no tiene un patrón de "recolorear toda la pantalla", y es lo que ya hacía la pantalla de elección que este patrón reemplazó |
+| `SelectionSummary` de la fila | El ícono del panel refleja el **valor activo**, mapeo 1:1 (mismo criterio que "Repetir": `repeat`/`repeat-1` según el modo) |
 
 **Fila inerte** (`dimmed`, no un elemento del lado derecho sino un estado de
 toda la fila): el mismo tratamiento al 50% de opacidad que los modos
 deshabilitados del reproductor — la fila se recorre con la rueda pero SELECT
 no hace nada. Consumidores reales: idiomas sin traducir (D-013) y, desde
 D-289, temas instalados con formato incompatible o manifiesto/fuentes
-inválidas en el submenú "Estilo" (`sistema/05-temas.md`) — el catálogo
+inválidas en el submenú "Temas" (D-292, ex-"Estilo", `sistema/05-temas.md`) — el catálogo
 completo se muestra siempre, el firmware nunca finge soportar lo que no
 tiene.
 
-🟢 **Elementos opcionales del lado derecho:** switch (D-165/D-167) y
-checkmark (D-111) ya confirmados; el resto se define cuando lleguemos a las
-pantallas específicas que los usan — diferido a propósito, no bloqueante.
+🟢 **Elementos opcionales del lado derecho:** switch (D-165/D-167),
+checkmark (D-111) e `InlineValue` (D-292) ya confirmados; el resto se
+define cuando lleguemos a las pantallas específicas que los usan —
+diferido a propósito, no bloqueante.
 
 **Ítems no seleccionados:** siguen exactamente la misma lógica y
 dimensiones que un ítem seleccionado — la única diferencia es la ausencia

@@ -16,15 +16,41 @@ construye localmente desde lo que ya está en la Mac del usuario. El firmware
 público sale con **Inter + Lucide/Phosphor** como tema por defecto, completo
 y funcional por sí solo.
 
-## Qué NO confundir: "Tema" vs. "Estilo"
+## Qué NO confundir: "Modo" vs. "Temas"
 
-`aura_settings.theme` (fila "Tema" en Ajustes, claro/oscuro) es un ajuste
-**anterior y sin relación** con esto — sigue existiendo exactamente igual. El
-sistema de temas de este documento se llama **"Estilo"** en la UI (fila
-nueva, justo debajo de "Tema") y `aura_style` en el código — nombres
-distintos a propósito, para que nadie confunda un paquete de fuentes+íconos+
-paleta con el interruptor claro/oscuro. Un tema (paquete) define **ambos**
-modos claro y oscuro a la vez; "Tema" sigue eligiendo cuál de los dos se ve.
+`aura_settings.theme` (fila "Modo" en Ajustes → Personalización, claro/
+oscuro — renombrada de "Tema" en D-292, misma clave `theme:` en `aura.cfg`
+sin cambio) es un ajuste **anterior y sin relación** con esto — sigue
+existiendo exactamente igual. El sistema de temas de este documento se
+llama **"Temas"** en la UI (fila hermana, renombrada de "Estilo" en D-292)
+y `aura_style` en el código — nombres distintos a propósito, para que
+nadie confunda un paquete de fuentes+íconos+paleta con el interruptor
+claro/oscuro.
+
+**Resolución explícita del conflicto (D-292, no dejado en silencio):**
+
+- **Un tema respeta el Modo activo, nunca lo reemplaza.** El formato v1
+  exige que todo tema traiga `palette_light_*` **y** `palette_dark_*`
+  (§B) — no existe la posibilidad de "un tema con una sola paleta" en este
+  formato, así que no hay ningún caso real de "el tema pisa el modo" que
+  resolver en tiempo de ejecución.
+- **Si un `theme_format` futuro llegara a admitir una sola paleta**
+  (decisión abierta, no implementada): la fila "Modo" se **atenúa**
+  (`dimmed`, mismo tratamiento que cualquier fila inerte) con su valor
+  sustituido por "Fijado por el tema" — nunca se oculta ni se ignora en
+  silencio. Ocultarla borraría la explicación; ignorarla dejaría a Modo
+  mintiendo sobre lo que en verdad se está mostrando.
+- **El Modo no afecta a `--color-accent`.** `aura_accent()` lee
+  `accent_rgb24` directo, sin pasar por la paleta ni por el modo — el
+  acento libre del usuario es independiente de si la pantalla está en
+  claro u oscuro (ver `fundamentos/01-color.md`).
+- **El tema no afecta al acento.** El slot `A26_ACCENT` de la tabla de
+  paleta de un tema no se usa (D-289); `accent_default`/`accent_presets`
+  del manifiesto se validan pero el firmware todavía no los lee
+  (`CONTRATO-formato-tema.md` §H).
+- **Cambiar de tema no cambia el Modo**, y viceversa — son ajustes
+  independientes, cada uno con su propia fila y su propia clave en
+  `aura.cfg` (`theme_id` para el tema, `theme` para el modo).
 
 ## Qué contiene un tema
 
@@ -82,9 +108,11 @@ habría tocado `rockbox.zip`, el sentinela de "árbol instalado" que usa Aura
 Studio (`.rockbox/fonts/a26-title-20.fnt`), y `package_dist.sh` — sin ganar
 nada, porque el fallback por archivo hacia esas rutas ya es gratis).
 
-## El submenú "Estilo"
+## El submenú "Temas"
 
-Ajustes → Apariencia → **Estilo**, justo debajo de "Tema". Misma maquinaria
+Ajustes → Personalización → **Temas** (D-292: submenú y nombre nuevos;
+antes Ajustes → Apariencia → "Estilo"), justo debajo de "Modo". Misma
+maquinaria
 visual que las pantallas de elección existentes (Idioma, Ecualizador):
 `MenuList` + `Selector`, checkmark en la fila activa — **sin UI nueva**. La
 diferencia es que la tabla de filas se lee del disco en cada entrada a la

@@ -86,11 +86,37 @@ acento configurado por el usuario — confirmado por el mockup del dueño:
 la fila Fotos muestra un tile naranja (color de categoría) sobre un fondo
 rosa (color de acento).
 
-**Estado interino:** solo existe el preset `pink`. Cualquier otro acento
-cae a `pink` mientras el dueño comparte las imágenes de los otros cinco
-presets. Si el archivo no está en el dispositivo (assets sin sincronizar
-todavía), el fondo cae a `--color-bg-base` sólido en vez de dejar basura
-en pantalla.
+**Los 6 presets existen (D-292)** — `pink`/`red`/`orange`/`green`/`blue`/
+`purple`, mismo orden que `aura_ds.color.accent_presets_hex` (Rosa/Rojo/
+Naranja/Verde/Azul/Morado), verificado por índice en
+`accent_background_preset_name()` (`aura_selection_summary.c`). Procedencia:
+naranja/verde/morado son creaciones propias del autor de Aura; rojo (Franck
+V.) y azul (Matthew McBrayer) son fotos de Unsplash, atribuidas en
+`THIRD-PARTY-NOTICES.txt` y en "Acerca de → Créditos".
+
+**Correspondencia acento → imagen:** `aura_settings.accent_rgb24` se
+compara contra los 6 valores de `accent_presets_hex`; si coincide
+exactamente con el preset *i*, se usa `right_panel_background.presets[i]`.
+**"No hay imagen"** = el acento activo no es ninguno de los 6 (color
+libre, o un tema instalado que no trae `backgrounds/<preset>.bmp` propio),
+**o** el archivo no carga (BMP corrupto, dimensión distinta a 160×240).
+
+**Fallback: degradado calculado desde el acento, no un color plano
+(D-292).** Cuando no hay imagen, el fondo pasa a un degradado **vertical**
+de 3 puntos — `aura_accent_dark()` (arriba) → `aura_accent()` (centro) →
+`aura_accent_light()` (abajo), los mismos derivados ±25% que ya usa el
+degradado del tile (ver abajo) — para que **cualquier** acento libre siga
+teniendo un fondo que lo refleja, nunca "pink" prestado de otro color ni
+un relleno `--color-bg-base` genérico. Vertical y no diagonal: en 160×240
+un diagonal de 3 puntos (la fórmula del tile) deja bandas visibles en
+RGB565 a esa escala — el diagonal se queda exclusivo del tile de 90×90.
+
+**No varía por Modo (D-271, confirmado de nuevo en D-292):** el fondo es
+siempre saturado/oscuro, claro u oscuro no cambia el asset ni el degradado
+calculado — el texto del panel sigue en blanco fijo (ver abajo) sin
+importar el tema activo. Duplicar los 6 assets por modo se evaluó y se
+descartó: costaría el doble de `rockbox.zip` para un cambio que ninguna de
+las 6 fotografías necesita (todas dan contraste ≥4:1 con blanco).
 
 **Fondo variante, parametrizado (D-281):** este fondo de imagen es el
 **default** (`AURA_SS_BG_ACCENT_IMAGE`), pero no el único — `draw_summary()`
@@ -308,7 +334,8 @@ actualizada, compartida con `CoverDrift`).
 - [x] Relación exacta con la variante dinámica de Fecha y Hora — resuelto
       en D-108 (B-04): es un modo del mismo componente, ver "Variante
       dinámica"
-- [ ] Imágenes de fondo para los cinco presets de acento restantes (hoy
-      solo `pink`, D-267)
+- [x] Imágenes de fondo para los cinco presets de acento restantes —
+      resuelto (D-292): los 6 presets existen, con fallback calculado
+      para cualquier acento sin imagen
 - [x] Dirección del degradado del tile — ratificada por el dueño
       (D-274, 2026-08-16): claro arriba-izquierda → oscuro abajo-derecha

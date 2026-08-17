@@ -113,10 +113,31 @@ agrupación, como en el original:
 |---|---|
 | Información | Acerca de ✅ `[FULL-CARRY]` (3 páginas, D-279 — el tile de `SelectionSummary` viaja con `Shift-and-Reveal`, D-278; ver `componentes/about.md`) |
 | Reproducción | Aleatorio ✅ · Repetir ✅ · Menú principal ✅ |
-| Apariencia (propios de Aura) | Tema ✅ · Estilo ✅ (D-289, `sistema/05-temas.md` — lista dinámica de paquetes de tema instalados, leída del disco; no confundir con "Tema", que sigue siendo claro/oscuro) · Color de acento ✅ · Animaciones ✅ · Gráficos ✅ · Mostrar sombras ✅ · Mostrar iconos ✅ |
+| — | **Personalización** ✅ `[SPLIT]` (D-292, submenú nuevo — ver tabla abajo) |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |
 | Sonido | Ecualizador ✅ (23 presets **con vista gráfica de la curva en vivo**) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
 | Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
+
+### Ajustes → Personalización (D-292)
+
+`[SPLIT]`, mismo tratamiento que "Fecha y hora" (nivel 2, tabla propia) —
+agrupa las 7 filas de apariencia que antes vivían sueltas en Ajustes, sin
+que ninguna cambie de `AURA_SCREEN_ID` ni de clave en `aura.cfg`:
+
+| Fila | Estado |
+|---|---|
+| Modo (Claro/Oscuro) | ✅ **`InlineValue`** (D-292, renombrada de "Tema") — valor visible en la fila, sin submenú; SELECT alterna. Ver `componentes/left-panel.md` |
+| Temas | ✅ (D-289, renombrada de "Estilo", `sistema/05-temas.md` — lista dinámica de paquetes de tema instalados, leída del disco; no confundir con "Modo") |
+| Color de acento | ✅ |
+| Animaciones | ✅ |
+| Gráficos | ✅ |
+| Mostrar sombras | ✅ |
+| Mostrar iconos | ✅ |
+
+Las pantallas de elección hijas (Temas/Color de acento/Animaciones/
+Gráficos) quedan a nivel 3 siendo `[SPLIT]` — excepción documentada a la
+regla de profundidad por defecto, mismo criterio ya aplicado a los hijos
+de "Fecha y hora".
 
 Del original quedan pendientes: **Menú Música** configurable. Los
 editores de **Fecha** (rejilla del mes con fecha en español en vivo),
