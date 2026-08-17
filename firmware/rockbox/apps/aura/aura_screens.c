@@ -1509,9 +1509,15 @@ static void about_storage_collect(bool force_reload,
     *video_b = sum_dir_bytes("/Videos");
     *photo_b = sum_dir_bytes("/Photos");
 
+    /* D-280: bug real -- volume_size()/fat_size() (firmware/common/fat.c)
+     * devuelve KiB, no sectores (Rockbox mismo lo formatea con
+     * kibyte_units, apps/menus/main_menu.c), pero este calculo llevaba
+     * desde D-264 multiplicando por SECTOR_SIZE (512) en vez de 1024 --
+     * total_b/free_b salian a la MITAD de lo real, duplicando todos los
+     * porcentajes y el ancho de cada segmento. */
     volume_size(IF_MV(0,) &vol_size, &vol_free);
-    *total_b = (long long)vol_size * SECTOR_SIZE;
-    *free_b  = (long long)vol_free * SECTOR_SIZE;
+    *total_b = (long long)vol_size * 1024;
+    *free_b  = (long long)vol_free * 1024;
     *other_b = *total_b - *free_b - *music_b - *video_b - *photo_b;
     if (*other_b < 0)
         *other_b = 0;
