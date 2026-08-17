@@ -2191,8 +2191,12 @@ static void draw_about_storage_row(int x, int y, int w, unsigned dot_color,
                                     aura_str_id_t label_id,
                                     long long bytes, long long total_b)
 {
-    char size_buf[16], line[32];
-    int pct = total_b > 0 ? (int)((bytes * 100) / total_b) : 0;
+    char size_buf[16], line[32], pct_buf[8];
+    /* D-280 (2/2): un decimal bajo 10.0% -- entero truncado mostraba "0%"
+     * para cualquier categoria por debajo del 1% del disco (el caso comun
+     * con discos grandes: 119 MiB de musica es 0.0X% de un volumen de
+     * cientos de GB). pct_x10 en decimas de punto porcentual, sin float. */
+    long long pct_x10 = total_b > 0 ? (bytes * 1000) / total_b : 0;
     const int dot = A26_SPACING_SM + A26_SPACING_XS;
     int tw, th;
 
@@ -2204,7 +2208,11 @@ static void draw_about_storage_row(int x, int y, int w, unsigned dot_color,
     lcd_putsxy(x + dot + A26_SPACING_SM, y, (const unsigned char *)aura_str(label_id));
 
     output_dyn_value(size_buf, sizeof(size_buf), bytes, byte_units, 4, true);
-    snprintf(line, sizeof(line), "%s \xC2\xB7 %d%%", size_buf, pct);
+    if (pct_x10 < 100)
+        snprintf(pct_buf, sizeof(pct_buf), "%d.%d%%", (int)(pct_x10 / 10), (int)(pct_x10 % 10));
+    else
+        snprintf(pct_buf, sizeof(pct_buf), "%d%%", (int)(pct_x10 / 10));
+    snprintf(line, sizeof(line), "%s \xC2\xB7 %s", size_buf, pct_buf);
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
     lcd_getstringsize((const unsigned char *)line, &tw, &th);
