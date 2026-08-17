@@ -30,6 +30,10 @@ endif
 else
 ifeq ($(findstring APPLE,$(CPPDEFINES)),APPLE)
 LDOPTS += -L/usr/local/lib -framework IOKit -framework CoreFoundation
+# Modificado por el proyecto Aura, 2026-08-10 (GPL v2 s2a; ver
+# DECISIONS.md D-050 y MODIFICATIONS.md). El resto de este archivo es
+# el Makefile original de Rockbox sin cambios.
+#
 # backend libusb opcional ademas de IOKit (no lo reemplaza): el
 # backend IOKit clasico (IOUSBDeviceInterface) puede sufrir timeouts
 # de transaccion bajo el stack USB moderno de macOS con dispositivos
