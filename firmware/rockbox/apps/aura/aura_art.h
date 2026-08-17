@@ -34,6 +34,7 @@
 #define AURA_ART_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "lcd.h"
 
@@ -71,5 +72,38 @@ int aura_art_reflection_height(int size, int height_pct);
 void aura_art_generate_reflection(const fb_data *cover, fb_data *out,
                                    int size, int height_pct, unsigned bg_color,
                                    bool transposed);
+
+/* -- Cache .pfraw generico (D-291) -----------------------------------------
+ *
+ * Extraido de aura_albumart.c (T3.2(a)) para que aura_photos.c
+ * (miniaturas de /Photos) tambien lo use, en vez de reimplementar el
+ * mismo formato de archivo -- regla dura 7 del proyecto: extender, no
+ * duplicar. Este modulo solo sabe leer/escribir el formato en la ruta
+ * que le pasan; el llamador decide directorio y llave (album_seek+size
+ * para caratulas, nombre de archivo+size para fotos) y es responsable
+ * de que el directorio exista antes de escribir. */
+
+/* Bitmap size x size, transpuesto (columna contigua), con esquinas ya
+ * horneadas al radio y fondo pedidos -- formato identico al .pfraw de
+ * Cover Flow. `extra` es una segunda llave de invalidacion a
+ * discrecion del llamador (caratulas de album pasan 0, su llave ya es
+ * unica por archivo en el nombre; fotos pasan el mtime del archivo
+ * fuente, para que un re-sync con el mismo nombre pero contenido
+ * distinto no sirva una miniatura vieja). El tema activo SIEMPRE es
+ * parte de la llave (las esquinas se hornean contra su fondo). */
+bool aura_art_read_pfraw(const char *path, int size, int radius, int32_t extra, fb_data *out);
+void aura_art_write_pfraw(const char *path, int size, int radius, int32_t extra,
+                           const fb_data *data);
+bool aura_art_pfraw_is_cached(const char *path, int size, int radius, int32_t extra);
+
+/* Fila-contigua -> columna-contigua ("recorrer columnas = memoria
+ * contigua = rapido" al blitear por columnas, mismo criterio que
+ * pictureflow.c). */
+void aura_art_transpose(const fb_data *src, fb_data *dst, int size);
+
+/* Recorta las 4 esquinas de un bitmap YA TRANSPUESTO al radio pedido,
+ * mezclando hacia bg_color en el borde -- se hornea UNA VEZ antes de
+ * cachear, costo cero en cada cuadro de render. */
+void aura_art_mask_corners_transposed(fb_data *buf, int size, int radius, unsigned bg_color);
 
 #endif /* AURA_ART_H */

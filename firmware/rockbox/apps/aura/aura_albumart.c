@@ -44,6 +44,14 @@
 #include "aura_art.h"
 #include "aura_music.h" /* AURA_MUSIC_ITEM_LEN, mismo tope que aura_music_list_playlists() */
 
+/* D-291: pfraw_path()/is_cached() siguen siendo la llave PROPIA de este
+ * archivo (album_seek+size, sin invalidacion extra -- ya es unica por
+ * archivo); leer/escribir el formato y transponer/enmascarar esquinas
+ * ahora vive en aura_art.c (aura_art_read_pfraw()/aura_art_write_pfraw()/
+ * aura_art_transpose()/aura_art_mask_corners_transposed()), compartido
+ * con aura_photos.c (miniaturas de /Photos). */
+#define PFRAW_EXTRA_NONE 0
+
 /* Buffer de trabajo para decodificar+remuestrear (FORMAT_RESIZE
  * necesita bastante mas espacio que el bitmap final, ver
  * BM_SCALED_SIZE en recorder/bmp.h) -- dimensionado sobre el mayor
@@ -70,161 +78,28 @@ static unsigned char s_transpose_scratch[AURA_ALBUMART_DECODE_SCRATCH_SIZE];
 #define AURA_DIR     ROCKBOX_DIR "/aura"
 #define CF_CACHE_DIR AURA_DIR "/cfcache"
 
-/* Header en disco del cache .pfraw (PLAN.md T3.2(a),
- * componentes/cover-flow.md: "cache .pfraw... pre-escaladas y
- * transpuestas... runtime solo carga de un cache" -- mismo formato
- * conceptual que apps/plugins/pictureflow/pictureflow.c::pfraw_header
- * (regla dura 7: extender, no reimplementar la tecnica), con un campo
- * extra `radius` para invalidar el cache si el radio de esquina
- * redondeada cambia -- personalizacion de Aura, pictureflow.c no
- * hornea esquinas). Solo la caratula PLANA se cachea, no el reflejo
- * (mismo criterio que pictureflow.c: el reflejo es barato, se recalcula
- * siempre; cachearlo duplicaria el costo en disco sin necesidad). */
-struct pfraw_header {
-    int32_t size;
-    int32_t radius;
-    /* Las esquinas van horneadas contra el fondo del TEMA vigente al
-     * escribir (correccion 2026-08-12): el tema es parte de la llave --
-     * un mismatch regenera el cache, igual que un cambio de radio. */
-    int32_t theme;
-};
-
 static void pfraw_path(int32_t album_seek, int size, char *out, size_t outsz)
 {
     snprintf(out, outsz, "%s/%ld-%d.pfraw", CF_CACHE_DIR, (long)album_seek, size);
 }
 
-static bool pfraw_header_valid(int fd, int size, int radius)
-{
-    struct pfraw_header hdr;
-    int n = read(fd, &hdr, sizeof(hdr));
-
-    return n == (int)sizeof(hdr) && hdr.size == size && hdr.radius == radius
-           && hdr.theme == (int32_t)aura_settings.theme;
-}
-
-static bool read_pfraw(const char *path, int size, int radius, fb_data *out)
-{
-    size_t px_bytes = (size_t)size * size * sizeof(fb_data);
-    int fd, n;
-
-    fd = open(path, O_RDONLY);
-    if (fd < 0)
-        return false;
-
-    if (!pfraw_header_valid(fd, size, radius))
-    {
-        close(fd);
-        return false;
-    }
-
-    n = read(fd, out, px_bytes);
-    close(fd);
-    return n == (int)px_bytes;
-}
-
-/* D-224: ver comentario en aura_albumart.h -- mismo chequeo de header
- * que read_pfraw(), sin el read() del payload de pixeles. */
+/* D-224: ver comentario en aura_albumart.h. */
 bool aura_albumart_is_cached(int32_t album_seek, int size, int radius)
 {
     char path[MAX_PATH];
-    int fd;
-    bool ok;
 
     pfraw_path(album_seek, size, path, sizeof(path));
-    fd = open(path, O_RDONLY);
-    if (fd < 0)
-        return false;
-
-    ok = pfraw_header_valid(fd, size, radius);
-    close(fd);
-    return ok;
+    return aura_art_pfraw_is_cached(path, size, radius, PFRAW_EXTRA_NONE);
 }
 
 static void write_pfraw(const char *path, int size, int radius, const fb_data *data)
 {
-    struct pfraw_header hdr;
-    int fd;
-
-    hdr.size = size;
-    hdr.radius = radius;
-    hdr.theme = (int32_t)aura_settings.theme;
-
     if (!dir_exists(AURA_DIR))
         mkdir(AURA_DIR);
     if (!dir_exists(CF_CACHE_DIR))
         mkdir(CF_CACHE_DIR);
 
-    fd = creat(path, 0666);
-    if (fd < 0)
-        return;
-
-    write(fd, &hdr, sizeof(hdr));
-    write(fd, data, (size_t)size * size * sizeof(fb_data));
-    close(fd);
-}
-
-/* Transpone (fila-contigua -> columna-contigua, doc: "recorrer columnas
- * = memoria contigua = rapido") -- pictureflow.c lo hace FUNDIDO con la
- * decodificacion JPEG via un callback custom_format
- * (output_row_*_transposed); aca se hace en un segundo paso explicito
- * sobre el resultado ya decodificado -- mismo resultado final (el
- * layout en disco/memoria es identico), pero sin engancharse al
- * mecanismo interno de bajo nivel del decodificador JPEG del plugin,
- * que este pipeline no expone. Costo: un recorrido extra de size*size
- * pixeles, una sola vez por caratula (se cachea despues), no en cada
- * cuadro. */
-static void transpose(const fb_data *src, fb_data *dst, int size)
-{
-    int row, col;
-
-    for (row = 0; row < size; row++)
-        for (col = 0; col < size; col++)
-            dst[(size_t)col * size + row] = src[(size_t)row * size + col];
-}
-
-/* Recorta las 4 esquinas de un bitmap YA TRANSPUESTO (buf[col*size+row])
- * al radio `radius` -- misma formula de distancia que stamp_corner()
- * (apple2026_shell.c) y mask_corners_buffer() (aura_nowplaying.c, T3.1),
- * adaptada al indexado transpuesto. Horneada UNA VEZ antes de escribir
- * el cache -- costo cero en cada cuadro de render (doc: "el bitmap
- * cacheado ya viene enmascarado"). */
-static void mask_corners_transposed(fb_data *buf, int size, int radius, unsigned bg)
-{
-    int r256 = radius * 256;
-    int row, col;
-
-    for (row = 0; row < radius; row++)
-    {
-        for (col = 0; col < radius; col++)
-        {
-            int rr = radius - 1 - row;
-            int rc = radius - 1 - col;
-            int dist256 = (int)a26_shell_isqrt256((unsigned)(rr * rr + rc * rc));
-            size_t idx[4];
-            int k, t;
-
-            if (dist256 <= r256 - 128)
-                continue;
-
-            idx[0] = (size_t)col * size + row;
-            idx[1] = (size_t)(size - 1 - col) * size + row;
-            idx[2] = (size_t)col * size + (size - 1 - row);
-            idx[3] = (size_t)(size - 1 - col) * size + (size - 1 - row);
-
-            if (dist256 >= r256 + 128)
-            {
-                for (k = 0; k < 4; k++)
-                    buf[idx[k]] = bg;
-                continue;
-            }
-            /* Borde antialiasado (misma rampa de 1px que stamp_corner,
-             * apple2026_shell.c) -- cobertura de fondo lineal. */
-            t = dist256 - (r256 - 128);
-            for (k = 0; k < 4; k++)
-                buf[idx[k]] = a26_shell_blend(buf[idx[k]], bg, t);
-        }
-    }
+    aura_art_write_pfraw(path, size, radius, PFRAW_EXTRA_NONE, data);
 }
 
 /* D-231 (reporte del dueno, 2026-08-14: "la version por default [en
@@ -322,7 +197,7 @@ void aura_albumart_load_default(aura_albumart_t *out)
     unsigned bg = a26_color(A26_SHELL_BG);
 
     aura_albumart_default_tile((fb_data *)out->cover_data, out->size, true);
-    mask_corners_transposed((fb_data *)out->cover_data, out->size, out->radius, bg);
+    aura_art_mask_corners_transposed((fb_data *)out->cover_data, out->size, out->radius, bg);
 
     aura_art_generate_reflection((const fb_data *)out->cover_data,
                                   (fb_data *)out->reflection_data,
@@ -434,7 +309,7 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
     out->valid = false;
     pfraw_path(album_seek, out->size, path, sizeof(path));
 
-    if (read_pfraw(path, out->size, out->radius, (fb_data *)out->cover_data))
+    if (aura_art_read_pfraw(path, out->size, out->radius, PFRAW_EXTRA_NONE, (fb_data *)out->cover_data))
     {
         /* Acierto de cache -- cero decodificacion JPEG (doc). El
          * reflejo NO se cachea (ver header del .pfraw arriba), se
@@ -450,8 +325,8 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
     if (!decode_album_art(album_seek, out->size))
         return false;
 
-    transpose((const fb_data *)s_decode_scratch, (fb_data *)s_transpose_scratch, out->size);
-    mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);
+    aura_art_transpose((const fb_data *)s_decode_scratch, (fb_data *)s_transpose_scratch, out->size);
+    aura_art_mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);
     memcpy(out->cover_data, s_transpose_scratch,
            (size_t)out->size * out->size * sizeof(fb_data));
 
@@ -555,7 +430,7 @@ bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
 
     playlist_pfraw_path(playlist_filename, out->size, cache_path, sizeof(cache_path));
 
-    if (read_pfraw(cache_path, out->size, out->radius, (fb_data *)out->cover_data))
+    if (aura_art_read_pfraw(cache_path, out->size, out->radius, PFRAW_EXTRA_NONE, (fb_data *)out->cover_data))
     {
         aura_art_generate_reflection((const fb_data *)out->cover_data,
                                       (fb_data *)out->reflection_data,
@@ -567,8 +442,8 @@ bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
     if (!decode_playlist_art(playlist_filename, out->size))
         return false;
 
-    transpose((const fb_data *)s_decode_scratch, (fb_data *)s_transpose_scratch, out->size);
-    mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);
+    aura_art_transpose((const fb_data *)s_decode_scratch, (fb_data *)s_transpose_scratch, out->size);
+    aura_art_mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);
     memcpy(out->cover_data, s_transpose_scratch,
            (size_t)out->size * out->size * sizeof(fb_data));
 

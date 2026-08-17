@@ -20,7 +20,11 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
+#include "file.h"
+
 #include "aura_art.h"
+#include "aura_settings.h"
+#include "apple2026_shell.h"
 
 int aura_art_reflection_height(int size, int height_pct)
 {
@@ -76,6 +80,127 @@ void aura_art_generate_reflection(const fb_data *cover, fb_data *out,
                 out[(size_t)x * refl_h + y] = result;
             else
                 out[(size_t)y * size + x] = result;
+        }
+    }
+}
+
+/* D-291: header en disco del cache .pfraw -- extraido de
+ * aura_albumart.c (PLAN.md T3.2(a)), ver aura_art.h. `extra` es la
+ * unica diferencia frente al formato original (que solo tenia
+ * size/radius/theme). */
+struct aura_art_pfraw_header {
+    int32_t size;
+    int32_t radius;
+    int32_t theme;
+    int32_t extra;
+};
+
+static bool pfraw_header_valid(int fd, int size, int radius, int32_t extra)
+{
+    struct aura_art_pfraw_header hdr;
+    int n = read(fd, &hdr, sizeof(hdr));
+
+    return n == (int)sizeof(hdr) && hdr.size == size && hdr.radius == radius
+           && hdr.theme == (int32_t)aura_settings.theme && hdr.extra == extra;
+}
+
+bool aura_art_read_pfraw(const char *path, int size, int radius, int32_t extra, fb_data *out)
+{
+    size_t px_bytes = (size_t)size * size * sizeof(fb_data);
+    int fd, n;
+
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return false;
+
+    if (!pfraw_header_valid(fd, size, radius, extra))
+    {
+        close(fd);
+        return false;
+    }
+
+    n = read(fd, out, px_bytes);
+    close(fd);
+    return n == (int)px_bytes;
+}
+
+bool aura_art_pfraw_is_cached(const char *path, int size, int radius, int32_t extra)
+{
+    int fd;
+    bool ok;
+
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return false;
+
+    ok = pfraw_header_valid(fd, size, radius, extra);
+    close(fd);
+    return ok;
+}
+
+void aura_art_write_pfraw(const char *path, int size, int radius, int32_t extra,
+                           const fb_data *data)
+{
+    struct aura_art_pfraw_header hdr;
+    int fd;
+
+    hdr.size = size;
+    hdr.radius = radius;
+    hdr.theme = (int32_t)aura_settings.theme;
+    hdr.extra = extra;
+
+    fd = creat(path, 0666);
+    if (fd < 0)
+        return;
+
+    write(fd, &hdr, sizeof(hdr));
+    write(fd, data, (size_t)size * size * sizeof(fb_data));
+    close(fd);
+}
+
+void aura_art_transpose(const fb_data *src, fb_data *dst, int size)
+{
+    int row, col;
+
+    for (row = 0; row < size; row++)
+        for (col = 0; col < size; col++)
+            dst[(size_t)col * size + row] = src[(size_t)row * size + col];
+}
+
+void aura_art_mask_corners_transposed(fb_data *buf, int size, int radius, unsigned bg)
+{
+    int r256 = radius * 256;
+    int row, col;
+
+    for (row = 0; row < radius; row++)
+    {
+        for (col = 0; col < radius; col++)
+        {
+            int rr = radius - 1 - row;
+            int rc = radius - 1 - col;
+            int dist256 = (int)a26_shell_isqrt256((unsigned)(rr * rr + rc * rc));
+            size_t idx[4];
+            int k, t;
+
+            if (dist256 <= r256 - 128)
+                continue;
+
+            idx[0] = (size_t)col * size + row;
+            idx[1] = (size_t)(size - 1 - col) * size + row;
+            idx[2] = (size_t)col * size + (size - 1 - row);
+            idx[3] = (size_t)(size - 1 - col) * size + (size - 1 - row);
+
+            if (dist256 >= r256 + 128)
+            {
+                for (k = 0; k < 4; k++)
+                    buf[idx[k]] = bg;
+                continue;
+            }
+            /* Borde antialiasado (misma rampa de 1px que stamp_corner,
+             * apple2026_shell.c) -- cobertura de fondo lineal. */
+            t = dist256 - (r256 - 128);
+            for (k = 0; k < 4; k++)
+                buf[idx[k]] = a26_shell_blend(buf[idx[k]], bg, t);
         }
     }
 }
