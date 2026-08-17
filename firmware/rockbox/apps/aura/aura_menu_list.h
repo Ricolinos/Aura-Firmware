@@ -46,6 +46,14 @@ typedef struct {
     const char *icon_name;  /* NULL = sin icono */
     int toggle;             /* -1 = sin switch; 0/1 = booleano inline */
     int checked;            /* 1 = checkmark a la derecha */
+    /* D-292: valor enumerado en linea (patron `InlineValue`,
+     * componentes/left-panel.md) -- NULL = sin valor. SELECT cicla el
+     * valor en el sitio (2 opciones = alterna), nunca navega: mismo
+     * criterio que `toggle`/`checked`, mutuamente excluyente con la
+     * flecha del Selector via `full_screen_target`. Tinta siempre
+     * TEXT_SECONDARY (dato, no accion) aunque la fila este
+     * seleccionada -- ver aura_menu_list.c. */
+    const char *value;
     int full_screen_target; /* 1 = el item lleva a un componente de
                              * pantalla completa -> flecha del Selector
                              * (solo si no hay otro elemento derecho,

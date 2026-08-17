@@ -2062,6 +2062,7 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].icon_name = entries[i].icon_name;
         items[i].checked = 0;
         items[i].toggle = settings_row_toggle_value(entries[i].target);
+        items[i].value = NULL; /* D-292: filas InlineValue lo pisan mas abajo */
         /* Flecha del Selector (selector.md) solo para destinos
          * navegables de pantalla completa -- un toggle inline no navega
          * a ningun lado, la regla de exclusion del documento ya lo
@@ -2279,6 +2280,7 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
             : NULL;
         items[i].checked = (i == current);
         items[i].toggle = -1;
+        items[i].value = NULL;
         items[i].indent = 0;
         items[i].dimmed = 0;
         items[i].full_screen_target = 0;
@@ -2338,6 +2340,7 @@ static void draw_style_list(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = !strcmp(entries[i].id, active_id);
         items[i].toggle = -1;
+        items[i].value = NULL;
         items[i].indent = 0;
         items[i].full_screen_target = 0;
         items[i].dimmed = !entries[i].loadable;
@@ -2996,6 +2999,7 @@ static void draw_backlight(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == global_settings.backlight_timeout);
         items[i].toggle = -1;
+        items[i].value = NULL;
         items[i].indent = 0;
         items[i].dimmed = 0;
         items[i].full_screen_target = 0;
@@ -3057,6 +3061,7 @@ static void draw_sleeptimer(aura_nav_t *nav)
         items[i].icon_name = NULL;
         items[i].checked = (v == (int)global_settings.sleeptimer_duration);
         items[i].toggle = -1;
+        items[i].value = NULL;
         items[i].indent = 0;
         items[i].dimmed = 0;
         items[i].full_screen_target = 0;
@@ -3207,6 +3212,7 @@ static void draw_mainmenu(aura_nav_t *nav)
         items[i].indent = mainmenu_rows[i].indent;
         items[i].checked = mainmenu_row_checked(&mainmenu_rows[i]);
         items[i].toggle = -1;
+        items[i].value = NULL;
         items[i].full_screen_target = 0;
         /* Musica y Extras no se pueden quitar del menu de inicio. */
         items[i].dimmed = (mainmenu_rows[i].target == AURA_SCREEN_MUSIC

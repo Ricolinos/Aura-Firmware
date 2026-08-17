@@ -206,8 +206,12 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
     {
         int sel_y = y + (selected - first) * ROW_H;
         const aura_menu_item_v2_t *sel_item = &items[selected];
+        /* D-292: `value` es otro elemento derecho mas -- misma exclusion
+         * que toggle/checked (selector.md: "la flecha significa 'esto
+         * abre un submenu'; una fila con valor no navega"). */
         aura_selector_indicator_t ind =
-            (sel_item->full_screen_target && sel_item->toggle < 0 && !sel_item->checked)
+            (sel_item->full_screen_target && sel_item->toggle < 0
+                && !sel_item->checked && !sel_item->value)
                 ? AURA_SELECTOR_INDICATOR_CHEVRON
                 : AURA_SELECTOR_INDICATOR_NONE;
         aura_selector_draw(x + PADDING, sel_y, panel_w - 2 * PADDING, ROW_H, ind);
@@ -245,14 +249,36 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         }
 
         /* Elementos opcionales del lado derecho (left-panel.md): switch
-         * para booleanos, checkmark para confirmacion -- mutuamente
-         * excluyentes por construccion de los llamadores. */
+         * para booleanos, checkmark para confirmacion, valor inline
+         * (D-292, patron InlineValue) -- mutuamente excluyentes por
+         * construccion de los llamadores. */
         if (items[i].toggle >= 0)
         {
             draw_switch_v2(right_edge - SWITCH_W,
                             row_y + (ROW_H - SWITCH_H) / 2,
                             items[i].toggle, is_selected);
             text_right = right_edge - SWITCH_W - TEXT_GAP;
+        }
+        else if (items[i].value)
+        {
+            /* Tinta SIEMPRE secundaria -- dato, no accion -- incluso
+             * sobre la fila seleccionada (la etiqueta, mas abajo, SI
+             * pasa a acento ahi; se pintan por separado a proposito).
+             * `value_w` sale del ancho YA truncado (nunca > el
+             * presupuesto del token): la etiqueta cede el espacio que
+             * el valor de verdad ocupa, no el presupuesto entero
+             * cuando el valor es corto ("Sí" deja mas sitio que
+             * "Mínimos"). */
+            char value_truncated[32];
+            int value_w, value_h;
+
+            truncate_to_fit(items[i].value, value_truncated, sizeof(value_truncated),
+                             AURA_DS_METRICS_MENU_LIST_INLINE_VALUE_MAX_W);
+            lcd_getstringsize((const unsigned char *)value_truncated, &value_w, &value_h);
+            lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+            lcd_putsxy(right_edge - value_w, row_y + (ROW_H - value_h) / 2,
+                       (const unsigned char *)value_truncated);
+            text_right = right_edge - value_w - TEXT_GAP;
         }
         else if (items[i].checked)
         {
