@@ -455,7 +455,7 @@ bool aura_music_db_ready(void)
  * dedup por artista), pero solo cuenta -- sin limite de
  * AURA_MUSIC_MAX_ITEMS, que existe para no desbordar las listas de
  * navegacion, no para un conteo. */
-int aura_music_count_artists(void)
+static int count_unique_tag(int tag)
 {
     struct tagcache_search tcs;
     char buf[TAGCACHE_BUFSZ];
@@ -463,7 +463,7 @@ int aura_music_count_artists(void)
 
     if (!tagcache_is_usable())
         return 0;
-    if (!tagcache_search(&tcs, tag_artist))
+    if (!tagcache_search(&tcs, tag))
         return 0;
     tagcache_search_set_uniqbuf(&tcs, s_uniqbuf, sizeof(s_uniqbuf));
 
@@ -472,6 +472,18 @@ int aura_music_count_artists(void)
 
     tagcache_search_finish(&tcs);
     return n;
+}
+
+int aura_music_count_artists(void)
+{
+    return count_unique_tag(tag_artist);
+}
+
+/* D-284: albumes unicos, mismo mecanismo que artistas (uniqbuf de
+ * tagcache en RAM), para la seccion Musica de "Acerca de". */
+int aura_music_count_albums(void)
+{
+    return count_unique_tag(tag_album);
 }
 
 static aura_str_id_t untagged_label_for(int tag)

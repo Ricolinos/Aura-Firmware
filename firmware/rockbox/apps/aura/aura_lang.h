@@ -313,6 +313,15 @@ typedef enum {
      * (GPL v2 SS3), en el ancho angosto de la region derecha con el
      * tile persistente (Q8). */
     AURA_STR_ABOUT_CREDITS_BODY,
+    /* D-284: identidad de la unidad de almacenamiento en la pagina de
+     * almacenamiento de "Acerca de" -- tipo detectado por ATA IDENTIFY
+     * (palabra 217, "nominal media rotation rate": 1 = estado solido) mas
+     * el modelo que reporta la unidad. En el simulador no hay ATA: se dice
+     * explicitamente que es un disco simulado, nunca se inventa un modelo. */
+    AURA_STR_ABOUT_DRIVE_SSD,
+    AURA_STR_ABOUT_DRIVE_HDD,
+    AURA_STR_ABOUT_DRIVE_UNKNOWN,
+    AURA_STR_ABOUT_DRIVE_SIMULATED,
 
     AURA_STR_COUNT,
 } aura_str_id_t;

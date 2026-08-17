@@ -31,6 +31,7 @@ bool aura_music_db_ready(void);
  * AURA_MUSIC_MAX_ITEMS (el Estado 2 de "Acerca de" solo necesita el
  * numero). 0 si la base de datos no esta lista. */
 int aura_music_count_artists(void);
+int aura_music_count_albums(void);
 
 /* D-214 (temporal, diagnostico del freeze de reproduccion): dibuja
  * `label` en una franja al pie de la pantalla y actualiza de inmediato

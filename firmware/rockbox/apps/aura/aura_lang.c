@@ -223,6 +223,10 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_MY_IPOD]          = "Mi iPod",
     [AURA_STR_ABOUT_OTHER]            = "Otros",
     [AURA_STR_ABOUT_SYSTEM]           = "Sistema",
+    [AURA_STR_ABOUT_DRIVE_SSD]        = "Unidad de estado sólido",
+    [AURA_STR_ABOUT_DRIVE_HDD]        = "Disco duro",
+    [AURA_STR_ABOUT_DRIVE_UNKNOWN]    = "Unidad de almacenamiento",
+    [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Disco simulado",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -446,6 +450,10 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_MY_IPOD]          = "My iPod",
     [AURA_STR_ABOUT_OTHER]            = "Other",
     [AURA_STR_ABOUT_SYSTEM]           = "System",
+    [AURA_STR_ABOUT_DRIVE_SSD]        = "Solid-state drive",
+    [AURA_STR_ABOUT_DRIVE_HDD]        = "Hard disk drive",
+    [AURA_STR_ABOUT_DRIVE_UNKNOWN]    = "Storage drive",
+    [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Simulated disk",
 };
 
 const char *aura_str(aura_str_id_t id)

@@ -51,14 +51,36 @@ de datos; la página 3, Créditos, no depende del manifiesto).
 | 5 filas de categoría (punto de color + etiqueta + cifra + %) | Apiladas entre `about.expanded_text_top_y` (30) y `about.expanded_text_bottom_y` (190), columna `[about.expanded_bar_x, about.expanded_bar_right)` | — |
 | Barra expandida (6 segmentos) | Mismo eje vertical que en split; ancho `about.expanded_bar_x`…`about.expanded_bar_right` (182px) | `about.bar_h` = 12 |
 
+**Línea de identidad de la unidad (D-284)** — encima de las filas, en
+`about.expanded_drive_line_y`, `DS_REG_10` `TEXT_SECONDARY`: "`<tipo> ·
+<modelo> · <capacidad>`". El tipo sale del ATA IDENTIFY DEVICE real
+(`storage_get_identify()`, palabra 217 "nominal media rotation rate":
+`0x0001` = medio no rotatorio → **Unidad de estado sólido**; `0x0401…0xFFFE`
+= rpm → **Disco duro**; `0` = no reportado → se infiere solo si el modelo
+lo dice de forma inequívoca ("SSD"/"FLASH"/"IFLASH"/"CF"), y si no,
+"Unidad de almacenamiento" — nunca se adivina). El modelo son las palabras
+27–46 del IDENTIFY (mismas que el menú de depuración de Rockbox), recortado
+con "…" si no cabe en los 182px; tipo y capacidad no se recortan. En el
+**simulador** no hay ATA: se muestra "Disco simulado" y ningún modelo.
+
 ### En `(full)`, página 2 — Conteos
 
 Mismo tile persistente a la izquierda; a la derecha (misma columna
-`about.expanded_bar_x`…`bar_right`), dos bloques de 3 líneas cada uno:
-Música (canciones, artistas, listas) y, si el manifiesto los trae, Video
-(películas, series, videoclips) y Fotos (imágenes, fotografías, IA). Sin
-esos campos, cada bloque muestra el aviso "Sincroniza con Aura Studio para
-ver el detalle" en vez de un cero engañoso.
+`about.expanded_bar_x`…`bar_right`), **tres secciones en este orden:
+Música → Videos → Fotos** (D-284, encargo del dueño). Cada sección abre
+con un encabezado: el ícono de 14px del menú principal (`music`/`video`/
+`image`, los mismos assets que dibuja `LeftPanel`, `about.counts_icon_size`)
+teñido con el **color plano de su categoría** (D-250: Música = acento,
+Video = navy, Fotos = naranja) y el título en `DS_BOLD_12` de ese mismo
+color; debajo, las líneas de conteo en `DS_REG_10` `TEXT_PRIMARY`, con
+sangría del ícono. Música: canciones, **álbumes** (D-284, tagcache),
+artistas, listas. Video: películas, series, videoclips. Fotos: imágenes,
+fotografías, IA. Separación entre secciones `about.counts_group_gap`. Sin
+los campos de Video/Fotos en el manifiesto, la sección muestra el aviso
+"Sincroniza con Aura Studio para ver el detalle" en vez de un cero
+engañoso. La primera sección arranca en `about.expanded_drive_line_y` (no
+en `expanded_text_top_y`): tres secciones con encabezado necesitan todo el
+alto entre la StatusBar y los puntos de página.
 
 ### En `(full)`, página 3 — Créditos
 
@@ -178,7 +200,9 @@ nunca tuvo un fallback al manifiesto porque nunca vivió en él.
 | Música (artistas) | En vivo, tagcache (`aura_music_count_artists()`, mismo patrón `tagcache_search`+`set_uniqbuf` que ya usa el navegador de Artistas) | En vivo, más fresco que cualquier sync |
 | Sistema | En vivo: recorrido recursivo de `/.rockbox/`, cacheado por sesión | Casi constante mientras el dispositivo está encendido |
 | Otros | Residual: `total − libre − música − video − fotos − sistema` | En vivo |
-| Libre / Total | `volume_size()` — **corregido en D-280**: multiplicaba por `SECTOR_SIZE` (512) un valor que en realidad está en KiB, duplicando todos los porcentajes de contenido | En vivo |
+| Música (álbumes) | En vivo, tagcache (`aura_music_count_albums()`, D-284, mismo mecanismo que artistas) | En vivo |
+| Libre / Total | `volume_size()` — **corregido en D-280**: multiplicaba por `SECTOR_SIZE` (512) un valor que en realidad está en KiB, duplicando todos los porcentajes de contenido. **En el simulador (D-284)** ya no reporta el disco de la Mac: perfil fijo de 128 GB decimales (122 070 MiB, `AURA_SIM_DISK_MIB` para otras capacidades, `0` = statfs del host) con el usado real de `simdisk` — nunca espacio ocupado inventado | En vivo |
+| Tipo y modelo de la unidad | ATA IDENTIFY (`storage_get_identify()`, palabras 27–46 y 217) | Fijo mientras no se cambie el disco; "Disco simulado" en el simulador |
 
 **Por qué no un escaneo real de `/Music` sin dircache**: recorrer
 recursivamente miles de archivos en el disco duro de 2008 sin caché en RAM
@@ -259,6 +283,11 @@ otra fila de Ajustes tiene un estado `FULL-CARRY` propio hoy).
 - D-283 (2026-08-16): Estado 2 (conteos, con Aura Studio clasificando
   video/fotos), Estado 3 (créditos + corrección GPL v2), tile persistente
   en las 3 páginas, `Fade-Slide` de región entre páginas.
+- D-284 (2026-08-16): perfil de disco de 128 GB para el simulador (antes
+  mostraba el disco de la Mac); línea de identidad de la unidad (SSD/HDD
+  por ATA IDENTIFY + modelo + capacidad) en la página 1; página 2
+  reorganizada en secciones Música/Videos/Fotos con ícono y color de
+  categoría; álbumes contados.
 
 ## Pendiente de definir
 

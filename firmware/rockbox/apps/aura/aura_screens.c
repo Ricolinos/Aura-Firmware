@@ -1,4 +1,5 @@
 #include <string.h>
+#include <ctype.h>
 #include <stdio.h>
 
 #include "button.h"
@@ -13,6 +14,7 @@
 #include "string-extra.h"
 #include "misc.h"
 #include "mv.h"
+#include "storage.h" /* D-284: storage_get_identify() para la identidad de la unidad */
 #include "fs_defines.h"
 #include "rbpaths.h"
 #include "recorder/bmp.h"
@@ -2392,6 +2394,100 @@ static void draw_about_storage_bar_expanded(int x, int y, int width, int height,
  * (aura_selection_summary_draw_tile()) y mismo eje Y que en split
  * (aura_selection_summary_tile_rect_split()), solo cambia X -- el cuadro
  * final de la transicion tiene que coincidir pixel a pixel con esto. */
+/* D-284: identidad de la unidad de almacenamiento, leida del ATA IDENTIFY
+ * DEVICE real (storage_get_identify(): las mismas palabras que el menu de
+ * depuracion de Rockbox ya usa -- modelo en 27..46, byte-swapped) mas la
+ * palabra 217 "nominal media rotation rate": 0x0001 = medio no rotatorio
+ * (SSD, iFlash, CF), 0x0401..0xFFFE = rpm de un disco duro, 0 = no
+ * reportado. Encargo del dueno: "que detecte si tiene SSD o HDD y de ser
+ * posible la marca". Si la unidad no reporta la palabra 217, se infiere
+ * por el modelo solo cuando el nombre lo dice de forma inequivoca
+ * ("SSD"/"FLASH"/"IFLASH"/"CF"), y si no, se muestra el tipo neutro --
+ * nunca se adivina. En el simulador no hay ATA (storage_get_identify()
+ * es NULL): se dice "Disco simulado", jamas un modelo inventado. */
+static void about_drive_identity(char *model, size_t model_sz, aura_str_id_t *kind)
+{
+    unsigned short *id = storage_get_identify();
+    int i;
+
+    model[0] = '\0';
+#ifdef SIMULATOR
+    (void)id; (void)i; (void)model_sz;
+    *kind = AURA_STR_ABOUT_DRIVE_SIMULATED;
+    return;
+#else
+    if (!id)
+    {
+        *kind = AURA_STR_ABOUT_DRIVE_UNKNOWN;
+        return;
+    }
+    for (i = 0; i < 20 && (size_t)(i * 2 + 2) < model_sz; i++)
+    {
+        model[i * 2]     = (char)(id[27 + i] >> 8);
+        model[i * 2 + 1] = (char)(id[27 + i] & 0xFF);
+    }
+    model[i * 2 < (int)model_sz ? i * 2 : (int)model_sz - 1] = '\0';
+    /* recorta espacios de relleno ATA al final y al inicio */
+    {
+        int len = (int)strlen(model);
+        while (len > 0 && model[len - 1] == ' ') model[--len] = '\0';
+        i = 0;
+        while (model[i] == ' ') i++;
+        if (i) memmove(model, model + i, strlen(model + i) + 1);
+    }
+    if (id[217] == 0x0001)
+        *kind = AURA_STR_ABOUT_DRIVE_SSD;
+    else if (id[217] >= 0x0401 && id[217] <= 0xFFFE)
+        *kind = AURA_STR_ABOUT_DRIVE_HDD;
+    else
+    {
+        char up[48];
+        int n = 0;
+        while (model[n] && n < (int)sizeof(up) - 1) { up[n] = toupper((unsigned char)model[n]); n++; }
+        up[n] = '\0';
+        if (strstr(up, "SSD") || strstr(up, "FLASH") || strstr(up, "IFLASH") || strstr(up, "CF "))
+            *kind = AURA_STR_ABOUT_DRIVE_SSD;
+        else
+            *kind = AURA_STR_ABOUT_DRIVE_UNKNOWN;
+    }
+#endif
+}
+
+/* Linea de identidad en la parte superior de la pagina de almacenamiento:
+ * "<tipo> · <modelo> · <capacidad>". El modelo se recorta con "…" para
+ * caber en el ancho de la region si hace falta (los strings ATA llegan a
+ * 40 caracteres); tipo y capacidad nunca se recortan. */
+static void draw_about_drive_line(int x, int y, int w, long long total_b)
+{
+    char model[48], cap[16], line[96];
+    aura_str_id_t kind;
+    int tw, th;
+
+    about_drive_identity(model, sizeof(model), &kind);
+    output_dyn_value(cap, sizeof(cap), total_b, byte_units, 4, true);
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+
+    if (model[0])
+    {
+        int model_len = (int)strlen(model);
+        for (;;)
+        {
+            snprintf(line, sizeof(line), "%s · %s%s · %s", aura_str(kind), model,
+                     model_len < (int)strlen(model) ? "…" : "", cap);
+            lcd_getstringsize((const unsigned char *)line, &tw, &th);
+            if (tw <= w || model_len <= 3)
+                break;
+            model[--model_len] = '\0';
+        }
+    }
+    else
+        snprintf(line, sizeof(line), "%s · %s", aura_str(kind), cap);
+
+    lcd_putsxy(x, y, (const unsigned char *)line);
+}
+
 static void draw_about_storage_expanded(void)
 {
     long long music_b, video_b, photo_b, system_b, other_b, free_b, total_b;
@@ -2437,6 +2533,9 @@ static void draw_about_storage_expanded(void)
     rows[3].label = AURA_STR_ABOUT_SYSTEM;
     rows[4].bytes = other_b; rows[4].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
     rows[4].label = AURA_STR_ABOUT_OTHER;
+
+    /* D-284: identidad de la unidad arriba de las filas. */
+    draw_about_drive_line(text_x, AURA_DS_METRICS_ABOUT_EXPANDED_DRIVE_LINE_Y, text_w, total_b);
 
     row_h = (AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_BOTTOM_Y
              - AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y) / 5;
@@ -2485,68 +2584,100 @@ static void draw_about_persistent_tile(void)
  * esa sesion (has_video_categories/has_photo_categories en false), se
  * muestra el aviso de sincronizar en vez de un "0" enganoso que se leeria
  * como "no tienes nada" en vez de "no lo sabemos todavia". */
+/* Pagina 2 (Estado 2, D-283) rediseñada en D-284 (encargo del dueno:
+ * "primero la seccion de musica, con el mismo esquema de colores y los
+ * mismos iconos de los menus, luego videos, despues fotos"): tres
+ * SECCIONES, cada una con el icono de 14px del menu principal ("music"/
+ * "video"/"image", los mismos assets que dibuja LeftPanel) tenido con el
+ * color plano de su categoria (D-250: Musica = acento, Video = navy,
+ * Fotos = naranja) y el titulo en ese mismo color, y debajo las lineas
+ * de conteo en la tinta normal. Musica gana "Albumes" (tagcache, mismo
+ * mecanismo que Artistas). El orden ya era Musica/Videos/Fotos, pero sin
+ * encabezados se leia como una sola lista sin estructura. */
+static int draw_about_counts_header(int x, int y, const char *icon,
+                                    aura_category_t cat, aura_str_id_t title)
+{
+    unsigned color = (cat == AURA_CATEGORY_MUSIC) ? aura_accent() : category_flat_color(cat);
+    int isz = AURA_DS_METRICS_ABOUT_COUNTS_ICON_SIZE;
+    int tw, text_h;
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
+    lcd_getstringsize((const unsigned char *)"Ag", &tw, &text_h);
+    /* icono centrado verticalmente respecto a la linea de titulo */
+    aura_widgets_draw_icon_ink(icon, isz, x, y + (text_h - isz) / 2, color, 256);
+    lcd_set_foreground(color);
+    lcd_putsxy(x + isz + A26_SPACING_SM, y, (const unsigned char *)aura_str(title));
+    (void)tw;
+    return text_h;
+}
+
+static int draw_about_counts_line(int x, int y, aura_str_id_t label, int value)
+{
+    char line[48];
+    int tw, th;
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+    snprintf(line, sizeof(line), "%s: %d", aura_str(label), value);
+    lcd_putsxy(x, y, (const unsigned char *)line);
+    lcd_getstringsize((const unsigned char *)"Ag", &tw, &th);
+    return th + 1;
+}
+
+static int draw_about_counts_note(int x, int y)
+{
+    int tw, th;
+    (void)tw;
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+    lcd_putsxy(x, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_SYNC_FOR_DETAIL));
+    lcd_getstringsize((const unsigned char *)"Ag", &tw, &th);
+    return th + 1;
+}
+
 static void draw_about_counts(const aura_manifest_t *m)
 {
-    int text_x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;
-    int y = AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y;
-    int line_h, tw, th;
-    char line[48];
+    int x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;
+    /* Arranca en la misma altura que la linea de identidad de la pagina 1
+     * (no en expanded_text_top_y): tres secciones con encabezado necesitan
+     * todo el alto disponible entre la StatusBar y los puntos de pagina. */
+    int y = AURA_DS_METRICS_ABOUT_EXPANDED_DRIVE_LINE_Y;
+    int gap = AURA_DS_METRICS_ABOUT_COUNTS_GROUP_GAP;
+    /* Titulos con sangria del icono para que las lineas alineen con el
+     * texto del encabezado, no con el icono. */
+    int lx = x + AURA_DS_METRICS_ABOUT_COUNTS_ICON_SIZE + A26_SPACING_SM;
 
     draw_about_persistent_tile();
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    lcd_getstringsize((const unsigned char *)"Ag", &tw, &th);
-    line_h = th + A26_SPACING_XS;
+    /* -- Musica -- */
+    y += draw_about_counts_header(x, y, "music", AURA_CATEGORY_MUSIC, AURA_STR_MUSIC);
+    y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_SONGS, m->music_count);
+    y += draw_about_counts_line(lx, y, AURA_STR_MUSIC_ALBUMS, aura_music_count_albums());
+    y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_ARTISTS, aura_music_count_artists());
+    y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_PLAYLISTS, m->playlist_count);
+    y += gap;
 
-    lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
-
-    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_SONGS), m->music_count);
-    lcd_putsxy(text_x, y, (const unsigned char *)line);
-    y += line_h;
-    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_ARTISTS),
-             aura_music_count_artists());
-    lcd_putsxy(text_x, y, (const unsigned char *)line);
-    y += line_h;
-    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_PLAYLISTS), m->playlist_count);
-    lcd_putsxy(text_x, y, (const unsigned char *)line);
-    y += line_h + A26_SPACING_XS;
-
+    /* -- Videos -- */
+    y += draw_about_counts_header(x, y, "video", AURA_CATEGORY_VIDEO, AURA_STR_VIDEOS);
     if (m->has_video_categories)
     {
-        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_MOVIES), m->video_movies_count);
-        lcd_putsxy(text_x, y, (const unsigned char *)line);
-        y += line_h;
-        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_SERIES), m->video_series_count);
-        lcd_putsxy(text_x, y, (const unsigned char *)line);
-        y += line_h;
-        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_CLIPS), m->video_clips_count);
-        lcd_putsxy(text_x, y, (const unsigned char *)line);
-        y += line_h + A26_SPACING_XS;
+        y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_MOVIES, m->video_movies_count);
+        y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_SERIES, m->video_series_count);
+        y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_CLIPS, m->video_clips_count);
     }
     else
-    {
-        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-        lcd_putsxy(text_x, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_SYNC_FOR_DETAIL));
-        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
-        y += line_h + A26_SPACING_XS;
-    }
+        y += draw_about_counts_note(lx, y);
+    y += gap;
 
+    /* -- Fotos -- */
+    y += draw_about_counts_header(x, y, "image", AURA_CATEGORY_PHOTOS, AURA_STR_PHOTOS);
     if (m->has_photo_categories)
     {
-        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_IMAGES), m->photo_images_count);
-        lcd_putsxy(text_x, y, (const unsigned char *)line);
-        y += line_h;
-        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_PHOTOS_TAKEN), m->photo_photos_count);
-        lcd_putsxy(text_x, y, (const unsigned char *)line);
-        y += line_h;
-        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_AI), m->photo_ai_count);
-        lcd_putsxy(text_x, y, (const unsigned char *)line);
+        y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_IMAGES, m->photo_images_count);
+        y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_PHOTOS_TAKEN, m->photo_photos_count);
+        y += draw_about_counts_line(lx, y, AURA_STR_ABOUT_AI, m->photo_ai_count);
     }
     else
-    {
-        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-        lcd_putsxy(text_x, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_SYNC_FOR_DETAIL));
-    }
+        y += draw_about_counts_note(lx, y);
 }
 
 /* Pagina 3: Estado 3 "Creditos" (D-283, PLAN-about-fixes.md Q7/Q8/Q9) --

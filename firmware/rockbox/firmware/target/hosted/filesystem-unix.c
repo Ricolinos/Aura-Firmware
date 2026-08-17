@@ -212,12 +212,83 @@ int os_opendir_and_fd(const char *osdirname, DIR **osdirpp, int *osfdp)
     return rc;
 }
 
+#ifdef SIMULATOR
+#include <stdlib.h>
+#include <dirent.h>
+#include <stdio.h>
+
+/* Aura (D-284): el simulador reportaba el disco del HOST (statfs sobre
+ * la carpeta simdisk -> el SSD de la Mac, ~2 TB), asi que "Acerca de"
+ * mostraba una capacidad que ningun iPod tiene. Perfil de disco de iPod
+ * para el simulador: capacidad fija de 128 GB decimales (122070 MiB, lo
+ * que trae el iPod del dueno con SSD de 128 GB), y el "usado" es la suma
+ * REAL de bytes que hay dentro de simdisk (recorrido del host, milisegundos)
+ * -- no se inventa espacio ocupado: el disco simulado contiene exactamente
+ * lo que contiene simdisk. Variable de entorno AURA_SIM_DISK_MIB para
+ * probar otras capacidades; AURA_SIM_DISK_MIB=0 vuelve al statfs del host
+ * (comportamiento original de Rockbox). Solo SIMULATOR, nunca hardware. */
+#define AURA_SIM_DEFAULT_DISK_MIB 122070ULL
+
+static unsigned long long sim_dir_bytes(const char *path, int depth)
+{
+    DIR *d;
+    struct dirent *e;
+    unsigned long long total = 0;
+    char child[MAX_PATH];
+
+    if (depth > 24 || !(d = opendir(path)))
+        return 0;
+    while ((e = readdir(d)) != NULL)
+    {
+        struct stat st;
+        if (e->d_name[0] == '.' && (e->d_name[1] == '\0'
+            || (e->d_name[1] == '.' && e->d_name[2] == '\0')))
+            continue;
+        if (snprintf(child, sizeof(child), "%s/%s", path, e->d_name) >= (int)sizeof(child))
+            continue; /* ruta demasiado larga para el buffer: se omite */
+        if (lstat(child, &st) != 0)
+            continue;
+        if (S_ISDIR(st.st_mode))
+            total += sim_dir_bytes(child, depth + 1);
+        else if (S_ISREG(st.st_mode))
+            total += (unsigned long long)st.st_size;
+    }
+    closedir(d);
+    return total;
+}
+
+static bool sim_volume_profile(const char *volpath, sector_t *sizep, sector_t *freep)
+{
+    const char *env = getenv("AURA_SIM_DISK_MIB");
+    unsigned long long disk_mib = env ? strtoull(env, NULL, 10) : AURA_SIM_DEFAULT_DISK_MIB;
+    unsigned long long total_kib, used_kib;
+
+    if (disk_mib == 0)
+        return false; /* escape: statfs real del host */
+
+    total_kib = disk_mib * 1024ULL;
+    used_kib = (sim_dir_bytes(volpath, 0) + 1023ULL) / 1024ULL;
+    if (used_kib > total_kib)
+        used_kib = total_kib;
+
+    if (sizep) *sizep = (sector_t)total_kib;
+    if (freep) *freep = (sector_t)(total_kib - used_kib);
+    return true;
+}
+#endif /* SIMULATOR */
+
 /* do we really need this in the app? (in the sim, yes) */
 void volume_size(IF_MV(int volume,) sector_t *sizep, sector_t *freep)
 {
     sector_t size = 0, free = 0;
     char volpath[MAX_PATH];
     struct statfs fs;
+
+#ifdef SIMULATOR
+    if (os_volume_path(IF_MV(volume,) volpath, sizeof (volpath)) >= 0
+        && sim_volume_profile(volpath, sizep, freep))
+        return;
+#endif
 
     if (os_volume_path(IF_MV(volume,) volpath, sizeof (volpath)) >= 0
         && !statfs(volpath, &fs))
