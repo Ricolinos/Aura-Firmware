@@ -46,6 +46,7 @@
 #include "aura_status_bar_v2.h"
 #include "aura_scroll_indicator.h"
 #include "aura_art.h" /* cache .pfraw generico -- D-291, compartido con aura_albumart.c */
+#include "aura_transitions.h" /* Fade-Slide region entre fotos -- D-291 */
 
 #define PHOTOS_DIR      "/Photos"
 /* D-291: 200 -> 500 (limite del contrato Photos/ con Aura Studio,
@@ -803,17 +804,40 @@ void aura_photo_viewer_handle_button(aura_nav_t *nav, long button)
 {
     switch (button)
     {
+    /* D-291 §5.3: la rueda es la navegacion PRIMARIA entre fotos;
+     * LEFT/RIGHT se conservan como atajo (mismo destino, misma
+     * transicion) -- no se retiran, el encargo solo pedia agregar la
+     * rueda. `Fade-Slide` variante de region (D-283,
+     * aura_transition_fade_slide_region()) DESPUES de actualizar
+     * s_current_index -- mismo contrato que handle_about(): la
+     * transicion prerrenderiza el DESTINO llamando aura_screens_draw(),
+     * que lee s_current_index para decidir que foto dibujar. Region =
+     * pantalla completa (el visor no tiene StatusBar que excluir). */
+    case BUTTON_SCROLL_FWD:
     case BUTTON_RIGHT:
         if (s_current_index < s_photo_count - 1)
+        {
             s_current_index++;
+            aura_transition_fade_slide_region(nav, 0, 0, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT, 1);
+        }
         break;
+    case BUTTON_SCROLL_BACK:
     case BUTTON_LEFT:
         if (s_current_index > 0)
+        {
             s_current_index--;
+            aura_transition_fade_slide_region(nav, 0, 0, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT, -1);
+        }
         break;
     case BUTTON_MENU:
     case BUTTON_SELECT:
+        /* D-291 §5.3: la lista recupera la seleccion de la foto que se
+         * estaba viendo, no la que tenia al entrar -- aura_nav_pop()
+         * PRIMERO (decrementa depth), aura_nav_set_selection() DESPUES
+         * (para que depth-1 ya apunte al slot de la LISTA, no al del
+         * propio visor -- ver aura_nav_set_selection()/aura_nav.c). */
         aura_nav_pop(nav);
+        aura_nav_set_selection(nav, s_current_index);
         break;
     default:
         break;
