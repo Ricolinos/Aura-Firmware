@@ -1,5 +1,24 @@
 # DECISIONS.md — Registro de decisiones técnicas
 
+> 🔒 **Bitácora congelada en D-285 (2026-08-16).** Este archivo es la
+> bitácora completa de **Aura-Proyect**, el monorepo original que
+> incluía firmware y Aura Studio (app macOS de sincronización/gestión).
+> En esa fecha el proyecto se separó en dos repositorios: este
+> (**Aura-Firmware**, solo firmware) y uno aparte para Aura Studio. Las
+> entradas D-001…D-285 se conservan **íntegras, sin editar ni podar**
+> —incluidas las que mencionan Aura Studio o el monorepo— porque hay
+> ~690 referencias cruzadas reales desde código, comentarios y otras
+> entradas hacia decisiones de esta bitácora; trocearla habría roto esa
+> trazabilidad. Sí es correcto verificar contra el estado actual del
+> código antes de asumir vigente cualquier mención a Studio, rutas de
+> `studio/`, o al build combinado — pueden describir el monorepo
+> anterior a la separación.
+>
+> Este repositorio **continúa la numeración desde D-286**. La bitácora
+> equivalente de Aura Studio, si existe, empieza su propia numeración
+> en su repositorio; no hay coordinación de números entre ambas a
+> partir de este punto.
+
 Formato: cada decisión con contexto, alternativas consideradas y justificación. Orden cronológico.
 
 > ⚠️ **Esto es una BITÁCORA, no una spec.** Registra la evolución —
@@ -3520,5 +3539,23 @@ La página 3 (antes "Basado en Rockbox" a secas) se reemplazó por texto complet
 **Cambio de orden en el tile, deliberado**: `aura_selection_summary_draw_tile()` redondeaba las esquinas (`a26_shell_round_bitmap_corners_over_content`, radio 28, restaurando el fondo real) **antes** de llamar al renderer — correcto para símbolos centrados de 60px, pero un renderer que cubre los 90px volvería a pintar las esquinas ya recortadas. Ahora el recorte corre **después** del renderer: cualquier tile, sea degradado+símbolo o imagen completa, sale con la misma máscara. Para los símbolos de 60px no cambia ni un píxel (están lejos de las esquinas). Como el radio del ícono (27.9) coincide con el del tile (28), no quedan crecientes de gris entre ambos arcos; la sombra SDF del tile (D-270) sigue debajo, sin cambio. La fila de la lista conserva su ícono "info" (regla de D-269, sin cambio).
 
 **Verificación**: `build_sim.sh` limpio (los dos BMP horneados: `aura_badge-light (90x90)`, `aura_badge-dark (90x90)`); build ARM limpio (persiste solo el `-Wtype-limits` preexistente); `make -C firmware/rockbox/apps/aura/test test` 8/8. Capturas en `docs/screenshots/about-fixes/`: `split-icon-light.png` (tile completo azul claro con su sombra, en split), `page1-storage-expanded.png` (el ícono viaja al expandido; disco del host de vuelta), `split-icon-dark.png` y `expanded-icon-dark.png` (tema oscuro con el ícono de fondo oscuro sobre el degradado oscuro de D-281). Una primera captura salió a mitad de la transición de entrada (arnés disparado a los 200 ticks) — repetida a 350 ticks; no era un defecto de dibujo. El tema del simulador se devolvió a claro al terminar. Doc: `componentes/about.md` y `componentes/selection-summary.md` (excepción de Acerca de actualizada, orden del recorte).
+
+---
+
+## D-286 — Tema compilado por defecto vuelve a Inter + Lucide/Phosphor, revive D-004, sustituye a SF Pro/SF Symbols (D-072) antes de hacer público el firmware
+
+**Encargo**: preparar este repositorio (`Aura-Firmware`, separado de `Aura-Proyect` el 2026-08-16, ver cabecera de este archivo) para publicación pública. El tema compilado por defecto usaba SF Pro (tipografía) y SF Symbols (iconografía) desde D-072 (Fase 26, "Apple2026") — ambos redistribuidos como binarios/bitmaps horneados dentro de `firmware/dist/*.zip` en el historial de git, lo cual viola la licencia de Apple (D-004 ya lo dejaba explícito: "Prohibido: SF Pro y SF Symbols en el firmware... la licencia de Apple prohíbe su redistribución fuera de plataformas Apple" — una regla que D-069/D-072 pasaron por alto en la práctica sin revertir el texto de D-004). Antes de este repositorio existir públicamente había que corregirlo.
+
+**Decisión**: el tema por defecto compilado vuelve a **Inter** (SIL OFL) + **Lucide** (ISC), con **Phosphor** (MIT) como set secundario para los pocos íconos sin equivalente directo en Lucide — exactamente la elección original de D-004, ahora repuesta. El pipeline de generación de fuentes/íconos (`design-system/generate.py`, `convttf`, la máscara de cobertura antialiasada) no cambió: solo cambiaron las fuentes de artwork.
+
+**Tipografía — 3 caras Inter cubren 6 roles abstractos**: se vendorizó `design-system/vendor/inter-ttf/{Inter-Regular,Inter-Medium,Inter-SemiBold}.ttf`. Los 6 `faces` abstractos de `tokens.json` (`reg`/`medium`/`semibold`/`bold`/`pro_bold`/`pro_semibold`) se reapuntaron a esas 3 caras — no hay un Bold real vendorizado, así que `pro_bold` y `pro_semibold` comparten `Inter-SemiBold.ttf` (simplificación pragmática, documentada en `tokens.json` como `comment_faces`, y en `docs/aura-design-system/fundamentos/02-tipografia.md`). Los tamaños de `type_scale` (los px reales de cada `.fnt`) **no se tocaron** — se mantienen los mismos valores afinados visualmente contra SF, verificados ahora contra Inter con capturas (`docs/screenshots/theme-default-inter-lucide/`). `resolve_font_file()` (`generate.py`) tenía un bug real de resolución de rutas relativas en `search_paths` (solo funcionaban absolutas o `~`) — corregido para resolver contra `ROOT` (`design-system/`), necesario para que `vendor/inter-ttf` funcionara sin ruta absoluta hardcodeada.
+
+**Iconografía — mapa completo de 87 icon_key, cobertura real** (`design-system/assets/icon-name-map.json`, consultado por `tokens.json`→`icon.svg_overrides`, que pasó de 2 a 89 entradas — las 2 previas, `music`/`ipod`, son artwork propio de D-263 y no se tocaron): **62 Lucide, 4 Phosphor, 21 reuso** (un icon_key existente cuya forma ya servía para el nuevo rol, sin SVG nuevo — razón documentada por entrada, ninguno es un placeholder vacío ni una aproximación oculta). El campo `icon.names` (mapeo a nombres de SF Symbols) **se conserva intacto**, ya no como fuente activa del pipeline sino como documentación para el futuro tema opcional "Apple (uso personal)" (ver `PLAN-theme-system.md`) — `generate.py` solo lo consulta si `svg_overrides` no tiene entrada, lo cual hoy nunca ocurre. `apple2026_sf_render.swift` (el renderizador que pide símbolos a AppKit) se conserva sin cambios de comportamiento, con un comentario nuevo que lo repositiona como el futuro constructor de ese tema opcional — no corre como parte de `build_sim.sh`/`package_dist.sh` de este repositorio.
+
+**Normalización de SVG vendorizados**: los Lucide son de trazo (`stroke="currentColor"`, `fill="none"`), los Phosphor de relleno (`fill="currentColor"`) — `currentColor` no siempre resuelve bajo `NSImage(contentsOfFile:)` (el mismo cargador que ya usaba `apple2026_sf_render.swift` para los SVG propios de D-263), así que se reemplazó `currentColor` → `#000000` en los 46 SVG nuevos y también en los 19 ya vendorizados de D-004/D-263 (el color real lo decide `generate.py` en la composición, igual que con los SF Symbols antes).
+
+**Dos bugs reales encontrados verificando, no en revisión de código**: (1) `svg_overrides`/`icon-name-map.json` guardaron primero las rutas relativas al repo (`design-system/vendor/...`) en vez de relativas a `design-system/` — la convención que ya usaban `music`/`ipod` — y `generate.py` hace `(ROOT / v).resolve()`, así que la ruta se duplicaba (`design-system/design-system/vendor/...`) y el build fallaba fuerte ("no se pudo cargar el SVG"); corregido quitando el prefijo en las 87 entradas nuevas. (2) el chequeo mecánico de generación `MIN_INK_TONES = 4` (cuenta tonos RGB distintos por BMP horneado, atrapa regresiones de binarización) marcó 81 íconos fallando, los 81 rastreados a 3 SVG fuente reusados en muchos icon_key: `pause.svg` (Lucide) resultó ser un **bug visual real**, no solo de la métrica — estaba dibujado como contorno hueco (`fill="none"` + `stroke`), así que las barras de pausa se habrían visto vacías; reescrito como dos rectángulos rellenos con esquinas redondeadas. `sliders-horizontal.svg`/`menu-list.svg` tenían trazos de 2px con muy poca superficie curva para generar antialiasing a tamaños pequeños; engrosados a `stroke-width="3"`. Arreglados esos 3 archivos fuente y reconstruido, la falla bajó a 20 (todas variantes de `pause`, cuyo `rx="1"` seguía siendo insuficiente) y luego, tras subir `rx` a `2.5` (extremos semicirculares completos), a **0**. El umbral `MIN_INK_TONES` en sí no se tocó — todas las correcciones fueron al artwork fuente, no al chequeo.
+
+**Verificación**: `build_sim.sh` limpio; build ARM limpio (solo el warning preexistente no relacionado, `-Wtype-limits` en `apple2026_shell.c:48`); `make -C firmware/rockbox/apps/aura/test test` 8/8. Capturas en `docs/screenshots/theme-default-inter-lucide/` (menú raíz, lista de Ajustes, selector de Tema, lista de Música, Acerca de expandido) confirman texto e íconos legibles y sin binarización rota — no se persiguió pixel-perfección contra el tema SF anterior, el objetivo era una migración de licencia sin regresión visual. Doc actualizada: `docs/aura-design-system/fundamentos/02-tipografia.md` (distinción rol-vs-cara explicada, Inter como cara compilada por defecto, SF disponible solo vía el tema opcional futuro) y notas cruzadas cortas en `componentes/{index-rail,status-bar,left-panel,now-playing,selection-summary}.md`.
 
 *(Las siguientes decisiones se añaden conforme avanza la ejecución.)*
