@@ -1,11 +1,11 @@
 # Guía de desarrollo — Aura
 
-Cómo compilar y trabajar en cada parte del proyecto. Todos los comandos asumen que estás parado en la raíz del repo (`Aura-Proyect/`) en un Mac con Apple Silicon.
+Cómo compilar y trabajar en cada parte del proyecto. Todos los comandos asumen que estás parado en la raíz de este repo en un Mac con Apple Silicon.
 
 ## Requisitos (una sola vez)
 
 ```bash
-brew install sdl2 gcc freetype librsvg coreutils gnu-sed make texinfo automake autoconf xcodegen ffmpeg
+brew install sdl2 gcc freetype librsvg coreutils gnu-sed make texinfo automake autoconf ffmpeg
 python3 -m venv design-system/.venv
 design-system/.venv/bin/pip install pillow
 ```
@@ -67,7 +67,7 @@ La herramienta de flasheo DFU (`mks5lboot`) es un binario de host, se compila ap
 cd firmware/rockbox/utils/mks5lboot && make
 ```
 
-`firmware/dist/` ya tiene los tres artefactos compilados y verificados en esta sesión (más `checksums.txt`), listos para usar sin recompilar nada.
+`firmware/tools/package_dist.sh` automatiza los tres pasos de arriba (menos el bootloader) y arma `firmware/dist/` completo con `checksums.txt` — ver [`firmware/dist/README.md`](../firmware/dist/README.md).
 
 ## Design system
 
@@ -79,39 +79,16 @@ design-system/.venv/bin/python3 design-system/generate.py
 
 Produce `design-system/out/aura_tokens.h` (que `build_sim.sh` copia a `firmware/rockbox/apps/aura/`), fuentes bitmap y bitmaps de íconos para ambos temas.
 
-## Aura Studio (macOS)
-
-El proyecto real es `studio/AuraStudio/AuraStudio.xcodeproj`, generado desde `studio/AuraStudio/project.yml` con [XcodeGen](https://github.com/yonaskolb/XcodeGen) — nunca se edita el `.xcodeproj` a mano, se edita el `.yml` y se regenera:
-
-```bash
-cd studio/AuraStudio && xcodegen generate
-open AuraStudio.xcodeproj
-```
-
-Build/test por línea de comandos con Xcode (requiere que Xcode tenga todos sus componentes de plataforma instalados — abrilo una vez con la interfaz gráfica si es la primera vez que lo usás en esta máquina):
-
-```bash
-xcodebuild -project AuraStudio.xcodeproj -scheme AuraStudio build
-xcodebuild -project AuraStudio.xcodeproj -scheme AuraStudio test
-```
-
-Camino alternativo, más rápido, vía Swift Package Manager (compila el mismo código fuente pero no genera el `.app` con recursos embebidos — ver D-034 en DECISIONS.md):
-
-```bash
-cd studio/AuraStudio
-swift build
-swift test          # 30 tests, incluye 4 que pegan contra APIs reales (MusicBrainz/CAA/LRCLIB) y se saltean solos sin red
-```
-
 ## Estructura del repo
 
 ```
 firmware/rockbox/apps/aura/   → la UI Aura (toda la lógica nueva; el resto de firmware/rockbox/ es el fork sin modificar salvo los parches puntuales documentados en DECISIONS.md)
 firmware/tools/               → scripts de build/test/capturas
-firmware/dist/                → artefactos compilados del target real (versionado)
+firmware/dist/                → artefactos compilados del target real (no versionado; ver firmware/dist/README.md)
 design-system/                → tokens + pipeline de generación
-studio/AuraStudio/            → app macOS (Swift/SwiftUI)
-docs/                         → esta guía + guía de usuario + guía de flasheo + capturas
+docs/                         → esta guía + guía de flasheo + capturas
 ```
 
-Ver [DECISIONS.md](../DECISIONS.md) para el porqué de cada decisión no obvia (son más de 40 entradas D-NNN, cada una con el problema real encontrado y la alternativa implementada).
+Este repositorio es solo el firmware. Aura Studio (app macOS que instala el firmware y gestiona la biblioteca) vive en un repositorio aparte; consume los artefactos de este a través de un GitHub Release, nunca leyendo este árbol directamente — ver `CONTRATO-firmware-studio.md`.
+
+Ver [DECISIONS.md](../DECISIONS.md) y [DECISIONS-ARCHIVE.md](../DECISIONS-ARCHIVE.md) para el porqué de cada decisión no obvia (más de 280 entradas D-NNN, cada una con el problema real encontrado y la alternativa implementada).

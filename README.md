@@ -6,7 +6,14 @@ Firmware moderno y minimalista para el iPod Classic de 6ª generación
 
 Este repositorio es solo el firmware. La app de escritorio para
 instalarlo y gestionar la biblioteca (Aura Studio, macOS) vive en un
-repositorio aparte.
+**repositorio aparte**, sin dependencia de rutas entre ambos: Aura
+Studio consume los binarios y la paleta de colores de este repositorio
+únicamente a través de sus **GitHub Releases**, nunca leyendo este
+árbol de fuentes directamente. El contrato completo entre los dos
+repositorios — qué se publica, cumplimiento GPL de lo que Studio
+embebe, y el formato de los archivos que ambos leen/escriben en el
+disco del iPod — está en
+[`CONTRATO-firmware-studio.md`](CONTRATO-firmware-studio.md).
 
 ## Origen y licencia
 
@@ -122,13 +129,14 @@ Studio (repositorio aparte).
 |---|---|
 | `firmware/` | El firmware: `firmware/rockbox/` (fork de Rockbox), `apps/aura/` dentro de él (la UI propia), `firmware/tools/` (scripts de build/empaquetado), `firmware/dist/` (artefactos compilados, no versionados). |
 | `design-system/` | Fuente única de verdad de tokens visuales (`tokens.json`) y el pipeline que genera fuentes bitmap e íconos a partir de ella. |
-| `docs/` | Sistema de diseño vivo (`docs/aura-design-system/`), guías de instalación/desarrollo/flasheo, capturas de evidencia. |
+| `docs/` | Sistema de diseño vivo (`docs/aura-design-system/`), guías de desarrollo/flasheo, capturas de evidencia. |
 
 ## Documentos clave
 
-- [`DECISIONS.md`](DECISIONS.md) — registro cronológico de decisiones técnicas, con el problema real encontrado y la alternativa implementada en cada una.
+- [`DECISIONS.md`](DECISIONS.md) — bitácora de decisiones desde la separación de repositorios (D-286+), con el problema real encontrado y la alternativa implementada en cada una.
+- [`DECISIONS-ARCHIVE.md`](DECISIONS-ARCHIVE.md) — bitácora congelada del monorepo original (D-001…D-285), de solo lectura.
 - [`MODIFICATIONS.md`](MODIFICATIONS.md) — qué modificó Aura sobre el Rockbox original, archivo por archivo (aviso GPL v2 §2a).
-- [`docs/guia-instalacion.md`](docs/guia-instalacion.md) — instalar Aura y sincronizar tu biblioteca.
+- [`CONTRATO-firmware-studio.md`](CONTRATO-firmware-studio.md) — contrato con el repositorio de Aura Studio.
 - [`docs/guia-flasheo-restauracion.md`](docs/guia-flasheo-restauracion.md) — detalle técnico del flasheo, dual-boot y restauración.
-- [`docs/guia-desarrollo.md`](docs/guia-desarrollo.md) — cómo compilar cada parte del proyecto.
+- [`docs/guia-desarrollo.md`](docs/guia-desarrollo.md) — cómo compilar el firmware.
 - [`docs/aura-design-system/00-INDICE.md`](docs/aura-design-system/00-INDICE.md) — sistema de diseño vigente (fuente de verdad viva).

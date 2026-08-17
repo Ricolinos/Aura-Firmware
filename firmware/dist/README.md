@@ -13,13 +13,15 @@ Artefactos que produce el script:
 - `bootloader-ipod6g.ipod` — bootloader de arranque dual (compilación manual,
   ver nota abajo).
 - `mks5lboot` — herramienta para grabar el bootloader por DFU.
-- `checksums.txt` — SHA-256 de los cuatro artefactos anteriores.
+- `AuraPalette.swift` — paleta de colores para Aura Studio (`design-system/generate.py --swift-out`, no lleva checksum: Studio lo reemplaza directo, no lo verifica en runtime).
+- `MODIFICATIONS.md` — copia del listado GPL §2a, para adjuntar al Release.
+- `checksums.txt` — SHA-256 de `rockbox.ipod`, `rockbox.zip`, `mks5lboot` y (si está presente) `bootloader-ipod6g.ipod`.
 
 Para instalarlos en un dispositivo real, la vía sancionada del proyecto es
 Aura Studio (repositorio aparte), que descarga estos artefactos desde un
 [Release](../../../releases) de este repositorio, verifica sus checksums y
-los copia/flashea siguiendo el procedimiento documentado en
-`docs/guia-flasheo-restauracion.md` del repositorio de Aura Studio.
+los copia/flashea siguiendo su propio procedimiento — ver `CONTRATO-firmware-studio.md`
+en la raíz de este repo para el contrato completo entre ambos.
 
 **Nota sobre el bootloader**: `package_dist.sh` compila `rockbox.ipod` y
 `mks5lboot` de forma automática, pero compilar `bootloader-ipod6g.ipod`
