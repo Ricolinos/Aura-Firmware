@@ -187,6 +187,30 @@ static const char *s_bg_loaded_name = NULL;
 static unsigned s_bg_loaded_generation = 0;
 static bool s_bg_load_ok = false;
 
+/* D-292: nombre del preset de fondo que corresponde al ACENTO activo
+ * (no a la categoria de seccion, D-267: "el fondo NO sigue la
+ * categoria... sigue el acento"). Mismo orden que accent_choice_rgb24
+ * (aura_screens.c) y que tokens.json (accent_presets_hex <->
+ * right_panel_background.presets, verificado por indice en ambos
+ * lados -- PLAN-personalizacion.md §5.1.2). Devuelve NULL si el acento
+ * activo no es ninguno de los 6 presets con imagen (color libre o de
+ * un tema que no trae fondo propio) -- el llamador cae al degradado
+ * calculado. */
+static const char *const s_accent_bg_preset_names[] = {
+    "pink", "red", "orange", "green", "blue", "purple",
+};
+
+static const char *accent_background_preset_name(void)
+{
+    static const unsigned presets[] = AURA_DS_COLOR_ACCENT_PRESETS_HEX_RGB24_VALUES;
+    unsigned i, n = sizeof(presets) / sizeof(presets[0]);
+
+    for (i = 0; i < n; i++)
+        if (presets[i] == aura_settings.accent_rgb24)
+            return s_accent_bg_preset_names[i];
+    return NULL;
+}
+
 static bool ensure_panel_background(const char *name)
 {
     char rel[MAX_PATH];
@@ -493,6 +517,35 @@ static void draw_neutral_fade_background(int x, int width)
     }
 }
 
+/* D-292: fallback del fondo del panel cuando el acento activo NO tiene
+ * imagen propia (color libre, o un tema instalado sin backgrounds/) --
+ * el degradado calculado que la propuesta original de D-267 usaba
+ * antes de la imagen, pero VERTICAL (no diagonal, D-097: en 160x240 un
+ * diagonal de 3 puntos deja bandas visibles en RGB565) y de los 3
+ * derivados de acento que ya existen para esto (aura_accent_dark() ->
+ * aura_accent() -> aura_accent_light(), accent_derived_lighten/
+ * darken_pct = 25%, tokens.json G9: "para el degradado de
+ * SelectionSummary"). Mismo blend de 2 tramos que draw_diagonal_
+ * gradient() (D-097): 0-128 hacia el centro, 128-256 desde el centro. */
+static void draw_accent_gradient_background(int x, int width)
+{
+    unsigned top = aura_accent_dark();
+    unsigned mid = aura_accent();
+    unsigned bottom = aura_accent_light();
+    int row;
+
+    for (row = 0; row < A26_SCREEN_HEIGHT; row++)
+    {
+        int t256 = (A26_SCREEN_HEIGHT > 1) ? (row * 256) / (A26_SCREEN_HEIGHT - 1) : 256;
+        unsigned c = (t256 <= 128)
+            ? a26_shell_blend(top, mid, t256 * 2)
+            : a26_shell_blend(mid, bottom, (t256 - 128) * 2);
+
+        lcd_set_foreground(c);
+        lcd_hline(x, x + width - 1, row);
+    }
+}
+
 static void draw_summary(int x, int width, const char *icon_name,
                           aura_selection_summary_icon_renderer_t renderer,
                           aura_category_t category,
@@ -530,20 +583,27 @@ static void draw_summary(int x, int width, const char *icon_name,
                     : AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
 
     /* Fondo COMPLETO del panel. ACCENT_IMAGE (D-267, reemplaza el
-     * degradado diagonal detras del tile de D-097): imagen por preset de
-     * acento, opaca, un solo lcd_bitmap(); si el archivo no esta
-     * (dispositivo real sin los assets sincronizados todavia, o un preset
-     * que aun no existe), cae a un relleno solido conocido en vez de
-     * dejar basura de memoria en pantalla. NEUTRAL_FADE (D-281): degradado
-     * calculado, sin BMP. */
+     * degradado diagonal detras del tile de D-097): imagen por preset del
+     * ACENTO ACTIVO (D-292 -- antes "pink" fijo para cualquier acento,
+     * interino explicito de cuando solo existia un preset), opaca, un
+     * solo lcd_bitmap(). Si el acento no tiene imagen (color libre fuera
+     * de los 6 presets, o un tema instalado sin backgrounds/) o el
+     * archivo no carga (dispositivo real sin assets sincronizados, BMP
+     * corrupto), cae al degradado CALCULADO desde el acento (D-292,
+     * draw_accent_gradient_background()) -- nunca a un color plano
+     * generico ni a "pink" prestado de otro acento: el usuario elige
+     * cualquier color y el fondo siempre lo refleja. NEUTRAL_FADE
+     * (D-281): degradado de tema, sin acento ni BMP, sin cambio. */
     if (background == AURA_SS_BG_NEUTRAL_FADE)
         draw_neutral_fade_background(x, width);
-    else if (ensure_panel_background("pink"))
-        lcd_bitmap(s_bg_pixels, x, 0, BG_W, BG_H);
     else
     {
-        lcd_set_foreground(a26_color(A26_SHELL_BG));
-        lcd_fillrect(x, 0, width, A26_SCREEN_HEIGHT);
+        const char *preset = accent_background_preset_name();
+
+        if (preset && ensure_panel_background(preset))
+            lcd_bitmap(s_bg_pixels, x, 0, BG_W, BG_H);
+        else
+            draw_accent_gradient_background(x, width);
     }
 
     /* Sombra de LeftPanel (efectos/01-sombras.md, "SIEMPRE renderiza una

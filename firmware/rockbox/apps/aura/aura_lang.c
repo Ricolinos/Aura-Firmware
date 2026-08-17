@@ -250,7 +250,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_REPEAT_SUMMARY_ALL]     = "Repetir todo",
     [AURA_STR_REPEAT_SUMMARY_ONE]     = "Repetir una",
 
-    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreado por Ricardo Gómez.\n\nBasado en Rockbox\nRockbox y sus colaboradores. Se distribuye bajo la Licencia Pública General de GNU versión 2 (GPL v2), y Aura hereda esa licencia.\nCódigo fuente:\ngithub.com/Ricolinos/Aura-Firmware\n\nTipografía e íconos\nInter (SIL Open Font License) y los íconos Lucide (licencia ISC) y Phosphor (licencia MIT).\n\nSobre el hardware\niPod e iPod Classic son marcas de Apple Inc. Aura no está afiliado, patrocinado ni respaldado por Apple.",
+    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreado por Ricardo Gómez.\n\nBasado en Rockbox\nRockbox y sus colaboradores. Se distribuye bajo la Licencia Pública General de GNU versión 2 (GPL v2), y Aura hereda esa licencia.\nCódigo fuente:\ngithub.com/Ricolinos/Aura-Firmware\n\nTipografía e íconos\nInter (SIL Open Font License) y los íconos Lucide (licencia ISC) y Phosphor (licencia MIT).\n\nFondos del panel\nFoto de Franck V. en Unsplash. Foto de Matthew McBrayer en Unsplash.\n\nSobre el hardware\niPod e iPod Classic son marcas de Apple Inc. Aura no está afiliado, patrocinado ni respaldado por Apple.",
     [AURA_STR_ABOUT_MY_IPOD]          = "Mi iPod",
     [AURA_STR_ABOUT_OTHER]            = "Otros",
     [AURA_STR_ABOUT_SYSTEM]           = "Sistema",
@@ -484,7 +484,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_REPEAT_SUMMARY_ALL]     = "Repeat All",
     [AURA_STR_REPEAT_SUMMARY_ONE]     = "Repeat One",
 
-    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreated by Ricardo Gomez.\n\nBased on Rockbox\nRockbox and its contributors. Distributed under the GNU General Public License version 2 (GPL v2), and Aura inherits that license.\nSource code:\ngithub.com/Ricolinos/Aura-Firmware\n\nTypography and icons\nInter (SIL Open Font License), and the Lucide (ISC license) and Phosphor (MIT license) icon sets.\n\nAbout the hardware\niPod and iPod Classic are trademarks of Apple Inc. Aura is not affiliated with, sponsored by, or endorsed by Apple.",
+    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreated by Ricardo Gomez.\n\nBased on Rockbox\nRockbox and its contributors. Distributed under the GNU General Public License version 2 (GPL v2), and Aura inherits that license.\nSource code:\ngithub.com/Ricolinos/Aura-Firmware\n\nTypography and icons\nInter (SIL Open Font License), and the Lucide (ISC license) and Phosphor (MIT license) icon sets.\n\nPanel backgrounds\nPhoto by Franck V. on Unsplash. Photo by Matthew McBrayer on Unsplash.\n\nAbout the hardware\niPod and iPod Classic are trademarks of Apple Inc. Aura is not affiliated with, sponsored by, or endorsed by Apple.",
     [AURA_STR_ABOUT_MY_IPOD]          = "My iPod",
     [AURA_STR_ABOUT_OTHER]            = "Other",
     [AURA_STR_ABOUT_SYSTEM]           = "System",

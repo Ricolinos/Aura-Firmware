@@ -153,6 +153,18 @@ echo "==> Generando THIRD-PARTY-NOTICES.txt (licencias de Inter/Lucide/Phosphor,
   echo "-- Phosphor (iconos, set secundario) --------------------------------"
   echo
   cat "$ROOT_DIR/design-system/vendor/phosphor-svg/LICENSE"
+  echo
+  echo "-- Fondos del panel derecho (fotografias) ---------------------------"
+  echo
+  echo "Dos de los seis fondos por color de acento (D-292) son fotografias"
+  echo "de Unsplash (licencia Unsplash, uso libre incluido comercial, sin"
+  echo "atribucion legalmente requerida -- se da de cualquier forma):"
+  echo
+  echo "  Foto de Franck V. en Unsplash (fondo rojo)"
+  echo "  Foto de Matthew McBrayer en Unsplash (fondo azul)"
+  echo
+  echo "Los otros cuatro (rosa, naranja, verde, morado) son creaciones"
+  echo "propias del autor de Aura."
 } > "$DIST_DIR/THIRD-PARTY-NOTICES.txt"
 
 # D-289 (sistema de temas, Q5 de PLAN-themes-impl.md): el default
