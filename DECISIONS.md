@@ -3437,7 +3437,7 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 **Bug de rendimiento encontrado y arreglado de paso**: `draw_about_storage_expanded()` recargaba el manifiesto Y recorría las tres carpetas en **cada cuadro** mientras la pantalla estaba visible. `s_about_needs_reload` limita la recarga a una vez por entrada al estado (se arma de nuevo al salir con Menu).
 
-**Verificación**: build ARM y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos.
+**Verificación**: build ARM y de simulador limpios, sin warnings nuevos. `make -C firmware/rockbox/apps/aura/test test` 8/8, mismos conteos. Captura y medición del efecto (junto con D-282) en `docs/screenshots/about-fixes/page1-storage-expanded.png`: "Otros" pasó de los ~740 GiB observados en las capturas de D-279 a **1481 GiB** en el mismo fixture -- se duplicó, consistente con corregir `total_b`/`free_b` de la mitad a su valor real, mientras el porcentaje (79%) se mantuvo igual porque numerador y denominador escalan juntos.
 
 ---
 
@@ -3451,7 +3451,7 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 **Conflicto encontrado y resuelto**: el texto superior "Mi iPod" era blanco fijo (D-267, justificado porque el fondo "siempre es saturado") -- sobre el degradado nuevo, ilegible (1:1). La tinta ahora depende de la variante: `ACCENT_IMAGE` conserva blanco fijo, `NEUTRAL_FADE` usa `A26_TEXT_PRIMARY`.
 
-**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8.
+**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8. Captura y medición en `docs/screenshots/about-fixes/split-neutral-fade-bar.png`: muestreo de píxeles en y=20 (fuera del tile) confirma un degradado monótono de `(189,186,189)` en el borde del panel a `(255,255,255)` en `x=304`, sin restos de la imagen rosa; "Mi iPod" se lee en negro/gris sobre el fondo nuevo.
 
 ---
 
@@ -3465,21 +3465,35 @@ Con "Crear copias de los medios..." apagado, además se registra la carpeta solt
 
 **Limitación real del simulador, no bug**: sin `HAVE_DIRCACHE`, Sistema siempre muestra 0B ahí -- a diferencia de Música, Sistema nunca tuvo un fallback al manifiesto porque nunca vivió en él.
 
-**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8.
+**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8. Captura en `docs/screenshots/about-fixes/page1-storage-expanded.png` (recorte de la columna de puntos de color): 5 tonos distintos y legibles -- rosa, navy, naranja, gris, amarillo -- cada uno con su contorno de 1px visible.
 
 ---
 
-## D-283 — Estado 2 de "Acerca de": conteos detallados por categoría, con Video/Fotos clasificados desde Aura Studio
+## D-283 — "Acerca de" gana Estados 2 y 3: conteos detallados, créditos con GPL v2, y transición Fade-Slide entre páginas
 
-**Encargo**: añadir conteos detallados (canciones/artistas/listas de Música; película/videoclip/serie de Video; IA/fondos/fotografía de Fotos) -- con la advertencia explícita del dueño de no simular datos donde no exista fuente real.
+**Encargo**: añadir conteos detallados (canciones/artistas/listas de Música; película/videoclip/serie de Video; IA/fondos/fotografía de Fotos) -- con la advertencia explícita del dueño de no simular datos donde no exista fuente real -- y una pantalla de créditos con atribución a Rockbox/GPL v2 y a Apple (hardware, sin afiliación).
+
+### 1/4 — Aura Studio emite conteos por categoría
 
 **Viabilidad verificada antes de construir la UI (Q6)**: Rockbox no tiene base de datos de video ni parser EXIF -- no puede clasificar nada por sí solo. Pero **Aura Studio ya clasifica** cada video (Videos/Series/Películas, `MediaCategory`) y cada foto (Imágenes/Fotos/IA, `MediaCategoryHeuristics.classifyPhoto`) al importar. Se extendió el mismo canal que ya existía (`sync_summary.cfg`, `LibrarySync.sync()`/`CatalogSummaryWriter`) con 6 líneas nuevas de conteo por categoría -- ningún dato inventado, "fondos de pantalla" se descartó del encargo (no existe como categoría en Studio; las categorías reales de foto son Imágenes/Fotos/IA). `video_clips_count` = la categoría `.videos` sin clasificar (lo que el encargo original llamaba "videoclips"). `swift build` limpio, `swift test`: 191 pruebas, 1 falla conocida de red (no relacionada).
 
-**Lectura en firmware**: `aura_manifest.c` lee los 6 campos nuevos con `has_video_categories`/`has_photo_categories` para distinguir "manifiesto viejo sin este dato" de "el conteo real es cero" -- un sync anterior a esta sesión nunca tuvo estas líneas, y mostrar "0 películas" en ese caso sería tan engañoso como inventar el dato. Música: canciones/listas del manifiesto (igual que antes); **artistas contados EN VIVO de tagcache** (`aura_music_count_artists()`, nuevo en `aura_music.c` -- mismo patrón `tagcache_search`+`set_uniqbuf` que ya usa el navegador de Artistas, sin el límite `AURA_MUSIC_MAX_ITEMS` que ahí existe para listas, no para un conteo). Video/Fotos: si el manifiesto trae los campos nuevos se muestran; si no, aviso "Sincroniza con Aura Studio para ver el detalle" en vez de un 0 engañoso.
+### 2/4 — Lectura en firmware, conteos y tile persistente
+
+`aura_manifest.c` lee los 6 campos nuevos con `has_video_categories`/`has_photo_categories` para distinguir "manifiesto viejo sin este dato" de "el conteo real es cero" -- un sync anterior a esta sesión nunca tuvo estas líneas, y mostrar "0 películas" en ese caso sería tan engañoso como inventar el dato. Música: canciones/listas del manifiesto (igual que antes); **artistas contados EN VIVO de tagcache** (`aura_music_count_artists()`, nuevo en `aura_music.c` -- mismo patrón `tagcache_search`+`set_uniqbuf` que ya usa el navegador de Artistas, sin el límite `AURA_MUSIC_MAX_ITEMS` que ahí existe para listas, no para un conteo). Video/Fotos: si el manifiesto trae los campos nuevos se muestran; si no, aviso "Sincroniza con Aura Studio para ver el detalle" en vez de un 0 engañoso.
 
 **Q8**: el tile de Aura ahora **persiste en las 3 páginas** (antes solo en Almacenamiento) -- `draw_about_persistent_tile()` nueva, reutilizada también por Créditos.
 
-**Verificación**: build ARM y de simulador limpios. `make -C firmware/rockbox/apps/aura/test test` 8/8.
+### 3/4 — Estado 3: créditos, y corrección de una cláusula incompatible con la GPL v2
+
+La página 3 (antes "Basado en Rockbox" a secas) se reemplazó por texto completo: Aura/Ricardo Gómez, atribución a Rockbox con la licencia GPL v2 y la URL del código fuente (GPL v2 §3 lo exige), y la nota de marca de Apple sin afiliación. Vive en la misma columna angosta de 182px que las otras dos páginas, con el tile persistente a la izquierda -- el texto completo (~18 líneas) no cabe en las ~13 visibles a ese ancho, así que usa scroll por rueda reutilizando el mismo patrón que ya tenía Ajustes → Avisos legales (`draw_long_text()`/`handle_legal_text()`), no un mecanismo nuevo.
+
+**Hallazgo real, no anticipado en el plan**: revisando el texto existente de Avisos legales (`AURA_STR_COPYRIGHT_BODY`) para mantenerlo coherente con los créditos nuevos, apareció una cláusula "PROHIBIDA su distribución... ESTRICTAMENTE PROHIBIDA su venta" -- **incompatible con la GPL v2** que Aura hereda de Rockbox (§6: no se pueden imponer restricciones adicionales a los derechos que la licencia ya otorga). Corregida: retirada la cláusula, añadida la sección "Código fuente" con la URL del repositorio. `LICENSE` (copia literal de `firmware/rockbox/docs/COPYING`, vía `cp`, sin regenerar el texto) se añadió en la raíz del repositorio, con una nota de contexto de 4 líneas antepuesta.
+
+### 4/4 — Fade-Slide de región para pasar de una página a otra
+
+**Q9**: antes de D-283, cambiar de página dentro de "Acerca de" era un corte seco. El vocabulario de transiciones documentaba `Fade-Slide` solo para pantalla completa fija con un texto cambiando (`DynamicTitle`) -- primer caso **full→full** real. Se adaptó a una utilidad `aura_transition_fade_slide_region()` (`aura_transitions.c/.h`) que anima solo un rect (la columna de contenido, 182×196px): lo que queda fuera (`StatusBar`, el tile persistente, los puntos de paginación) no cambia entre páginas y se toma directo del destino ya prerrenderizado en cada cuadro, mismo costo de blit que ya pagan las demás transiciones del archivo. Mismo contrato que `aura_transition_shift_and_reveal()` (D-278): captura lo que hay en pantalla, prerrenderiza el destino llamando `aura_screens_draw(nav)` después de que el llamador actualiza el estado de página. `direction > 0` (SELECT/RIGHT): saliente se desliza a la izquierda con fade-out, entrante llega desde la derecha con fade-in; `direction < 0` (LEFT): al revés. Mismos tokens de timing que Push-and-Drop/Shift-and-Reveal (`push_and_drop.*`), sin token nuevo -- el vocabulario tampoco daba timing propio para esta variante. `handle_about()` la invoca en los casos SELECT/RIGHT/LEFT, nunca en MENU (que sigue siendo la inversa exacta de Shift-and-Reveal, sin tocar).
+
+**Verificación**: build ARM y de simulador limpios tras cada una de las 4 partes. `make -C firmware/rockbox/apps/aura/test test` 8/8. Capturas medidas en `docs/screenshots/about-fixes/`: `split-neutral-fade-bar.png` (fondo gris→blanco confirmado por muestreo de píxeles, monótono de `(189,186,189)` en el borde del panel a blanco puro en `x=304`; texto "Mi iPod" legible en negro/gris, no blanco), `page1-storage-expanded.png` (5 puntos de color distintos y legibles: rosa/navy/naranja/gris/amarillo, cada uno con su contorno; "Otros" en 1481 GiB · 79% -- coherente con el fix de D-280: el valor absoluto se duplicó respecto a las capturas de D-279 porque `total_b`/`free_b` ahora reflejan el tamaño real del disco virtual del simulador, mientras el porcentaje se mantuvo igual porque numerador y denominador escalan juntos), `page2-counts.png` (Canciones/Artistas/Listas + Películas/Series/Videoclips + Imágenes/Fotografías/IA, todos con datos reales del fixture actualizado en la parte 1/4), `page3-credits.png` (texto de créditos visible y correctamente envuelto, tile persistente, tercer punto de paginación activo). No se pudo capturar un cuadro a mitad de la transición Fade-Slide -- misma limitación arquitectónica ya documentada para Shift-and-Reveal en D-278: las transiciones son bloqueantes y de un solo hilo, así que el volcado automático del arnés solo puede ocurrir antes o después del bucle completo, nunca en medio. Sin verificación en hardware real.
 
 ---
 
