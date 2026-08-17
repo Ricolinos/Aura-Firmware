@@ -23,6 +23,14 @@ design-system/out/
 design-system/.venv/
 __pycache__/
 *.pyc
+
+# Artefactos empaquetados del firmware (regenerar con firmware/tools/package_dist.sh,
+# publicar como GitHub Release -- ver firmware/dist/README.md). Nunca se versionan
+# aquí: son binarios de varios MB y el historial ya se limpió una vez por esto.
+firmware/dist/*.zip
+firmware/dist/*.ipod
+firmware/dist/mks5lboot
+firmware/dist/checksums.txt
 # Copiado desde design-system/out/ por firmware/tools/build_sim.sh
 firmware/rockbox/apps/aura/apple2026_tokens.h
 
