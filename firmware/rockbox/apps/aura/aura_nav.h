@@ -151,6 +151,15 @@ typedef enum {
      * justo despues de "Tema" (claro/oscuro, sin relacion con esto).
      * Agregada al final del enum, mismo criterio "solo-anadir-al-final". */
     AURA_SCREEN_SETTINGS_STYLE,
+    /* D-292: submenu SPLIT nuevo que agrupa las 7 filas de apariencia
+     * (Modo/Temas/Color de acento/Animaciones/Graficos/Mostrar sombras/
+     * Mostrar iconos), antes sueltas en Ajustes -- mismo patron que
+     * AURA_SCREEN_SETTINGS_DATETIME (tabla propia + SPLIT). Agregada al
+     * final del enum, mismo criterio "solo-anadir-al-final": las
+     * pantallas hijas (THEME/STYLE/ACCENT/ANIMATIONS/GRAPHICS/
+     * LEFT_PANEL_SHADOW/SHOW_ICONS) NO cambian de id, solo de padre de
+     * navegacion -- sus claves en aura.cfg no se tocan. */
+    AURA_SCREEN_SETTINGS_PERSONALIZATION,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 

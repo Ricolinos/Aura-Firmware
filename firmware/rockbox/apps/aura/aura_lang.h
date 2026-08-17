@@ -368,6 +368,10 @@ typedef enum {
      * lo reemplaza. */
     AURA_STR_STYLE_MODE_NOTE,
 
+    /* D-292: submenu nuevo en Ajustes que agrupa Modo/Temas/Color de
+     * acento/Animaciones/Graficos/Mostrar sombras/Mostrar iconos. */
+    AURA_STR_SETTINGS_PERSONALIZATION,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

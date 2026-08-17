@@ -220,21 +220,12 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_SHUFFLE,    "shuffle",           AURA_SCREEN_SETTINGS_SHUFFLE },
     { AURA_STR_SETTINGS_REPEAT,     "repeat",            AURA_SCREEN_SETTINGS_REPEAT },
     { AURA_STR_SETTINGS_MAINMENU,   "menu-list",         AURA_SCREEN_SETTINGS_MAINMENU },
-    /* -- apariencia (propios de Aura) -- */
-    { AURA_STR_SETTINGS_THEME,      "theme",             AURA_SCREEN_SETTINGS_THEME },
-    /* D-289: "Estilo" (fuentes+iconos+paleta instalables) justo
-     * despues de "Tema" (claro/oscuro) -- ambas son "apariencia", sin
-     * relacion entre si. Icono "sync" reusado (D-286/D-004: reuso
-     * documentado en vez de un SVG nuevo cuando ninguno de los 89
-     * existentes encaja mejor) -- "theme"/"paintpalette"/"graphics"/
-     * "square-on-square"/"sliders-horizontal" ya son de las 5 filas
-     * hermanas de este mismo grupo. */
-    { AURA_STR_SETTINGS_STYLE,      "sync",              AURA_SCREEN_SETTINGS_STYLE },
-    { AURA_STR_SETTINGS_ACCENT,     "paintpalette",      AURA_SCREEN_SETTINGS_ACCENT },
-    { AURA_STR_SETTINGS_ANIMATIONS, "motion",            AURA_SCREEN_SETTINGS_ANIMATIONS },
-    { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
-    { AURA_STR_SETTINGS_LEFT_PANEL_SHADOW, "square-on-square", AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW },
-    { AURA_STR_SETTINGS_SHOW_ICONS, "sliders-horizontal", AURA_SCREEN_SETTINGS_SHOW_ICONS },
+    /* D-292: las 7 filas de apariencia (Modo/Temas/Color de acento/
+     * Animaciones/Graficos/Mostrar sombras/Mostrar iconos) se mudan a
+     * su propio submenu -- ver personalization_entries[] abajo. Icono
+     * "theme" (libre al convertirse "Tema" en fila InlineValue, cuyo
+     * panel usa theme-light/dark en su lugar). */
+    { AURA_STR_SETTINGS_PERSONALIZATION, "theme",        AURA_SCREEN_SETTINGS_PERSONALIZATION },
     /* -- pantalla -- */
     { AURA_STR_SETTINGS_BRIGHTNESS, "sun",               AURA_SCREEN_SETTINGS_BRIGHTNESS },
     { AURA_STR_SETTINGS_BACKLIGHT,  "backlight",         AURA_SCREEN_SETTINGS_BACKLIGHT },
@@ -260,6 +251,22 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
     { AURA_STR_SETTINGS_COPYRIGHT,  "legal",             AURA_SCREEN_SETTINGS_COPYRIGHT },
     { AURA_STR_SETTINGS_RESET,      "reset",             AURA_SCREEN_SETTINGS_RESET },
+};
+
+/* D-292: submenu "Personalizacion" -- de mayor a menor impacto visual
+ * (Modo y Temas cambian TODA la pantalla; Color de acento un solo
+ * elemento; Animaciones/Graficos son de detalle/rendimiento; los dos
+ * booleanos cierran, mismo criterio que "Fecha y hora" cierra con sus
+ * propios toggles). Ninguna fila cambia de AURA_SCREEN_ID ni de icono
+ * -- solo de padre de navegacion, PLAN-personalizacion.md §2.1. */
+static const nav_entry_t personalization_entries[] = {
+    { AURA_STR_SETTINGS_THEME,      "theme",             AURA_SCREEN_SETTINGS_THEME },
+    { AURA_STR_SETTINGS_STYLE,      "sync",              AURA_SCREEN_SETTINGS_STYLE },
+    { AURA_STR_SETTINGS_ACCENT,     "paintpalette",      AURA_SCREEN_SETTINGS_ACCENT },
+    { AURA_STR_SETTINGS_ANIMATIONS, "motion",            AURA_SCREEN_SETTINGS_ANIMATIONS },
+    { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
+    { AURA_STR_SETTINGS_LEFT_PANEL_SHADOW, "square-on-square", AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW },
+    { AURA_STR_SETTINGS_SHOW_ICONS, "sliders-horizontal", AURA_SCREEN_SETTINGS_SHOW_ICONS },
 };
 
 /* Extras del firmware original (2026-08-13), en su orden. */
@@ -338,6 +345,9 @@ static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
     case AURA_SCREEN_SETTINGS:
         *out = settings_entries;
         return clamp_menu_count(sizeof(settings_entries) / sizeof(settings_entries[0]));
+    case AURA_SCREEN_SETTINGS_PERSONALIZATION:
+        *out = personalization_entries;
+        return clamp_menu_count((int)(sizeof(personalization_entries) / sizeof(personalization_entries[0])));
     default:
         *out = NULL;
         return 0;
@@ -391,6 +401,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_PHOTOS:              return AURA_STR_PHOTOS;
     case AURA_SCREEN_NOWPLAYING:          return AURA_STR_NOWPLAYING;
     case AURA_SCREEN_SETTINGS:            return AURA_STR_SETTINGS;
+    case AURA_SCREEN_SETTINGS_PERSONALIZATION: return AURA_STR_SETTINGS_PERSONALIZATION;
     case AURA_SCREEN_SETTINGS_THEME:      return AURA_STR_SETTINGS_THEME;
     case AURA_SCREEN_SETTINGS_STYLE:      return AURA_STR_SETTINGS_STYLE;
     case AURA_SCREEN_SETTINGS_ANIMATIONS: return AURA_STR_SETTINGS_ANIMATIONS;
@@ -1431,6 +1442,14 @@ static const char *parent_settings_icon(aura_screen_id_t screen)
     for (i = 0; i < sizeof(settings_entries) / sizeof(settings_entries[0]); i++)
         if (settings_entries[i].target == screen)
             return settings_entries[i].icon_name;
+    /* D-292: Color de acento/Animaciones/Graficos (entre otras) se
+     * mudaron a personalization_entries[] -- sin esto, su pantalla de
+     * eleccion perdia el icono del panel y caia al generico
+     * "settings" en cuanto se selecciona algo sin icono propio (D-264,
+     * draw_choice_list()). */
+    for (i = 0; i < sizeof(personalization_entries) / sizeof(personalization_entries[0]); i++)
+        if (personalization_entries[i].target == screen)
+            return personalization_entries[i].icon_name;
     return "settings";
 }
 
@@ -2002,7 +2021,12 @@ static void compute_panel_content(aura_screen_id_t screen, aura_screen_id_t targ
         return;
     }
 
-    if (screen == AURA_SCREEN_SETTINGS)
+    /* D-292: Modo/Temas viven ahora en AURA_SCREEN_SETTINGS_
+     * PERSONALIZATION, no en AURA_SCREEN_SETTINGS -- se amplia la
+     * condicion en vez de duplicar sus dos casos (los demas targets de
+     * este bloque, SHUFFLE/REPEAT/DATETIME/ABOUT, son exclusivos de
+     * Ajustes y nunca coinciden con un hijo de Personalizacion). */
+    if (screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION)
     {
         if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
         {
@@ -4513,6 +4537,12 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
         || screen == AURA_SCREEN_MUSIC
         || screen == AURA_SCREEN_EXTRAS
         || screen == AURA_SCREEN_SETTINGS_DATETIME
+        /* D-292: submenu de Personalizacion, mismo criterio que "Fecha
+         * y hora" (nivel 2, SPLIT) -- excepcion documentada a la regla
+         * de profundidad por defecto para sus hijas de eleccion, que
+         * quedan a nivel 3 siendo SPLIT (PLAN-personalizacion.md Q5,
+         * sistema/03-arbol-de-menus.md). */
+        || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION
         || is_choice_screen(screen)
         || screen == AURA_SCREEN_SETTINGS_STYLE
         || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
@@ -4562,7 +4592,8 @@ void aura_screens_draw(aura_nav_t *nav)
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
         || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
-        || screen == AURA_SCREEN_SETTINGS_DATETIME)
+        || screen == AURA_SCREEN_SETTINGS_DATETIME
+        || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -4955,7 +4986,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     if (screen == AURA_SCREEN_ROOT || screen == AURA_SCREEN_SETTINGS
         || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
         || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
-        || screen == AURA_SCREEN_SETTINGS_DATETIME)
+        || screen == AURA_SCREEN_SETTINGS_DATETIME
+        || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);

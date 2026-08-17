@@ -259,6 +259,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_DRIVE_UNKNOWN]    = "Unidad de almacenamiento",
     [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Disco simulado",
     [AURA_STR_STYLE_MODE_NOTE]        = "Se ve en modo claro y oscuro",
+    [AURA_STR_SETTINGS_PERSONALIZATION] = "Personalización",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -492,6 +493,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_DRIVE_UNKNOWN]    = "Storage drive",
     [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Simulated disk",
     [AURA_STR_STYLE_MODE_NOTE]        = "Works in light and dark mode",
+    [AURA_STR_SETTINGS_PERSONALIZATION] = "Personalization",
 };
 
 const char *aura_str(aura_str_id_t id)
