@@ -146,6 +146,11 @@ typedef enum {
      * de Rockbox) -- ver aura_screens.c. Agregada al final del enum,
      * mismo criterio "solo-anadir-al-final". */
     AURA_SCREEN_SETTINGS_POWEROFF,
+    /* D-289 (sistema de temas): lista de estilos instalados
+     * (fuentes+iconos+paleta) -- "Estilo" en Ajustes > Apariencia,
+     * justo despues de "Tema" (claro/oscuro, sin relacion con esto).
+     * Agregada al final del enum, mismo criterio "solo-anadir-al-final". */
+    AURA_SCREEN_SETTINGS_STYLE,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 

@@ -31,6 +31,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS]           = "Ajustes",
 
     [AURA_STR_SETTINGS_THEME]       = "Tema",
+    [AURA_STR_SETTINGS_STYLE]       = "Estilo",
     [AURA_STR_SETTINGS_ANIMATIONS]  = "Animaciones",
     [AURA_STR_SETTINGS_GRAPHICS]    = "Gráficos",
     [AURA_STR_SETTINGS_EQ]          = "Ecualizador",
@@ -259,6 +260,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS]           = "Settings",
 
     [AURA_STR_SETTINGS_THEME]       = "Theme",
+    [AURA_STR_SETTINGS_STYLE]       = "Style",
     [AURA_STR_SETTINGS_ANIMATIONS]  = "Animations",
     [AURA_STR_SETTINGS_GRAPHICS]    = "Graphics",
     [AURA_STR_SETTINGS_EQ]          = "Equalizer",

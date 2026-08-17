@@ -77,6 +77,8 @@
 #include "aura_status_bar_v2.h"
 #include "aura_selection_summary.h"
 #include "aura_category.h"
+#include "aura_style.h"
+#include "aura_color.h"
 
 /* Cota de los buffers locales de items de menu. El arbol del original
  * (2026-08-13) llevo Ajustes a 18 filas: con la cota vieja de 16, los
@@ -220,6 +222,14 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_MAINMENU,   "menu-list",         AURA_SCREEN_SETTINGS_MAINMENU },
     /* -- apariencia (propios de Aura) -- */
     { AURA_STR_SETTINGS_THEME,      "theme",             AURA_SCREEN_SETTINGS_THEME },
+    /* D-289: "Estilo" (fuentes+iconos+paleta instalables) justo
+     * despues de "Tema" (claro/oscuro) -- ambas son "apariencia", sin
+     * relacion entre si. Icono "sync" reusado (D-286/D-004: reuso
+     * documentado en vez de un SVG nuevo cuando ninguno de los 89
+     * existentes encaja mejor) -- "theme"/"paintpalette"/"graphics"/
+     * "square-on-square"/"sliders-horizontal" ya son de las 5 filas
+     * hermanas de este mismo grupo. */
+    { AURA_STR_SETTINGS_STYLE,      "sync",              AURA_SCREEN_SETTINGS_STYLE },
     { AURA_STR_SETTINGS_ACCENT,     "paintpalette",      AURA_SCREEN_SETTINGS_ACCENT },
     { AURA_STR_SETTINGS_ANIMATIONS, "motion",            AURA_SCREEN_SETTINGS_ANIMATIONS },
     { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
@@ -382,6 +392,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_NOWPLAYING:          return AURA_STR_NOWPLAYING;
     case AURA_SCREEN_SETTINGS:            return AURA_STR_SETTINGS;
     case AURA_SCREEN_SETTINGS_THEME:      return AURA_STR_SETTINGS_THEME;
+    case AURA_SCREEN_SETTINGS_STYLE:      return AURA_STR_SETTINGS_STYLE;
     case AURA_SCREEN_SETTINGS_ANIMATIONS: return AURA_STR_SETTINGS_ANIMATIONS;
     case AURA_SCREEN_SETTINGS_GRAPHICS:   return AURA_STR_SETTINGS_GRAPHICS;
     case AURA_SCREEN_SETTINGS_EQ:         return AURA_STR_SETTINGS_EQ;
@@ -1751,6 +1762,7 @@ static const char *clock_row_top_text(void)
 static fb_data s_aura_badge_pixels[AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE
                                     * AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE];
 static int  s_aura_badge_theme = -1;   /* tema con el que se cargo el buffer */
+static unsigned s_aura_badge_generation = 0; /* D-289: generacion del estilo activo */
 static bool s_aura_badge_ok = false;
 
 /* D-285 (encargo del dueno, dos imagenes del icono de Aura): el badge deja
@@ -1769,18 +1781,24 @@ static void draw_about_icon_renderer(int cx, int cy, int size)
 {
     enum { SZ = AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE };
     int theme = (aura_settings.theme == AURA_THEME_DARK) ? 1 : 0;
+    unsigned generation = aura_style_generation();
 
-    if (s_aura_badge_theme != theme)
+    /* D-289: la generacion del estilo activo entra en la clave de
+     * cache, ademas del tema claro/oscuro -- sin esto, cambiar de
+     * estilo (o revertir uno invalido) no invalidaria este buffer si
+     * el tema claro/oscuro no cambio a la vez. */
+    if (s_aura_badge_theme != theme || s_aura_badge_generation != generation)
     {
-        char path[MAX_PATH];
+        char rel[MAX_PATH];
         struct bitmap bm;
         int ret;
 
         s_aura_badge_theme = theme;
-        snprintf(path, sizeof(path), "%s/aura/tile-icons/aura_badge-%s.bmp", ICON_DIR,
+        s_aura_badge_generation = generation;
+        snprintf(rel, sizeof(rel), "tile-icons/aura_badge-%s.bmp",
                  theme ? "dark" : "light");
         bm.data = (char *)s_aura_badge_pixels;
-        ret = read_bmp_file(path, &bm, sizeof(s_aura_badge_pixels), FORMAT_NATIVE, NULL);
+        ret = aura_style_read_icon_bmp(rel, &bm, sizeof(s_aura_badge_pixels));
         s_aura_badge_ok = (ret > 0 && bm.width == SZ && bm.height == SZ);
     }
 
@@ -1799,6 +1817,18 @@ static unsigned category_flat_color(aura_category_t cat)
     unsigned a, center, b;
     aura_category_gradient(cat, &a, &center, &b);
     return center;
+}
+
+/* D-289: el amarillo plano de Extras para las dos barras de
+ * almacenamiento de abajo -- Extras NO pasa por category_flat_color()
+ * aca porque su degradado de dos tonos (amarillo -> acento) no tiene
+ * un "centro" real (aura_category_gradient() no lo calcula para esa
+ * categoria, ver apple2026_shell.c). Resuelto contra el estilo activo
+ * en vez del AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW compilado. */
+static unsigned category_extras_yellow_flat(void)
+{
+    aura_rgb_t c = aura_color_from_rgb24(aura_style_category_extras_yellow_rgb24());
+    return LCD_RGBPACK(c.r, c.g, c.b);
 }
 
 /* Grafico de almacenamiento por color (D-264, extendido D-279/D-282 --
@@ -1849,7 +1879,7 @@ static void draw_storage_segments(int x, int y, int width, int height,
     segs[1].bytes = video_b;  segs[1].color = category_flat_color(AURA_CATEGORY_VIDEO);
     segs[2].bytes = photo_b;  segs[2].color = category_flat_color(AURA_CATEGORY_PHOTOS);
     segs[3].bytes = system_b; segs[3].color = category_flat_color(AURA_CATEGORY_SETTINGS);
-    segs[4].bytes = other_b;  segs[4].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
+    segs[4].bytes = other_b;  segs[4].color = category_extras_yellow_flat();
     segs[5].bytes = free_b;   segs[5].color = a26_color(A26_PROGRESS_TRACK);
 
     lcd_set_drawmode(DRMODE_SOLID);
@@ -2281,6 +2311,87 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
                          AURA_SCREEN_COUNT, AURA_SCREEN_COUNT, AURA_SS_BG_ACCENT_IMAGE);
 }
 
+/* D-289: pantalla "Estilo" -- misma maquinaria visual que
+ * draw_choice_list() (MenuList + Selector, checkmark en la fila
+ * activa, filas inertes atenuadas) pero con una tabla DINAMICA leida
+ * del disco en vez de una tabla de aura_str_id_t compilada -- por eso
+ * no vive dentro de is_choice_screen()/get_choice_table(), que asumen
+ * texto compilado (aura_str()). aura_style_scan() ya deja los nombres
+ * en un buffer propio (aura_style_entry_t.name) que sobrevive el resto
+ * de esta funcion, asi que items[i].label puede apuntar directo ahi
+ * sin copiar de nuevo. */
+static void draw_style_list(aura_nav_t *nav)
+{
+    static aura_style_entry_t entries[AURA_STYLES_MAX];
+    int count = aura_style_scan(entries, AURA_STYLES_MAX);
+    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    int selected = aura_nav_get_selection(nav);
+    const char *active_id = aura_style_active_id();
+    int i;
+
+    if (count > MAX_MENU_ENTRIES)
+        count = MAX_MENU_ENTRIES;
+
+    for (i = 0; i < count; i++)
+    {
+        items[i].label = entries[i].name;
+        items[i].icon_name = NULL;
+        items[i].checked = !strcmp(entries[i].id, active_id);
+        items[i].toggle = -1;
+        items[i].indent = 0;
+        items[i].full_screen_target = 0;
+        items[i].dimmed = !entries[i].loadable;
+    }
+
+    draw_menu_screen_v2(aura_str(AURA_STR_SETTINGS_STYLE), items, count,
+                         selected, "sync", NULL, NULL, NULL, NULL,
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT, AURA_SS_BG_ACCENT_IMAGE);
+}
+
+/* Fila inerte (formato incompatible / manifiesto invalido / fuentes
+ * faltantes): se puede recorrer, no elegir -- mismo criterio que los
+ * idiomas sin traducir en handle_choice_list(). SELECT en la fila
+ * "Aura" o en cualquier estilo cargable llama a
+ * aura_style_activate(): solo si devuelve true (aplico de verdad, sin
+ * revertir) se persiste en aura.cfg -- si el estilo fallara a mitad de
+ * carga (disco removido, etc.) el ajuste guardado no miente sobre lo
+ * que quedo activo (PLAN-themes-impl.md SS1.1/SS1.2). */
+static void handle_style_list(aura_nav_t *nav, long button)
+{
+    static aura_style_entry_t entries[AURA_STYLES_MAX];
+    int count = aura_style_scan(entries, AURA_STYLES_MAX);
+    int sel = aura_nav_get_selection(nav);
+
+    if (count > AURA_STYLES_MAX)
+        count = AURA_STYLES_MAX;
+
+    if (button == BUTTON_SELECT && (sel < 0 || sel >= count || !entries[sel].loadable))
+        return;
+
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, 1));
+        break;
+    case BUTTON_SCROLL_BACK:
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, count, -1));
+        break;
+    case BUTTON_SELECT:
+        if (aura_style_activate(entries[sel].id))
+        {
+            strlcpy(aura_settings.style_id, entries[sel].id, sizeof(aura_settings.style_id));
+            aura_settings_save();
+        }
+        aura_nav_pop(nav);
+        break;
+    case BUTTON_MENU:
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
 static void draw_brightness(void)
 {
     char buf[16];
@@ -2563,7 +2674,7 @@ static void draw_about_storage_expanded(void)
     rows[2].label = AURA_STR_ABOUT_PHOTOS;
     rows[3].bytes = system_b; rows[3].color = category_flat_color(AURA_CATEGORY_SETTINGS);
     rows[3].label = AURA_STR_ABOUT_SYSTEM;
-    rows[4].bytes = other_b; rows[4].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
+    rows[4].bytes = other_b; rows[4].color = category_extras_yellow_flat();
     rows[4].label = AURA_STR_ABOUT_OTHER;
 
     /* D-284: identidad de la unidad arriba de las filas. */
@@ -4378,6 +4489,7 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
         || screen == AURA_SCREEN_EXTRAS
         || screen == AURA_SCREEN_SETTINGS_DATETIME
         || is_choice_screen(screen)
+        || screen == AURA_SCREEN_SETTINGS_STYLE
         || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
         || screen == AURA_SCREEN_SETTINGS_SLEEPTIMER
         || screen == AURA_SCREEN_SETTINGS_MAINMENU
@@ -4429,6 +4541,8 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
+    else if (screen == AURA_SCREEN_SETTINGS_STYLE)
+        draw_style_list(nav);
     else if (screen == AURA_SCREEN_SETTINGS_BRIGHTNESS)
         draw_brightness();
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
@@ -4801,6 +4915,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
+    else if (screen == AURA_SCREEN_SETTINGS_STYLE)
+        handle_style_list(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_BRIGHTNESS)
         handle_brightness(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_BACKLIGHT)

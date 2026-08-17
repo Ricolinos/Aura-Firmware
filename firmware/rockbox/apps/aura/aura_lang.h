@@ -345,6 +345,10 @@ typedef enum {
     AURA_STR_ABOUT_DRIVE_UNKNOWN,
     AURA_STR_ABOUT_DRIVE_SIMULATED,
 
+    /* D-289 (sistema de temas): fila de Ajustes y titulo de la
+     * pantalla de eleccion de estilo instalado. */
+    AURA_STR_SETTINGS_STYLE,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 
