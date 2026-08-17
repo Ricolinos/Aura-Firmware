@@ -28,6 +28,19 @@
 
 #include "aura_category.h"
 
+/* D-281: fondo del panel completo -- por defecto la imagen por acento de
+ * D-267 (ACCENT_IMAGE); NEUTRAL_FADE es un degradado horizontal gris a
+ * blanco (o su equivalente por tema) calculado en tiempo real, pedido
+ * SOLO para "Acerca de" (mas fluido hacia el estado expandido, que vive
+ * sobre SHELL_BG plano -- PLAN-about-fixes.md C1/Q3). Parametrizado en
+ * vez de un caso especial adentro del componente: cualquier fila puede
+ * elegirlo a futuro asignando el campo en panel_identity_t, sin tocar
+ * este archivo de nuevo. */
+typedef enum {
+    AURA_SS_BG_ACCENT_IMAGE = 0,
+    AURA_SS_BG_NEUTRAL_FADE,
+} aura_ss_background_t;
+
 /* Dibuja en la franja [x, x+width) x [0, A26_SCREEN_HEIGHT) -- todo el
  * espacio vertical disponible del panel derecho (StatusBar en (split)
  * solo vive sobre el panel izquierdo, doc status-bar.md, asi que este
@@ -73,12 +86,15 @@ typedef void (*aura_selection_summary_icon_renderer_t)(int x, int y, int size);
  * -- el renderer decide su propio contenido adentro. */
 typedef void (*aura_selection_summary_bottom_renderer_t)(int x, int y, int width, int height);
 
+/* `background` (D-281): AURA_SS_BG_ACCENT_IMAGE en cualquier llamador que
+ * no lo necesite distinto (mismo aspecto que aura_selection_summary_draw()). */
 void aura_selection_summary_draw_dynamic(int x, int width,
                                           aura_selection_summary_icon_renderer_t renderer,
                                           aura_category_t category,
                                           const char *top_text,
                                           const char *bottom_text,
-                                          aura_selection_summary_bottom_renderer_t bottom_renderer);
+                                          aura_selection_summary_bottom_renderer_t bottom_renderer,
+                                          aura_ss_background_t background);
 
 /* Primer renderer dinamico real (no un stub): reloj analogico con las
  * manecillas apuntando a la hora actual (get_time(), mismo dato real

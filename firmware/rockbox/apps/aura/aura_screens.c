@@ -939,6 +939,7 @@ typedef struct
     aura_screen_id_t selected_target;
     bool coverdrift;
     aura_category_t coverdrift_category;
+    aura_ss_background_t background; /* D-281 */
 } panel_identity_t;
 
 /* Categoria CONGELADA de una identidad de panel -- reproduce, sobre
@@ -971,7 +972,8 @@ static bool panel_identity_equal(const panel_identity_t *a, const panel_identity
         && a->icon_renderer == b->icon_renderer
         && a->bottom_renderer == b->bottom_renderer
         && a->container_screen == b->container_screen
-        && a->selected_target == b->selected_target;
+        && a->selected_target == b->selected_target
+        && a->background == b->background;
 }
 
 /* Lo que esta REALMENTE dibujado en el panel derecho ahora mismo (tras
@@ -1049,7 +1051,7 @@ static void draw_panel_identity(int panel_x, int panel_w, const panel_identity_t
         aura_selection_summary_draw_dynamic(panel_x, panel_w, id->icon_renderer,
                                              panel_identity_category(id),
                                              id->panel_top, id->panel_desc,
-                                             id->bottom_renderer);
+                                             id->bottom_renderer, id->background);
     }
     else
     {
@@ -1169,7 +1171,8 @@ static void render_panel_debounced(int panel_x, int panel_w, const char *title,
                                     aura_selection_summary_icon_renderer_t icon_renderer,
                                     aura_selection_summary_bottom_renderer_t bottom_renderer,
                                     aura_screen_id_t container_screen,
-                                    aura_screen_id_t selected_target)
+                                    aura_screen_id_t selected_target,
+                                    aura_ss_background_t background)
 {
     panel_identity_t pending;
 
@@ -1182,6 +1185,7 @@ static void render_panel_debounced(int panel_x, int panel_w, const char *title,
     pending.bottom_renderer = bottom_renderer;
     pending.container_screen = container_screen;
     pending.selected_target = selected_target;
+    pending.background = background;
     pending.coverdrift = music_row_wants_coverdrift(container_screen, selected_target)
         && aura_coverdrift_should_mount(s_drift_album_pool_count);
     pending.coverdrift_category = pending.coverdrift
@@ -1358,7 +1362,8 @@ static void draw_menu_screen_v2(const char *title,
                                  aura_selection_summary_icon_renderer_t icon_renderer,
                                  aura_selection_summary_bottom_renderer_t bottom_renderer,
                                  aura_screen_id_t container_screen,
-                                 aura_screen_id_t selected_target)
+                                 aura_screen_id_t selected_target,
+                                 aura_ss_background_t background)
 {
     a26_shell_clear_screen();
     /* Barra y panel del MISMO dato (regla dura 2026-08-13): con
@@ -1382,7 +1387,7 @@ static void draw_menu_screen_v2(const char *title,
          * bloque instantaneo que vivia aca antes (2026-08-12). */
         render_panel_debounced(panel_x, panel_w, title, panel_icon, panel_top, panel_desc,
                                 icon_renderer, bottom_renderer,
-                                container_screen, selected_target);
+                                container_screen, selected_target, background);
     }
 }
 
@@ -1862,7 +1867,8 @@ static void compute_panel_content(aura_screen_id_t screen, aura_screen_id_t targ
                                    const char **panel_top,
                                    const char **panel_desc,
                                    aura_selection_summary_icon_renderer_t *icon_renderer,
-                                   aura_selection_summary_bottom_renderer_t *bottom_renderer)
+                                   aura_selection_summary_bottom_renderer_t *bottom_renderer,
+                                   aura_ss_background_t *background)
 {
     if (screen == AURA_SCREEN_ROOT)
     {
@@ -1921,6 +1927,10 @@ static void compute_panel_content(aura_screen_id_t screen, aura_screen_id_t targ
             *icon_renderer = draw_about_icon_renderer;
             *panel_top = aura_str(AURA_STR_ABOUT_MY_IPOD);
             *bottom_renderer = draw_about_storage_bars;
+            /* D-281 (C1): fondo neutro gris->blanco solo para esta fila --
+             * transicion mas fluida hacia el estado expandido (SHELL_BG
+             * plano), pedido explicito del dueno solo para "Acerca de". */
+            *background = AURA_SS_BG_NEUTRAL_FADE;
             return;
         }
     }
@@ -1968,6 +1978,7 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         const char *panel_desc = NULL;
         aura_selection_summary_icon_renderer_t icon_renderer = NULL;
         aura_selection_summary_bottom_renderer_t bottom_renderer = NULL;
+        aura_ss_background_t background = AURA_SS_BG_ACCENT_IMAGE;
         aura_screen_id_t target = (selected >= 0 && selected < count)
             ? entries[selected].target : AURA_SCREEN_COUNT;
 
@@ -1985,9 +1996,12 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
             /* D-264: contenido real por fila -- generaliza
              * root_selection_description() (arriba) al resto de
              * pantallas. Puede sobreescribir `panel_icon` (Repetir,
-             * icono segun estado) ademas de poblar top/desc/renderers. */
+             * icono segun estado) ademas de poblar top/desc/renderers.
+             * D-281: tambien decide la variante de fondo (solo "Acerca
+             * de" pide NEUTRAL_FADE hoy). */
             compute_panel_content(screen, target, &panel_icon, &panel_top,
-                                   &panel_desc, &icon_renderer, &bottom_renderer);
+                                   &panel_desc, &icon_renderer, &bottom_renderer,
+                                   &background);
         }
 
         draw_menu_screen_v2(screen == AURA_SCREEN_ROOT ? "Aura"
@@ -1995,7 +2009,7 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
                              items, count, selected, panel_icon,
                              panel_top, panel_desc,
                              icon_renderer, bottom_renderer,
-                             screen, target);
+                             screen, target, background);
     }
 }
 
@@ -2183,7 +2197,7 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
 
     draw_menu_screen_v2(aura_str(screen_title_id(screen)), items, count,
                          selected, panel_icon, NULL, NULL, NULL, NULL,
-                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT, AURA_SS_BG_ACCENT_IMAGE);
 }
 
 static void draw_brightness(void)
@@ -2517,7 +2531,7 @@ static void draw_backlight(aura_nav_t *nav)
                          aura_nav_get_selection(nav),
                          parent_settings_icon(AURA_SCREEN_SETTINGS_BACKLIGHT), NULL, NULL,
                          NULL, NULL,
-                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT, AURA_SS_BG_ACCENT_IMAGE);
 }
 
 static void handle_backlight(aura_nav_t *nav, long button)
@@ -2578,7 +2592,7 @@ static void draw_sleeptimer(aura_nav_t *nav)
                          aura_nav_get_selection(nav),
                          parent_settings_icon(AURA_SCREEN_SETTINGS_SLEEPTIMER), NULL, NULL,
                          NULL, NULL,
-                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT, AURA_SS_BG_ACCENT_IMAGE);
 }
 
 static void handle_sleeptimer(aura_nav_t *nav, long button)
@@ -2731,7 +2745,7 @@ static void draw_mainmenu(aura_nav_t *nav)
                          (sel >= 0 && sel < MAINMENU_ROWS) ? items[sel].icon_name
                                                             : "menu-list", NULL, NULL,
                          NULL, NULL,
-                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT);
+                         AURA_SCREEN_COUNT, AURA_SCREEN_COUNT, AURA_SS_BG_ACCENT_IMAGE);
 }
 
 static void handle_mainmenu(aura_nav_t *nav, long button)

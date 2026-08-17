@@ -15,6 +15,7 @@
 #include "aura_marquee.h"
 #include "aura_flow.h"
 #include "aura_category.h"
+#include "aura_settings.h"
 
 #include "aura_selection_summary.h"
 
@@ -429,11 +430,41 @@ void aura_selection_summary_draw_tile(int x, int y, aura_category_t category,
         renderer(x + TILE_SIZE / 2, y + TILE_SIZE / 2, SYMBOL_SIZE);
 }
 
+/* D-281 (C1/Q3): degradado horizontal en tiempo real -- "gris" en el
+ * borde izquierdo del panel (x=0 de la franja) hasta SHELL_BG en el
+ * borde derecho (x=width), por lineas verticales con a26_shell_blend()
+ * (misma primitiva que draw_diagonal_gradient(), D-097, aplicada aca en
+ * un solo eje). Direccion elegida porque la franja derecha del split ya
+ * termina en el mismo color que usa el estado expandido (SHELL_BG plano)
+ * -- durante el Shift-and-Reveal (D-278) el unico cambio de fondo visible
+ * es la franja izquierda, que ademas queda tapada la mitad del tiempo por
+ * el LeftPanel saliendo. "Gris" no es un hex fijo: en tema claro es
+ * PROGRESS_TRACK (el carril ya usado en todo el sistema), en oscuro es
+ * SHELL_RAIL -- el mismo PROGRESS_TRACK del tema oscuro es demasiado
+ * cercano a SHELL_BG oscuro para leerse como degradado. Sin BMP nuevo:
+ * no requiere imagen del dueno ni entrada en generate_panel_backgrounds(),
+ * y es automaticamente correcto por tema (un BMP horneado no lo seria). */
+static void draw_neutral_fade_background(int x, int width)
+{
+    bool dark = (aura_settings.theme == AURA_THEME_DARK);
+    unsigned from = dark ? a26_color(A26_SHELL_RAIL) : a26_color(A26_PROGRESS_TRACK);
+    unsigned to = a26_color(A26_SHELL_BG);
+    int col;
+
+    for (col = 0; col < width; col++)
+    {
+        int pct256 = (width > 1) ? (col * 256) / (width - 1) : 256;
+        lcd_set_foreground(a26_shell_blend(from, to, pct256));
+        lcd_vline(x + col, 0, A26_SCREEN_HEIGHT - 1);
+    }
+}
+
 static void draw_summary(int x, int width, const char *icon_name,
                           aura_selection_summary_icon_renderer_t renderer,
                           aura_category_t category,
                           const char *top_text, const char *bottom_text,
-                          aura_selection_summary_bottom_renderer_t bottom_renderer)
+                          aura_selection_summary_bottom_renderer_t bottom_renderer,
+                          aura_ss_background_t background)
 {
     int tile_x = x + (width - TILE_SIZE) / 2;
     int text_max_w = width - 2 * TEXT_PAD;
@@ -454,15 +485,26 @@ static void draw_summary(int x, int width, const char *icon_name,
      * centro del panel). */
     const int tile_y = (A26_SCREEN_HEIGHT - TILE_SIZE) / 2;
     int w, h;
-    unsigned white = AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
+    /* D-281: la tinta del texto depende de la variante de fondo -- blanco
+     * fijo (D-267) SOLO tiene sentido sobre la imagen saturada; sobre el
+     * degradado gris->blanco de NEUTRAL_FADE el texto blanco se volveria
+     * ilegible en su mitad derecha (bug encontrado en PLAN-about-fixes.md
+     * C1 antes de implementar, no en produccion). A26_TEXT_PRIMARY ya es
+     * el color de texto normal por tema. */
+    unsigned white = (background == AURA_SS_BG_NEUTRAL_FADE)
+                    ? a26_color(A26_TEXT_PRIMARY)
+                    : AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT;
 
-    /* Fondo COMPLETO del panel (D-267, reemplaza el degradado diagonal
-     * detras del tile de D-097) -- imagen por preset de acento, opaca,
-     * un solo lcd_bitmap(). Si el archivo no esta (dispositivo real sin
-     * los assets sincronizados todavia, o un preset que aun no existe),
-     * cae a un relleno solido conocido en vez de dejar basura de memoria
-     * en pantalla. */
-    if (ensure_panel_background("pink"))
+    /* Fondo COMPLETO del panel. ACCENT_IMAGE (D-267, reemplaza el
+     * degradado diagonal detras del tile de D-097): imagen por preset de
+     * acento, opaca, un solo lcd_bitmap(); si el archivo no esta
+     * (dispositivo real sin los assets sincronizados todavia, o un preset
+     * que aun no existe), cae a un relleno solido conocido en vez de
+     * dejar basura de memoria en pantalla. NEUTRAL_FADE (D-281): degradado
+     * calculado, sin BMP. */
+    if (background == AURA_SS_BG_NEUTRAL_FADE)
+        draw_neutral_fade_background(x, width);
+    else if (ensure_panel_background("pink"))
         lcd_bitmap(s_bg_pixels, x, 0, BG_W, BG_H);
     else
     {
@@ -594,7 +636,8 @@ void aura_selection_summary_draw(int x, int width,
                                   const char *top_text,
                                   const char *bottom_text)
 {
-    draw_summary(x, width, icon_name, NULL, category, top_text, bottom_text, NULL);
+    draw_summary(x, width, icon_name, NULL, category, top_text, bottom_text, NULL,
+                 AURA_SS_BG_ACCENT_IMAGE);
 }
 
 void aura_selection_summary_draw_dynamic(int x, int width,
@@ -602,9 +645,11 @@ void aura_selection_summary_draw_dynamic(int x, int width,
                                           aura_category_t category,
                                           const char *top_text,
                                           const char *bottom_text,
-                                          aura_selection_summary_bottom_renderer_t bottom_renderer)
+                                          aura_selection_summary_bottom_renderer_t bottom_renderer,
+                                          aura_ss_background_t background)
 {
-    draw_summary(x, width, NULL, renderer, category, top_text, bottom_text, bottom_renderer);
+    draw_summary(x, width, NULL, renderer, category, top_text, bottom_text, bottom_renderer,
+                 background);
 }
 
 /* Reloj analogico (componentes/selection-summary.md, "Variante
