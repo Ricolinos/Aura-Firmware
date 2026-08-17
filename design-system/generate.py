@@ -271,13 +271,20 @@ def resolve_font_file(tokens, filename):
     'archivo no encontrado' pelado.
     """
     for base in tokens["font"]["search_paths"]:
-        candidate = Path(base).expanduser() / filename
+        base_path = Path(base).expanduser()
+        # D-286: rutas relativas (ej. "vendor/inter-ttf") se resuelven contra
+        # ROOT (design-system/), no contra el cwd del proceso que invoque
+        # generate.py -- las absolutas (/Library/Fonts...) y "~" no cambian.
+        if not base_path.is_absolute():
+            base_path = ROOT / base_path
+        candidate = base_path / filename
         if candidate.exists():
             return candidate
     die(
         f"no se encontro {filename} en {tokens['font']['search_paths']}.\n"
-        "SF Pro no se versiona en este repo (licencia de Apple): descargala de\n"
-        "https://developer.apple.com/fonts/ e instalala (doble clic en los .otf)."
+        "Si es una cara de Inter, verifica design-system/vendor/inter-ttf/.\n"
+        "Si es una cara de Apple (tema opcional, no el default de este repo):\n"
+        "descargala de https://developer.apple.com/fonts/ e instalala."
     )
 
 

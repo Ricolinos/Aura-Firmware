@@ -1,0 +1,437 @@
+{
+  "alarm": {
+    "file": "vendor/lucide-svg/alarm.svg",
+    "note": "alarm-clock",
+    "source": "lucide"
+  },
+  "album": {
+    "file": "vendor/lucide-svg/album.svg",
+    "note": "layers",
+    "source": "lucide"
+  },
+  "artist": {
+    "file": "vendor/lucide-svg/artist.svg",
+    "note": "mic",
+    "source": "lucide"
+  },
+  "audiobook": {
+    "file": "vendor/lucide-svg/audiobook.svg",
+    "note": "book",
+    "source": "lucide"
+  },
+  "backlight": {
+    "file": "vendor/lucide-svg/backlight.svg",
+    "note": "lightbulb",
+    "source": "lucide"
+  },
+  "backward": {
+    "file": "vendor/lucide-svg/backward.svg",
+    "note": "skip-back",
+    "source": "lucide"
+  },
+  "battery-charging": {
+    "file": "vendor/lucide-svg/battery-charging.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "battery-full": {
+    "file": "vendor/lucide-svg/battery-full.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "battery-low": {
+    "file": "vendor/lucide-svg/battery-low.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "battery-medium": {
+    "file": "vendor/lucide-svg/battery-medium.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "calendar": {
+    "file": "vendor/lucide-svg/calendar.svg",
+    "note": "calendar",
+    "source": "lucide"
+  },
+  "check": {
+    "file": "vendor/lucide-svg/check.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "chevron-left": {
+    "file": "vendor/lucide-svg/chevron-left.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "chevron-right": {
+    "file": "vendor/lucide-svg/chevron-right.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "clip": {
+    "file": "vendor/lucide-svg/clip.svg",
+    "note": "film",
+    "source": "lucide"
+  },
+  "clock": {
+    "file": "vendor/lucide-svg/globe.svg",
+    "note": "reusa globe (SF original: globe.americas)",
+    "source": "reuse"
+  },
+  "compilation": {
+    "file": "vendor/lucide-svg/album.svg",
+    "note": "sin equivalente 3d exacto; reusa layers",
+    "source": "reuse"
+  },
+  "composer": {
+    "file": "vendor/lucide-svg/composer.svg",
+    "note": "piano",
+    "source": "lucide"
+  },
+  "contacts": {
+    "file": "vendor/lucide-svg/contacts.svg",
+    "note": "circle-user",
+    "source": "lucide"
+  },
+  "eject-ok": {
+    "file": "vendor/lucide-svg/check.svg",
+    "note": "reusa check",
+    "source": "reuse"
+  },
+  "equalizer": {
+    "file": "vendor/lucide-svg/sliders-horizontal.svg",
+    "note": "SF original tambien reusaba slider.horizontal.3",
+    "source": "reuse"
+  },
+  "extras": {
+    "file": "vendor/lucide-svg/extras.svg",
+    "note": "wrench",
+    "source": "lucide"
+  },
+  "forward": {
+    "file": "vendor/lucide-svg/forward.svg",
+    "note": "skip-forward",
+    "source": "lucide"
+  },
+  "games": {
+    "file": "vendor/lucide-svg/games.svg",
+    "note": "gamepad-2",
+    "source": "lucide"
+  },
+  "genre": {
+    "file": "vendor/lucide-svg/genre.svg",
+    "note": "guitar",
+    "source": "lucide"
+  },
+  "globe": {
+    "file": "vendor/lucide-svg/globe.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "graphics": {
+    "file": "vendor/lucide-svg/graphics.svg",
+    "note": "boxes",
+    "source": "lucide"
+  },
+  "image": {
+    "file": "vendor/lucide-svg/image.svg",
+    "note": "image (ya vendorizado D-004)",
+    "source": "lucide"
+  },
+  "info": {
+    "file": "vendor/lucide-svg/info.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "legal": {
+    "file": "vendor/lucide-svg/legal.svg",
+    "note": "file-text",
+    "source": "lucide"
+  },
+  "lock": {
+    "file": "vendor/lucide-svg/lock.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "lyrics": {
+    "file": "vendor/lucide-svg/lyrics.svg",
+    "note": "message-square",
+    "source": "lucide"
+  },
+  "menu-list": {
+    "file": "vendor/lucide-svg/menu-list.svg",
+    "note": "list",
+    "source": "lucide"
+  },
+  "mode-lyrics": {
+    "file": "vendor/lucide-svg/lyrics.svg",
+    "note": "reusa message-square",
+    "source": "reuse"
+  },
+  "mode-lyrics-fill": {
+    "file": "vendor/lucide-svg/lyrics.svg",
+    "note": "sin variante fill; reusa message-square",
+    "source": "reuse"
+  },
+  "mode-playlist": {
+    "file": "vendor/lucide-svg/menu-list.svg",
+    "note": "SF original tambien reusaba list.bullet",
+    "source": "reuse"
+  },
+  "mode-playlist-fill": {
+    "file": "vendor/lucide-svg/menu-list.svg",
+    "note": "SF original tambien reusaba el mismo glifo",
+    "source": "reuse"
+  },
+  "mode-scrub": {
+    "file": "vendor/lucide-svg/scrub.svg",
+    "note": "reusa scrub",
+    "source": "reuse"
+  },
+  "mode-scrub-fill": {
+    "file": "vendor/lucide-svg/scrub.svg",
+    "note": "sin variante fill; reusa scrub",
+    "source": "reuse"
+  },
+  "mode-stars": {
+    "file": "vendor/lucide-svg/star.svg",
+    "note": "reusa star",
+    "source": "reuse"
+  },
+  "mode-stars-fill": {
+    "file": "vendor/phosphor-svg/star-fill.svg",
+    "note": "reusa star-fill",
+    "source": "reuse"
+  },
+  "mode-volume": {
+    "file": "vendor/lucide-svg/speaker-wave-1.svg",
+    "note": "reusa 1 onda",
+    "source": "reuse"
+  },
+  "mode-volume-fill": {
+    "file": "vendor/lucide-svg/volume-2.svg",
+    "note": "reusa 2 ondas",
+    "source": "reuse"
+  },
+  "motion": {
+    "file": "vendor/lucide-svg/motion.svg",
+    "note": "sparkles",
+    "source": "lucide"
+  },
+  "movie": {
+    "file": "vendor/lucide-svg/movie.svg",
+    "note": "clapperboard",
+    "source": "lucide"
+  },
+  "notes": {
+    "file": "vendor/lucide-svg/notes.svg",
+    "note": "notebook-text",
+    "source": "lucide"
+  },
+  "paintpalette": {
+    "file": "vendor/lucide-svg/paintpalette.svg",
+    "note": "palette",
+    "source": "lucide"
+  },
+  "pause": {
+    "file": "vendor/lucide-svg/pause.svg",
+    "note": "pause (ya vendorizado D-004)",
+    "source": "lucide"
+  },
+  "pause-fill": {
+    "file": "vendor/phosphor-svg/pause-fill.svg",
+    "note": "pause-fill (peso fill real)",
+    "source": "phosphor"
+  },
+  "play": {
+    "file": "vendor/lucide-svg/play.svg",
+    "note": "play (ya vendorizado D-004)",
+    "source": "lucide"
+  },
+  "play-fill": {
+    "file": "vendor/phosphor-svg/play-fill.svg",
+    "note": "play-fill (peso fill real)",
+    "source": "phosphor"
+  },
+  "playlist": {
+    "file": "vendor/lucide-svg/playlist.svg",
+    "note": "list-music",
+    "source": "lucide"
+  },
+  "playlist-add": {
+    "file": "vendor/lucide-svg/menu-list.svg",
+    "note": "SF original tambien reusaba list.bullet",
+    "source": "reuse"
+  },
+  "poweroff": {
+    "file": "vendor/lucide-svg/poweroff.svg",
+    "note": "power",
+    "source": "lucide"
+  },
+  "repeat": {
+    "file": "vendor/lucide-svg/repeat.svg",
+    "note": "repeat",
+    "source": "lucide"
+  },
+  "repeat-1": {
+    "file": "vendor/lucide-svg/repeat-1.svg",
+    "note": "repeat-1",
+    "source": "lucide"
+  },
+  "reset": {
+    "file": "vendor/lucide-svg/reset.svg",
+    "note": "rotate-ccw",
+    "source": "lucide"
+  },
+  "scrub": {
+    "file": "vendor/lucide-svg/scrub.svg",
+    "note": "move-horizontal",
+    "source": "lucide"
+  },
+  "search": {
+    "file": "vendor/lucide-svg/search.svg",
+    "note": "search",
+    "source": "lucide"
+  },
+  "settings": {
+    "file": "vendor/lucide-svg/settings.svg",
+    "note": "settings (ya vendorizado D-004)",
+    "source": "lucide"
+  },
+  "shuffle": {
+    "file": "vendor/lucide-svg/shuffle.svg",
+    "note": "shuffle",
+    "source": "lucide"
+  },
+  "sleep": {
+    "file": "vendor/lucide-svg/theme-dark.svg",
+    "note": "reusa moon (theme-dark)",
+    "source": "reuse"
+  },
+  "sliders-horizontal": {
+    "file": "vendor/lucide-svg/sliders-horizontal.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "song": {
+    "file": "vendor/lucide-svg/music.svg",
+    "note": "reusa music (D-004, coincide con music.note)",
+    "source": "reuse"
+  },
+  "sort": {
+    "file": "vendor/lucide-svg/sort.svg",
+    "note": "arrow-up-down",
+    "source": "lucide"
+  },
+  "speaker": {
+    "file": "vendor/lucide-svg/speaker.svg",
+    "note": "volume",
+    "source": "lucide"
+  },
+  "speaker-minus": {
+    "file": "vendor/lucide-svg/speaker-wave-1.svg",
+    "note": "sin equivalente volumen-menos; reusa 1 onda",
+    "source": "reuse"
+  },
+  "speaker-plus": {
+    "file": "vendor/lucide-svg/volume-2.svg",
+    "note": "sin equivalente volumen-mas; reusa 2 ondas",
+    "source": "reuse"
+  },
+  "speaker-slash": {
+    "file": "vendor/lucide-svg/speaker-slash.svg",
+    "note": "volume-off",
+    "source": "lucide"
+  },
+  "speaker-wave-1": {
+    "file": "vendor/lucide-svg/speaker-wave-1.svg",
+    "note": "volume-1",
+    "source": "lucide"
+  },
+  "speaker-wave-2": {
+    "file": "vendor/lucide-svg/volume-2.svg",
+    "note": "volume-2 (ya vendorizado D-004)",
+    "source": "lucide"
+  },
+  "speaker-wave-3": {
+    "file": "vendor/phosphor-svg/speaker-wave-3.svg",
+    "note": "speaker-high-fill (Lucide no tiene 3a ola)",
+    "source": "phosphor"
+  },
+  "square-on-square": {
+    "file": "vendor/lucide-svg/square-on-square.svg",
+    "note": "copy",
+    "source": "lucide"
+  },
+  "star": {
+    "file": "vendor/lucide-svg/star.svg",
+    "note": "star",
+    "source": "lucide"
+  },
+  "star-fill": {
+    "file": "vendor/phosphor-svg/star-fill.svg",
+    "note": "star-fill (peso fill real)",
+    "source": "phosphor"
+  },
+  "stopwatch": {
+    "file": "vendor/lucide-svg/stopwatch.svg",
+    "note": "timer",
+    "source": "lucide"
+  },
+  "sun": {
+    "file": "vendor/lucide-svg/sun.svg",
+    "note": "ya vendorizado D-004",
+    "source": "lucide"
+  },
+  "sync": {
+    "file": "vendor/lucide-svg/sync.svg",
+    "note": "refresh-cw",
+    "source": "lucide"
+  },
+  "tap": {
+    "file": "vendor/lucide-svg/tap.svg",
+    "note": "pointer",
+    "source": "lucide"
+  },
+  "theme": {
+    "file": "vendor/lucide-svg/theme.svg",
+    "note": "contrast",
+    "source": "lucide"
+  },
+  "theme-dark": {
+    "file": "vendor/lucide-svg/theme-dark.svg",
+    "note": "moon",
+    "source": "lucide"
+  },
+  "theme-light": {
+    "file": "vendor/lucide-svg/sun.svg",
+    "note": "reusa sun",
+    "source": "reuse"
+  },
+  "tv": {
+    "file": "vendor/lucide-svg/tv.svg",
+    "note": "tv",
+    "source": "lucide"
+  },
+  "usb-connected": {
+    "file": "vendor/lucide-svg/usb-connected.svg",
+    "note": "usb",
+    "source": "lucide"
+  },
+  "video": {
+    "file": "vendor/lucide-svg/video.svg",
+    "note": "square-play",
+    "source": "lucide"
+  },
+  "volume-2": {
+    "file": "vendor/lucide-svg/volume-2.svg",
+    "note": "ya vendorizado D-004 (mismo archivo que speaker-wave-2)",
+    "source": "lucide"
+  },
+  "volume-limit": {
+    "file": "vendor/lucide-svg/volume-2.svg",
+    "note": "sin equivalente exacto; reusa volume-2",
+    "source": "reuse"
+  }
+}

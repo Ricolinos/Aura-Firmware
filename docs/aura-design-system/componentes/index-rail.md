@@ -1,5 +1,7 @@
 # IndexRail
 
+
+> **Nota (D-286):** las menciones a "SF Pro" en esta página describen el tamaño/peso con el que se midió el rol tipográfico, no la cara concreta que lo resuelve hoy -- el tema compilado por defecto de este repositorio usa **Inter** para todos los roles (ver `fundamentos/02-tipografia.md` y `PLAN-theme-system.md`).
 🟢 Definido (D-276, 2026-08-16). Riel vertical de índice alfabético `#`+A–Z
 pegado al borde derecho de las **listas de elementos a pantalla completa**
 (canciones, artistas, álbumes por nombre, géneros… — todo lo que dibuja

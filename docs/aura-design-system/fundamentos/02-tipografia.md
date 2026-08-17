@@ -5,6 +5,25 @@
 pantallas sin token propio (`--font-body`/`--font-caption` de la tabla
 final) siguen usando estilos compartidos del sistema Apple2026 viejo.
 
+**D-286 (2026-08-16, separación de repositorios):** las tablas de abajo
+describen cada token por **rol** (tamaño en punto + peso), no por la cara
+tipográfica concreta que lo resuelve — eso ahora depende del **tema**
+(ver `PLAN-theme-system.md`). El tema COMPILADO por defecto de este
+repositorio resuelve los 14 roles con **Inter** (SIL OFL, vendorizada en
+`design-system/vendor/inter-ttf/`) en vez de SF Pro/SF Compact (Apple, no
+redistribuible — ver `AUDIT-pre-split.md` 0.1). El tema opcional "Apple
+(uso personal)", construido localmente en Aura Studio a partir de las
+fuentes ya instaladas en la Mac del usuario (nunca redistribuidas), sigue
+resolviendo estos mismos roles con SF Pro/SF Compact -- por eso las tablas
+de abajo, escritas cuando SF Pro era el único tema, se dejan tal cual en
+su columna "Familia": son la referencia histórica de CÓMO se midieron
+estos tamaños (contra mockups reales, D-207/D-271), válida para cualquier
+cara que los resuelva. Inter tiene otra altura de x que SF -- los tamaños
+en punto se conservaron idénticos como simplificación pragmática; un
+reajuste fino medido en píxel contra Inter queda como mejora futura, no
+bloqueante (el resultado ya se verificó visualmente, sin texto cortado ni
+glifos rotos, `docs/screenshots/theme-default-inter-lucide/`).
+
 ## Tokens definidos
 
 **Actualizado 2026-08-14, dos pasadas el mismo día** (D-205: tipografía de

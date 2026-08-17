@@ -1,5 +1,7 @@
 # StatusBar
 
+
+> **Nota (D-286):** las menciones a "SF Pro" en esta página describen el tamaño/peso con el que se midió el rol tipográfico, no la cara concreta que lo resuelve hoy -- el tema compilado por defecto de este repositorio usa **Inter** para todos los roles (ver `fundamentos/02-tipografia.md` y `PLAN-theme-system.md`).
 Un solo componente, dos estados. No son dos componentes distintos que se
 alternan — es el mismo `StatusBar` con geometría y contenido distintos según
 el estado de pantalla.

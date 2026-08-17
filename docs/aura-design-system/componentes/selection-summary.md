@@ -1,5 +1,7 @@
 # SelectionSummary
 
+
+> **Nota (D-286):** las menciones a "SF Pro" en esta página describen el tamaño/peso con el que se midió el rol tipográfico, no la cara concreta que lo resuelve hoy -- el tema compilado por defecto de este repositorio usa **Inter** para todos los roles (ver `fundamentos/02-tipografia.md` y `PLAN-theme-system.md`).
 Nombre provisional — corrígeme si tienes uno ya definido en tu investigación.
 
 Es lo que se renderiza en `--layer-base` cuando **no hay contenido más rico

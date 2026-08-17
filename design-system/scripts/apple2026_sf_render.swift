@@ -1,6 +1,18 @@
 // Renderiza un lote de SF Symbols (o SVG propios, D-263) a PNGs
 // cuadrados, negro sobre alfa 0.
 //
+// D-286 (2026-08-16, separacion de repositorios): este script ya NO es
+// parte del pipeline que genera el tema COMPILADO por defecto de este
+// repositorio (ver design-system/tokens.json, icon.svg_overrides -- hoy
+// cubre los 89 icon_key con SVG de Lucide/Phosphor, vendorizados). Se
+// conserva intacto, sin borrar, como el CONSTRUCTOR del futuro tema
+// opcional "Apple (uso personal)": Aura Studio lo invocaria localmente en
+// la Mac del usuario, pidiendo los SF Symbols ya instalados en ESE
+// sistema -- nunca redistribuidos (ver AUDIT-pre-split.md 0.1 y
+// PLAN-theme-system.md). Solo corre en un Mac con SF Pro/SF Compact
+// instaladas; no se ejecuta como parte de build_sim.sh/package_dist.sh
+// de este repo salvo que alguien construya ese tema a mano.
+//
 // SF Symbols no se distribuyen como archivos sueltos que se puedan
 // versionar (la app SF Symbols exporta SVG de a uno a mano, y ni siquiera
 // esta instalada en esta maquina); la via programatica y reproducible es
