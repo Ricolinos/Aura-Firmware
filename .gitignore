@@ -31,6 +31,8 @@ firmware/dist/*.zip
 firmware/dist/*.ipod
 firmware/dist/mks5lboot
 firmware/dist/checksums.txt
+firmware/dist/AuraPalette.swift
+firmware/dist/MODIFICATIONS.md
 # Copiado desde design-system/out/ por firmware/tools/build_sim.sh
 firmware/rockbox/apps/aura/apple2026_tokens.h
 
