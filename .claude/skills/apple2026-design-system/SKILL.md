@@ -1,6 +1,6 @@
 ---
 name: apple2026-design-system
-description: "Consulta esta skill antes de crear, modificar o revisar cualquier pantalla, animación, ícono, transición o componente visual de Aura (el firmware y Aura Studio). Cubre el sistema de diseño Apple2026 (color, tipografía, geometría, movimiento), el comportamiento heredado del firmware original del iPod Classic 2008 (taxonomía de pantallas, transiciones), y la especificación del reproductor Ahora suena. Dispárala para cualquier tarea de UI/UX aunque el usuario no diga la palabra 'diseño' — por ejemplo al implementar un menú nuevo, ajustar una transición, tocar apps/apple2026_shell.h, o trabajar en icons/ o skins/."
+description: "Consulta esta skill antes de crear, modificar o revisar cualquier pantalla, animación, ícono, transición o componente visual del firmware Aura. Cubre el sistema de diseño Apple2026 (color, tipografía, geometría, movimiento), el comportamiento heredado del firmware original del iPod Classic 2008 (taxonomía de pantallas, transiciones), y la especificación del reproductor Ahora suena. Dispárala para cualquier tarea de UI/UX aunque el usuario no diga la palabra 'diseño' — por ejemplo al implementar un menú nuevo, ajustar una transición, tocar apps/apple2026_shell.h, o trabajar en icons/ o skins/."
 ---
 
 # Sistema de diseño Apple2026 — guía de consulta
