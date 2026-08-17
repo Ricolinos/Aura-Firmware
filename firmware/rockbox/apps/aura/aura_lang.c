@@ -212,6 +212,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
 
     [AURA_STR_ABOUT_MY_IPOD]          = "Mi iPod",
     [AURA_STR_ABOUT_OTHER]            = "Otros",
+    [AURA_STR_ABOUT_SYSTEM]           = "Sistema",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -424,6 +425,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
 
     [AURA_STR_ABOUT_MY_IPOD]          = "My iPod",
     [AURA_STR_ABOUT_OTHER]            = "Other",
+    [AURA_STR_ABOUT_SYSTEM]           = "System",
 };
 
 const char *aura_str(aura_str_id_t id)

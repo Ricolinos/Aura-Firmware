@@ -282,6 +282,9 @@ typedef enum {
      * dueno) -- residual "Otros" (firmware, listas, cache, sueltos), no
      * una categoria de contenido real como las otras tres. */
     AURA_STR_ABOUT_OTHER,
+    /* D-282: quinto segmento -- "Sistema" separa de "Otros" lo que ocupa
+     * el propio firmware de Aura (/.rockbox/) del resto del residual. */
+    AURA_STR_ABOUT_SYSTEM,
 
     AURA_STR_COUNT,
 } aura_str_id_t;

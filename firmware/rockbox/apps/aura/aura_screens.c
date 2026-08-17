@@ -1558,9 +1558,22 @@ static long long sum_dir_bytes_recursive(const char *path)
  * el manifiesto, comportamiento identico al de antes de esta pasada. */
 static long long s_music_scan_bytes = -1;
 
+/* D-282 (C3/Q5): bytes de /.rockbox/ (el firmware de Aura en si, no la
+ * particion de firmware de Apple -- esa ya no existe en el iPod del
+ * dueno, D-185/D-186, y de todos modos no es espacio de Aura). Cache de
+ * SESION, no por entrada: /.rockbox/ practicamente no cambia mientras el
+ * dispositivo esta encendido (solo un reinstalo desde Aura Studio lo
+ * toca, y eso implica reiniciar), asi que una sola lectura real (la
+ * primera vez que se pide, con dircache listo) basta -- distinto del
+ * cache de musica de arriba, que si se refresca cada entrada porque el
+ * usuario puede copiar canciones sin reiniciar. -2 = "todavia no
+ * calculado", -1 = "no disponible" (dircache no listo/SIMULATOR). */
+static long long s_system_scan_bytes = -2;
+
 static void about_storage_collect(bool force_reload,
                                    long long *music_b, long long *video_b,
-                                   long long *photo_b, long long *other_b,
+                                   long long *photo_b, long long *system_b,
+                                   long long *other_b,
                                    long long *free_b, long long *total_b)
 {
     aura_manifest_t fresh;
@@ -1575,6 +1588,10 @@ static void about_storage_collect(bool force_reload,
     *video_b = sum_dir_bytes("/Videos");
     *photo_b = sum_dir_bytes("/Photos");
 
+    if (s_system_scan_bytes == -2)
+        s_system_scan_bytes = dircache_ready() ? sum_dir_bytes_recursive("/.rockbox") : -1;
+    *system_b = (s_system_scan_bytes >= 0) ? s_system_scan_bytes : 0;
+
     /* D-280: bug real -- volume_size()/fat_size() (firmware/common/fat.c)
      * devuelve KiB, no sectores (Rockbox mismo lo formatea con
      * kibyte_units, apps/menus/main_menu.c), pero este calculo llevaba
@@ -1584,7 +1601,10 @@ static void about_storage_collect(bool force_reload,
     volume_size(IF_MV(0,) &vol_size, &vol_free);
     *total_b = (long long)vol_size * 1024;
     *free_b  = (long long)vol_free * 1024;
-    *other_b = *total_b - *free_b - *music_b - *video_b - *photo_b;
+    /* D-282: "Otros" ya no incluye lo que ahora se distingue como
+     * "Sistema" (/.rockbox/) -- residual real: playlists, cache de
+     * caratulas, archivos sueltos, holgura de clusters. */
+    *other_b = *total_b - *free_b - *music_b - *video_b - *photo_b - *system_b;
     if (*other_b < 0)
         *other_b = 0;
 }
@@ -1747,21 +1767,23 @@ static unsigned category_flat_color(aura_category_t cat)
     return center;
 }
 
-/* Grafico de almacenamiento por color (D-264, extendido D-279 -- encargo
- * textual: "dividir la barra en 4 segmentos por color: rosa = musica,
- * azul = videos, verde = imagenes, amarillo = extras"). Verde para
- * Fotos hubiera roto la jerarquia de color por categoria ya fija por
- * encargo del dueno (D-250, `photos_hex` naranja, 2026-08-14) -- el
- * dueno confirmo mantener el color de categoria vigente en toda la
+/* Grafico de almacenamiento por color (D-264, extendido D-279/D-282 --
+ * encargo textual original: "dividir la barra en 4 segmentos por color:
+ * rosa = musica, azul = videos, verde = imagenes, amarillo = extras").
+ * Verde para Fotos hubiera roto la jerarquia de color por categoria ya
+ * fija por encargo del dueno (D-250, `photos_hex` naranja, 2026-08-14) --
+ * el dueno confirmo mantener el color de categoria vigente en toda la
  * barra (PLAN-about-storage.md Q4) en vez de introducir un verde que
  * seria la unica excepcion del sistema. "Extras" no tiene bytes medibles
- * (ver about_storage_collect(), Q5): el cuarto segmento amarillo
- * representa el residual "Otros" (firmware, playlists, cache, archivos
- * sueltos) con el extremo amarillo de la categoria Extras
- * (`extras_yellow_hex`, antes gris de Ajustes). Colores: acento
- * configurable para Musica (Q2, sigue la misma regla que el resto del
- * sistema), color fijo de categoria para Video/Fotos (Q3), amarillo fijo
- * de Extras para "Otros" (Q5) -- ninguno es un RGB nuevo. */
+ * (ver about_storage_collect()): el segmento amarillo representa el
+ * residual "Otros" con el extremo amarillo de la categoria Extras
+ * (`extras_yellow_hex`). D-282 (encargo del dueno, separar "Sistema" de
+ * "Otros"): sexto segmento gris de Ajustes (`settings_gray`, D-250 --
+ * Sistema=Ajustes semanticamente, y ese gris ya era el color de "Otros"
+ * antes de D-279) para /.rockbox/. Colores: acento configurable para
+ * Musica, color fijo de categoria para Video/Fotos, gris de Ajustes para
+ * Sistema, amarillo fijo de Extras para "Otros" -- ninguno es un RGB
+ * nuevo. */
 /* Carril + segmentos, sin fondo/capsula -- el llamador decide como tapar
  * los extremos segun lo que haya DETRAS (D-279): imagen del panel
  * derecho en split (restore, ver abajo) o SHELL_BG plano en la pantalla
@@ -1769,18 +1791,32 @@ static unsigned category_flat_color(aura_category_t cat)
  * duplicar el calculo de anchos/colores/minimo visible en dos sitios. */
 static void draw_storage_segments(int x, int y, int width, int height,
                                    long long music_b, long long video_b,
-                                   long long photo_b, long long other_b,
+                                   long long photo_b, long long system_b,
+                                   long long other_b,
                                    long long free_b, long long total_b)
 {
     int seg_x = x;
     int i;
-    struct { long long bytes; unsigned color; } segs[5];
+    /* D-282/Q4: contorno de 1px hacia adentro de cada segmento (y de los
+     * puntos de color de las filas del expandido, ver
+     * draw_about_storage_row()) -- amarillo (1.5:1) y naranja (2.2:1)
+     * fallan el umbral WCAG de 3:1 para elementos graficos sobre el fondo
+     * casi-blanco nuevo de D-281, y ningun tono "amarillo mas oscuro" pasa
+     * 3:1 sin dejar de leerse como amarillo (PLAN-about-fixes.md
+     * seccion 4). Blend hacia negro en tema claro / hacia blanco en
+     * oscuro -- misma regla para los 6 colores, no solo los que fallan,
+     * para que la barra se lea como una sola pieza. */
+    bool dark = (aura_settings.theme == AURA_THEME_DARK);
+    unsigned outline_toward = dark ? LCD_RGBPACK(255, 255, 255) : LCD_RGBPACK(0, 0, 0);
+    int outline_pct256 = (AURA_DS_METRICS_ABOUT_SEGMENT_OUTLINE_PCT * 256) / 100;
+    struct { long long bytes; unsigned color; } segs[6];
 
-    segs[0].bytes = music_b; segs[0].color = aura_accent();
-    segs[1].bytes = video_b; segs[1].color = category_flat_color(AURA_CATEGORY_VIDEO);
-    segs[2].bytes = photo_b; segs[2].color = category_flat_color(AURA_CATEGORY_PHOTOS);
-    segs[3].bytes = other_b; segs[3].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
-    segs[4].bytes = free_b;  segs[4].color = a26_color(A26_PROGRESS_TRACK);
+    segs[0].bytes = music_b;  segs[0].color = aura_accent();
+    segs[1].bytes = video_b;  segs[1].color = category_flat_color(AURA_CATEGORY_VIDEO);
+    segs[2].bytes = photo_b;  segs[2].color = category_flat_color(AURA_CATEGORY_PHOTOS);
+    segs[3].bytes = system_b; segs[3].color = category_flat_color(AURA_CATEGORY_SETTINGS);
+    segs[4].bytes = other_b;  segs[4].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
+    segs[5].bytes = free_b;   segs[5].color = a26_color(A26_PROGRESS_TRACK);
 
     lcd_set_drawmode(DRMODE_SOLID);
     lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
@@ -1790,9 +1826,10 @@ static void draw_storage_segments(int x, int y, int width, int height,
     if (total_b <= 0)
         return;
 
-    for (i = 0; i < 5; i++)
+    for (i = 0; i < 6; i++)
     {
         int seg_w = (int)((long long)width * segs[i].bytes / total_b);
+        unsigned outline;
         if (segs[i].bytes <= 0)
             continue;
         /* D-279/Q9: bytes>0 pero proporcion diminuta no debe desaparecer
@@ -1807,6 +1844,16 @@ static void draw_storage_segments(int x, int y, int width, int height,
             continue;
         lcd_set_foreground(segs[i].color);
         lcd_fillrect(seg_x, y, seg_w, height);
+        /* Contorno superior/inferior de 1px hacia adentro (D-282/Q4) --
+         * filas horizontales, no verticales: no interfieren con el
+         * separador SHELL_BG entre segmentos de abajo (que si es vertical,
+         * en la misma columna que un contorno lateral se pisarian). Sube
+         * el contraste contra el fondo casi-blanco que rodea la barra por
+         * arriba y por abajo, para los 6 colores por igual. */
+        outline = a26_shell_blend(segs[i].color, outline_toward, outline_pct256);
+        lcd_set_foreground(outline);
+        lcd_hline(seg_x, seg_x + seg_w - 1, y);
+        lcd_hline(seg_x, seg_x + seg_w - 1, y + height - 1);
         if (seg_x > x)
         {
             lcd_set_foreground(a26_color(A26_SHELL_BG));
@@ -1818,7 +1865,7 @@ static void draw_storage_segments(int x, int y, int width, int height,
 
 static void draw_about_storage_bars(int x, int y, int width, int height)
 {
-    long long music_b, video_b, photo_b, other_b, free_b, total_b;
+    long long music_b, video_b, photo_b, system_b, other_b, free_b, total_b;
 
     /* D-277: esta barra vive SOBRE la imagen de fondo del panel derecho
      * (D-267), no sobre SHELL_BG -- redondear contra un color plano
@@ -1836,7 +1883,7 @@ static void draw_about_storage_bars(int x, int y, int width, int height)
                 && width <= (A26_SCREEN_WIDTH - AURA_DS_METRICS_LEFT_PANEL_WIDTH)
                 && height <= 24;
 
-    about_storage_collect(false, &music_b, &video_b, &photo_b,
+    about_storage_collect(false, &music_b, &video_b, &photo_b, &system_b,
                            &other_b, &free_b, &total_b);
 
     if (restore)
@@ -1847,7 +1894,7 @@ static void draw_about_storage_bars(int x, int y, int width, int height)
     }
 
     draw_storage_segments(x, y, width, height, music_b, video_b, photo_b,
-                          other_b, free_b, total_b);
+                          system_b, other_b, free_b, total_b);
 
     /* D-277: los segmentos rectangulares tapaban las esquinas que el
      * carril traia redondeadas -- la barra terminaba cuadrada. La
@@ -2279,9 +2326,16 @@ static void draw_about_storage_row(int x, int y, int w, unsigned dot_color,
     long long pct_x10 = total_b > 0 ? (bytes * 1000) / total_b : 0;
     const int dot = A26_SPACING_SM + A26_SPACING_XS;
     int tw, th;
+    /* D-282/Q4: mismo contorno de 1px que los segmentos de la barra
+     * (draw_storage_segments()) -- el punto de color tiene el mismo
+     * problema de contraste sobre SHELL_BG casi-blanco. */
+    bool dark = (aura_settings.theme == AURA_THEME_DARK);
+    unsigned outline_toward = dark ? LCD_RGBPACK(255, 255, 255) : LCD_RGBPACK(0, 0, 0);
+    int outline_pct256 = (AURA_DS_METRICS_ABOUT_SEGMENT_OUTLINE_PCT * 256) / 100;
+    unsigned dot_border = a26_shell_blend(dot_color, outline_toward, outline_pct256);
 
-    a26_shell_fill_rounded_rect(x, y + (A26_TYPE_BODY - dot) / 2, dot, dot,
-                                 dot / 2, dot_color, a26_color(A26_SHELL_BG));
+    a26_shell_outline_rounded_rect(x, y + (A26_TYPE_BODY - dot) / 2, dot, dot,
+                                    dot / 2, dot_color, dot_border, a26_color(A26_SHELL_BG));
 
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
@@ -2307,11 +2361,12 @@ static void draw_about_storage_row(int x, int y, int w, unsigned dot_color,
  * rediseño. */
 static void draw_about_storage_bar_expanded(int x, int y, int width, int height,
                                              long long music_b, long long video_b,
-                                             long long photo_b, long long other_b,
+                                             long long photo_b, long long system_b,
+                                             long long other_b,
                                              long long free_b, long long total_b)
 {
     draw_storage_segments(x, y, width, height, music_b, video_b, photo_b,
-                          other_b, free_b, total_b);
+                          system_b, other_b, free_b, total_b);
     a26_shell_capsule_ends_over_content(x, y, width, height, a26_color(A26_SHELL_BG));
 }
 
@@ -2328,7 +2383,7 @@ static void draw_about_storage_bar_expanded(int x, int y, int width, int height,
  * final de la transicion tiene que coincidir pixel a pixel con esto. */
 static void draw_about_storage_expanded(void)
 {
-    long long music_b, video_b, photo_b, other_b, free_b, total_b;
+    long long music_b, video_b, photo_b, system_b, other_b, free_b, total_b;
     aura_category_t cat = aura_category_for_screen(AURA_SCREEN_SETTINGS_ABOUT);
     int split_x, tile_y, tile_w, tile_h;
     int text_x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;
@@ -2338,7 +2393,10 @@ static void draw_about_storage_expanded(void)
     int bar_h = AURA_DS_METRICS_ABOUT_BAR_H;
     int row_h, y, bar_y, region_top;
     int i;
-    struct { long long bytes; unsigned color; aura_str_id_t label; } rows[4];
+    /* D-282: 5 filas -- Libre no lleva fila de texto propia (es el
+     * "resto" implicito de la barra, igual que antes), pero Sistema si,
+     * separada de Otros. */
+    struct { long long bytes; unsigned color; aura_str_id_t label; } rows[5];
 
     /* Q1/D-280: recarga fresca del manifiesto (no el cache de una vez por
      * sesion que usa el bottom_renderer de split) -- pero SOLO al entrar
@@ -2350,7 +2408,7 @@ static void draw_about_storage_expanded(void)
      * identifico como el unico costo real si se ejecuta sin control).
      * s_about_needs_reload la pone en true handle_about() al SALIR
      * (BUTTON_MENU) para que la proxima entrada si relea. */
-    about_storage_collect(s_about_needs_reload, &music_b, &video_b, &photo_b,
+    about_storage_collect(s_about_needs_reload, &music_b, &video_b, &photo_b, &system_b,
                           &other_b, &free_b, &total_b);
     s_about_needs_reload = false;
 
@@ -2364,13 +2422,15 @@ static void draw_about_storage_expanded(void)
     rows[1].label = AURA_STR_ABOUT_VIDEOS;
     rows[2].bytes = photo_b; rows[2].color = category_flat_color(AURA_CATEGORY_PHOTOS);
     rows[2].label = AURA_STR_ABOUT_PHOTOS;
-    rows[3].bytes = other_b; rows[3].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
-    rows[3].label = AURA_STR_ABOUT_OTHER;
+    rows[3].bytes = system_b; rows[3].color = category_flat_color(AURA_CATEGORY_SETTINGS);
+    rows[3].label = AURA_STR_ABOUT_SYSTEM;
+    rows[4].bytes = other_b; rows[4].color = AURA_DS_COLOR_CATEGORY_EXTRAS_YELLOW;
+    rows[4].label = AURA_STR_ABOUT_OTHER;
 
     row_h = (AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_BOTTOM_Y
-             - AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y) / 4;
+             - AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y) / 5;
     y = AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y;
-    for (i = 0; i < 4; i++)
+    for (i = 0; i < 5; i++)
     {
         draw_about_storage_row(text_x, y, text_w, rows[i].color, rows[i].label,
                                rows[i].bytes, total_b);
@@ -2383,8 +2443,8 @@ static void draw_about_storage_expanded(void)
     region_top = tile_y + tile_h;
     bar_y = region_top + (A26_SCREEN_HEIGHT - region_top - bar_h) / 2;
     draw_about_storage_bar_expanded(bar_x, bar_y, bar_w, bar_h,
-                                    music_b, video_b, photo_b, other_b,
-                                    free_b, total_b);
+                                    music_b, video_b, photo_b, system_b,
+                                    other_b, free_b, total_b);
 }
 
 /* Pagina 2: contador de archivos (doc: "Canciones, Videos, Podcast,
