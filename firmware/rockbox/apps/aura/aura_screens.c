@@ -1699,28 +1699,28 @@ static const char *music_row_empty_description(aura_screen_id_t target)
  * de. */
 static const char *video_row_empty_description(aura_screen_id_t target)
 {
-    const aura_manifest_t *m;
-
     switch (target)
     {
     case AURA_SCREEN_VIDEOS_MOVIES:  return aura_str(AURA_STR_VIDEOS_EMPTY_MOVIES);
     case AURA_SCREEN_VIDEOS_TVSHOWS: return aura_str(AURA_STR_VIDEOS_EMPTY_TVSHOWS);
     case AURA_SCREEN_VIDEOS_CLIPS:   return aura_str(AURA_STR_VIDEOS_EMPTY_CLIPS);
     case AURA_SCREEN_VIDEOS_ALL:
-        m = cached_manifest();
-        return (m && m->video_count > 0) ? NULL : aura_str(AURA_STR_EMPTY_VIDEOS);
+        /* D-291: cuenta real de /Videos, no sync_summary.cfg -- ese
+         * manifiesto solo se reescribe en cada sync de Studio, asi que
+         * podia desincronizarse de lo que en verdad hay en el disco
+         * (copia manual, sync interrumpido). */
+        return (aura_video_count() > 0) ? NULL : aura_str(AURA_STR_EMPTY_VIDEOS);
     default: return NULL;
     }
 }
 
 static const char *photos_row_empty_description(aura_screen_id_t target)
 {
-    const aura_manifest_t *m;
-
     if (target != AURA_SCREEN_PHOTOS_ALL)
         return NULL;
-    m = cached_manifest();
-    return (m && m->photo_count > 0) ? NULL : aura_str(AURA_STR_EMPTY_PHOTOS);
+    /* D-291: idem video_row_empty_description() arriba -- cuenta real
+     * de /Photos. */
+    return (aura_photos_count() > 0) ? NULL : aura_str(AURA_STR_EMPTY_PHOTOS);
 }
 
 /* HH:MM real (D-264, fila "Fecha y hora"): reusa aura_format_clock()
@@ -4610,11 +4610,20 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_music_browse(nav, screen);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
         draw_playlists(nav);
-    else if (screen == AURA_SCREEN_PHOTOS)
+    else if (screen == AURA_SCREEN_PHOTOS_ALL)
+        /* D-291: AURA_SCREEN_PHOTOS (la fila-menu "Todas las fotos" que
+         * cuelga del menu raiz) ya la intercepta draw_nav_list() mas
+         * arriba en esta misma cadena -- el contenido real de la lista
+         * vive en AURA_SCREEN_PHOTOS_ALL, que hasta aqui no tenia caso
+         * de dibujo y caia al fallback generico ("Nada sonando" con
+         * fotos reales en el disco). Mismo bug para Video, dos lineas
+         * abajo. Ambos habian sido corregidos en D-251 y se perdieron
+         * en el revert de D-253 (DECISIONS-ARCHIVE.md) sin reaplicarse
+         * -- ver PLAN-image-viewer.md. */
         aura_photos_draw(nav);
     else if (screen == AURA_SCREEN_PHOTO_VIEWER)
         aura_photo_viewer_draw(nav);
-    else if (screen == AURA_SCREEN_VIDEOS)
+    else if (screen == AURA_SCREEN_VIDEOS_ALL)
         aura_video_draw(nav);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_draw();
@@ -5008,6 +5017,17 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
          * sabe cuando la pila entera llego a la raiz. */
         if (depth_after < depth_before && to == AURA_SCREEN_ROOT)
             aura_search_reset();
+
+        /* D-291: re-escanea /Photos y /Videos cada vez que se entra a
+         * su lista desde el menu -- sin esto, un sync por USB durante
+         * la sesion no se reflejaba hasta reiniciar (la cache de
+         * ensure_photo_list()/ensure_video_list() solo se llenaba una
+         * vez). Mismo gancho central que search_reset arriba: es el
+         * unico lugar que ve ambos extremos de la navegacion. */
+        if (depth_after > depth_before && to == AURA_SCREEN_PHOTOS_ALL)
+            aura_photos_invalidate();
+        if (depth_after > depth_before && to == AURA_SCREEN_VIDEOS_ALL)
+            aura_video_invalidate();
 
         /* Una pulsacion = una navegacion, aunque el boton se sostenga
          * durante la transicion (los repeats acumulados/venideros de

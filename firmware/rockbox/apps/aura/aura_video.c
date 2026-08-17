@@ -104,6 +104,17 @@ static void ensure_video_list(void)
     closedir(d);
 }
 
+void aura_video_invalidate(void)
+{
+    s_video_count = -1;
+}
+
+int aura_video_count(void)
+{
+    ensure_video_list();
+    return s_video_count;
+}
+
 void aura_video_draw(aura_nav_t *nav)
 {
     int i;

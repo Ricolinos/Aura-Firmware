@@ -33,4 +33,14 @@
 void aura_video_draw(aura_nav_t *nav);
 void aura_video_handle_button(aura_nav_t *nav, long button);
 
+/* Mismo bug hermano que aura_photos_invalidate() (D-291): sin esto,
+ * un sync por USB durante la sesion no se refleja hasta reiniciar. */
+void aura_video_invalidate(void);
+
+/* Cuenta real de videos en /Videos (asegura el escaneo si hace falta),
+ * mismo criterio que aura_photos_count() -- reemplaza a
+ * sync_summary.cfg como fuente del estado vacio de "Todos los
+ * videos". */
+int aura_video_count(void);
+
 #endif /* AURA_VIDEO_H */

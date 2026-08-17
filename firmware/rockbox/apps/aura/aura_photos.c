@@ -121,6 +121,18 @@ static void ensure_photo_list(void)
     closedir(d);
 }
 
+void aura_photos_invalidate(void)
+{
+    s_photo_count = -1;
+    s_loaded_index = -1;
+}
+
+int aura_photos_count(void)
+{
+    ensure_photo_list();
+    return s_photo_count;
+}
+
 static void draw_message(aura_str_id_t msg_id)
 {
     int w, h;

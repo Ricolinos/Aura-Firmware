@@ -36,4 +36,16 @@ void aura_photos_handle_button(aura_nav_t *nav, long button);
 void aura_photo_viewer_draw(aura_nav_t *nav);
 void aura_photo_viewer_handle_button(aura_nav_t *nav, long button);
 
+/* Fuerza un re-escaneo de /Photos la proxima vez que se dibuje la
+ * lista -- sin esto, un sync por USB durante la sesion no se refleja
+ * hasta reiniciar (D-291). Se llama al entrar a la pantalla desde el
+ * menu, no en cada frame. */
+void aura_photos_invalidate(void);
+
+/* Cuenta real de imagenes listables en /Photos (asegura el escaneo si
+ * hace falta) -- reemplaza a sync_summary.cfg como fuente del estado
+ * vacio del panel derecho del menu (D-291), que podia desincronizarse
+ * de lo que en verdad hay en el disco. */
+int aura_photos_count(void);
+
 #endif /* AURA_PHOTOS_H */
