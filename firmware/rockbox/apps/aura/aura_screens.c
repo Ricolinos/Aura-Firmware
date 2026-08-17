@@ -18,6 +18,7 @@
 #include "recorder/bmp.h"
 #include "file.h"
 #include "dir.h"
+#include "dircache.h"
 
 #include "aura_screens.h"
 #include "aura_widgets.h"
@@ -1480,6 +1481,56 @@ static long long sum_dir_bytes(const char *path)
     return total;
 }
 
+/* D-280 (Q2): dircache listo == readdir se sirve de RAM (dir_get_info()
+ * ya trae el tamano de la entrada, sin tocar disco) -- condicion real que
+ * hace seguro un recorrido recursivo de /Music (miles de archivos, PLAN-
+ * about-fixes.md C2). En el simulador HAVE_DIRCACHE no existe
+ * (config.h: excluido con #ifndef SIMULATOR) -- ahi esta funcion siempre
+ * devuelve false y el llamador cae al manifiesto, igual que antes de esta
+ * pasada. */
+static bool dircache_ready(void)
+{
+#ifdef HAVE_DIRCACHE
+    struct dircache_info info;
+    dircache_get_info(&info);
+    return info.status == DIRCACHE_READY;
+#else
+    return false;
+#endif
+}
+
+/* Version recursiva de sum_dir_bytes() -- SOLO se llama cuando
+ * dircache_ready() ya confirmo que es barata (RAM, no disco). `/Music`
+ * tiene subcarpetas Artista/Album que la version plana original (D-279,
+ * para /Videos y /Photos, que SI son planas) no recorre. */
+static long long sum_dir_bytes_recursive(const char *path)
+{
+    DIR *d = opendir(path);
+    struct DIRENT *entry;
+    long long total = 0;
+
+    if (!d)
+        return 0;
+    while ((entry = readdir(d)) != NULL)
+    {
+        struct dirinfo info = dir_get_info(d, entry);
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+            continue;
+        if (info.attribute & ATTR_DIRECTORY)
+        {
+            char child[MAX_PATH];
+            snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
+            total += sum_dir_bytes_recursive(child);
+        }
+        else
+        {
+            total += info.size;
+        }
+    }
+    closedir(d);
+    return total;
+}
+
 /* Recoleccion unica del dato de almacenamiento para la barra de "Acerca
  * de" (D-279), compartida entre el bottom_renderer de SelectionSummary
  * (split) y la pantalla expandida (full) -- reemplaza el calculo
@@ -1494,6 +1545,14 @@ static long long sum_dir_bytes(const char *path)
  * expandido (Q1: "recargar el manifest al expandir, no solo una vez por
  * sesion"); el bottom_renderer de split, que corre cada cuadro, sigue
  * con el cache barato. */
+/* D-280 (Q2): cache del recorrido de /Music -- costoso incluso en RAM
+ * (miles de entradas), asi que solo se recalcula cuando `force_reload`
+ * es cierto (una vez por ENTRADA al estado expandido, ver
+ * draw_about_storage_expanded()/handle_about() mas abajo), nunca por
+ * cuadro. -1 = "no disponible" (dircache no listo, o SIMULATOR) -> usa
+ * el manifiesto, comportamiento identico al de antes de esta pasada. */
+static long long s_music_scan_bytes = -1;
+
 static void about_storage_collect(bool force_reload,
                                    long long *music_b, long long *video_b,
                                    long long *photo_b, long long *other_b,
@@ -1505,7 +1564,9 @@ static void about_storage_collect(bool force_reload,
         : cached_manifest();
     sector_t vol_size = 0, vol_free = 0;
 
-    *music_b = m ? m->music_bytes : 0;
+    if (force_reload)
+        s_music_scan_bytes = dircache_ready() ? sum_dir_bytes_recursive("/Music") : -1;
+    *music_b = (s_music_scan_bytes >= 0) ? s_music_scan_bytes : (m ? m->music_bytes : 0);
     *video_b = sum_dir_bytes("/Videos");
     *photo_b = sum_dir_bytes("/Photos");
 
@@ -2154,6 +2215,11 @@ typedef enum {
 } about_page_t;
 
 static int s_about_page = ABOUT_PAGE_STORAGE;
+/* D-280: true = la proxima vez que se dibuje la pagina de almacenamiento
+ * debe releer manifiesto + recorrido de /Music (recien se entro a la
+ * pantalla o se acaba de re-entrar tras salir con Menu); false = ya se
+ * recargo para esta visita, los cuadros siguientes usan el dato en cache. */
+static bool s_about_needs_reload = true;
 
 #define ABOUT_CONTENT_Y (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL)
 
@@ -2260,12 +2326,19 @@ static void draw_about_storage_expanded(void)
     int i;
     struct { long long bytes; unsigned color; aura_str_id_t label; } rows[4];
 
-    /* Q1: recarga fresca del manifiesto (no el cache de una vez por
-     * sesion que usa el bottom_renderer de split) -- coherente con que
-     * draw_about() YA releia aura_manifest_load() en cada cuadro antes
-     * del rediseño, no es un costo nuevo. */
-    about_storage_collect(true, &music_b, &video_b, &photo_b,
+    /* Q1/D-280: recarga fresca del manifiesto (no el cache de una vez por
+     * sesion que usa el bottom_renderer de split) -- pero SOLO al entrar
+     * a este estado, no en cada cuadro (bug real encontrado en revision:
+     * esta pantalla se redibuja ~20 veces por segundo mientras esta
+     * visible, y antes de este arreglo relenia sync_summary.cfg Y
+     * recorria /Music, /Videos, /Photos en cada uno de esos cuadros --
+     * barato en el simulador, pero exactamente el patron que D-280/C2
+     * identifico como el unico costo real si se ejecuta sin control).
+     * s_about_needs_reload la pone en true handle_about() al SALIR
+     * (BUTTON_MENU) para que la proxima entrada si relea. */
+    about_storage_collect(s_about_needs_reload, &music_b, &video_b, &photo_b,
                           &other_b, &free_b, &total_b);
+    s_about_needs_reload = false;
 
     aura_selection_summary_tile_rect_split(&split_x, &tile_y, &tile_w, &tile_h);
     aura_selection_summary_draw_tile(AURA_DS_METRICS_ABOUT_EXPANDED_TILE_X, tile_y,
@@ -2397,6 +2470,7 @@ static void handle_about(aura_nav_t *nav, long button)
          * nunca cambiaba de valor una vez puesta (bug real: solo
          * funcionaba la primera vez que se dibujaba en todo el proceso). */
         s_about_page = ABOUT_PAGE_STORAGE;
+        s_about_needs_reload = true;
         aura_nav_pop(nav);
         break;
     default:
