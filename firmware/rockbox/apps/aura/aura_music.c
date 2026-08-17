@@ -450,6 +450,30 @@ bool aura_music_db_ready(void)
     return tagcache_is_usable();
 }
 
+/* D-283 (PLAN-about-fixes.md E2): mismo tagcache_search()+set_uniqbuf()
+ * que ya usa run_search() para el navegador de Artistas (S_uniqbuf
+ * dedup por artista), pero solo cuenta -- sin limite de
+ * AURA_MUSIC_MAX_ITEMS, que existe para no desbordar las listas de
+ * navegacion, no para un conteo. */
+int aura_music_count_artists(void)
+{
+    struct tagcache_search tcs;
+    char buf[TAGCACHE_BUFSZ];
+    int n = 0;
+
+    if (!tagcache_is_usable())
+        return 0;
+    if (!tagcache_search(&tcs, tag_artist))
+        return 0;
+    tagcache_search_set_uniqbuf(&tcs, s_uniqbuf, sizeof(s_uniqbuf));
+
+    while (tagcache_get_next(&tcs, buf, sizeof(buf)))
+        n++;
+
+    tagcache_search_finish(&tcs);
+    return n;
+}
+
 static aura_str_id_t untagged_label_for(int tag)
 {
     switch (tag)

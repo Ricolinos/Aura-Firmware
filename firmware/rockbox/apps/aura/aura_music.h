@@ -24,6 +24,14 @@ typedef struct {
 /* True si la base de datos de Rockbox esta lista para consultarse. */
 bool aura_music_db_ready(void);
 
+/* D-283 (PLAN-about-fixes.md E2): cuantos artistas UNICOS hay en la
+ * base de datos -- mismo patron de tagcache_search()+set_uniqbuf() que
+ * ya usa run_search() de este archivo para el navegador de Artistas,
+ * pero contando en vez de llenar una lista limitada a
+ * AURA_MUSIC_MAX_ITEMS (el Estado 2 de "Acerca de" solo necesita el
+ * numero). 0 si la base de datos no esta lista. */
+int aura_music_count_artists(void);
+
 /* D-214 (temporal, diagnostico del freeze de reproduccion): dibuja
  * `label` en una franja al pie de la pantalla y actualiza de inmediato
  * -- ver el comentario grande junto a la definicion en aura_music.c.

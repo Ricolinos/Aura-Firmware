@@ -67,6 +67,28 @@ typedef enum {
     AURA_STR_ABOUT_PLAYLISTS,
     AURA_STR_ABOUT_NO_SYNC,
 
+    /* D-283 (Estado 2 de "Acerca de", conteos detallados): "Musica" ya
+     * cuenta canciones/artistas/listas; Video y Fotos se dividen en sus
+     * categorias reales de Aura Studio (MediaCategory/classifyPhoto).
+     * AURA_STR_ABOUT_MOVIES/SERIES/CLIPS y AURA_STR_ABOUT_IMAGES/
+     * PHOTOS_TAKEN/AI son etiquetas de FILA (distintas de
+     * AURA_STR_ABOUT_VIDEOS/PHOTOS de arriba, que son titulos de
+     * SECCION) -- Fotografias no reutiliza AURA_STR_ABOUT_PHOTOS porque
+     * ese string significa "Fotos" como categoria de contenido general,
+     * no la subcategoria "camara real" de MediaCategoryHeuristics. */
+    AURA_STR_ABOUT_SONGS,
+    AURA_STR_ABOUT_ARTISTS,
+    AURA_STR_ABOUT_MOVIES,
+    AURA_STR_ABOUT_SERIES,
+    AURA_STR_ABOUT_CLIPS,
+    AURA_STR_ABOUT_IMAGES,
+    AURA_STR_ABOUT_PHOTOS_TAKEN,
+    AURA_STR_ABOUT_AI,
+    /* Manifiesto de un sync ANTERIOR a esta sesion -- sin los campos
+     * *_count por categoria (D-283). Distinto de AURA_STR_ABOUT_NO_SYNC
+     * (nunca se sincronizo NADA). */
+    AURA_STR_ABOUT_SYNC_FOR_DETAIL,
+
     AURA_STR_EMPTY_MUSIC,
     AURA_STR_EMPTY_VIDEOS,
     AURA_STR_EMPTY_PHOTOS,

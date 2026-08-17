@@ -2447,32 +2447,95 @@ static void draw_about_storage_expanded(void)
                                     other_b, free_b, total_b);
 }
 
-/* Pagina 2: contador de archivos (doc: "Canciones, Videos, Podcast,
- * Fotos, Juegos, Contactos" -- Aura solo tiene Musica/Video/Fotos/
- * Listas reales, se muestran esas). */
+/* Q8 (PLAN-about-fixes.md): el tile de Aura persiste en las 3 paginas de
+ * "Acerca de", no solo en Almacenamiento -- continuidad del viaje del
+ * Shift-and-Reveal (D-278). Mismo x/y que ahi; cada pagina define su
+ * propia region de texto a la derecha con las mismas constantes
+ * about.expanded_bar_x/expanded_text_top_y/expanded_text_bottom_y. */
+static void draw_about_persistent_tile(void)
+{
+    aura_category_t cat = aura_category_for_screen(AURA_SCREEN_SETTINGS_ABOUT);
+    int split_x, tile_y, tile_w, tile_h;
+
+    aura_selection_summary_tile_rect_split(&split_x, &tile_y, &tile_w, &tile_h);
+    aura_selection_summary_draw_tile(AURA_DS_METRICS_ABOUT_EXPANDED_TILE_X, tile_y,
+                                     cat, NULL, draw_about_icon_renderer);
+}
+
+/* Pagina 2, conteos detallados (D-283, encargo del dueno): Musica ya
+ * era viable con lo que Aura ya tenia -- canciones/listas del
+ * manifiesto (mismo dato de siempre), artistas contados EN VIVO de la
+ * base de datos de Rockbox (aura_music_count_artists()) porque el
+ * manifiesto nunca tuvo ese campo y tagcache ya lo sabe exacto, mas
+ * fresco que cualquier sync. Video/Fotos necesitaban un cambio en Aura
+ * Studio primero (Rockbox no tiene DB de video ni parser EXIF, PLAN-
+ * about-fixes.md E2) -- Studio ya escribe los conteos por categoria
+ * (D-283, LibrarySync.swift); si el manifiesto es de un sync ANTERIOR a
+ * esa sesion (has_video_categories/has_photo_categories en false), se
+ * muestra el aviso de sincronizar en vez de un "0" enganoso que se leeria
+ * como "no tienes nada" en vez de "no lo sabemos todavia". */
 static void draw_about_counts(const aura_manifest_t *m)
 {
-    const int line_h = A26_TYPE_BODY + A26_SPACING_SM;
-    int y = ABOUT_CONTENT_Y;
+    int text_x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;
+    int y = AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y;
+    int line_h, tw, th;
     char line[48];
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    draw_about_persistent_tile();
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    lcd_getstringsize((const unsigned char *)"Ag", &tw, &th);
+    line_h = th + A26_SPACING_XS;
+
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
 
-    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_MUSIC), m->music_count);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
+    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_SONGS), m->music_count);
+    lcd_putsxy(text_x, y, (const unsigned char *)line);
     y += line_h;
-
-    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_VIDEOS), m->video_count);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
+    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_ARTISTS),
+             aura_music_count_artists());
+    lcd_putsxy(text_x, y, (const unsigned char *)line);
     y += line_h;
-
-    snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_PHOTOS), m->photo_count);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
-    y += line_h;
-
     snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_PLAYLISTS), m->playlist_count);
-    lcd_putsxy(A26_SPACING_LG, y, (const unsigned char *)line);
+    lcd_putsxy(text_x, y, (const unsigned char *)line);
+    y += line_h + A26_SPACING_XS;
+
+    if (m->has_video_categories)
+    {
+        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_MOVIES), m->video_movies_count);
+        lcd_putsxy(text_x, y, (const unsigned char *)line);
+        y += line_h;
+        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_SERIES), m->video_series_count);
+        lcd_putsxy(text_x, y, (const unsigned char *)line);
+        y += line_h;
+        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_CLIPS), m->video_clips_count);
+        lcd_putsxy(text_x, y, (const unsigned char *)line);
+        y += line_h + A26_SPACING_XS;
+    }
+    else
+    {
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_putsxy(text_x, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_SYNC_FOR_DETAIL));
+        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+        y += line_h + A26_SPACING_XS;
+    }
+
+    if (m->has_photo_categories)
+    {
+        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_IMAGES), m->photo_images_count);
+        lcd_putsxy(text_x, y, (const unsigned char *)line);
+        y += line_h;
+        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_PHOTOS_TAKEN), m->photo_photos_count);
+        lcd_putsxy(text_x, y, (const unsigned char *)line);
+        y += line_h;
+        snprintf(line, sizeof(line), "%s: %d", aura_str(AURA_STR_ABOUT_AI), m->photo_ai_count);
+        lcd_putsxy(text_x, y, (const unsigned char *)line);
+    }
+    else
+    {
+        lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+        lcd_putsxy(text_x, y, (const unsigned char *)aura_str(AURA_STR_ABOUT_SYNC_FOR_DETAIL));
+    }
 }
 
 /* Pagina 3: info del dispositivo (doc: numero de serie/modelo/version --

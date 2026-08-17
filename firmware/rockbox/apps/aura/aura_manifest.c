@@ -57,6 +57,18 @@ bool aura_manifest_load(aura_manifest_t *out)
             out->photo_bytes = parse_i64(value);
         else if (!strcmp(name, "playlist_count"))
             out->playlist_count = (int)parse_i64(value);
+        else if (!strcmp(name, "video_movies_count"))
+        { out->video_movies_count = (int)parse_i64(value); out->has_video_categories = true; }
+        else if (!strcmp(name, "video_series_count"))
+        { out->video_series_count = (int)parse_i64(value); out->has_video_categories = true; }
+        else if (!strcmp(name, "video_clips_count"))
+        { out->video_clips_count = (int)parse_i64(value); out->has_video_categories = true; }
+        else if (!strcmp(name, "photo_images_count"))
+        { out->photo_images_count = (int)parse_i64(value); out->has_photo_categories = true; }
+        else if (!strcmp(name, "photo_photos_count"))
+        { out->photo_photos_count = (int)parse_i64(value); out->has_photo_categories = true; }
+        else if (!strcmp(name, "photo_ai_count"))
+        { out->photo_ai_count = (int)parse_i64(value); out->has_photo_categories = true; }
     }
     close(fd);
 
