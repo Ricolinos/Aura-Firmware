@@ -113,7 +113,7 @@ agrupación, como en el original:
 |---|---|
 | Información | Acerca de ✅ `[FULL-CARRY]` (3 páginas, D-279 — el tile de `SelectionSummary` viaja con `Shift-and-Reveal`, D-278; ver `componentes/about.md`) |
 | Reproducción | Aleatorio ✅ · Repetir ✅ · Menú principal ✅ |
-| Apariencia (propios de Aura) | Tema ✅ · Color de acento ✅ · Animaciones ✅ · Gráficos ✅ · Mostrar sombras ✅ · Mostrar iconos ✅ |
+| Apariencia (propios de Aura) | Tema ✅ · Estilo ✅ (D-289, `sistema/05-temas.md` — lista dinámica de paquetes de tema instalados, leída del disco; no confundir con "Tema", que sigue siendo claro/oscuro) · Color de acento ✅ · Animaciones ✅ · Gráficos ✅ · Mostrar sombras ✅ · Mostrar iconos ✅ |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |
 | Sonido | Ecualizador ✅ (23 presets **con vista gráfica de la curva en vivo**) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
 | Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |

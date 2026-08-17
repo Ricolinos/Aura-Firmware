@@ -109,6 +109,15 @@ opción — no todos los ítems llevan uno):
 | Texto alineado a la derecha | Mostrar distintos parámetros/valores | Pendiente |
 | Ícono de carga (animado) | Comunicar que la opción está cargando | Pendiente — sin consumidor real todavía |
 
+**Fila inerte** (`dimmed`, no un elemento del lado derecho sino un estado de
+toda la fila): el mismo tratamiento al 50% de opacidad que los modos
+deshabilitados del reproductor — la fila se recorre con la rueda pero SELECT
+no hace nada. Consumidores reales: idiomas sin traducir (D-013) y, desde
+D-289, temas instalados con formato incompatible o manifiesto/fuentes
+inválidas en el submenú "Estilo" (`sistema/05-temas.md`) — el catálogo
+completo se muestra siempre, el firmware nunca finge soportar lo que no
+tiene.
+
 🟢 **Elementos opcionales del lado derecho:** switch (D-165/D-167) y
 checkmark (D-111) ya confirmados; el resto se define cuando lleguemos a las
 pantallas específicas que los usan — diferido a propósito, no bloqueante.

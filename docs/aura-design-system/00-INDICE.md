@@ -31,6 +31,7 @@ primero, no solo en el código.
 | `efectos/` | Sombras, elevación, otros efectos visuales | 🟡 Sombras con valores (LeftPanel 8px/20% lineal; tile SelectionSummary offset 4/35%/blur 12) y toggle global "Mostrar sombras" (D-154). Sin otros efectos |
 | `sistema/03-arbol-de-menus.md` | Árbol de navegación completo (original + añadidos de Aura) con el estado real de cada rama | 🟢 Al día 2026-08-13 |
 | `sistema/04-color-por-categoria.md` | Jerarquía de color por sección del Menú principal (Música/Ajustes/Video/Fotos/Extras), en cascada a toda pantalla descendiente | 🟢 Definido 2026-08-14 |
+| `sistema/05-temas.md` | Sistema de temas (D-289): paquete instalable de fuentes+íconos+paleta en runtime, submenú "Estilo", fallback obligatorio al default | 🟢 Definido 2026-08-17 |
 | `modulos/` | Composiciones de componentes reutilizables entre pantallas | ⚪ Sin empezar |
 
 🟢 Definido y completo · 🟡 Parcial / con huecos marcados explícitamente · ⚪ Placeholder

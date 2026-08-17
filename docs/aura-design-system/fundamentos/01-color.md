@@ -9,6 +9,17 @@ generan a `apple2026_tokens.h` / `a26_palette`. Queda abierto, marcado
 adelante). La relación entre el acento del tema y el del usuario quedó
 resuelta en D-274.
 
+**D-289 (2026-08-17, sistema de temas):** de los 9 tokens de la tabla de
+abajo, 8 (todos salvo `accent`, que sigue siendo 100% el ajuste del
+usuario — ver "Rosa de fábrica y acento del tema") son **sustituibles por
+un estilo instalado** (`sistema/05-temas.md`): la tabla de abajo describe
+los valores del tema COMPILADO por defecto ("Aura"); un tema alternativo
+puede traer sus propios 8 × 2 valores, heredando del default lo que no
+declare. Los 4 colores fijos de categoría (Ajustes/Video/Fotos/el
+amarillo de Extras, ver `sistema/04-color-por-categoria.md`) también son
+sustituibles por tema. Formato exacto de las claves en
+`CONTRATO-formato-tema.md`.
+
 ## Paleta base (`color.light` / `color.dark`, D-072)
 
 Estos son los tokens del sistema Apple2026 que consume `a26_palette`

@@ -5,10 +5,13 @@
 pantallas sin token propio (`--font-body`/`--font-caption` de la tabla
 final) siguen usando estilos compartidos del sistema Apple2026 viejo.
 
-**D-286 (2026-08-16, separación de repositorios):** las tablas de abajo
-describen cada token por **rol** (tamaño en punto + peso), no por la cara
-tipográfica concreta que lo resuelve — eso ahora depende del **tema**
-(ver `PLAN-theme-system.md`). El tema COMPILADO por defecto de este
+**D-286 (2026-08-16, separación de repositorios) / D-289 (2026-08-17,
+sistema de temas implementado):** las tablas de abajo describen cada
+token por **rol** (tamaño en punto + peso), no por la cara tipográfica
+concreta que lo resuelve — eso ahora depende del **estilo activo**
+(`sistema/05-temas.md`, formato en `CONTRATO-formato-tema.md`; los 14
+roles de esta página son EXACTAMENTE los 14 `fonts/<rol>.fnt` de un
+paquete de tema). El tema COMPILADO por defecto de este
 repositorio resuelve los 14 roles con **Inter** (SIL OFL, vendorizada en
 `design-system/vendor/inter-ttf/`) en vez de SF Pro/SF Compact (Apple, no
 redistribuible — ver `AUDIT-pre-split.md` 0.1). El tema opcional "Apple
