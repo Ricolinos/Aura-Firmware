@@ -2538,25 +2538,63 @@ static void draw_about_counts(const aura_manifest_t *m)
     }
 }
 
-/* Pagina 3: info del dispositivo (doc: numero de serie/modelo/version --
- * Aura no tiene un numero de serie que mostrar con sentido, asi que
- * queda solo la atribucion a Rockbox). AUDITORIA-01 A-10/A-c: antes
- * tambien mostraba `rbversion` crudo (hash de git + fecha de build,
- * p. ej. "28a30450a8M-260811") -- es informacion de debug de build, no
- * un numero de version real de Aura, y exponerla es jerga tecnica cruda
- * (Principio 7). Se retira en vez de inventar un esquema de version
- * semantica para Aura que no existe en ningun otro lugar del proyecto
- * -- introducir uno es una decision de producto real, no algo para
- * resolver de paso en una auditoria (misma razon por la que
- * AUDITORIA-01 no "resuelve en silencio" sus ambiguedades). La
- * atribucion textual a Rockbox se conserva: es informacion real y
- * apropiada para una app derivada de un proyecto GPL, no cromo. */
-static void draw_about_device(void)
+/* Pagina 3: Estado 3 "Creditos" (D-283, PLAN-about-fixes.md Q7/Q8/Q9) --
+ * reemplaza el resumen de una sola linea ("Basado en Rockbox") por el
+ * texto completo que la GPL v2 exige (atribucion + URL del codigo
+ * fuente, GPL v2 SS3) mas la nota de marca de Apple sin afiliacion.
+ * AUDITORIA-01 A-10/A-c ya habia retirado `rbversion` crudo de aqui
+ * (jerga de build, no version real de Aura) -- eso se conserva, este
+ * cambio es aparte.
+ *
+ * El tile persiste (Q8, draw_about_persistent_tile(), igual que en la
+ * pagina de Conteos) asi que el texto vive en la columna angosta de la
+ * region derecha (about.expanded_bar_x..bar_right, 182px) -- a ese
+ * ancho el texto NO cabe completo (mas de 18 lineas con DS_REG_12
+ * contra los ~13 que caben entre expanded_text_top_y y bottom_y), asi
+ * que se reutiliza el mismo patron de scroll por rueda que ya usa
+ * Avisos legales (draw_long_text()/handle_legal_text()) en vez de
+ * inventar uno nuevo, adaptado a la region angosta con tile en vez de
+ * pantalla completa. */
+static int s_credits_scroll = 0;
+
+static void draw_about_credits(void)
 {
-    lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+    const char *body = aura_str(AURA_STR_ABOUT_CREDITS_BODY);
+    const char *lines[48];
+    int lens[48];
+    int text_x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;
+    int box_w = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_RIGHT - text_x;
+    int top_y = AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_TOP_Y;
+    int bottom_y = AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_BOTTOM_Y;
+    int line_h, tw, th, n, i, y, visible;
+
+    draw_about_persistent_tile();
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
     lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-    lcd_putsxy(A26_SPACING_LG, ABOUT_CONTENT_Y,
-               (const unsigned char *)aura_str(AURA_STR_ABOUT_BUILT_ON));
+    lcd_getstringsize((const unsigned char *)"Ag", &tw, &th);
+    line_h = th + A26_SPACING_XS;
+    visible = (bottom_y - top_y) / line_h;
+
+    n = aura_widgets_wrap_text(body, box_w, lines, lens, 48);
+    if (s_credits_scroll > n - visible)
+        s_credits_scroll = (n > visible) ? n - visible : 0;
+    if (s_credits_scroll < 0)
+        s_credits_scroll = 0;
+
+    y = top_y;
+    for (i = s_credits_scroll; i < n && i < s_credits_scroll + visible; i++)
+    {
+        char buf[64];
+        int len = lens[i];
+
+        if (len > (int)sizeof(buf) - 1)
+            len = (int)sizeof(buf) - 1;
+        memcpy(buf, lines[i], len);
+        buf[len] = '\0';
+        lcd_putsxy(text_x, y, (const unsigned char *)buf);
+        y += line_h;
+    }
 }
 
 static void draw_about(void)
@@ -2580,7 +2618,7 @@ static void draw_about(void)
     {
     case ABOUT_PAGE_STORAGE: draw_about_storage_expanded(); break;
     case ABOUT_PAGE_COUNTS:  draw_about_counts(&manifest); break;
-    case ABOUT_PAGE_DEVICE:  draw_about_device(); break;
+    case ABOUT_PAGE_DEVICE:  draw_about_credits(); break;
     default: break;
     }
 
@@ -2594,11 +2632,29 @@ static void handle_about(aura_nav_t *nav, long button)
     case BUTTON_SELECT:
     case BUTTON_RIGHT:
         if (s_about_page < ABOUT_PAGE_COUNT - 1)
+        {
             s_about_page++;
+            s_credits_scroll = 0;
+        }
         break;
     case BUTTON_LEFT:
         if (s_about_page > 0)
+        {
             s_about_page--;
+            s_credits_scroll = 0;
+        }
+        break;
+    /* Scroll por rueda dentro de la pagina de Creditos (Q8): mismo
+     * patron que handle_legal_text(). No interfiere con SELECT/RIGHT/
+     * LEFT, que siguen cambiando de pagina -- la rueda solo desplaza
+     * texto DENTRO de la pagina 3. */
+    case BUTTON_SCROLL_FWD:
+        if (s_about_page == ABOUT_PAGE_DEVICE)
+            s_credits_scroll++;
+        break;
+    case BUTTON_SCROLL_BACK:
+        if (s_about_page == ABOUT_PAGE_DEVICE)
+            s_credits_scroll--;
         break;
     case BUTTON_MENU:
         /* AUDITORIA-01 A-09: FULL-COLD "sin memoria" (doc de
@@ -2608,6 +2664,7 @@ static void handle_about(aura_nav_t *nav, long button)
          * funcionaba la primera vez que se dibujaba en todo el proceso). */
         s_about_page = ABOUT_PAGE_STORAGE;
         s_about_needs_reload = true;
+        s_credits_scroll = 0;
         aura_nav_pop(nav);
         break;
     default:

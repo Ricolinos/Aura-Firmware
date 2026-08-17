@@ -307,6 +307,12 @@ typedef enum {
     /* D-282: quinto segmento -- "Sistema" separa de "Otros" lo que ocupa
      * el propio firmware de Aura (/.rockbox/) del resto del residual. */
     AURA_STR_ABOUT_SYSTEM,
+    /* D-283 (Estado 3, PLAN-about-fixes.md Q7): reemplaza la pagina 3
+     * vieja ("Basado en Rockbox" solo) -- creditos completos con la
+     * mencion GPL v2 y la URL del codigo fuente que la licencia exige
+     * (GPL v2 SS3), en el ancho angosto de la region derecha con el
+     * tile persistente (Q8). */
+    AURA_STR_ABOUT_CREDITS_BODY,
 
     AURA_STR_COUNT,
 } aura_str_id_t;
