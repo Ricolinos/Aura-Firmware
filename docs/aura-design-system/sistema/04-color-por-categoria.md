@@ -143,6 +143,16 @@ vuelve a un acento plano sin categoría. Degradación aceptable, nunca un
 crash; el camino primario (con máscaras, el caso real en disco) siempre
 tiene el degradado completo.
 
+## Segundo consumidor de un color de categoría fijo (D-282)
+
+El gris de Ajustes (`AURA_DS_COLOR_CATEGORY_SETTINGS_GRAY`) tiene desde
+D-282 un segundo consumidor fuera del tile de `SelectionSummary`: el
+segmento "Sistema" de la barra de almacenamiento de "Acerca de"
+(`componentes/about.md`) — espacio que ocupa el propio firmware de Aura
+(`/.rockbox/`). Elegido porque "Sistema" es semánticamente Ajustes, sin
+necesidad de un hex nuevo ni de romper la regla de "un color fijo por
+categoría, sin excepción" que ya rige este documento.
+
 ## Alcance de este encargo — qué quedó explícitamente afuera
 
 - **Qué íconos de Ajustes se excluyen del gris**: el dueño mencionó que

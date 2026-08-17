@@ -222,6 +222,18 @@ de izquierda a derecha.
 **Usado por:** `DynamicTitle` (`componentes/dynamic-title.md`) cuando
 cambia de un nombre de menú a otro.
 
+**Variante de región (D-283, `aura_transition_fade_slide_region()`,
+`aura_transitions.c`):** primer caso de cambio **full→full** que el
+vocabulario cubre — antes solo describía pantalla completa fija con un
+texto cambiando (`DynamicTitle`). Se usa entre las 3 páginas de "Acerca de"
+(`componentes/about.md`): en vez de animar toda la pantalla, solo se anima
+un rect — lo que queda fuera (`StatusBar`, un elemento persistente, puntos
+de paginación) no cambia entre estados y se toma directo del destino ya
+prerrenderizado. Mismo idioma de fade+deslizamiento, mismos tokens de
+timing que `Push-and-Drop`/`Shift-and-Reveal` (`push_and_drop.*`, D-274) —
+sin timing propio documentado hasta esta variante, igual que
+`Shift-and-Reveal` no lo tenía.
+
 ---
 
 ## `Scroll-Slide`

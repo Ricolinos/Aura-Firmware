@@ -90,6 +90,20 @@ presets. Si el archivo no está en el dispositivo (assets sin sincronizar
 todavía), el fondo cae a `--color-bg-base` sólido en vez de dejar basura
 en pantalla.
 
+**Fondo variante, parametrizado (D-281):** este fondo de imagen es el
+**default** (`AURA_SS_BG_ACCENT_IMAGE`), pero no el único — `draw_summary()`
+recibe un parámetro `aura_ss_background_t background` que cualquier fila
+puede fijar en su `panel_identity_t`. La fila "Acerca de" usa la variante
+`AURA_SS_BG_NEUTRAL_FADE`: un degradado horizontal calculado en runtime
+(sin BMP, sin token de color nuevo — reutiliza `progress_track`/
+`shell_rail`/`shell_bg` de la paleta por tema), para que la transición al
+estado expandido de esa pantalla (`SHELL_BG` plano) se sienta continua. El
+cambio de variante cuenta como cambio de identidad para el debounce del
+panel derecho (D-262/D-266) — un caso especial hardcodeado dentro del
+componente no lo hubiera respetado sin código extra. La tinta del texto
+(ver abajo) también depende de la variante: fija a `ACCENT_IMAGE`, no a
+`NEUTRAL_FADE`. Detalle completo en `componentes/about.md`.
+
 ## Degradado del tile (D-097, D-236)
 
 El **tile del ícono** (no el panel) sí lleva un **degradado en diagonal**
@@ -112,11 +126,13 @@ derivados del color de categoría vigente (`aura_category_gradient()`):
 
 Los tamaños se midieron en píxeles contra un mockup pixel-exacto del
 dueño (D-271) — el 13/12pt provisional de D-267 resultó demasiado chico
-frente al objetivo real. Ambos slots son **blanco fijo** en los dos temas
-(D-267): el fondo del panel es siempre una imagen saturada, así que
-`--color-text-primary` (que cambia por tema) no aplica aquí. Si el texto
-inferior no cabe ni en dos líneas, cada línea usa `MarqueeText` por
-separado (ver abajo).
+frente al objetivo real. Ambos slots son **blanco fijo con la variante
+`ACCENT_IMAGE`** (D-267: el fondo es siempre una imagen saturada, así que
+`--color-text-primary` no aplica ahí) — pero con `NEUTRAL_FADE` (D-281,
+solo "Acerca de" por ahora) el blanco fijo se vuelve ilegible sobre el
+degradado casi-blanco, así que esa variante usa `--color-text-primary`
+normal, por tema. Si el texto inferior no cabe ni en dos líneas, cada línea
+usa `MarqueeText` por separado (ver abajo).
 
 ## Sombra del tile (D-267, D-270)
 
