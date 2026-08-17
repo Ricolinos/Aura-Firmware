@@ -487,6 +487,106 @@ void aura_transition_shift_and_reveal(aura_nav_t *nav, int direction,
     TRANSITION_LOG("shift-and-reveal", frames, start_tick);
 }
 
+/* Ver aura_transitions.h. Igual que las demas transiciones del archivo:
+ * captura lo que HAY en pantalla (s_outgoing_fb, generico -- sirve para
+ * cualquier contenido, no solo split), prerrenderiza el DESTINO
+ * completo a s_push_fb, y compone. La diferencia es que solo una
+ * REGION se anima -- el resto de cada cuadro se toma directo del
+ * destino ya prerrenderizado (StatusBar/tile/dots no cambian entre
+ * paginas, blitearlos de nuevo cada cuadro es mas simple que excluirlos
+ * de un rect recortado, y el costo es el mismo orden que ya pagan
+ * shift-and-reveal/slide por cuadro). */
+void aura_transition_fade_slide_region(aura_nav_t *nav, int x, int y, int w, int h,
+                                       int direction)
+{
+    int frames, frame_delay, i, row;
+    int slide_w;
+    struct viewport vp;
+    struct viewport *saved;
+    unsigned bg = a26_color(A26_SHELL_BG);
+    long start_tick = current_tick;
+
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE || direction == 0)
+        return;
+    if (w <= 0 || h <= 0)
+        return;
+
+    /* Mismos tokens de Push-and-Drop que Shift-and-Reveal (D-278) -- el
+     * vocabulario no da timing propio para esta variante de region. */
+    if (aura_settings.animation_mode == AURA_ANIM_ALL)
+    {
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_ALL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_ALL;
+    }
+    else
+    {
+        frames = AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FRAMES_MINIMAL;
+        frame_delay = HZ / AURA_DS_METRICS_PUSH_AND_DROP_PUSH_FPS_MINIMAL;
+    }
+    slide_w = w / 4;
+    if (slide_w < 1)
+        slide_w = 1;
+
+    capture_outgoing_split_frame();
+
+    viewport_set_defaults(&vp, SCREEN_MAIN);
+    vp.x = 0; vp.y = 0; vp.width = A26_SCREEN_WIDTH; vp.height = A26_SCREEN_HEIGHT;
+    viewport_set_buffer(&vp, &s_push_buffer, SCREEN_MAIN);
+    saved = lcd_set_viewport(&vp);
+    aura_screens_draw(nav);
+    lcd_set_viewport(saved);
+
+    for (i = 1; i <= frames; i++)
+    {
+        int prog = eased_offset(256, i, frames);
+        int d = eased_offset(slide_w, i, frames); /* 0..slide_w */
+        /* Ver derivacion completa en el comentario del .h: `out_off`
+         * desplaza la MUESTRA que se lee del saliente (positivo = se
+         * lee mas a la derecha = visualmente se mueve a la izquierda);
+         * `in_off` hace que el entrante empiece fuera de la region por
+         * `slide_w` px del lado correspondiente y llegue a 0 (en su
+         * lugar) cuando d = slide_w. */
+        int out_off = (direction > 0) ?  d          : -d;
+        int in_off  = (direction > 0) ? -(slide_w - d) : (slide_w - d);
+
+        for (row = 0; row < A26_SCREEN_HEIGHT; row++)
+        {
+            if (row >= y && row < y + h)
+                continue; /* la region se compone aparte, abajo */
+            memcpy(FBADDR(0, row), &s_push_fb[row * A26_SCREEN_WIDTH],
+                   A26_SCREEN_WIDTH * sizeof(fb_data));
+        }
+
+        for (row = y; row < y + h; row++)
+        {
+            fb_data *dst = FBADDR(x, row);
+            const fb_data *out_src = &s_outgoing_fb[row * A26_SCREEN_WIDTH + x];
+            const fb_data *in_src  = &s_push_fb[row * A26_SCREEN_WIDTH + x];
+            int col;
+
+            for (col = 0; col < w; col++)
+            {
+                int out_col = col + out_off;
+                int in_col  = col + in_off;
+                unsigned c = bg;
+
+                if (out_col >= 0 && out_col < w)
+                    c = a26_shell_blend(bg, out_src[out_col], 256 - prog);
+                if (in_col >= 0 && in_col < w)
+                    c = a26_shell_blend(c, in_src[in_col], prog);
+                dst[col] = c;
+            }
+        }
+
+        lcd_update();
+        drain_button_queue_if_full();
+        if (i < frames)
+            sleep(frame_delay);
+    }
+
+    TRANSITION_LOG("fade-slide-region", frames, start_tick);
+}
+
 void aura_transition_slide(aura_nav_t *nav, int direction, int width,
                             bool cover_drift_was_active)
 {

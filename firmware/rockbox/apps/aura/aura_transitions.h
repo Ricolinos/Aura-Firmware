@@ -122,4 +122,22 @@ typedef struct {
 void aura_transition_shift_and_reveal(aura_nav_t *nav, int direction,
                                       const aura_shift_rect_t *carry);
 
+/* `Fade-Slide` de una REGION (D-283, PLAN-about-fixes.md Q9): cambio de
+ * pagina DENTRO de una misma pantalla FULL (Estados 1-3 de "Acerca de")
+ * -- el vocabulario documenta `Fade-Slide` para DynamicTitle (pantalla
+ * completa fija, solo el texto cambia); aca se adapta a una region
+ * arbitraria porque el resto de la pantalla (StatusBar, el tile
+ * persistente de D-283 2/4, los puntos de paginacion) no cambia entre
+ * paginas y no debe animarse. Llamar DESPUES de actualizar el estado de
+ * navegacion (`s_about_page` u equivalente) que decide que dibuja
+ * `aura_screens_draw()` -- mismo contrato que las demas transiciones de
+ * este archivo: prerrenderizan el DESTINO, no el origen.
+ *
+ * `x,y,w,h`: rect de la region a animar, en coordenadas de pantalla.
+ * `direction` > 0 (profundizar, SELECT/RIGHT): el contenido saliente se
+ * desliza a la izquierda con fade-out: el entrante llega desde la
+ * derecha con fade-in. `direction` < 0 (LEFT): al reves. */
+void aura_transition_fade_slide_region(aura_nav_t *nav, int x, int y, int w, int h,
+                                       int direction);
+
 #endif /* AURA_TRANSITIONS_H */

@@ -2284,6 +2284,17 @@ static bool s_about_needs_reload = true;
 
 #define ABOUT_CONTENT_Y (A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL)
 
+/* Region animada por Fade-Slide entre las 3 paginas de "Acerca de"
+ * (D-283 4/4, PLAN-about-fixes.md Q9): toda el area de contenido bajo
+ * la StatusBar y sobre los puntos de paginacion -- mismo ancho angosto
+ * que usan las 3 paginas (texto/barra en Almacenamiento y Conteos,
+ * texto con scroll en Creditos), consistente para que la region nunca
+ * cambie de forma al cambiar de pagina. */
+#define ABOUT_PAGE_REGION_X AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X
+#define ABOUT_PAGE_REGION_W (AURA_DS_METRICS_ABOUT_EXPANDED_BAR_RIGHT - ABOUT_PAGE_REGION_X)
+#define ABOUT_PAGE_REGION_Y A26_LAYOUT_STATUSBAR_HEIGHT
+#define ABOUT_PAGE_REGION_H (A26_SCREEN_HEIGHT - A26_SPACING_XXL - ABOUT_PAGE_REGION_Y)
+
 static void draw_about_dots(void)
 {
     /* Indicador de pagina (doc no lo especifica en detalle -- FULL-COLD
@@ -2635,6 +2646,12 @@ static void handle_about(aura_nav_t *nav, long button)
         {
             s_about_page++;
             s_credits_scroll = 0;
+            /* Fade-Slide DESPUES de actualizar s_about_page -- la
+             * transicion prerrenderiza el DESTINO llamando
+             * aura_screens_draw(nav), que lee s_about_page para decidir
+             * que pagina dibujar (mismo contrato que shift-and-reveal). */
+            aura_transition_fade_slide_region(nav, ABOUT_PAGE_REGION_X, ABOUT_PAGE_REGION_Y,
+                                              ABOUT_PAGE_REGION_W, ABOUT_PAGE_REGION_H, 1);
         }
         break;
     case BUTTON_LEFT:
@@ -2642,6 +2659,8 @@ static void handle_about(aura_nav_t *nav, long button)
         {
             s_about_page--;
             s_credits_scroll = 0;
+            aura_transition_fade_slide_region(nav, ABOUT_PAGE_REGION_X, ABOUT_PAGE_REGION_Y,
+                                              ABOUT_PAGE_REGION_W, ABOUT_PAGE_REGION_H, -1);
         }
         break;
     /* Scroll por rueda dentro de la pagina de Creditos (Q8): mismo
