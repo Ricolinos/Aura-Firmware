@@ -1,3 +1,25 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2026 Ricardo Gómez
+ *
+ * Aura UI -- capa de interfaz sobre este fork de Rockbox (ver
+ * MODIFICATIONS.md, DECISIONS.md D-001/D-002 en la raíz del repositorio).
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
 #include "aura_lang.h"
 #include "aura_settings.h"
 
@@ -161,7 +183,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_VIDEOS_ALL]     = "Todos los videos",
     [AURA_STR_PHOTOS_ALL]     = "Todas las fotos",
     [AURA_STR_SETTINGS_COPYRIGHT] = "Avisos legales",
-    [AURA_STR_COPYRIGHT_BODY] = "Aura es un firmware CONCEPTUAL para iPod Classic, construido sobre Rockbox.\n\nRockbox\nEste firmware deriva del proyecto Rockbox y se distribuye bajo la Licencia Publica General de GNU (GPL v2). El nucleo, los controladores, el sistema de archivos, los codecs y el motor de reproduccion son obra del equipo de Rockbox y de sus colaboradores, a quienes corresponde todo el credito por ese trabajo.\n\nCodigo fuente\nAura hereda la GPL v2 de Rockbox: el codigo fuente completo, junto con el texto integro de la licencia, esta disponible en github.com/Ricolinos/Aura-Proyect.\n\nApple\niPod, iPod Classic, iTunes, Finder, SF Symbols y Apple son marcas registradas de Apple Inc. Aura no esta afiliado, patrocinado ni respaldado por Apple Inc. Los simbolos SF se renderizan desde el sistema operativo del equipo donde se compila y siguen sujetos a la licencia de Apple. Este proyecto es un ejercicio de diseno inspirado en el iPod, no un producto de Apple ni un sustituto de su software.\n\nCreditos\nDiseno: Ricardo Gomez (Ricolinos).\nImplementacion del codigo: Claude, de Anthropic, bajo la direccion de diseno de Ricardo Gomez.\n\nSin garantia de ningun tipo, expresa o implicita.",
+    [AURA_STR_COPYRIGHT_BODY] = "Aura es un firmware CONCEPTUAL para iPod Classic, construido sobre Rockbox.\n\nRockbox\nEste firmware deriva del proyecto Rockbox y se distribuye bajo la Licencia Publica General de GNU (GPL v2). El nucleo, los controladores, el sistema de archivos, los codecs y el motor de reproduccion son obra del equipo de Rockbox y de sus colaboradores, a quienes corresponde todo el credito por ese trabajo.\n\nCodigo fuente\nAura hereda la GPL v2 de Rockbox: el codigo fuente completo, junto con el texto integro de la licencia, esta disponible en github.com/Ricolinos/Aura-Firmware.\n\nApple\niPod, iPod Classic, iTunes, Finder y Apple son marcas registradas de Apple Inc. Aura no esta afiliado, patrocinado ni respaldado por Apple Inc. Este proyecto es un ejercicio de diseno inspirado en el iPod, no un producto de Apple ni un sustituto de su software.\n\nCreditos\nDiseno: Ricardo Gomez (Ricolinos).\nImplementacion del codigo: Claude, de Anthropic, bajo la direccion de diseno de Ricardo Gomez.\n\nSin garantia de ningun tipo, expresa o implicita.",
     [AURA_STR_WC_LOCAL]  = "Hora local",
     [AURA_STR_WC_ADD]    = "Añadir",
     [AURA_STR_WC_EDIT]   = "Editar",
@@ -219,7 +241,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_REPEAT_SUMMARY_ALL]     = "Repetir todo",
     [AURA_STR_REPEAT_SUMMARY_ONE]     = "Repetir una",
 
-    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreado por Ricardo Gómez.\n\nBasado en Rockbox\nRockbox y sus colaboradores. Se distribuye bajo la Licencia Pública General de GNU versión 2 (GPL v2), y Aura hereda esa licencia.\nCódigo fuente:\ngithub.com/Ricolinos/Aura-Proyect\n\nSobre el hardware\niPod e iPod Classic son marcas de Apple Inc. Aura no está afiliado, patrocinado ni respaldado por Apple.",
+    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreado por Ricardo Gómez.\n\nBasado en Rockbox\nRockbox y sus colaboradores. Se distribuye bajo la Licencia Pública General de GNU versión 2 (GPL v2), y Aura hereda esa licencia.\nCódigo fuente:\ngithub.com/Ricolinos/Aura-Firmware\n\nSobre el hardware\niPod e iPod Classic son marcas de Apple Inc. Aura no está afiliado, patrocinado ni respaldado por Apple.",
     [AURA_STR_ABOUT_MY_IPOD]          = "Mi iPod",
     [AURA_STR_ABOUT_OTHER]            = "Otros",
     [AURA_STR_ABOUT_SYSTEM]           = "Sistema",
@@ -388,7 +410,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_VIDEOS_ALL]     = "All Videos",
     [AURA_STR_PHOTOS_ALL]     = "All Photos",
     [AURA_STR_SETTINGS_COPYRIGHT] = "Legal",
-    [AURA_STR_COPYRIGHT_BODY] = "Aura is a CONCEPTUAL firmware for the iPod Classic, built on Rockbox.\n\nRockbox\nThis firmware derives from the Rockbox project and is distributed under the GNU General Public License (GPL v2). The kernel, drivers, file system, codecs and playback engine are the work of the Rockbox team and its contributors, who deserve full credit for it.\n\nSource code\nAura inherits Rockbox's GPL v2: the complete source code, along with the full text of the license, is available at github.com/Ricolinos/Aura-Proyect.\n\nApple\niPod, iPod Classic, iTunes, Finder, SF Symbols and Apple are registered trademarks of Apple Inc. Aura is not affiliated with, sponsored by or endorsed by Apple Inc. SF Symbols are rendered from the operating system of the machine where this is built and remain subject to Apple's license. This project is a design exercise inspired by the iPod, not an Apple product nor a replacement for its software.\n\nCredits\nDesign: Ricardo Gomez (Ricolinos).\nCode implementation: Claude, by Anthropic, under the design direction of Ricardo Gomez.\n\nNo warranty of any kind, express or implied.",
+    [AURA_STR_COPYRIGHT_BODY] = "Aura is a CONCEPTUAL firmware for the iPod Classic, built on Rockbox.\n\nRockbox\nThis firmware derives from the Rockbox project and is distributed under the GNU General Public License (GPL v2). The kernel, drivers, file system, codecs and playback engine are the work of the Rockbox team and its contributors, who deserve full credit for it.\n\nSource code\nAura inherits Rockbox's GPL v2: the complete source code, along with the full text of the license, is available at github.com/Ricolinos/Aura-Firmware.\n\nApple\niPod, iPod Classic, iTunes, Finder and Apple are registered trademarks of Apple Inc. Aura is not affiliated with, sponsored by or endorsed by Apple Inc. This project is a design exercise inspired by the iPod, not an Apple product nor a replacement for its software.\n\nCredits\nDesign: Ricardo Gomez (Ricolinos).\nCode implementation: Claude, by Anthropic, under the design direction of Ricardo Gomez.\n\nNo warranty of any kind, express or implied.",
     [AURA_STR_WC_LOCAL]  = "Local Time",
     [AURA_STR_WC_ADD]    = "Add",
     [AURA_STR_WC_EDIT]   = "Edit",
@@ -446,7 +468,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_REPEAT_SUMMARY_ALL]     = "Repeat All",
     [AURA_STR_REPEAT_SUMMARY_ONE]     = "Repeat One",
 
-    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreated by Ricardo Gomez.\n\nBased on Rockbox\nRockbox and its contributors. Distributed under the GNU General Public License version 2 (GPL v2), and Aura inherits that license.\nSource code:\ngithub.com/Ricolinos/Aura-Proyect\n\nAbout the hardware\niPod and iPod Classic are trademarks of Apple Inc. Aura is not affiliated with, sponsored by, or endorsed by Apple.",
+    [AURA_STR_ABOUT_CREDITS_BODY] = "Aura\nCreated by Ricardo Gomez.\n\nBased on Rockbox\nRockbox and its contributors. Distributed under the GNU General Public License version 2 (GPL v2), and Aura inherits that license.\nSource code:\ngithub.com/Ricolinos/Aura-Firmware\n\nAbout the hardware\niPod and iPod Classic are trademarks of Apple Inc. Aura is not affiliated with, sponsored by, or endorsed by Apple.",
     [AURA_STR_ABOUT_MY_IPOD]          = "My iPod",
     [AURA_STR_ABOUT_OTHER]            = "Other",
     [AURA_STR_ABOUT_SYSTEM]           = "System",
