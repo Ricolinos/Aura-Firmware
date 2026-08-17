@@ -34,6 +34,7 @@ firmware/dist/checksums.txt
 firmware/dist/AuraPalette.swift
 firmware/dist/MODIFICATIONS.md
 firmware/dist/theme-format-v1.json
+firmware/dist/THIRD-PARTY-NOTICES.txt
 # Copiado desde design-system/out/ por firmware/tools/build_sim.sh
 firmware/rockbox/apps/aura/apple2026_tokens.h
 

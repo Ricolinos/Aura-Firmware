@@ -6,6 +6,14 @@
 #
 # Uso:
 #   firmware/tools/package_dist.sh
+#   firmware/tools/package_dist.sh --release-tag v0.1.0-beta
+#
+# --release-tag <tag>: marca este empaquetado como un Release real --
+# escribe el tag exacto en .rockbox/aura/version.txt (dentro de
+# rockbox.zip), la única forma en que Aura Studio puede saber qué
+# versión tiene instalada un dispositivo (ver PLAN-release-updates.md
+# §1.0). Sin este flag (build de desarrollo) el archivo no se escribe
+# -- su ausencia es una señal válida en sí misma.
 #
 # Requiere: firmware/tools/build_sim.sh ya corrido al menos una vez (para
 # tener design-system/out/ con las fuentes e íconos), y el toolchain ARM
@@ -18,14 +26,23 @@
 #   firmware/dist/mks5lboot                -- herramienta de flasheo DFU
 #   firmware/dist/AuraPalette.swift        -- paleta para Aura Studio (design-system/generate.py --swift-out)
 #   firmware/dist/MODIFICATIONS.md         -- listado GPL §2a, para el Release
+#   firmware/dist/THIRD-PARTY-NOTICES.txt  -- licencias de Inter/Lucide/Phosphor (OFL/ISC/MIT), para el Release
 #   firmware/dist/theme-format-v1.json     -- contrato del formato de tema, para Aura Studio
 #   firmware/dist/aura-theme-default.zip   -- el default reempaquetado como tema instalable (id "aura", libre)
 #   firmware/dist/checksums.txt            -- SHA-256 de los 3 binarios de arriba
 #
-# NO produce (paso manual, ver nota abajo):
-#   firmware/dist/bootloader-ipod6g.ipod
+# NO produce automáticamente (paso manual, ver nota abajo, y ver
+# firmware/dist/README.md una vez compilado): firmware/dist/bootloader-ipod6g.ipod
+# -- pero si ya está presente en firmware/dist/ (de una corrida manual
+# anterior), este script lo deja intacto y lo incluye en checksums.txt.
 
 set -euo pipefail
+
+RELEASE_TAG=""
+if [[ "${1:-}" == "--release-tag" ]]; then
+  RELEASE_TAG="${2:-}"
+  [[ -n "$RELEASE_TAG" ]] || { echo "ERROR: --release-tag requiere un valor (ej. v0.1.0-beta)" >&2; exit 1; }
+fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SRC_DIR="$ROOT_DIR/firmware/rockbox"
@@ -92,6 +109,13 @@ cp -R "$ROOT_DIR/design-system/out/icons/masks" "$STAGE/.rockbox/icons/aura/mask
 # fabrica) viaja en el zip para que exista desde el primer arranque,
 # sin depender de que Aura Studio lo cree.
 mkdir -p "$STAGE/.rockbox/aura/themes"
+# version.txt (PLAN-release-updates.md §1.0): solo se escribe si este
+# empaquetado corresponde a un Release real (--release-tag). El
+# firmware nunca lee esta clave -- es puramente para que Aura Studio
+# sepa, leyendo el disco montado, qué tag tiene instalado.
+if [[ -n "$RELEASE_TAG" ]]; then
+  echo "$RELEASE_TAG" > "$STAGE/.rockbox/aura/version.txt"
+fi
 # rockbox.ipod suelto en la raíz del árbol (el bootloader lo arranca así)
 cp "$BUILD_DIR/rockbox.ipod" "$STAGE/.rockbox/rockbox.ipod"
 (cd "$STAGE" && zip -qr "$DIST_DIR/rockbox.zip" .rockbox)
@@ -104,6 +128,32 @@ cp "$ROOT_DIR/MODIFICATIONS.md" "$DIST_DIR/MODIFICATIONS.md"
 
 echo "==> Copiando theme-format-v1.json (asset del Release, contrato de formato de tema)"
 cp "$ROOT_DIR/design-system/out/theme-format-v1.json" "$DIST_DIR/theme-format-v1.json"
+
+# PLAN-release-updates.md §1.2: las licencias de Inter/Lucide/Phosphor
+# ya viven completas en design-system/vendor/*/LICENSE* -- lo que
+# faltaba era que llegaran al artefacto distribuido (rockbox.zip solo
+# lleva los .fnt/.bmp derivados, sin el texto de licencia). Este
+# archivo consolida los tres para el Release.
+echo "==> Generando THIRD-PARTY-NOTICES.txt (licencias de Inter/Lucide/Phosphor, asset del Release)"
+{
+  echo "Aura -- avisos de terceros"
+  echo "=========================="
+  echo
+  echo "El tema compilado por defecto usa las siguientes fuentes e iconos"
+  echo "de terceros. El texto completo de cada licencia sigue abajo."
+  echo
+  echo "-- Inter (tipografia) --------------------------------------------"
+  echo
+  cat "$ROOT_DIR/design-system/vendor/inter-ttf/LICENSE.txt"
+  echo
+  echo "-- Lucide (iconos) -------------------------------------------------"
+  echo
+  cat "$ROOT_DIR/design-system/vendor/lucide-svg/LICENSE"
+  echo
+  echo "-- Phosphor (iconos, set secundario) --------------------------------"
+  echo
+  cat "$ROOT_DIR/design-system/vendor/phosphor-svg/LICENSE"
+} > "$DIST_DIR/THIRD-PARTY-NOTICES.txt"
 
 # D-289 (sistema de temas, Q5 de PLAN-themes-impl.md): el default
 # compilado (Inter + Lucide/Phosphor, licencia libre) reempaquetado en
