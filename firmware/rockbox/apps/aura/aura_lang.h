@@ -131,6 +131,13 @@ typedef enum {
     AURA_STR_DB_NOT_READY,
     AURA_STR_EMPTY_LIST,
     AURA_STR_UNSUPPORTED_FORMAT,
+    /* D-291: visor de fotos -- fuente por encima del tope de memoria
+     * (12 MP / 4096px de lado), degradacion elegante en vez de colgarse.
+     * AURA_STR_LOADING solo se muestra cuando la sonda de dimensiones
+     * determina que la fuente supera 640px de lado (unico caso en que
+     * la decodificacion es perceptible, PLAN-image-viewer.md §5.3). */
+    AURA_STR_PHOTO_TOO_LARGE,
+    AURA_STR_LOADING,
 
     AURA_STR_YES,
     AURA_STR_NO,

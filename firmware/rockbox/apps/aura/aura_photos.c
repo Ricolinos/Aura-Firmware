@@ -289,6 +289,190 @@ void aura_photos_handle_button(aura_nav_t *nav, long button)
     }
 }
 
+/* D-291: tope de tamano de fuente antes de decodificar -- el costo de
+ * read_jpeg_file()/read_bmp_file() con FORMAT_RESIZE es CONSTANTE en
+ * memoria (escalan en la IDCT/remuestrean por linea, jamas materializan
+ * la imagen fuente completa, PLAN-image-viewer.md §4), asi que este
+ * tope es por TIEMPO de CPU, no por RAM -- una fuente de 12 MP tarda
+ * varios segundos en decodificar en el S5L8702 aunque quepa de sobra.
+ * 12 megapixeles en el sentido decimal habitual de resolucion de
+ * camara (no 2^20). */
+#define PHOTO_MAX_SIDE          4096
+#define PHOTO_MAX_PIXELS        (12L * 1000L * 1000L)
+/* Unico caso en que la decodificacion es perceptible (D-291 §5.3): por
+ * debajo de esto (las fotos que produce Aura Studio, <=640px) no hace
+ * falta avisar. */
+#define PHOTO_LOADING_INDICATOR_SIDE 640
+
+typedef enum {
+    PHOTO_PROBE_OK = 0,   /* decodificable -- dimensiones conocidas o no */
+    PHOTO_PROBE_TOO_LARGE,
+    PHOTO_PROBE_UNSUPPORTED, /* extension no soportada o JPEG progresivo/etc */
+} photo_probe_t;
+
+static int s_probed_index = -1;
+static photo_probe_t s_probe_result = PHOTO_PROBE_OK;
+static bool s_probe_needs_indicator = false;
+
+typedef enum {
+    JPEG_PROBE_UNKNOWN = 0, /* cabecera no reconocida -- se deja decidir al decoder, como antes */
+    JPEG_PROBE_BASELINE,
+    JPEG_PROBE_UNSUPPORTED, /* SOF progresivo/aritmetico/etc (D-028) */
+} jpeg_probe_t;
+
+/* D-291: lee SOLO los marcadores JPEG hasta encontrar el SOFn -- nunca
+ * decodifica pixeles. Formato JPEG: 0xFFD8 (SOI), luego una cadena de
+ * marcadores 0xFFxx; los que llevan payload traen su longitud (2 bytes
+ * big-endian, cuenta la longitud misma) justo despues del codigo de
+ * marcador. SOF0/SOF1 (baseline) traen precision(1)+alto(2 BE)+
+ * ancho(2 BE) al inicio de su payload; SOF2 en adelante es progresivo/
+ * aritmetico -- Rockbox no lo decodifica (D-028), asi que ni vale la
+ * pena intentarlo. Si la cabecera no se reconoce (formato raro, EOF
+ * antes de tiempo), se devuelve JPEG_PROBE_UNKNOWN y el llamador cae al
+ * comportamiento de siempre: se intenta decodificar igual. */
+static jpeg_probe_t probe_jpeg_dimensions(const char *path, int *out_w, int *out_h)
+{
+    int fd;
+    unsigned char marker[2];
+    jpeg_probe_t result = JPEG_PROBE_UNKNOWN;
+
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return JPEG_PROBE_UNKNOWN;
+
+    if (read(fd, marker, 2) != 2 || marker[0] != 0xFF || marker[1] != 0xD8)
+    {
+        close(fd);
+        return JPEG_PROBE_UNKNOWN;
+    }
+
+    for (;;)
+    {
+        unsigned char lenbuf[2];
+        unsigned char sofbuf[5];
+        int len;
+
+        if (read(fd, marker, 2) != 2 || marker[0] != 0xFF)
+            break;
+        while (marker[1] == 0xFF) /* bytes de relleno antes del codigo real */
+        {
+            if (read(fd, &marker[1], 1) != 1)
+                break;
+        }
+
+        if (marker[1] == 0x01 || (marker[1] >= 0xD0 && marker[1] <= 0xD7))
+            continue; /* TEM/RSTn -- sin campo de longitud */
+        if (marker[1] == 0xD9 || marker[1] == 0xDA)
+            break; /* EOI/SOS sin haber visto un SOFn -- se abandona */
+
+        if (read(fd, lenbuf, 2) != 2)
+            break;
+        len = (lenbuf[0] << 8) | lenbuf[1];
+
+        if (marker[1] == 0xC0 || marker[1] == 0xC1) /* SOF0/SOF1 baseline */
+        {
+            if (read(fd, sofbuf, 5) == 5)
+            {
+                *out_h = (sofbuf[1] << 8) | sofbuf[2];
+                *out_w = (sofbuf[3] << 8) | sofbuf[4];
+                result = JPEG_PROBE_BASELINE;
+            }
+            break;
+        }
+        if (marker[1] >= 0xC2 && marker[1] <= 0xCF && marker[1] != 0xC4 && marker[1] != 0xC8)
+        {
+            /* SOF2 progresivo, SOF3 lossless, SOF5-7/9-11/13-15 -- ver
+             * D-028: Rockbox solo decodifica SOF0/SOF1. 0xC4 (DHT) y
+             * 0xC8 (JPG, reservado) no son SOFn. */
+            result = JPEG_PROBE_UNSUPPORTED;
+            break;
+        }
+
+        if (len < 2 || lseek(fd, len - 2, SEEK_CUR) < 0)
+            break; /* saltar el resto del payload de este marcador */
+    }
+
+    close(fd);
+    return result;
+}
+
+/* D-291: cabecera BMP -- BITMAPFILEHEADER (14 bytes) + los primeros 12
+ * bytes de BITMAPINFOHEADER, que ya traen ancho/alto (offsets 18/22,
+ * int32 little-endian; alto puede venir negativo para bitmaps
+ * top-down). Nunca decodifica pixeles. */
+static bool probe_bmp_dimensions(const char *path, int *out_w, int *out_h)
+{
+    int fd;
+    unsigned char hdr[26];
+    int w, h;
+    bool ok;
+
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return false;
+    ok = (read(fd, hdr, sizeof(hdr)) == (int)sizeof(hdr) && hdr[0] == 'B' && hdr[1] == 'M');
+    close(fd);
+    if (!ok)
+        return false;
+
+    w = hdr[18] | (hdr[19] << 8) | (hdr[20] << 16) | (hdr[21] << 24);
+    h = hdr[22] | (hdr[23] << 8) | (hdr[24] << 16) | (hdr[25] << 24);
+    *out_w = (w < 0) ? -w : w;
+    *out_h = (h < 0) ? -h : h;
+    return true;
+}
+
+/* D-291: fase barata (solo cabeceras, nunca pixeles) que decide ANTES
+ * de decodificar si la foto cabe en el tope, si es un formato que ya
+ * se sabe que va a fallar (JPEG progresivo), y si el visor debe avisar
+ * "Cargando..." antes de bloquear en la decodificacion real -- todo
+ * esto tiene que resolverse ANTES de llamar a load_current_photo(),
+ * que es la que bloquea. Idempotente por indice (s_probed_index),
+ * igual que load_current_photo() lo es via s_loaded_index. */
+static void probe_current_photo(void)
+{
+    char path[MAX_PATH];
+    int w = 0, h = 0;
+    bool have_dims = false;
+
+    s_probed_index = s_current_index;
+    s_probe_result = PHOTO_PROBE_OK;
+    s_probe_needs_indicator = false;
+
+    if (!s_photos[s_current_index].supported)
+    {
+        s_probe_result = PHOTO_PROBE_UNSUPPORTED;
+        return;
+    }
+
+    snprintf(path, sizeof(path), "%s/%s", PHOTOS_DIR, s_photos[s_current_index].filename);
+
+    if (has_ext(path, ".bmp"))
+    {
+        have_dims = probe_bmp_dimensions(path, &w, &h);
+    }
+    else
+    {
+        jpeg_probe_t r = probe_jpeg_dimensions(path, &w, &h);
+        if (r == JPEG_PROBE_UNSUPPORTED)
+        {
+            s_probe_result = PHOTO_PROBE_UNSUPPORTED;
+            return;
+        }
+        have_dims = (r == JPEG_PROBE_BASELINE);
+    }
+
+    if (!have_dims)
+        return; /* cabecera no reconocida -- se deja decidir al decoder, como siempre */
+
+    if (w > PHOTO_MAX_SIDE || h > PHOTO_MAX_SIDE || (long)w * (long)h > PHOTO_MAX_PIXELS)
+    {
+        s_probe_result = PHOTO_PROBE_TOO_LARGE;
+        return;
+    }
+    s_probe_needs_indicator = (w > PHOTO_LOADING_INDICATOR_SIDE || h > PHOTO_LOADING_INDICATOR_SIDE);
+}
+
 static void load_current_photo(void)
 {
     char path[MAX_PATH];
@@ -329,9 +513,36 @@ void aura_photo_viewer_draw(aura_nav_t *nav)
     if (s_photo_count == 0)
         return;
 
-    load_current_photo();
+    if (s_probed_index != s_current_index)
+        probe_current_photo();
 
-    if (!s_photos[s_current_index].supported || !s_loaded_ok)
+    if (s_probe_result == PHOTO_PROBE_TOO_LARGE)
+    {
+        draw_message(AURA_STR_PHOTO_TOO_LARGE);
+        return;
+    }
+    if (s_probe_result == PHOTO_PROBE_UNSUPPORTED)
+    {
+        draw_message(AURA_STR_UNSUPPORTED_FORMAT);
+        return;
+    }
+
+    if (s_loaded_index != s_current_index)
+    {
+        /* Solo se avisa cuando de verdad se va a notar (D-291 §5.3) --
+         * hay que forzar un lcd_update() aca mismo porque
+         * load_current_photo() bloquea; el ciclo normal de
+         * aura_main.c solo vuelca a LCD DESPUES de que este draw()
+         * completo regrese. */
+        if (s_probe_needs_indicator)
+        {
+            draw_message(AURA_STR_LOADING);
+            lcd_update();
+        }
+        load_current_photo();
+    }
+
+    if (!s_loaded_ok)
     {
         draw_message(AURA_STR_UNSUPPORTED_FORMAT);
         return;

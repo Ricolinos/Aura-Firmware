@@ -108,6 +108,8 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_DB_NOT_READY]       = "Preparando la biblioteca…",
     [AURA_STR_EMPTY_LIST]         = "Sin resultados",
     [AURA_STR_UNSUPPORTED_FORMAT] = "Formato no soportado",
+    [AURA_STR_PHOTO_TOO_LARGE]    = "Foto demasiado grande",
+    [AURA_STR_LOADING]            = "Cargando…",
 
     [AURA_STR_YES]                = "Sí",
     [AURA_STR_NO]                 = "No",
@@ -338,6 +340,8 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_DB_NOT_READY]       = "Preparing your library...",
     [AURA_STR_EMPTY_LIST]         = "No results",
     [AURA_STR_UNSUPPORTED_FORMAT] = "Unsupported format",
+    [AURA_STR_PHOTO_TOO_LARGE]    = "Photo too large",
+    [AURA_STR_LOADING]            = "Loading…",
 
     [AURA_STR_YES]                = "Yes",
     [AURA_STR_NO]                 = "No",
