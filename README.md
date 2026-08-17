@@ -123,6 +123,19 @@ conserva en el árbol como código, sin ejecutarse en ningún build de
 este repositorio; el mecanismo completo para invocarlo vive en Aura
 Studio (repositorio aparte).
 
+## Temas
+
+Este tema por defecto ("Aura") no es el único que el firmware puede
+correr: Ajustes → Estilo lee temas instalables (paquete de
+fuentes+íconos+paleta) desde `/.rockbox/aura/themes/`, con fallback
+obligatorio al tema compilado si el instalado falta, está corrupto o
+es de un formato que este firmware no entiende — nunca queda el
+dispositivo sin interfaz legible. Aura Studio construye e instala esos
+paquetes; nunca este repositorio. Diseño completo en
+[`docs/aura-design-system/sistema/05-temas.md`](docs/aura-design-system/sistema/05-temas.md);
+formato exacto (compartido con Aura Studio) en
+[`CONTRATO-formato-tema.md`](CONTRATO-formato-tema.md).
+
 ## Estructura
 
 | Directorio | Qué es |
@@ -137,6 +150,7 @@ Studio (repositorio aparte).
 - [`DECISIONS-ARCHIVE.md`](DECISIONS-ARCHIVE.md) — bitácora congelada del monorepo original (D-001…D-285), de solo lectura.
 - [`MODIFICATIONS.md`](MODIFICATIONS.md) — qué modificó Aura sobre el Rockbox original, archivo por archivo (aviso GPL v2 §2a).
 - [`CONTRATO-firmware-studio.md`](CONTRATO-firmware-studio.md) — contrato con el repositorio de Aura Studio.
+- [`CONTRATO-formato-tema.md`](CONTRATO-formato-tema.md) — formato del paquete de tema instalable (D-289), compartido con Aura Studio.
 - [`docs/guia-flasheo-restauracion.md`](docs/guia-flasheo-restauracion.md) — detalle técnico del flasheo, dual-boot y restauración.
 - [`docs/guia-desarrollo.md`](docs/guia-desarrollo.md) — cómo compilar el firmware.
 - [`docs/aura-design-system/00-INDICE.md`](docs/aura-design-system/00-INDICE.md) — sistema de diseño vigente (fuente de verdad viva).

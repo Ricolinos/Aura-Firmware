@@ -20,3 +20,11 @@ Aura Studio (app macOS) vive en un repositorio aparte. El contrato entre ambos e
 - GPL v2: todo archivo `.c`/`.h` nuevo en `apps/aura/` lleva la cabecera de licencia; todo cambio a un archivo de Rockbox fuera de `apps/aura/` se registra en `MODIFICATIONS.md` en la misma pasada.
 - Sin material de Apple en el árbol ni en `firmware/dist/`: nada de SF Pro, SF Symbols, ni sus derivados (`.fnt`, BMP horneados). El tema Apple es un constructor local fuera de este repo (`PLAN-theme-system.md`), nunca parte del build público.
 - `DECISIONS-ARCHIVE.md` es histórico, de solo lectura (D-001…D-285). Las decisiones nuevas van a `DECISIONS.md` con numeración `D-286+`; una referencia a una decisión de Aura Studio se escribe `ST-NNN`.
+
+## Sistema de temas (D-289)
+
+Ver `docs/aura-design-system/sistema/05-temas.md` (diseño) y `CONTRATO-formato-tema.md` (formato exacto, copia idéntica en Aura Studio) antes de tocar rutas de fuentes/íconos/paleta.
+
+- Ninguna ruta de fuente, ícono, fondo o tile se construye a mano fuera de `aura_style.c` (`aura_style_read_icon_bmp()` para íconos; las 14 rutas de fuente solo se resuelven en `build_default_font_paths()`/`build_style_font_paths()`). Un sitio nuevo que dibuje algo por tema pasa por ahí, nunca por un `snprintf` propio con `ICON_DIR`/`FONT_DIR` a secas.
+- `aura_settings.theme` (claro/oscuro) y el sistema de temas (paquete de fuentes+íconos+paleta, "Estilo" en la UI) son conceptos **distintos y ortogonales** — no los mezcles ni en código ni en texto de cara al usuario.
+- Un tema nunca puede dejar el dispositivo sin UI legible: cualquier cambio a la lógica de carga/activación de `aura_style.c` tiene que preservar el fallback al default (§ "Fallback de seguridad" del documento de diseño) — es un requisito de seguridad, no una comodidad.
