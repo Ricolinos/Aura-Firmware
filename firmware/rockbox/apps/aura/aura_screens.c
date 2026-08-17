@@ -1714,39 +1714,49 @@ static const char *clock_row_top_text(void)
     return buf;
 }
 
-/* Badge real de Aura (D-269, encargo del dueno de producto): a color
+/* Icono real de Aura (D-269, encargo del dueno de producto): a color
  * completo, NO un glifo monocromo para tenir -- reemplaza el "ipod"
  * blanco de D-263/D-264 SOLO en el icono de SelectionSummary de "Acerca
  * de" (el icono de la FILA en la lista, settings_entries[]="info", NO
  * cambia -- el dueno lo pidio explicito: "el icono que aparece en el
  * left panel no debe cambiar"). Horneado por design-system/generate.py
- * (generate_tile_icons()) a partir de un bundle .icon de Icon Composer
- * que el dueno compartio -- aplanado a mano (seis capas SVG
- * individuales, compuestas segun su propio icon.json) porque Aura no
- * tiene un renderer de Icon Composer real. Cargado UNA vez por sesion
- * (cache por bandera, nunca cambia en tiempo de ejecucion) -- mismo
- * patron read_bmp_file() que ensure_panel_background() en
- * aura_selection_summary.c (D-267), pero con lcd_bitmap_transparent()
- * (clave magenta, D-010) en vez de un blit opaco: el badge es un
- * circulo, sus 4 esquinas deben dejar ver el degradado del tile
- * detras. */
+ * (generate_tile_icons()). D-269 lo aplano a mano de un bundle .icon de
+ * Icon Composer como badge circular de 60px; D-285 lo reemplaza por las
+ * dos imagenes PNG que el dueno entrego (una por tema) a tile completo.
+ * Mismo patron read_bmp_file() que ensure_panel_background() (D-267),
+ * con lcd_bitmap_transparent() (clave magenta, D-010): las esquinas
+ * transparentes del icono dejan ver el fondo restaurado. */
 static fb_data s_aura_badge_pixels[AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE
                                     * AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE];
-static bool s_aura_badge_loaded = false;
+static int  s_aura_badge_theme = -1;   /* tema con el que se cargo el buffer */
 static bool s_aura_badge_ok = false;
 
+/* D-285 (encargo del dueno, dos imagenes del icono de Aura): el badge deja
+ * de ser un circulo de 60px sobre el degradado gris y pasa a ser la IMAGEN
+ * COMPLETA del icono cubriendo el tile de 90px -- una version por tema
+ * (aura_badge-light.bmp para el claro, aura_badge-dark.bmp para el oscuro,
+ * decision de asignacion: el icono de fondo oscuro va con el tema oscuro).
+ * El icono trae su propio cuadrado redondeado con radio del 31% (medido
+ * en la fuente: 317/1024), el mismo 31% (28px) del tile de D-236 -- por
+ * eso el recorte de esquinas del tile (que ahora corre DESPUES del
+ * renderer, ver aura_selection_summary_draw_tile) no deja crecientes y la
+ * silueta coincide con los demas tiles. Se recarga si el usuario cambia
+ * de tema en la sesion. La fila de la lista sigue con su icono "info"
+ * (regla de D-269: solo SelectionSummary). */
 static void draw_about_icon_renderer(int cx, int cy, int size)
 {
     enum { SZ = AURA_DS_METRICS_TILE_ICONS_ITEMS_AURA_BADGE_SIZE };
+    int theme = (aura_settings.theme == AURA_THEME_DARK) ? 1 : 0;
 
-    if (!s_aura_badge_loaded)
+    if (s_aura_badge_theme != theme)
     {
         char path[MAX_PATH];
         struct bitmap bm;
         int ret;
 
-        s_aura_badge_loaded = true;
-        snprintf(path, sizeof(path), "%s/aura/tile-icons/aura_badge.bmp", ICON_DIR);
+        s_aura_badge_theme = theme;
+        snprintf(path, sizeof(path), "%s/aura/tile-icons/aura_badge-%s.bmp", ICON_DIR,
+                 theme ? "dark" : "light");
         bm.data = (char *)s_aura_badge_pixels;
         ret = read_bmp_file(path, &bm, sizeof(s_aura_badge_pixels), FORMAT_NATIVE, NULL);
         s_aura_badge_ok = (ret > 0 && bm.width == SZ && bm.height == SZ);

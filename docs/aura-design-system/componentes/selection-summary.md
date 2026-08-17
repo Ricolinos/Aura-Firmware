@@ -205,7 +205,7 @@ falta producir un ícono único por cada ítem de todo el árbol de menús
 (Música, Videos, Fotos, Podcasts, Extras, Ajustes y todos sus submenús) —
 eso es trabajo de producción de assets, no una pregunta de sistema pendiente.
 
-**Única excepción hoy — Acerca de (D-269):** en `SelectionSummary` (y
+**Única excepción hoy — Acerca de (D-269, actualizada en D-285):** en `SelectionSummary` (y
 solo ahí) la fila "Acerca de" muestra el **ícono real de Aura a color
 completo** (badge circular, pipeline `tile_icons` en `tokens.json`,
 horneado desde el bundle de Icon Composer del proyecto) en vez del
@@ -213,6 +213,8 @@ símbolo blanco `-selector`. La fila correspondiente en `LeftPanel`
 conserva su glifo monocromo normal ("info"). Es la única fila que rompe
 la regla "símbolo blanco sobre tile de color"; cualquier otra excepción
 futura debe documentarse aquí.
+
+Desde D-285 ese ícono cubre el **tile completo** (90×90, con su propio cuadrado redondeado del 31% — el mismo radio del tile) en vez de ser un badge circular de 60px sobre el degradado, y tiene **una versión por tema** (`aura_badge-light.bmp` / `aura_badge-dark.bmp`, `tile_icons.items.aura_badge.themed`). Para que un renderer a tile completo quede recortado con la misma máscara que los demás tiles, `aura_selection_summary_draw_tile()` ahora redondea las esquinas **después** del renderer (antes, después del degradado y antes del símbolo).
 
 ## Texto: `MarqueeText`
 

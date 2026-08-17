@@ -417,17 +417,21 @@ void aura_selection_summary_draw_tile(int x, int y, aura_category_t category,
     aura_category_gradient(category, &tile_a, &tile_center, &tile_b);
     draw_diagonal_gradient(x, y, TILE_SIZE, tile_a, tile_center, tile_b);
 
-    a26_shell_round_bitmap_corners_over_content(x, y, TILE_SIZE, TILE_SIZE,
-                                                  TILE_RADIUS, saved_tile, TILE_SIZE);
-
     /* Simbolo: estatico (icono horneado, variante "-selector" blanco
      * constante, G5/T2.2) o dinamico (renderer real, B-04) -- mismo
-     * hueco centrado sobre el tile para los dos casos. */
+     * hueco centrado sobre el tile para los dos casos. D-285: se dibuja
+     * ANTES del recorte de esquinas (antes iba despues) para que un
+     * renderer que cubra el tile completo (el icono de Aura de "Acerca
+     * de") quede recortado con la MISMA mascara de radio 28 que el resto
+     * de tiles; para los simbolos centrados de 60px no cambia nada. */
     if (icon_name)
         aura_widgets_draw_icon_variant_selector(icon_name, SYMBOL_SIZE,
             x + (TILE_SIZE - SYMBOL_SIZE) / 2, y + (TILE_SIZE - SYMBOL_SIZE) / 2);
     else if (renderer)
         renderer(x + TILE_SIZE / 2, y + TILE_SIZE / 2, SYMBOL_SIZE);
+
+    a26_shell_round_bitmap_corners_over_content(x, y, TILE_SIZE, TILE_SIZE,
+                                                  TILE_RADIUS, saved_tile, TILE_SIZE);
 }
 
 /* D-281 (C1/Q3): degradado horizontal en tiempo real -- "gris" en el

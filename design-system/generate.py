@@ -634,29 +634,34 @@ def generate_tile_icons(tokens):
     TRANSPARENT_RGB = (255, 0, 255)
 
     for name, spec in cfg["items"].items():
-        src_path = src_dir / f"{name}-source.png"
-        if not src_path.exists():
-            die(f"falta {src_path} (icono de tile '{name}', declarado en "
-                f"aura_ds.metrics.tile_icons.items)")
-        size = spec["size"]
-        bg_rgb = hex_to_rgb(spec["compose_bg_hex"])
+        # D-285: 'themed' -> una fuente y una salida por tema
+        # (<name>-light / <name>-dark); si no, una sola (<name>).
+        variants = ["light", "dark"] if spec.get("themed") else [None]
+        for theme in variants:
+            stem = f"{name}-{theme}" if theme else name
+            src_path = src_dir / f"{stem}-source.png"
+            if not src_path.exists():
+                die(f"falta {src_path} (icono de tile '{name}', declarado en "
+                    f"aura_ds.metrics.tile_icons.items)")
+            size = spec["size"]
+            bg_rgb = hex_to_rgb(spec["compose_bg_hex"])
 
-        img = Image.open(src_path).convert("RGBA")
-        img = img.resize((size, size), Image.LANCZOS)
+            img = Image.open(src_path).convert("RGBA")
+            img = img.resize((size, size), Image.LANCZOS)
 
-        out_img = Image.new("RGB", (size, size), TRANSPARENT_RGB)
-        bg_img = Image.new("RGB", (size, size), bg_rgb)
-        alpha = img.split()[3]
-        composed = Image.composite(img.convert("RGB"), bg_img, alpha)
-        # Solo cobertura EXACTAMENTE cero se queda como clave de
-        # transparencia -- cualquier otra cosa (incluido el borde
-        # antialiasado) ya quedo pre-compuesta contra bg_rgb arriba.
-        zero_mask = alpha.point(lambda a: 255 if a == 0 else 0)
-        out_img.paste(composed, (0, 0))
-        out_img.paste(Image.new("RGB", (size, size), TRANSPARENT_RGB), (0, 0), zero_mask)
+            out_img = Image.new("RGB", (size, size), TRANSPARENT_RGB)
+            bg_img = Image.new("RGB", (size, size), bg_rgb)
+            alpha = img.split()[3]
+            composed = Image.composite(img.convert("RGB"), bg_img, alpha)
+            # Solo cobertura EXACTAMENTE cero se queda como clave de
+            # transparencia -- cualquier otra cosa (incluido el borde
+            # antialiasado) ya quedo pre-compuesta contra bg_rgb arriba.
+            zero_mask = alpha.point(lambda a: 255 if a == 0 else 0)
+            out_img.paste(composed, (0, 0))
+            out_img.paste(Image.new("RGB", (size, size), TRANSPARENT_RGB), (0, 0), zero_mask)
 
-        out_img.save(out_dir / f"{name}.bmp", format="BMP")
-        print(f"   {name} ({size}x{size}) -> {name}.bmp")
+            out_img.save(out_dir / f"{stem}.bmp", format="BMP")
+            print(f"   {stem} ({size}x{size}) -> {stem}.bmp")
 
 
 def main():

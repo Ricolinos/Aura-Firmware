@@ -201,7 +201,7 @@ nunca tuvo un fallback al manifiesto porque nunca vivió en él.
 | Sistema | En vivo: recorrido recursivo de `/.rockbox/`, cacheado por sesión | Casi constante mientras el dispositivo está encendido |
 | Otros | Residual: `total − libre − música − video − fotos − sistema` | En vivo |
 | Música (álbumes) | En vivo, tagcache (`aura_music_count_albums()`, D-284, mismo mecanismo que artistas) | En vivo |
-| Libre / Total | `volume_size()` — **corregido en D-280**: multiplicaba por `SECTOR_SIZE` (512) un valor que en realidad está en KiB, duplicando todos los porcentajes de contenido. **En el simulador (D-284)** ya no reporta el disco de la Mac: perfil fijo de 128 GB decimales (122 070 MiB, `AURA_SIM_DISK_MIB` para otras capacidades, `0` = statfs del host) con el usado real de `simdisk` — nunca espacio ocupado inventado | En vivo |
+| Libre / Total | `volume_size()` — **corregido en D-280**: multiplicaba por `SECTOR_SIZE` (512) un valor que en realidad está en KiB, duplicando todos los porcentajes de contenido. Depende del **dispositivo real**: en el iPod lee la FAT del disco; en el simulador reporta el disco del host (decisión del dueño, D-285: el perfil fijo de 128 GB que D-284 había puesto en el simulador se retiró el mismo día — la medición debe depender del dispositivo, no de una constante) | En vivo |
 | Tipo y modelo de la unidad | ATA IDENTIFY (`storage_get_identify()`, palabras 27–46 y 217) | Fijo mientras no se cambie el disco; "Disco simulado" en el simulador |
 
 **Por qué no un escaneo real de `/Music` sin dircache**: recorrer
@@ -283,11 +283,17 @@ otra fila de Ajustes tiene un estado `FULL-CARRY` propio hoy).
 - D-283 (2026-08-16): Estado 2 (conteos, con Aura Studio clasificando
   video/fotos), Estado 3 (créditos + corrección GPL v2), tile persistente
   en las 3 páginas, `Fade-Slide` de región entre páginas.
-- D-284 (2026-08-16): perfil de disco de 128 GB para el simulador (antes
-  mostraba el disco de la Mac); línea de identidad de la unidad (SSD/HDD
-  por ATA IDENTIFY + modelo + capacidad) en la página 1; página 2
-  reorganizada en secciones Música/Videos/Fotos con ícono y color de
-  categoría; álbumes contados.
+- D-284 (2026-08-16): línea de identidad de la unidad (SSD/HDD por ATA
+  IDENTIFY + modelo + capacidad) en la página 1; página 2 reorganizada en
+  secciones Música/Videos/Fotos con ícono y color de categoría; álbumes
+  contados. (El perfil de disco de 128 GB para el simulador que traía se
+  retiró en D-285 por decisión del dueño.)
+- D-285 (2026-08-16): ícono de Aura nuevo a **tile completo** (90×90, dos
+  imágenes del dueño: azul claro para el tema claro, fondo oscuro para el
+  oscuro), reemplaza al badge circular de 60px de D-269; el recorte de
+  esquinas del tile corre después del renderer para que la silueta
+  coincida con los demás tiles (el ícono trae radio del 31%, el mismo del
+  tile).
 
 ## Pendiente de definir
 
