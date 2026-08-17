@@ -25,6 +25,7 @@ macOS.
 Es seguro volver a ejecutar este script cuantas veces haga falta; out/ se
 regenera por completo cada vez.
 """
+import argparse
 import json
 import shutil
 import struct
@@ -200,32 +201,23 @@ def generate_aura_ds_defines(tokens):
     return lines
 
 
-STUDIO_PROJECT = ROOT.parent / "studio" / "AuraStudio"
-STUDIO_GENERATED = STUDIO_PROJECT / "Sources" / "AuraStudio" / "Generated"
-
-
-def generate_swift_palette(tokens):
-    """Emite la misma paleta para Aura Studio.
+def generate_swift_palette(tokens, swift_out):
+    """Emite la misma paleta para Aura Studio, en `swift_out` (un archivo
+    .swift, p. ej. AuraPalette.swift).
 
     El firmware y la app de escritorio comparten identidad visual, asi que
     tienen que compartir tambien la fuente de los colores: el header C y
-    este archivo Swift salen del mismo tokens.json. Se escribe directo en
-    el arbol de fuentes de Studio (no en out/) porque Studio se compila
-    con SwiftPM/Xcode, que no tienen un paso de instalacion de assets
-    como build_sim.sh.
+    este archivo Swift salen del mismo tokens.json.
 
-    D-286 (separacion de repositorios, 2026-08-16): Aura Studio vive
-    ahora en un repositorio aparte, ya no como `studio/` hermano de
-    este. Si ese arbol no esta presente (el caso normal en un checkout
-    de este repo, que es solo firmware), no hay a donde escribir esto
-    -- se omite en vez de crear un `studio/` huerfano sin dueno. Si
-    alguna vez se necesita este archivo desde el otro repositorio, hay
-    que copiarlo/publicarlo explicitamente, no asumir un arbol hermano.
+    D-287 (reparto de contexto, 2026-08-16): este generador ya no asume
+    ningun arbol hermano (`../studio`) -- Aura Studio vive en un
+    repositorio aparte y consume este archivo por Release, nunca por
+    ruta relativa a un checkout de este repo (ver
+    CONTRATO-firmware-studio.md). Solo se invoca si el caller pasa
+    `--swift-out RUTA` explicitamente (ver `package_dist.sh`, que lo
+    escribe en `firmware/dist/`); sin el flag, este paso se omite.
     """
-    if not STUDIO_PROJECT.exists():
-        print("==> Aura Studio no esta presente como hermano de este repo -- se omite AuraPalette.swift")
-        return
-    print("==> Generando la paleta de Aura Studio (Generated/AuraPalette.swift)")
+    print(f"==> Generando la paleta de Aura Studio ({swift_out})")
     lines = [
         "// Generado por design-system/generate.py a partir de tokens.json.",
         "// NO editar a mano: los cambios se perderian al regenerar.",
@@ -260,8 +252,8 @@ def generate_swift_palette(tokens):
     lines.append("}")
     lines.append("")
 
-    STUDIO_GENERATED.mkdir(parents=True, exist_ok=True)
-    (STUDIO_GENERATED / "AuraPalette.swift").write_text("\n".join(lines))
+    swift_out.parent.mkdir(parents=True, exist_ok=True)
+    swift_out.write_text("\n".join(lines))
 
 
 def to_camel(snake):
@@ -682,6 +674,15 @@ def generate_tile_icons(tokens):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--swift-out",
+        type=Path,
+        default=None,
+        help="Si se pasa, tambien emite AuraPalette.swift en esta ruta (para publicar como asset de Release, ver CONTRATO-firmware-studio.md). Sin este flag, no se genera.",
+    )
+    args = parser.parse_args()
+
     tokens = json.loads(TOKENS_PATH.read_text())
 
     if OUT.exists():
@@ -689,7 +690,8 @@ def main():
     OUT.mkdir(parents=True)
 
     generate_header(tokens)
-    generate_swift_palette(tokens)
+    if args.swift_out:
+        generate_swift_palette(tokens, args.swift_out)
     generate_fonts(tokens)
     generate_icons(tokens)
     generate_panel_backgrounds(tokens)

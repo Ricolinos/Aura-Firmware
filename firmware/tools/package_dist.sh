@@ -16,7 +16,9 @@
 #   firmware/dist/rockbox.ipod             -- binario del firmware
 #   firmware/dist/rockbox.zip              -- árbol .rockbox/ completo
 #   firmware/dist/mks5lboot                -- herramienta de flasheo DFU
-#   firmware/dist/checksums.txt            -- SHA-256 de los anteriores
+#   firmware/dist/AuraPalette.swift        -- paleta para Aura Studio (design-system/generate.py --swift-out)
+#   firmware/dist/MODIFICATIONS.md         -- listado GPL §2a, para el Release
+#   firmware/dist/checksums.txt            -- SHA-256 de los 3 binarios de arriba
 #
 # NO produce (paso manual, ver nota abajo):
 #   firmware/dist/bootloader-ipod6g.ipod
@@ -79,6 +81,12 @@ cp -R "$ROOT_DIR/design-system/out/icons/masks" "$STAGE/.rockbox/icons/aura/mask
 # rockbox.ipod suelto en la raíz del árbol (el bootloader lo arranca así)
 cp "$BUILD_DIR/rockbox.ipod" "$STAGE/.rockbox/rockbox.ipod"
 (cd "$STAGE" && zip -qr "$DIST_DIR/rockbox.zip" .rockbox)
+
+echo "==> Generando AuraPalette.swift (asset del Release para Aura Studio, ver CONTRATO-firmware-studio.md)"
+"$ROOT_DIR/design-system/.venv/bin/python3" "$ROOT_DIR/design-system/generate.py" --swift-out "$DIST_DIR/AuraPalette.swift"
+
+echo "==> Copiando MODIFICATIONS.md (asset del Release, cumplimiento GPL §2a)"
+cp "$ROOT_DIR/MODIFICATIONS.md" "$DIST_DIR/MODIFICATIONS.md"
 
 echo "==> Generando checksums.txt"
 (
