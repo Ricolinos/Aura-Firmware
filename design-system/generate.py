@@ -60,6 +60,67 @@ def hex_to_rgb(h):
     return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
 
 
+def generate_theme_format_json(tokens):
+    """Emite out/theme-format-v1.json -- el manifiesto del FORMATO de
+    tema (CONTRATO-formato-tema.md), no un tema en si. Es el asset que
+    Aura Studio consume via el Release (fetch-firmware.sh) para saber,
+    sin leer tokens.json ni el arbol de este repo, que roles de fuente
+    existen, que icon_key/tamanos/variantes construir, y los valores
+    por defecto (para poder editar un tema partiendo del default en vez
+    de una paleta vacia). El firmware NO lee este archivo -- las
+    mismas 14 rutas/89 nombres/9 tamanos viven horneados en
+    apple2026_tokens.h y aura_style.c; este JSON es solo para el
+    consumidor externo."""
+    print("==> Generando out/theme-format-v1.json")
+
+    font_roles = [
+        {"role": role, "px": tokens["type_scale"][role]}
+        for role, _face in tokens["font"]["styles_by_size"].items()
+    ]
+
+    # Mismos 8 roles de paleta que AURA_STYLE_ROLE_* (aura_style_manifest.h)
+    # y palette_{light,dark}_* de CONTRATO-formato-tema.md -- accent y
+    # white_constant quedan afuera a proposito (no son del tema, ver SS2).
+    palette_roles = [
+        "shell_bg", "text_primary", "text_secondary", "text_tertiary",
+        "shell_rail", "progress_fill", "progress_track", "selection_fill",
+    ]
+    color = tokens["color"]
+    default_palette = {
+        mode: {role: color[mode][role] for role in palette_roles}
+        for mode in ("light", "dark")
+    }
+
+    category = tokens["aura_ds"]["color"]["category"]
+    default_category = {
+        "settings_gray": category["settings_gray_hex"],
+        "video": category["video_hex"],
+        "photos": category["photos_hex"],
+        "extras_yellow": category["extras_yellow_hex"],
+    }
+
+    manifest = {
+        "theme_format": 1,
+        "font_roles": font_roles,
+        "icon_sizes": sorted(set(tokens["icon"]["sizes"].values())),
+        "icon_keys": sorted(tokens["icon"]["names"].keys()),
+        "icon_variants": tokens["icon"]["variants"],
+        "palette_roles": palette_roles,
+        "category_keys": list(default_category.keys()),
+        "background_presets": list(
+            tokens["aura_ds"]["metrics"]["right_panel_background"]["presets"]
+        ),
+        "tile_icons": ["aura_badge"],
+        "default_palette": default_palette,
+        "default_category": default_category,
+        "default_accent": {
+            "default": tokens["aura_ds"]["color"]["accent_default_hex"],
+            "presets": tokens["aura_ds"]["color"]["accent_presets_hex"],
+        },
+    }
+    (OUT / "theme-format-v1.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+
+
 def generate_header(tokens):
     print("==> Generando out/apple2026_tokens.h")
     lines = []
@@ -690,6 +751,7 @@ def main():
     OUT.mkdir(parents=True)
 
     generate_header(tokens)
+    generate_theme_format_json(tokens)
     if args.swift_out:
         generate_swift_palette(tokens, args.swift_out)
     generate_fonts(tokens)
