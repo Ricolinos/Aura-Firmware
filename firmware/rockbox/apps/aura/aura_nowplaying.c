@@ -43,6 +43,7 @@
 #include "status.h"
 #include "tick.h"
 #include "tagcache.h"
+#include "debug.h"
 
 #include "aura_nowplaying.h"
 #include "apple2026_shell.h"
@@ -1646,6 +1647,14 @@ static void mode4_morph(int dir)
 {
     struct mp3entry *id3 = audio_current_track();
     int frames, frame_delay, i;
+    /* D-300 (diagnostico de rendimiento, encargo del dueno: "el morph
+     * de Letras se siente lento"): mismo criterio de instrumentacion
+     * que TRANSITION_LOG en aura_transitions.c (Fase 16, PLAN-UX.md) --
+     * DEBUGF es no-op fuera de builds DEBUG, sin costo en produccion.
+     * Mide las dos fases por separado (barrido principal vs. fase
+     * extra de sombra) para saber donde se va el tiempo de verdad, en
+     * vez de optimizar a ciegas. */
+    long morph_start_tick = current_tick;
 
     if (!id3 || !lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE)
         return;
@@ -1702,22 +1711,72 @@ static void mode4_morph(int dir)
         if (i < frames)
             sleep(frame_delay);
     }
+    DEBUGF("aura_nowplaying: mode4_morph barrido principal, %d frames en %ld ticks\n",
+           frames, (long)(current_tick - morph_start_tick));
+    (void)morph_start_tick; /* DEBUGF es no-op fuera de builds DEBUG -- evita -Wunused-variable */
 
     if (dir > 0)
     {
         /* Fase extra: fade de la sombra del panel izquierdo sobre la
-         * hoja ya acoplada (~la mitad de la duracion del morph). */
+         * hoja ya acoplada (~la mitad de la duracion del morph).
+         *
+         * D-300 (el dueno: "se siente lento" -- diagnostico con la
+         * instrumentacion de arriba antes de tocar nada): a t256 fijo
+         * en 256 durante TODA esta fase, lo UNICO que cambia cuadro a
+         * cuadro es `s_m4_shadow_a`, que solo afecta una franja de
+         * M4_PANEL_SHADOW_W (8px) de ancho por A26_SCREEN_HEIGHT de
+         * alto dentro de draw_m4_right_panel() -- el resto de la
+         * pantalla (caratula ya cacheada, texto, progreso, transporte,
+         * el TINTE de vidrio del panel derecho entero -- ~190x240px de
+         * blend por pixel) es BYTE-IDENTICO cuadro a cuadro. La
+         * version vieja llamaba a draw_player() completo (con
+         * a26_shell_clear_screen() antes) en cada uno de estos
+         * cuadros: repetia ese blend de ~45000 pixeles del panel
+         * completo para producir, en el 100% de los casos, el mismo
+         * resultado que ya estaba en pantalla. Ahora se captura la
+         * franja UNA vez (con sombra en 0, el estado en el que quedo
+         * el ultimo cuadro del barrido principal) y cada cuadro
+         * siguiente solo recalcula el segundo blend (sombra sobre esa
+         * base ya fija) para esos 8 columnas, con `lcd_update_rect()`
+         * acotado a esa franja en vez de voltear la pantalla entera. */
         int sframes = frames / 2;
+        long shadow_start_tick = current_tick;
+        int x0 = MORPH_PANEL_W + m4_panel_dx(256);
+        static fb_data stripe_base[A26_SCREEN_HEIGHT][M4_PANEL_SHADOW_W];
+        int yy, sx;
+
+        for (yy = 0; yy < A26_SCREEN_HEIGHT; yy++)
+            for (sx = 0; sx < M4_PANEL_SHADOW_W; sx++)
+                if (MORPH_PANEL_W + sx >= x0)
+                    stripe_base[yy][sx] = *FBADDR(MORPH_PANEL_W + sx, yy);
 
         for (i = 1; i <= sframes; i++)
         {
             s_m4_shadow_a = 256 * i / sframes;
-            a26_shell_clear_screen();
-            draw_player(id3, (int)s_scrub_preview_ms, 256);
-            lcd_update();
+
+            for (yy = 0; yy < A26_SCREEN_HEIGHT; yy++)
+            {
+                fb_data *row = FBADDR(0, yy);
+
+                for (sx = 0; aura_shadows_enabled() && sx < M4_PANEL_SHADOW_W; sx++)
+                {
+                    if (MORPH_PANEL_W + sx < x0)
+                        continue;
+                    row[MORPH_PANEL_W + sx] = a26_shell_blend(stripe_base[yy][sx],
+                        LCD_RGBPACK(0, 0, 0),
+                        88 * (M4_PANEL_SHADOW_W - sx) * s_m4_shadow_a
+                            / (M4_PANEL_SHADOW_W * 256));
+                }
+            }
+            lcd_update_rect(MORPH_PANEL_W, 0, M4_PANEL_SHADOW_W, A26_SCREEN_HEIGHT);
+            if (button_queue_full())
+                button_clear_queue();
             if (i < sframes)
                 sleep(frame_delay);
         }
+        DEBUGF("aura_nowplaying: mode4_morph fase extra (sombra), %d frames en %ld ticks\n",
+               sframes, (long)(current_tick - shadow_start_tick));
+        (void)shadow_start_tick; /* DEBUGF es no-op fuera de builds DEBUG -- evita -Wunused-variable */
     }
     s_m4_shadow_a = 256;
 }
