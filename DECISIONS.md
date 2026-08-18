@@ -249,4 +249,6 @@ gh release create v0.2.1-beta \
   --notes "Corrige el rockbox.zip de v0.1.0-beta/v0.2.0-beta, que no incluía códecs ni plugins (sin video; sin audio en instalaciones desde cero) -- D-297. Si ya tenías Aura instalado, actualiza desde Aura Studio -> Actualizar Aura."
 ```
 
-**Pendiente**: OK del dueño para el push+tag+Release de arriba; después, F0.4 (Aura Studio consume el Release, verifica contenido real del zip) y F0.5 (protocolo de hardware).
+**Publicado** (OK del dueño recibido en la misma sesión): `main` empujado (`5d1af20..2da4c29`), tag anotado `v0.2.1-beta` empujado, Release creado como pre-release con los 10 assets — https://github.com/Ricolinos/Aura-Firmware/releases/tag/v0.2.1-beta
+
+**Pendiente**: F0.4 (Aura Studio consume el Release, verifica contenido real del zip) y F0.5 (protocolo de hardware).
