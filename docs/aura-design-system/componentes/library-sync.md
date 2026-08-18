@@ -84,4 +84,7 @@ Sin colores RGB propios: todo sale de `a26_palette` (regla siempre-on).
 `docs/screenshots/library-sync/` — `00` el síntoma (archivos en `/Music`,
 "Sin música todavía"), `01` esperando a tagcache, `02` progreso de Música
 con la barra, `03`/`04` Canciones y Cover Flow después, `05` el aviso de
-Ajustes, `06`/`07` los dos errores.
+Ajustes, `06`/`07` los dos errores, `08`/`09` extremo a extremo con el
+`LibrarySync` real de Aura Studio contra el `simdisk`: canciones
+sincronizadas visibles tras la reconstrucción, y las letras `.lrc` en el
+Modo 4.
