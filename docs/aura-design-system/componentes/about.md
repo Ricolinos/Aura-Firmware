@@ -40,7 +40,7 @@ de datos; la página 3, Créditos, no depende del manifiesto).
 | Fondo del panel: degradado horizontal gris→`shell_bg` | Toda la columna del panel derecho, calculado en runtime (`draw_neutral_fade_background()`) | D-281 |
 | Tile (90×90, degradado por categoría, sombra) | Centro exacto del panel derecho (`aura_selection_summary_tile_rect_split()`) | D-270 |
 | Badge de Aura (ícono a color) | Centrado sobre el tile | D-269 |
-| "Mi iPod" | Texto superior, Bold 18pt, tinta `A26_TEXT_PRIMARY` (no blanco fijo — D-281, ver "Fondo variante" abajo) | D-264 / D-281 |
+| "Mi iPod" → **nombre del iPod** | Texto superior, Bold 18pt, tinta `A26_TEXT_PRIMARY` (no blanco fijo — D-281, ver "Fondo variante" abajo). Desde D-294 muestra el `device_name` que Aura Studio guardó en `.rockbox/aura/device.cfg` (`CONTRATO-dispositivo.md` v2 §E; releído al arrancar y al volver de USB); "Mi iPod" queda solo como respaldo sin archivo/nombre. Mismo marquee de siempre si no cabe en 152 px | D-264 / D-281 / D-294 |
 | Barra de almacenamiento (**6 segmentos**) | Centrada en el margen inferior del tile (`[tile_y+90, 240)`), misma fórmula que D-272 usa para el texto | D-279 |
 
 ### En `(full)`, página 1 — Almacenamiento (estado expandido)
