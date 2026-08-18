@@ -47,7 +47,8 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `apps/plugins/mpegplayer/mpegplayer.c`
 - `apps/plugins/solitaire.c`
 - `apps/settings.h`
-- `apps/tagcache.c`
+- `apps/tagcache.c` (D-021/D-244, y D-293: contador de trabajos de (re)construcción procesados + consulta/descarte del temporal `database_tmp.tcd` para `apps/aura/aura_sync.c`; confirmación silenciosa del temporal al arrancar en vez del diálogo sí/no de Rockbox; `load_ramcache()` redimensiona la copia en RAM cuando la base creció tras un commit y distingue "no cabe" de "corrupta" en vez de deshabilitar la base en ambos casos, y ya no deja `ramcache_allocated > 0` con el handle liberado — pánico de buflib al siguiente commit; `commit()` prefiere un buffer temporal general al de RAM cuando este es claramente chico para el commit pendiente)
+- `apps/tagcache.h` (D-293: `tagcache_get_build_jobs_done()`, `tagcache_has_pending_temp()`, `tagcache_discard_pending_temp()`)
 - `bootloader/ipod-s5l87xx.c`
 - `firmware/export/config/ipod6g.h`
 - `firmware/export/font.h`
@@ -58,7 +59,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 
 (Rutas relativas a `firmware/rockbox/`.)
 
-De estos 20, dos no tenían ningún comentario que mencionara a Aura:
+De estos 21 (`apps/tagcache.h` se sumó con D-293), dos no tenían ningún comentario que mencionara a Aura:
 
 - **`utils/mks5lboot/Makefile`**: sí tiene una modificación real vigente
   (backend libusb opcional en macOS, D-050, 2026-08-10) — recibió un

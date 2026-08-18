@@ -348,6 +348,9 @@ aura/aura_statusbar.c
 aura/apple2026_shell.c
 aura/aura_style.c
 aura/aura_style_manifest.c
+aura/aura_sync_marker.c
+aura/aura_sync.c
+aura/aura_fsutil.c
 aura/aura_transitions.c
 aura/aura_video.c
 aura/aura_widgets.c

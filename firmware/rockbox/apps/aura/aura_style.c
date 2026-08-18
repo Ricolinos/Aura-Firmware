@@ -37,6 +37,7 @@
 #include "apple2026_tokens.h"
 #include "aura_settings.h"
 #include "aura_color.h"
+#include "aura_fsutil.h"
 
 /* Mismo patron que AURA_DIR en aura_settings.c/aura_albumart.c/
  * aura_manifest.c -- cada .c que lo necesita lo re-declara, convencion
@@ -411,44 +412,6 @@ int aura_style_scan(aura_style_entry_t *out, int max)
     return n;
 }
 
-/* Borrado recursivo propio (sin pasar por apps/fileop.c: esa ruta esta
- * atada al navegador de archivos de Rockbox -- pide confirmacion con
- * SU PROPIO dialogo, cromo que Aura no usa nunca, ver CLAUDE.md). Solo
- * remove()/rmdir()/opendir()/readdir() -- sin UI, sin cromo. */
-static bool remove_dir_recursive(const char *path)
-{
-    DIR *d = opendir(path);
-    struct DIRENT *entry;
-    bool ok = true;
-
-    if (!d)
-        return false;
-
-    while ((entry = readdir(d)) != NULL)
-    {
-        /* 2x MAX_PATH: `path` y `entry->d_name` son cada uno hasta
-         * MAX_PATH -- el arbol real de un tema nunca se acerca a esto
-         * (AURA_STYLES_DIR/<id de <=32>/fonts|icons/.../archivo.bmp),
-         * pero un buffer del tamano justo hace que gcc no pueda probar
-         * que snprintf() no trunca (-Wformat-truncation). */
-        char child[MAX_PATH * 2];
-        struct dirinfo info;
-
-        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
-            continue;
-
-        snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
-        info = dir_get_info(d, entry);
-        if (info.attribute & ATTR_DIRECTORY)
-            ok = remove_dir_recursive(child) && ok;
-        else
-            ok = (remove(child) >= 0) && ok;
-    }
-    closedir(d);
-
-    return (rmdir(path) >= 0) && ok;
-}
-
 bool aura_style_delete(const char *id)
 {
     char path[MAX_PATH];
@@ -457,7 +420,7 @@ bool aura_style_delete(const char *id)
         return false;
 
     snprintf(path, sizeof(path), "%s/%s", AURA_STYLES_DIR, id);
-    return remove_dir_recursive(path);
+    return aura_fsutil_remove_tree(path);
 }
 
 /* -- Iconos, con fallback por archivo al default ----------------------- */

@@ -260,6 +260,24 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Disco simulado",
     [AURA_STR_STYLE_MODE_NOTE]        = "Se ve en modo claro y oscuro",
     [AURA_STR_SETTINGS_PERSONALIZATION] = "Personalización",
+
+    [AURA_STR_SETTINGS_REBUILD_LIBRARY] = "Reconstruir biblioteca",
+    [AURA_STR_REBUILD_CONFIRM_BODY]     = "Vuelve a leer toda la música, los videos y las fotos del iPod. Tarda unos minutos y no se puede cancelar a la mitad.",
+    [AURA_STR_LIBRARY_UPDATING]         = "Actualizando biblioteca…",
+    [AURA_STR_LIBRARY_SECTION_MUSIC]    = "Música",
+    [AURA_STR_LIBRARY_SECTION_VIDEO]    = "Videos",
+    [AURA_STR_LIBRARY_SECTION_IMAGES]   = "Fotos",
+    [AURA_STR_LIBRARY_STATE_PENDING]    = "En espera",
+    [AURA_STR_LIBRARY_STATE_RUNNING]    = "Leyendo…",
+    [AURA_STR_LIBRARY_STATE_DONE]       = "Listo",
+    [AURA_STR_LIBRARY_STATE_SKIPPED]    = "Sin cambios",
+    [AURA_STR_LIBRARY_SCAN_FOLDERS_FMT] = "%s elementos leídos",
+    [AURA_STR_LIBRARY_INDEXING_FMT]     = "Indexando %s",
+    [AURA_STR_LIBRARY_POSTPONE_HINT]    = "Menú: seguir en el próximo encendido",
+    [AURA_STR_LIBRARY_ERROR_VERSION_FMT]= "Aura Studio dejó una actualización de biblioteca en un formato más nuevo (versión %d) que este iPod no entiende. Actualiza Aura para aplicarla.",
+    [AURA_STR_LIBRARY_ERROR_ATTEMPTS]   = "No se pudo actualizar la biblioteca después de tres intentos. Puedes intentarlo de nuevo desde Ajustes → Reconstruir biblioteca.",
+    [AURA_STR_LIBRARY_ERROR_HINT]       = "Menú: cerrar",
+    [AURA_STR_LIBRARY_NEEDS_REBOOT]     = "La biblioteca ya se leyó completa; el índice se terminará de guardar la próxima vez que enciendas el iPod.",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -494,6 +512,24 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_DRIVE_SIMULATED]  = "Simulated disk",
     [AURA_STR_STYLE_MODE_NOTE]        = "Works in light and dark mode",
     [AURA_STR_SETTINGS_PERSONALIZATION] = "Personalization",
+
+    [AURA_STR_SETTINGS_REBUILD_LIBRARY] = "Rebuild library",
+    [AURA_STR_REBUILD_CONFIRM_BODY]     = "Re-reads all the music, videos and photos on the iPod. It takes a few minutes and cannot be cancelled halfway.",
+    [AURA_STR_LIBRARY_UPDATING]         = "Updating library...",
+    [AURA_STR_LIBRARY_SECTION_MUSIC]    = "Music",
+    [AURA_STR_LIBRARY_SECTION_VIDEO]    = "Videos",
+    [AURA_STR_LIBRARY_SECTION_IMAGES]   = "Photos",
+    [AURA_STR_LIBRARY_STATE_PENDING]    = "Waiting",
+    [AURA_STR_LIBRARY_STATE_RUNNING]    = "Reading...",
+    [AURA_STR_LIBRARY_STATE_DONE]       = "Done",
+    [AURA_STR_LIBRARY_STATE_SKIPPED]    = "No changes",
+    [AURA_STR_LIBRARY_SCAN_FOLDERS_FMT] = "%s items read",
+    [AURA_STR_LIBRARY_INDEXING_FMT]     = "Indexing %s",
+    [AURA_STR_LIBRARY_POSTPONE_HINT]    = "Menu: continue next time you turn it on",
+    [AURA_STR_LIBRARY_ERROR_VERSION_FMT]= "Aura Studio left a library update in a newer format (version %d) than this iPod understands. Update Aura to apply it.",
+    [AURA_STR_LIBRARY_ERROR_ATTEMPTS]   = "The library could not be updated after three attempts. You can try again from Settings > Rebuild library.",
+    [AURA_STR_LIBRARY_ERROR_HINT]       = "Menu: close",
+    [AURA_STR_LIBRARY_NEEDS_REBOOT]     = "The library was fully read; the index will finish saving the next time you turn on the iPod.",
 };
 
 const char *aura_str(aura_str_id_t id)

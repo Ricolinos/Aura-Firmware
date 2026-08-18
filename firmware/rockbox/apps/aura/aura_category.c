@@ -128,6 +128,11 @@ aura_category_t aura_category_for_screen(aura_screen_id_t screen)
      * agregados en Ajustes -- misma categoria que el resto del arbol. */
     case AURA_SCREEN_SETTINGS_POWEROFF:
     case AURA_SCREEN_SETTINGS_SCREENLOCK:
+    /* D-293: la fila de Ajustes y la pantalla de progreso que dispara --
+     * la misma pantalla aparece sola al arrancar tras un sync, pero
+     * sigue siendo "cosa del aparato", categoria Ajustes. */
+    case AURA_SCREEN_SETTINGS_REBUILD_LIBRARY:
+    case AURA_SCREEN_LIBRARY_SYNC:
         return AURA_CATEGORY_SETTINGS;
 
     /* Raiz del Menu principal (sin seccion propia -- la categoria de

@@ -17,6 +17,9 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
+/* Modificado por el proyecto Aura, 2026-08-17 (GPL v2 §2a; ver
+ * MODIFICATIONS.md en la raíz del repositorio): tres funciones nuevas al
+ * final, marcadas "Aura (D-293)". */
 #ifdef HAVE_TAGCACHE
 #ifndef _TAGCACHE_H
 #define _TAGCACHE_H
@@ -213,5 +216,9 @@ void tagcache_stop_scan(void);
 bool tagcache_update(void);
 bool tagcache_rebuild(void);
 int tagcache_get_max_commit_step(void);
+/* Aura (D-293): ver comentario junto a tagcache_rebuild() en tagcache.c. */
+unsigned tagcache_get_build_jobs_done(void);
+bool tagcache_has_pending_temp(void);
+void tagcache_discard_pending_temp(void);
 #endif
 #endif

@@ -160,6 +160,14 @@ typedef enum {
      * LEFT_PANEL_SHADOW/SHOW_ICONS) NO cambian de id, solo de padre de
      * navegacion -- sus claves en aura.cfg no se tocan. */
     AURA_SCREEN_SETTINGS_PERSONALIZATION,
+    /* D-293: reconstruccion de la biblioteca tras sincronizar.
+     * SETTINGS_REBUILD_LIBRARY = aviso Si/No de la fila en Ajustes;
+     * LIBRARY_SYNC = pantalla FULL de progreso/error, que aura_main.c
+     * empuja sola al arrancar y al volver de la pantalla USB cuando hay
+     * marcador (/.aura/sync-pending.json). Al final del enum, "solo-
+     * anadir-al-final". */
+    AURA_SCREEN_SETTINGS_REBUILD_LIBRARY,
+    AURA_SCREEN_LIBRARY_SYNC,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 

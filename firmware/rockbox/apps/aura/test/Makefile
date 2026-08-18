@@ -8,7 +8,7 @@ BUILD := build
 
 .PHONY: test clean
 
-test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow $(BUILD)/test_color $(BUILD)/test_patterns $(BUILD)/test_style
+test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow $(BUILD)/test_color $(BUILD)/test_patterns $(BUILD)/test_style $(BUILD)/test_sync_marker
 	@echo "== test_nav =="
 	@$(BUILD)/test_nav
 	@echo "== test_lrc =="
@@ -27,6 +27,8 @@ test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/tes
 	@$(BUILD)/test_patterns
 	@echo "== test_style =="
 	@$(BUILD)/test_style
+	@echo "== test_sync_marker =="
+	@$(BUILD)/test_sync_marker
 
 $(BUILD)/test_nav: test_nav.c ../aura_nav.c ../aura_nav.h | $(BUILD)
 	$(CC) $(CFLAGS) test_nav.c ../aura_nav.c -o $@
@@ -54,6 +56,9 @@ $(BUILD)/test_splash_lang: test_splash_lang.c ../aura_splash_lang.c ../aura_spla
 
 $(BUILD)/test_style: test_style.c ../aura_style_manifest.c ../aura_style_manifest.h | $(BUILD)
 	$(CC) $(CFLAGS) test_style.c ../aura_style_manifest.c -o $@
+
+$(BUILD)/test_sync_marker: test_sync_marker.c ../aura_sync_marker.c ../aura_sync_marker.h | $(BUILD)
+	$(CC) $(CFLAGS) test_sync_marker.c ../aura_sync_marker.c -o $@
 
 $(BUILD):
 	mkdir -p $(BUILD)

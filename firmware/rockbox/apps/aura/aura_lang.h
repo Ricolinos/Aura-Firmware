@@ -372,6 +372,26 @@ typedef enum {
      * acento/Animaciones/Graficos/Mostrar sombras/Mostrar iconos. */
     AURA_STR_SETTINGS_PERSONALIZATION,
 
+    /* D-293: reconstruccion de la biblioteca tras sincronizar (marcador
+     * /.aura/sync-pending.json de Aura Studio) y su disparo manual. */
+    AURA_STR_SETTINGS_REBUILD_LIBRARY,      /* fila en Ajustes */
+    AURA_STR_REBUILD_CONFIRM_BODY,          /* cuerpo del aviso Si/No */
+    AURA_STR_LIBRARY_UPDATING,              /* titulo de la pantalla de progreso */
+    AURA_STR_LIBRARY_SECTION_MUSIC,
+    AURA_STR_LIBRARY_SECTION_VIDEO,
+    AURA_STR_LIBRARY_SECTION_IMAGES,
+    AURA_STR_LIBRARY_STATE_PENDING,
+    AURA_STR_LIBRARY_STATE_RUNNING,
+    AURA_STR_LIBRARY_STATE_DONE,
+    AURA_STR_LIBRARY_STATE_SKIPPED,
+    AURA_STR_LIBRARY_SCAN_FOLDERS_FMT,      /* "%s elementos leidos" (entradas de disco recorridas) */
+    AURA_STR_LIBRARY_INDEXING_FMT,          /* "Indexando %s" */
+    AURA_STR_LIBRARY_POSTPONE_HINT,         /* "Menu: continuar en el proximo arranque" */
+    AURA_STR_LIBRARY_ERROR_VERSION_FMT,     /* "%d" version del marcador */
+    AURA_STR_LIBRARY_ERROR_ATTEMPTS,
+    AURA_STR_LIBRARY_ERROR_HINT,            /* como salir / que hacer */
+    AURA_STR_LIBRARY_NEEDS_REBOOT,          /* commit pospuesto por tagcache */
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

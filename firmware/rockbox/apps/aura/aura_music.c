@@ -41,6 +41,7 @@
 #include "kernel.h" /* yield(), D-224: precarga de caratulas */
 
 #include "aura_music.h"
+#include "aura_sync.h"
 #include "aura_lang.h"
 #include "rbpaths.h"
 #include "misc.h"
@@ -57,11 +58,14 @@
  * linea, mismo formato "name: value" que aura.cfg (settings_parseline
  * ya lo entiende). Hace falta porque la calificacion NO vive en el
  * archivo de audio (no hay tag POPM en ningun lado de este arbol): es
- * un dato de runtime de tagcache (tag_rating), y
- * LibrarySync.triggerFirmwareDBRebuild() borra ese indice en CADA
- * sync para forzar una reconstruccion -- sin este import, cualquier
+ * un dato de runtime de tagcache (tag_rating). Antes de D-293
+ * LibrarySync.triggerFirmwareDBRebuild() borraba ese indice en CADA
+ * sync para forzar una reconstruccion; desde D-293 Studio deja el
+ * marcador /.aura/sync-pending.json (docs/contracts/library-layout-v1.md
+ * SS4) y aura_sync.c reconstruye -- y vuelve a llamar a este import al
+ * terminar (aura_music_db_reset_triggers()). Sin este import, cualquier
  * calificacion (puesta en Aura Studio o en el propio iPod) se perderia
- * en el siguiente sync. */
+ * en la siguiente reconstruccion. */
 #define AURA_RATINGS_PATH ROCKBOX_DIR "/aura/ratings.cfg"
 
 /* Contexto de filtro para las pantallas "hijas" de una eleccion previa
@@ -354,6 +358,23 @@ static void draw_precache_progress(int done, int total)
  * sin decodificar nada) es lo unico que corre si la biblioteca ya esta
  * completa, y en ese caso ni siquiera se dibuja la pantalla de
  * progreso. */
+/* D-293: la pantalla de progreso del precache se dibuja por fuera del
+ * ciclo de aura_screens_draw() (ver draw_precache_progress). Cuando el
+ * precache termina, el loop principal se quedaria esperando un boton con
+ * ese ultimo cuadro en pantalla -- despues de una reconstruccion de la
+ * base (que vacia cfcache y vuelve a disparar el precache) eso tapaba la
+ * pantalla siguiente (p. ej. un error del marcador de sincronizacion)
+ * hasta que el usuario tocara algo. aura_main.c consulta esta bandera y
+ * fuerza un redibujo. */
+static bool s_precache_drew = false;
+
+bool aura_music_take_redraw_request(void)
+{
+    bool r = s_precache_drew;
+    s_precache_drew = false;
+    return r;
+}
+
 static void aura_music_precache_album_art(void)
 {
     static aura_music_item_t s_precache_albums[AURA_MUSIC_MAX_ITEMS];
@@ -372,6 +393,7 @@ static void aura_music_precache_album_art(void)
 
     if (pending == 0)
         return; /* biblioteca sin cambios desde el ultimo arranque -- nada que hacer */
+    s_precache_drew = true;
 
     art.size = AURA_PRECACHE_COVER_SIZE;
     art.radius = AURA_PRECACHE_CORNER_RADIUS;
@@ -399,6 +421,14 @@ static void aura_music_precache_album_art(void)
     }
 }
 
+/* D-293: antes eran `static` locales de aura_music_db_ready(); ahora
+ * viven aqui para que aura_music_db_reset_triggers() pueda rearmarlas
+ * tras una reconstruccion. `s_buffer_event_added` evita registrar dos
+ * veces el mismo callback en el rearme. */
+static bool s_scan_triggered = false;
+static bool s_update_triggered = false;
+static bool s_buffer_event_added = false;
+
 bool aura_music_db_ready(void)
 {
     /* Rockbox no escanea la biblioteca solo con tagcache_init(): en el
@@ -424,13 +454,20 @@ bool aura_music_db_ready(void)
      * cero en vez de reutilizar la del arranque anterior. Por eso se
      * espera a que la determinacion este hecha antes de decidir si
      * hace falta reconstruir. Ver D-021. */
-    static bool scan_triggered = false;
-    static bool update_triggered = false;
+    /* D-293: mientras aura_sync.c tiene un trabajo de reconstruccion
+     * encolado (marcador de sincronizacion de Studio, o "Reconstruir
+     * biblioteca"), este bloque no compite con el: un segundo
+     * tagcache_rebuild() aqui volveria a tirar la base que aquel esta
+     * construyendo. Al terminar bien, aura_sync llama a
+     * aura_music_db_reset_triggers() para que la pasada de "primera vez"
+     * (calificaciones + precache) corra sobre la base nueva. */
+    if (aura_sync_job_active())
+        return tagcache_is_usable();
 
-    if (tagcache_is_fully_initialized() && !tagcache_is_usable() && !scan_triggered)
+    if (tagcache_is_fully_initialized() && !tagcache_is_usable() && !s_scan_triggered)
     {
         tagcache_rebuild();
-        scan_triggered = true;
+        s_scan_triggered = true;
     }
 
     /* Base YA usable: dispararle una pasada de actualizacion UNA vez
@@ -456,20 +493,30 @@ bool aura_music_db_ready(void)
      * este bloque entero a la siguiente pasada del loop principal
      * (medio segundo despues, sin bloquear nada) hasta que la
      * determinacion ya este hecha. */
-    if (tagcache_is_usable() && tagcache_is_fully_initialized() && !update_triggered)
+    if (tagcache_is_usable() && tagcache_is_fully_initialized() && !s_update_triggered)
     {
         tagcache_start_scan();
         import_ratings_from_studio();
-        add_event(PLAYBACK_EVENT_TRACK_BUFFER, aura_music_buffer_event);
+        if (!s_buffer_event_added)
+        {
+            add_event(PLAYBACK_EVENT_TRACK_BUFFER, aura_music_buffer_event);
+            s_buffer_event_added = true;
+        }
         /* D-224: misma puerta que lo de arriba, mismo motivo (tagcache
          * recien confirmado listo) -- ver el comentario grande junto a
          * la definicion. Una sola vez por arranque, igual que el resto
          * de este bloque. */
         aura_music_precache_album_art();
-        update_triggered = true;
+        s_update_triggered = true;
     }
 
     return tagcache_is_usable();
+}
+
+void aura_music_db_reset_triggers(void)
+{
+    s_scan_triggered = false;
+    s_update_triggered = false;
 }
 
 /* D-283 (PLAN-about-fixes.md E2): mismo tagcache_search()+set_uniqbuf()

@@ -1097,7 +1097,11 @@ void aura_widgets_draw_confirm(const char *title, const char *body, int yes_sele
  * radio 6 (A26_LAYOUT_CORNER_RADIUS_CAPSULE), fondo SHELL_BG y borde
  * SHELL_RAIL de 1px -- unica superficie de esperas del sistema; unica
  * pagina completa que le queda al aparato es para sus propios estados
- * (apagado, USB, base de datos vacia), no para un progreso. */
+ * (apagado, USB, base de datos vacia), no para un progreso. Excepcion
+ * unica y documentada (D-293, componentes/library-sync.md): la
+ * reconstruccion de la biblioteca tras un sync es pantalla completa con
+ * progreso por seccion -- ahi no hay contenido debajo que valga la pena
+ * dejar a la vista, la biblioteca es justamente lo que se reconstruye. */
 void aura_widgets_draw_wait_capsule(const char *text)
 {
     int cap_h = 12;

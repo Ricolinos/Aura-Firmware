@@ -260,6 +260,8 @@ char *itoa_buf(char *buf, size_t bufsz, long int i)
 
 /* Status information of the tagcache. */
 static struct tagcache_stat tc_stat;
+/* Aura (D-293): ver tagcache_get_build_jobs_done(). */
+static volatile unsigned tc_build_jobs_done = 0;
 
 /* Queue commands. */
 enum tagcache_queue {
@@ -3464,11 +3466,37 @@ static bool commit(void)
 #ifdef HAVE_TC_RAMCACHE
     if (tempbuf_size == 0 && tc_stat.ramcache_allocated > 0)
     {
-        tcrc_buffer_lock();
-        tempbuf = (char *)(tcramcache.hdr + 1);
-        tempbuf_size = tc_stat.ramcache_allocated - sizeof(struct ramcache_header) - 128;
-        tempbuf_size &= ~0x03;
-        ramcache_buffer_stolen = true;
+        /* Aura (D-293): la copia en RAM se dimensiono al ARRANCAR para la
+         * base de ese momento (+32 KB de reserva). Tras un Q_UPDATE que
+         * agrego cientos de canciones es demasiado chica para ordenar los
+         * indices y build_index() falla ("Buffer way too small!") --
+         * commit pospuesto "hasta el proximo arranque". Si claramente no
+         * alcanza, se prueba primero un buffer general (en el simulador,
+         * sin dircache, es el unico que tiene tamano de sobra; en el
+         * aparato el bloque de dircache de arriba ya suele bastar y esto
+         * no se alcanza). Solo si tampoco hay, se roba el de RAM como
+         * siempre -- mejor intentar que rendirse. */
+        size_t rc_size = tc_stat.ramcache_allocated - sizeof(struct ramcache_header) - 128;
+        size_t needed = (size_t)(tch.entry_count + current_tcmh.tch.entry_count)
+                        * (sizeof(struct temp_file_entry) + TAGFILE_ENTRY_AVG_LENGTH);
+        if (rc_size < needed)
+        {
+            allocate_tempbuf();
+            aura_general_tempbuf_used = (tempbuf_size != 0);
+            if (tempbuf_size != 0 && tempbuf_size < rc_size)
+            {
+                free_tempbuf();
+                aura_general_tempbuf_used = false;
+            }
+        }
+        if (tempbuf_size == 0)
+        {
+            tcrc_buffer_lock();
+            tempbuf = (char *)(tcramcache.hdr + 1);
+            tempbuf_size = rc_size;
+            tempbuf_size &= ~0x03;
+            ramcache_buffer_stolen = true;
+        }
     }
 #endif /* HAVE_TC_RAMCACHE */
 
@@ -4362,7 +4390,10 @@ static struct buflib_callbacks ops = {
     .shrink_callback = NULL,
 };
 
-static bool allocate_tagcache(void)
+/* Aura (D-293): `extra` = holgura adicional sobre TAGCACHE_RESERVE. 0 en
+ * el arranque (comportamiento original); load_ramcache() la usa en su
+ * reintento tras un commit que hizo crecer la base. */
+static bool allocate_tagcache(size_t extra)
 {
     tc_stat.ramcache_allocated = 0;
     tcramcache.handle = 0;
@@ -4380,7 +4411,7 @@ static bool allocate_tagcache(void)
      * Now calculate the required cache size plus
      * some extra space for alignment fixes.
      */
-    size_t alloc_size = tcmh.tch.datasize + 256 + TAGCACHE_RESERVE +
+    size_t alloc_size = tcmh.tch.datasize + 256 + TAGCACHE_RESERVE + extra +
         sizeof(struct ramcache_header) + TAG_COUNT*sizeof(void *);
 #ifdef HAVE_DIRCACHE
     alloc_size += tcmh.tch.entry_count*sizeof(struct dircache_fileref);
@@ -4494,12 +4525,18 @@ static bool tagcache_dumpsave(void)
 }
 #endif /* HAVE_EEPROM_SETTINGS */
 
+/* Aura (D-293): por que fallo la ultima carga a RAM -- load_ramcache()
+ * reacciona distinto si simplemente no cabe (redimensionar y reintentar)
+ * que si la base esta corrupta (deshabilitarla, criterio original). */
+static bool tc_load_failed_too_big = false;
+
 static bool load_tagcache(void)
 {
     /* DEBUG: After tagcache commit and dircache rebuild, hdr-sturcture
      * may become corrupt. */
 
     bool ok = false;
+    tc_load_failed_too_big = false;
     ssize_t bytesleft = tc_stat.ramcache_allocated - sizeof(struct ramcache_header);
     int fd;
 
@@ -4537,6 +4574,7 @@ static bool load_tagcache(void)
         if (bytesleft < 0)
         {
             logf("too big tagcache.");
+            tc_load_failed_too_big = true;
             goto failure;
         }
 
@@ -4566,6 +4604,7 @@ static bool load_tagcache(void)
         if (bytesleft < (ssize_t)sizeof(struct tagcache_header))
         {
             logf("Too big tagcache #10.5");
+            tc_load_failed_too_big = true;
             goto failure;
         }
 
@@ -4594,6 +4633,7 @@ static bool load_tagcache(void)
             if (bytesleft < (ssize_t)sizeof(struct tagfile_entry))
             {
                 logf("Too big tagcache #10.75");
+            tc_load_failed_too_big = true;
                 goto failure;
             }
 
@@ -5244,15 +5284,64 @@ static void load_ramcache(void)
     /* At first we should load the cache (if exists). */
     tc_stat.ramcache = load_tagcache();
 
-    if (!tc_stat.ramcache)
+    if (!tc_stat.ramcache && !tc_load_failed_too_big)
     {
-        /* If loading failed, it must indicate some problem with the db
-         * so disable it entirely to prevent further issues. */
+        /* Fallo que NO es de tamano: base con problemas de verdad --
+         * criterio original: deshabilitarla (Aura la reconstruye entera
+         * sola, ver aura_music_db_ready() / aura_sync.c). */
         tc_stat.ready = false;
         tcramcache.hdr = NULL;
         int handle = tcramcache.handle;
         tcramcache.handle = 0;
-        core_free(handle);
+        tc_stat.ramcache_allocated = 0; /* Aura: sin esto commit() intenta robar un buffer ya liberado (panic) */
+        if (handle > 0)
+            core_free(handle);
+    }
+    else if (!tc_stat.ramcache)
+    {
+        /* Aura (D-293): la copia en RAM se dimensiona UNA vez, al
+         * arrancar, a partir del master de ese momento mas
+         * TAGCACHE_RESERVE (32 KB). Tras un Q_UPDATE/Q_REBUILD que
+         * agrego unos cientos de canciones la base en disco ya no cabe y
+         * load_tagcache() falla -- el original lo tomaba por "base
+         * corrupta", la deshabilitaba (tc_stat.ready = false) hasta el
+         * proximo reinicio y, peor, dejaba tc_stat.ramcache_allocated > 0
+         * con el handle ya liberado: el siguiente commit() intentaba
+         * robar ese buffer como temporal y buflib entraba en panico
+         * ("invalid handle pin: 0"), reproducido en el simulador. Antes
+         * de rendirse: liberar, redimensionar desde el master NUEVO y
+         * reintentar una vez. */
+        int handle = tcramcache.handle;
+        tcramcache.handle = 0;
+        tcramcache.hdr = NULL;
+        tc_stat.ramcache_allocated = 0;
+        if (handle > 0)
+            core_free(handle);
+
+        /* Holgura extra generosa (un cuarto de la base, minimo 64 KB): el
+         * datasize del master es lo que la carga necesita en teoria, pero
+         * el original ya fallaba con la reserva justa. */
+        if (allocate_tagcache(64 * 1024 + current_tcmh.tch.datasize / 4))
+        {
+            tc_stat.ramcache = load_tagcache();
+            if (!tc_stat.ramcache)
+            {
+                handle = tcramcache.handle;
+                tcramcache.handle = 0;
+                tcramcache.hdr = NULL;
+                tc_stat.ramcache_allocated = 0;
+                if (handle > 0)
+                    core_free(handle);
+                if (!tc_load_failed_too_big)
+                    tc_stat.ready = false; /* corrupta: idem arriba */
+            }
+        }
+        /* Si sigue sin caber, o no hay memoria (p. ej. el buffer de audio
+         * ocupando el resto), la base sigue usable DESDE DISCO -- acaba de
+         * pasar check_all_headers() en el commit, no es una base con
+         * problemas; el original la deshabilitaba hasta reiniciar y eso
+         * dejaba Musica vacia sin motivo. Solo se queda sin copia en RAM
+         * hasta el proximo arranque. */
     }
 
     cpu_boost(false);
@@ -5289,19 +5378,16 @@ static void tagcache_thread(void)
      * the changes first in foreground. */
     if (db_file_exists(TAGCACHE_FILE_TEMP))
     {
-#if !(defined(__APPLE__) && (CONFIG_PLATFORM & PLATFORM_SDL))
-        static const char *lines[] = {ID2P(LANG_TAGCACHE_BUSY),
-                                      ID2P(LANG_TAGCACHE_UPDATE)};
-        static const struct text_message message = {lines, 2};
-
-        if (gui_syncyesno_run_w_tmo(HZ * 5, YESNO_YES, str(LANG_TAGCACHE),
-                                    &message, NULL, NULL) == YESNO_YES)
-#endif
-        {
-            allocate_tempbuf();
-            commit();
-            free_tempbuf();
-        }
+        /* Aura (D-293): el original preguntaba con gui_syncyesno_run_w_tmo()
+         * (LANG_TAGCACHE_BUSY / LANG_TAGCACHE_UPDATE, 5 s, default SI)
+         * -- cromo de Rockbox en el arranque, justo despues de una
+         * reconstruccion interrumpida por bateria o por desenchufar el
+         * cable. Aura siempre confirma (era el default de todas formas):
+         * lo escaneado hasta la interrupcion se guarda y el marcador de
+         * sincronizacion (aura_sync.c) completa lo que falte. */
+        allocate_tempbuf();
+        commit();
+        free_tempbuf();
     }
 
 #ifdef HAVE_TC_RAMCACHE
@@ -5317,7 +5403,7 @@ static void tagcache_thread(void)
 
     /* Allocate space for the tagcache if found on disk. */
     if (global_settings.tagcache_ram && !tc_stat.ramcache)
-        allocate_tagcache();
+        allocate_tagcache(0);
 #endif /* HAVE_TC_RAMCACHE */
 
     cpu_boost(false);
@@ -5346,6 +5432,7 @@ static void tagcache_thread(void)
                 remove_files();
                 remove_db_file(TAGCACHE_FILE_TEMP);
                 tagcache_build();
+                tc_build_jobs_done++; /* Aura, D-293 */
                 break;
 
             case Q_UPDATE:
@@ -5354,6 +5441,7 @@ static void tagcache_thread(void)
                 load_ramcache();
 #endif
                 check_deleted_files();
+                tc_build_jobs_done++; /* Aura, D-293 */
                 break ;
 
             case Q_START_SCAN:
@@ -5491,6 +5579,30 @@ bool tagcache_rebuild(void)
 {
     queue_post(&tagcache_queue, Q_REBUILD, 0);
     return false;
+}
+
+/* Aura (D-293): tagcache no ofrece ninguna forma de saber cuando un
+ * Q_UPDATE/Q_REBUILD encolado TERMINO -- tc_stat.ready no cambia en un
+ * update, curentry solo vive con syncscreen (que ademas bloquea el
+ * escaneo al ritmo de la UI), y queue_length ya vale 0 mientras el hilo
+ * esta procesando el mensaje. Este contador sube una vez por trabajo de
+ * (re)construccion procesado, se haya completado o abortado por
+ * Q_STOP_SCAN/USB; el llamador (apps/aura/aura_sync.c) guarda el valor
+ * antes de encolar y espera a que cambie. Los helpers del temporal
+ * existen para no exportar el nombre interno del archivo. */
+unsigned tagcache_get_build_jobs_done(void)
+{
+    return tc_build_jobs_done;
+}
+
+bool tagcache_has_pending_temp(void)
+{
+    return db_file_exists(TAGCACHE_FILE_TEMP);
+}
+
+void tagcache_discard_pending_temp(void)
+{
+    remove_db_file(TAGCACHE_FILE_TEMP);
 }
 
 void tagcache_stop_scan(void)

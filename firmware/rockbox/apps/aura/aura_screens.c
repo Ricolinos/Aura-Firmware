@@ -52,6 +52,7 @@
 #include "aura_lang.h"
 #include "apple2026_tokens.h"
 #include "aura_music.h"
+#include "aura_sync.h"
 #include "aura_nowplaying.h"
 #include "aura_transitions.h"
 #include "aura_coverflow.h"
@@ -250,6 +251,11 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_SORT_BY,    "sort",              AURA_SCREEN_SETTINGS_SORT_BY },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
     { AURA_STR_SETTINGS_COPYRIGHT,  "legal",             AURA_SCREEN_SETTINGS_COPYRIGHT },
+    /* D-293: disparo manual de la reconstruccion de la biblioteca (el
+     * mismo trabajo que corre solo tras un sync de Aura Studio). "sync"
+     * no se repite dentro de ESTA lista (D-075); en Personalizacion lo
+     * usa "Temas", que es otra lista. */
+    { AURA_STR_SETTINGS_REBUILD_LIBRARY, "sync",         AURA_SCREEN_SETTINGS_REBUILD_LIBRARY },
     { AURA_STR_SETTINGS_RESET,      "reset",             AURA_SCREEN_SETTINGS_RESET },
 };
 
@@ -427,6 +433,8 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_CLICKER:      return AURA_STR_SETTINGS_CLICKER;
     case AURA_SCREEN_SETTINGS_MAINMENU:     return AURA_STR_SETTINGS_MAINMENU;
     case AURA_SCREEN_SETTINGS_RESET:        return AURA_STR_SETTINGS_RESET;
+    case AURA_SCREEN_SETTINGS_REBUILD_LIBRARY: return AURA_STR_SETTINGS_REBUILD_LIBRARY;
+    case AURA_SCREEN_LIBRARY_SYNC:          return AURA_STR_LIBRARY_UPDATING;
     default:                              return AURA_STR_SETTINGS;
     }
 }
@@ -3369,6 +3377,209 @@ static void handle_reset_confirm(aura_nav_t *nav, long button)
     }
 }
 
+/* -- Reconstruir biblioteca (D-293): aviso Si/No + pantalla de progreso -- */
+
+static bool s_rebuild_confirm_yes = false;
+
+static void draw_rebuild_confirm(void)
+{
+    aura_widgets_draw_confirm(aura_str(AURA_STR_SETTINGS_REBUILD_LIBRARY),
+                               aura_str(AURA_STR_REBUILD_CONFIRM_BODY),
+                               s_rebuild_confirm_yes);
+}
+
+static void handle_rebuild_confirm(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+    case BUTTON_SCROLL_BACK:
+        s_rebuild_confirm_yes = !s_rebuild_confirm_yes;
+        break;
+    case BUTTON_SELECT:
+    {
+        bool go = s_rebuild_confirm_yes;
+        s_rebuild_confirm_yes = false;
+        aura_nav_pop(nav);
+        /* Reemplaza el aviso por la pantalla de progreso (no se apila
+         * encima: al terminar, Menu vuelve a Ajustes, no al aviso). */
+        if (go && aura_sync_request_manual())
+            aura_nav_push(nav, AURA_SCREEN_LIBRARY_SYNC);
+        break;
+    }
+    case BUTTON_MENU:
+        s_rebuild_confirm_yes = false;
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
+/* Pantalla FULL de "Actualizando biblioteca..." -- una excepcion
+ * deliberada al patron de esperas del sistema (capsula flotante SS5.2):
+ * aqui NO hay contenido debajo que valga la pena dejar a la vista (la
+ * biblioteca es justamente lo que se esta reconstruyendo) y el usuario
+ * necesita ver por seccion que esta pasando y cuanto falta. Documentada
+ * en docs/aura-design-system/componentes/library-sync.md (D-293). Todo
+ * el avance vive en aura_sync.c; esto solo dibuja su estado. */
+static void draw_text_block(const char *body, int box_x, int box_w, int text_y)
+{
+    const char *lines[12];
+    int lens[12];
+    int i, n;
+
+    n = aura_widgets_wrap_text(body, box_w, lines, lens, 12);
+    for (i = 0; i < n; i++)
+    {
+        char buf[128];
+        int len = lens[i];
+        if (len >= (int)sizeof(buf))
+            len = sizeof(buf) - 1;
+        memcpy(buf, lines[i], len);
+        buf[len] = '\0';
+        lcd_putsxy(box_x, text_y, (const unsigned char *)buf);
+        text_y += A26_TYPE_BODY + A26_SPACING_SM;
+    }
+}
+
+static void draw_hint_bottom(const char *hint)
+{
+    int w, h;
+    lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+    lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
+    lcd_getstringsize((const unsigned char *)hint, &w, &h);
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, A26_SCREEN_HEIGHT - A26_SPACING_XL - h,
+               (const unsigned char *)hint);
+}
+
+static aura_str_id_t section_state_str(aura_sync_section_state_t st)
+{
+    switch (st)
+    {
+    case AURA_SYNC_SECTION_PENDING: return AURA_STR_LIBRARY_STATE_PENDING;
+    case AURA_SYNC_SECTION_RUNNING: return AURA_STR_LIBRARY_STATE_RUNNING;
+    case AURA_SYNC_SECTION_DONE:    return AURA_STR_LIBRARY_STATE_DONE;
+    case AURA_SYNC_SECTION_SKIPPED:
+    default:                        return AURA_STR_LIBRARY_STATE_SKIPPED;
+    }
+}
+
+static void draw_library_sync(void)
+{
+    static const aura_str_id_t section_labels[AURA_SYNC_SECTION_COUNT] = {
+        AURA_STR_LIBRARY_SECTION_MUSIC,
+        AURA_STR_LIBRARY_SECTION_VIDEO,
+        AURA_STR_LIBRARY_SECTION_IMAGES,
+    };
+    int box_x = A26_SPACING_XXL;
+    int box_w = A26_SCREEN_WIDTH - 2 * A26_SPACING_XXL;
+    int y = A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_XXL;
+    aura_sync_state_t st = aura_sync_state();
+    char buf[160];
+    int i;
+
+    a26_shell_clear_screen();
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_LIBRARY_UPDATING));
+
+    if (st == AURA_SYNC_ERROR_VERSION || st == AURA_SYNC_ERROR_ATTEMPTS
+        || st == AURA_SYNC_NEEDS_REBOOT)
+    {
+        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
+        if (st == AURA_SYNC_ERROR_VERSION)
+            snprintf(buf, sizeof(buf), aura_str(AURA_STR_LIBRARY_ERROR_VERSION_FMT),
+                     aura_sync_marker_version_seen());
+        else if (st == AURA_SYNC_NEEDS_REBOOT)
+            snprintf(buf, sizeof(buf), "%s", aura_str(AURA_STR_LIBRARY_NEEDS_REBOOT));
+        else
+            snprintf(buf, sizeof(buf), "%s", aura_str(AURA_STR_LIBRARY_ERROR_ATTEMPTS));
+        draw_text_block(buf, box_x, box_w, y);
+        draw_hint_bottom(aura_str(AURA_STR_LIBRARY_ERROR_HINT));
+        return;
+    }
+
+    /* Una fila por seccion: nombre a la izquierda, estado a la derecha. */
+    for (i = 0; i < AURA_SYNC_SECTION_COUNT; i++)
+    {
+        aura_sync_section_state_t sst = aura_sync_section_state((aura_sync_section_t)i);
+        const char *state = aura_str(section_state_str(sst));
+        int w, h;
+
+        lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
+        lcd_set_foreground(a26_color(sst == AURA_SYNC_SECTION_SKIPPED
+                                     ? A26_TEXT_TERTIARY : A26_TEXT_PRIMARY));
+        lcd_putsxy(box_x, y, (const unsigned char *)aura_str(section_labels[i]));
+
+        lcd_set_foreground(a26_color(sst == AURA_SYNC_SECTION_RUNNING
+                                     ? A26_ACCENT : A26_TEXT_SECONDARY));
+        lcd_getstringsize((const unsigned char *)state, &w, &h);
+        lcd_putsxy(box_x + box_w - w, y, (const unsigned char *)state);
+        y += A26_TYPE_BODY + A26_SPACING_MD;
+    }
+
+    /* Barra de la seccion Musica (la unica que tarda): misma capsula
+     * real que el slider (D-277), tokens PROGRESS_TRACK/PROGRESS_FILL. */
+    {
+        char detail[24];
+        int fraction = aura_sync_music_progress_256(detail, sizeof(detail));
+        int bar_y = y + A26_SPACING_MD;
+        int bar_h = A26_SPACING_MD;
+        int fill_w;
+
+        if (aura_sync_section_state(AURA_SYNC_SECTION_MUSIC) != AURA_SYNC_SECTION_SKIPPED)
+        {
+            lcd_set_drawmode(DRMODE_SOLID);
+            lcd_set_foreground(a26_color(A26_PROGRESS_TRACK));
+            lcd_fillrect(box_x, bar_y, box_w, bar_h);
+            if (fraction > 0)
+            {
+                fill_w = (box_w * fraction) / 256;
+                lcd_set_foreground(a26_color(A26_PROGRESS_FILL));
+                lcd_fillrect(box_x, bar_y, fill_w, bar_h);
+                if (fill_w < box_w)
+                    a26_shell_capsule_tail_over_content(box_x, bar_y, fill_w, bar_h,
+                                                        a26_color(A26_PROGRESS_TRACK));
+            }
+            lcd_set_drawmode(DRMODE_FG);
+            a26_shell_capsule_ends_over_content(box_x, bar_y, box_w, bar_h,
+                                                a26_color(A26_SHELL_BG));
+
+            if (detail[0])
+            {
+                lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+                lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+                snprintf(buf, sizeof(buf),
+                         aura_str(aura_sync_music_indexing() ? AURA_STR_LIBRARY_INDEXING_FMT
+                                                             : AURA_STR_LIBRARY_SCAN_FOLDERS_FMT),
+                         detail);
+                lcd_putsxy(box_x, bar_y + bar_h + A26_SPACING_SM, (const unsigned char *)buf);
+            }
+        }
+    }
+
+    draw_hint_bottom(aura_str(AURA_STR_LIBRARY_POSTPONE_HINT));
+}
+
+static void handle_library_sync(aura_nav_t *nav, long button)
+{
+    switch (button)
+    {
+    case BUTTON_MENU:
+        if (aura_sync_state() == AURA_SYNC_ERROR_VERSION
+            || aura_sync_state() == AURA_SYNC_ERROR_ATTEMPTS
+            || aura_sync_state() == AURA_SYNC_NEEDS_REBOOT)
+            aura_sync_dismiss();
+        else
+            aura_sync_postpone();
+        aura_nav_pop(nav);
+        break;
+    default:
+        /* No cancelable: SELECT/rueda no hacen nada. */
+        break;
+    }
+}
+
 /* Pantalla de texto largo desplazable (Avisos legales, 2026-08-13):
  * pantalla completa, envuelve por palabras al ancho util y la rueda
  * desplaza por lineas. Sin dependencias nuevas -- reusa el mismo
@@ -4613,6 +4824,10 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_mainmenu(nav);
     else if (screen == AURA_SCREEN_SETTINGS_RESET)
         draw_reset_confirm();
+    else if (screen == AURA_SCREEN_SETTINGS_REBUILD_LIBRARY)
+        draw_rebuild_confirm();
+    else if (screen == AURA_SCREEN_LIBRARY_SYNC)
+        draw_library_sync();
     else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
         draw_long_text(AURA_STR_SETTINGS_COPYRIGHT, AURA_STR_COPYRIGHT_BODY);
     else if (screen == AURA_SCREEN_EXTRAS_NOTES)
@@ -5005,6 +5220,10 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_mainmenu(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_RESET)
         handle_reset_confirm(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_REBUILD_LIBRARY)
+        handle_rebuild_confirm(nav, button);
+    else if (screen == AURA_SCREEN_LIBRARY_SYNC)
+        handle_library_sync(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
         handle_about(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT

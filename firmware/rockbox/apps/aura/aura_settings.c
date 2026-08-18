@@ -35,6 +35,7 @@
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
 #include "aura_style.h"
+#include "aura_sync_marker.h"
 
 #define AURA_DIR       ROCKBOX_DIR "/aura"
 #define AURA_CFG_PATH  AURA_DIR "/aura.cfg"
@@ -342,6 +343,12 @@ void aura_settings_save(void)
      * lado visible, ver PLAN-themes-impl.md SS1.0). El firmware nunca
      * lee esta clave de vuelta. */
     fdprintf(fd, "theme_format_supported: %d\n", AURA_STYLE_FORMAT_SUPPORTED);
+    /* D-293: idem, informativa para Aura Studio -- este firmware entiende
+     * el marcador /.aura/sync-pending.json hasta esta version del
+     * esquema. Studio lo lee para NO borrar la base de datos de tagcache
+     * al sincronizar (su mecanismo previo, ciego, para forzar una
+     * reconstruccion) y dejar en su lugar el marcador. */
+    fdprintf(fd, "sync_marker_supported: %d\n", AURA_SYNC_MARKER_VERSION_SUPPORTED);
 
     close(fd);
 }

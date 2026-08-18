@@ -49,6 +49,7 @@
 #include "aura_status_bar_v2.h"
 #include "aura_screenlock.h"
 #include "aura_shutdown_screen.h"
+#include "aura_sync.h"
 #ifdef HAVE_HARDWARE_CLICK
 #include "piezo.h"
 #endif
@@ -266,6 +267,19 @@ static void aura_main_ensure_media_dirs(void)
     }
 }
 
+/* D-293: tras leer el marcador de sincronizacion, empuja la pantalla de
+ * progreso/error si toca y todavia no esta arriba de la pila. Se llama
+ * al arrancar (antes del primer cuadro) y al volver de la pantalla USB
+ * -- los dos unicos momentos en que el firmware recupera el disco
+ * despues de que Aura Studio pudo escribir en el. */
+static void aura_main_sync_after_disk_handoff(aura_nav_t *nav)
+{
+    aura_sync_check_pending();
+    if (aura_sync_needs_screen()
+        && aura_nav_current(nav) != AURA_SCREEN_LIBRARY_SYNC)
+        aura_nav_push(nav, AURA_SCREEN_LIBRARY_SYNC);
+}
+
 void aura_main(void)
 {
     aura_nav_t nav;
@@ -317,6 +331,11 @@ void aura_main(void)
     aura_main_ensure_media_dirs();
     a26_shell_init();
     aura_nav_init(&nav, AURA_SCREEN_ROOT);
+    /* D-293: si Aura Studio dejo /.aura/sync-pending.json, la primera
+     * pantalla es la de "Actualizando biblioteca..." (salvo candado
+     * activo: la pantalla de bloqueo va primero y esto se empuja debajo,
+     * asi que aparece al desbloquear). */
+    aura_main_sync_after_disk_handoff(&nav);
 
 #ifdef USB_ENABLE_HID
     /* Fase 12 (PLAN-UX.md) / D-051: global_settings.usb_hid=false (en
@@ -415,7 +434,13 @@ void aura_main(void)
             {
                 s_usb_pending = false;
                 if (usb_inserted())
+                {
                     default_event_handler_deferred_usb(s_usb_pending_seqnum);
+                    /* D-293: al volver de la pantalla USB el cable ya se
+                     * desconecto -- unico momento en que el firmware se
+                     * entera de que hubo (o no) una sincronizacion. */
+                    aura_main_sync_after_disk_handoff(&nav);
+                }
             }
             continue;
         }
@@ -455,6 +480,24 @@ void aura_main(void)
          * real. */
         if (!aura_music_db_ready() && timeout_ticks < 0)
             timeout_ticks = HZ / 2;
+        /* D-293: el precache de caratulas dibuja su propia pantalla; si
+         * acaba de hacerlo, no esperar un boton encima de ese cuadro. */
+        if (aura_music_take_redraw_request())
+            timeout_ticks = 0;
+        /* D-293: la maquina de estados de la reconstruccion avanza en
+         * cada vuelta, con o sin su pantalla a la vista (pospuesta, el
+         * trabajo de tagcache sigue en fondo y hay que cerrarlo bien).
+         * Mismo criterio que la linea de arriba: NO es una animacion,
+         * no se gatea con lcd_active(). Con la pantalla arriba, medio
+         * segundo de cadencia para que la barra avance. */
+        if (aura_sync_job_active())
+        {
+            aura_sync_tick();
+            if (aura_nav_current(&nav) == AURA_SCREEN_LIBRARY_SYNC && timeout_ticks < 0)
+                timeout_ticks = HZ / 2;
+        }
+        if (aura_nav_current(&nav) == AURA_SCREEN_LIBRARY_SYNC && !aura_sync_needs_screen())
+            aura_nav_pop(&nav); /* termino bien: la pantalla se cierra sola */
 
         /* Puerta de energia central (doc SS6/CLAUDE.md, Fase 28): toda
          * animacion visual se detiene con la pantalla dormida -- un
@@ -599,7 +642,14 @@ void aura_main(void)
          * tree.c, etc.): monta el disco/apaga limpio y devuelve el
          * propio evento si lo manejo, o 0 para un boton normal. */
         if (default_event_handler(button) != 0)
+        {
+            /* D-293: default_event_handler() no devuelve hasta que la
+             * pantalla USB termina, es decir hasta que el cable se
+             * desconecto -- ver arriba. */
+            if (button == SYS_USB_CONNECTED)
+                aura_main_sync_after_disk_handoff(&nav);
             continue;
+        }
 
         /* Gesto de "mantener SELECT" (AURA_BUTTON_HOLD, aura_main.h,
          * B-02 en BLOCKED.md) -- interceptado aca de forma
