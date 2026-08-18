@@ -224,10 +224,10 @@ static const nav_entry_t settings_entries[] = {
     { AURA_STR_SETTINGS_MAINMENU,   "menu-list",         AURA_SCREEN_SETTINGS_MAINMENU },
     /* D-292: las 7 filas de apariencia (Modo/Temas/Color de acento/
      * Animaciones/Graficos/Mostrar sombras/Mostrar iconos) se mudan a
-     * su propio submenu -- ver personalization_entries[] abajo. Icono
-     * "theme" (libre al convertirse "Tema" en fila InlineValue, cuyo
-     * panel usa theme-light/dark en su lugar). */
-    { AURA_STR_SETTINGS_PERSONALIZATION, "theme",        AURA_SCREEN_SETTINGS_PERSONALIZATION },
+     * su propio submenu -- ver personalization_entries[] abajo.
+     * Icono "paintbrush" (D-295, encargo del dueno -- brochita/pinceles
+     * para la fila padre, vendorizado nuevo de Lucide). */
+    { AURA_STR_SETTINGS_PERSONALIZATION, "paintbrush",   AURA_SCREEN_SETTINGS_PERSONALIZATION },
     /* -- pantalla -- */
     { AURA_STR_SETTINGS_BRIGHTNESS, "sun",               AURA_SCREEN_SETTINGS_BRIGHTNESS },
     { AURA_STR_SETTINGS_BACKLIGHT,  "backlight",         AURA_SCREEN_SETTINGS_BACKLIGHT },
@@ -268,8 +268,8 @@ static const nav_entry_t settings_entries[] = {
  * -- solo de padre de navegacion, PLAN-personalizacion.md §2.1. */
 static const nav_entry_t personalization_entries[] = {
     { AURA_STR_SETTINGS_THEME,      "theme",             AURA_SCREEN_SETTINGS_THEME },
-    { AURA_STR_SETTINGS_STYLE,      "sync",              AURA_SCREEN_SETTINGS_STYLE },
-    { AURA_STR_SETTINGS_ACCENT,     "paintpalette",      AURA_SCREEN_SETTINGS_ACCENT },
+    { AURA_STR_SETTINGS_STYLE,      "paintpalette",      AURA_SCREEN_SETTINGS_STYLE },
+    { AURA_STR_SETTINGS_ACCENT,     "pipette",           AURA_SCREEN_SETTINGS_ACCENT },
     { AURA_STR_SETTINGS_ANIMATIONS, "motion",            AURA_SCREEN_SETTINGS_ANIMATIONS },
     { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
     { AURA_STR_SETTINGS_LEFT_PANEL_SHADOW, "square-on-square", AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW },

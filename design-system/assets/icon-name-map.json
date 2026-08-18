@@ -229,6 +229,11 @@
     "note": "notebook-text",
     "source": "lucide"
   },
+  "paintbrush": {
+    "file": "vendor/lucide-svg/paintbrush.svg",
+    "note": "paintbrush",
+    "source": "lucide"
+  },
   "paintpalette": {
     "file": "vendor/lucide-svg/paintpalette.svg",
     "note": "palette",
@@ -243,6 +248,11 @@
     "file": "vendor/phosphor-svg/pause-fill.svg",
     "note": "pause-fill (peso fill real)",
     "source": "phosphor"
+  },
+  "pipette": {
+    "file": "vendor/lucide-svg/pipette.svg",
+    "note": "pipette",
+    "source": "lucide"
   },
   "play": {
     "file": "vendor/lucide-svg/play.svg",
