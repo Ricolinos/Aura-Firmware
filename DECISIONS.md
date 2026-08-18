@@ -226,3 +226,27 @@ Build ARM y de simulador limpios tras cada uno de los 4 commits de código (los 
 **Archivos**: `apps/aura/aura_device.c`/`.h` (nuevo), `apps/aura/aura_screens.c`, `apps/aura/aura_lang.c`/`.h` (4 strings × 2 idiomas), `apps/aura/aura_video.c`, `apps/plugin.c`/`.h` (fuera de `apps/aura/`, en `MODIFICATIONS.md`), `docs/contracts/library-layout-v1.md` (v1.1, copiado a Aura Studio).
 
 **Pendiente**: F0.3 (cortar `v0.2.1-beta`), F0.4 (Aura Studio consume el Release y verifica contenido del zip), F0.5 (protocolo de hardware) — siguientes pasos de `PLAN-sync-media-hardening.md`.
+
+## D-299 — Empaquetado de `v0.2.1-beta` (PATCH), publicación pendiente de OK del dueño
+
+**Encargo**: F0.3 de `PLAN-sync-media-hardening.md`. PATCH, no MINOR: ningún contrato de datos cambió (`CONTRATO-firmware-studio.md` §E) — la subida de `docs/contracts/library-layout-v1.md` a v1.1 en D-298 documenta un límite que ya regía de facto (`PHOTO_NAME_LEN` ya era 96; Studio nunca tuvo que cambiar nada), no una nueva obligación para Aura Studio.
+
+**Empaquetado local** (`package_dist.sh --release-tag v0.2.1-beta`, árbol limpio tras el commit de D-298): limpio, sin warnings nuevos. Centinelas (D-297) verificados: **9431 archivos**. `unzip -p rockbox.zip .rockbox/aura/version.txt` → `v0.2.1-beta` exacto. Confirmados dentro del zip: `mpegplayer.rock`, `viewers.config`, `mpa.codec`, `flac.codec`, `a26-title-20.fnt`, `icons/aura/masks/`. `checksums.txt` con los 4 binarios (`rockbox.zip`, `rockbox.ipod`, `mks5lboot`, `bootloader-ipod6g.ipod` — este último sobrevive intacto de la compilación manual de D-290, sin cambios en su fuente desde entonces).
+
+**Publicación NO ejecutada en esta pasada** — el propio plan (F0.3) pide dejarla para el dueño ("Publicar solo con OK del dueño: dejar borrador y el comando"), y son acciones visibles hacia fuera (push, tag, Release público) que no se toman sin confirmación explícita. `main` local queda 2 commits adelante de `origin/main` (D-297, D-298/F0.2) sin empujar, sin tag creado. Comando exacto para publicar, una vez confirmado:
+
+```bash
+git -C Aura-Firmware push origin main
+git -C Aura-Firmware tag -a v0.2.1-beta -m "v0.2.1-beta"
+git -C Aura-Firmware push origin v0.2.1-beta
+gh release create v0.2.1-beta \
+  firmware/dist/rockbox.zip firmware/dist/rockbox.ipod firmware/dist/mks5lboot \
+  firmware/dist/bootloader-ipod6g.ipod firmware/dist/AuraPalette.swift \
+  firmware/dist/MODIFICATIONS.md firmware/dist/THIRD-PARTY-NOTICES.txt \
+  firmware/dist/theme-format-v1.json firmware/dist/aura-theme-default.zip \
+  firmware/dist/checksums.txt \
+  --title "v0.2.1-beta" --prerelease \
+  --notes "Corrige el rockbox.zip de v0.1.0-beta/v0.2.0-beta, que no incluía códecs ni plugins (sin video; sin audio en instalaciones desde cero) -- D-297. Si ya tenías Aura instalado, actualiza desde Aura Studio -> Actualizar Aura."
+```
+
+**Pendiente**: OK del dueño para el push+tag+Release de arriba; después, F0.4 (Aura Studio consume el Release, verifica contenido real del zip) y F0.5 (protocolo de hardware).
