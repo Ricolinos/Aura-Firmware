@@ -28,3 +28,13 @@ Ver `docs/aura-design-system/sistema/05-temas.md` (diseño) y `CONTRATO-formato-
 - Ninguna ruta de fuente, ícono, fondo o tile se construye a mano fuera de `aura_style.c` (`aura_style_read_icon_bmp()` para íconos; las 14 rutas de fuente solo se resuelven en `build_default_font_paths()`/`build_style_font_paths()`). Un sitio nuevo que dibuje algo por tema pasa por ahí, nunca por un `snprintf` propio con `ICON_DIR`/`FONT_DIR` a secas.
 - `aura_settings.theme` (claro/oscuro) y el sistema de temas (paquete de fuentes+íconos+paleta, "Estilo" en la UI) son conceptos **distintos y ortogonales** — no los mezcles ni en código ni en texto de cara al usuario.
 - Un tema nunca puede dejar el dispositivo sin UI legible: cualquier cambio a la lógica de carga/activación de `aura_style.c` tiene que preservar el fallback al default (§ "Fallback de seguridad" del documento de diseño) — es un requisito de seguridad, no una comodidad.
+
+## Biblioteca y sincronización (D-293)
+
+Ver `docs/contracts/library-layout-v1.md` (contrato con Aura Studio, copia idéntica allá — estructura de directorios, carátulas, `.lrc`, marcador `/.aura/sync-pending.json`) y `docs/aura-design-system/componentes/library-sync.md` (pantalla) antes de tocar rutas de biblioteca, tagcache o el arranque.
+
+- El firmware **nunca** se entera de una sincronización más que por el marcador `/.aura/sync-pending.json` (Studio lo escribe; `aura_sync.c` lo lee al arrancar y al volver de la pantalla USB — únicos dos momentos en que recupera el disco). Un archivo nuevo que Studio deje para el firmware va al contrato **antes** de leerlo aquí; su versión de esquema sube con el campo `version` del marcador y con la clave `sync_marker_supported` de `aura.cfg`.
+- Toda reconstrucción de la base de datos de música pasa por `aura_sync.c` (`Q_UPDATE`/`Q_REBUILD` de tagcache, contador de intentos dentro del marcador, borrado del marcador solo al terminar bien). No se llama a `tagcache_rebuild()`/`tagcache_update()` desde ninguna otra pantalla nueva; `aura_music_db_ready()` conserva solo su disparo de "sin base al arrancar" y **cede** mientras `aura_sync_job_active()`.
+- La pantalla "Actualizando biblioteca…" es la única pantalla completa de progreso del sistema (excepción documentada a la cápsula de espera) — no es precedente para otras esperas. No cancelable, posponible con Menú.
+- Cambios en `apps/tagcache.c`/`.h` se registran en `MODIFICATIONS.md` en la misma pasada (GPL v2 §2a) y se marcan `Aura (D-NNN)` en el código.
+

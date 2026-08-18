@@ -116,7 +116,7 @@ agrupación, como en el original:
 | — | **Personalización** ✅ `[SPLIT]` (D-292, submenú nuevo — ver tabla abajo) |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |
 | Sonido | Ecualizador ✅ (23 presets **con vista gráfica de la curva en vivo**) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
-| Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Restablecer ajustes ✅ |
+| Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Reconstruir biblioteca ✅ (D-293: aviso Sí/No → pantalla `LibrarySync`; el mismo trabajo corre solo tras un sync de Aura Studio) · Restablecer ajustes ✅ |
 
 ### Ajustes → Personalización (D-292)
 
