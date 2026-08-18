@@ -124,6 +124,13 @@ static unsigned char s_view_scratch[VIEW_SCRATCH_SIZE];
 static int s_loaded_index = -1;
 static bool s_loaded_ok = false;
 static struct bitmap s_bm;
+/* D-303: tamano FINAL en pantalla -- puede ser mayor que s_bm.width/
+ * height (lo que en verdad se decodifico) cuando "cubrir" agranda mas
+ * alla de lo que el decoder pudo producir; draw_scaled_centered() usa
+ * la diferencia para re-muestrear. En "ajustar" siempre coincide con
+ * s_bm.width/height (sin agrandado, blit 1:1). */
+static int s_display_w;
+static int s_display_h;
 
 static bool has_ext(const char *name, const char *ext)
 {
@@ -759,28 +766,41 @@ static void probe_current_photo(void)
     s_probe_needs_indicator = (w > PHOTO_LOADING_INDICATOR_SIDE || h > PHOTO_LOADING_INDICATOR_SIDE);
 }
 
-/* D-303: tamano objetivo de decodificacion para el modo "cubrir" --
- * agranda lo suficiente para que la foto cubra TODA la pantalla en
- * ambos ejes (nunca deforma, mismo factor en X e Y), recortando el
- * sobrante en el eje que le sobre. Dos topes, en este orden:
+/* D-303 (correccion tras prueba en hardware real -- el dueno: "aún se
+ * ven las franjas [...] necesitamos que agrande la imagen [...] aunque
+ * se corten los bordes"): la primera version acotaba el factor de
+ * "cubrir" a 1.0 para no pedirle al decoder que agrande (no puede,
+ * ver abajo) -- pero eso dejaba SIN agrandar cualquier foto que ya
+ * fuera mas chica que la pantalla en el eje que le falta, que es
+ * exactamente el caso comun (las fotos que sincroniza Studio ya vienen
+ * redimensionadas a 320 o 640px de lado mas largo, ST-022). Esta
+ * version separa dos tamanos:
  *
- *  1. El decoder de JPEG de Rockbox SOLO reduce durante la
- *     decodificacion (escalado en el dominio DCT, potencias de 2) --
- *     nunca agranda. Pedir un tamano mayor al de origen decodificaria
- *     a resolucion nativa igual, dejando bm->width/height
- *     desincronizados de lo que en realidad se escribio en el
- *     scratch buffer. Por eso el factor de "cubrir" se acota a 1.0:
- *     una foto mas chica que la pantalla en el eje que le falta
- *     simplemente no se agranda mas alla de su tamano real (se ve
- *     igual que en modo "ajustar" en ese caso -- limite real del
- *     hardware, no un descuido).
- *  2. `s_view_scratch` es un buffer fijo (VIEW_SCRATCH_SIZE) -- una
- *     foto de calidad "HD" (640px) en modo "cubrir" puede pedir mas
- *     pixeles de los que ese buffer tiene espacio (640x640 a 16bpp ya
- *     excede los 240 KiB reservados). Si el tamano ideal no entra, se
- *     reduce proporcionalmente (conserva el aspecto) hasta que si.
+ *  - `decode_w/h`: lo que se le PIDE AL DECODER. Nunca mayor al
+ *    tamano de origen -- el decoder de JPEG de Rockbox SOLO reduce
+ *    durante la decodificacion (escalado en el dominio DCT, potencias
+ *    de 2), nunca agranda; pedirle mas dejaria bm->width/height
+ *    desincronizados de lo que en realidad escribio en el scratch
+ *    buffer. Si el factor ideal de "cubrir" ya es <= 1.0 (la foto
+ *    alcanza para cubrir sin agrandar), decodificar YA al tamano final
+ *    es lo mas eficiente. Si el factor ideal es > 1.0 (hace falta
+ *    agrandar), se decodifica a resolucion NATIVA -- la fuente mas
+ *    nitida posible para el agrandado que sigue.
+ *  - `display_w/h`: el tamano FINAL que se ve en pantalla (recorte
+ *    incluido) -- SIN tope de 1.0. Si `display > decode`, el agrandado
+ *    real lo hace `draw_scaled_centered()` por muestreo de pixeles ya
+ *    decodificados (nearest-neighbor), no el decoder.
+ *
+ * `s_view_scratch` sigue siendo un buffer fijo -- si `decode_w x
+ * decode_h` no entra (una foto "HD" de 640px decodificada a tamano
+ * nativo en modo cubrir), se reduce proporcionalmente (conserva el
+ * aspecto) hasta que si. `display_w/h` NUNCA se reduce por esto: bajar
+ * la nitidez de la fuente esta bien, dejar de cubrir la pantalla no --
+ * es justo lo que se pidio evitar.
  */
-static void compute_cover_target(int src_w, int src_h, int *out_w, int *out_h)
+static void compute_decode_and_display_size(int src_w, int src_h,
+                                             int *decode_w, int *decode_h,
+                                             int *display_w, int *display_h)
 {
     /* Aritmetica en punto fijo Q16.16 -- este target no tiene FPU;
      * mismo criterio general (shift en vez de float) que ya usa
@@ -789,23 +809,38 @@ static void compute_cover_target(int src_w, int src_h, int *out_w, int *out_h)
      * ninguna formula con esas, solo la tecnica). */
     long scale_x = ((long)A26_SCREEN_WIDTH << 16) / src_w;
     long scale_y = ((long)A26_SCREEN_HEIGHT << 16) / src_h;
-    long scale = (scale_x > scale_y) ? scale_x : scale_y; /* max: cubrir, no ajustar */
-    long w, h;
+    long ideal_scale = (scale_x > scale_y) ? scale_x : scale_y; /* max: cubrir, no ajustar */
+    long dw, dh;
 
-    if (scale > (1L << 16))
-        scale = 1L << 16; /* nunca agranda mas alla del tamano real (decoder solo reduce) */
+    dw = (src_w * ideal_scale) >> 16;
+    dh = (src_h * ideal_scale) >> 16;
+    if (dw < 1) dw = 1;
+    if (dh < 1) dh = 1;
+    *display_w = (int)dw;
+    *display_h = (int)dh;
 
-    w = (src_w * scale) >> 16;
-    h = (src_h * scale) >> 16;
-    if (w < 1) w = 1;
-    if (h < 1) h = 1;
+    if (ideal_scale <= (1L << 16))
+    {
+        /* La foto ya alcanza para cubrir sin agrandar -- decodificar
+         * directo al tamano final es lo mas eficiente (blit final 1:1,
+         * sin muestreo de por medio). */
+        *decode_w = *display_w;
+        *decode_h = *display_h;
+    }
+    else
+    {
+        *decode_w = src_w;
+        *decode_h = src_h;
+    }
 
-    if ((long)w * h * (long)sizeof(fb_data) > (long)VIEW_SCRATCH_SIZE)
+    if ((long)(*decode_w) * (*decode_h) * (long)sizeof(fb_data) > (long)VIEW_SCRATCH_SIZE)
     {
         /* isqrt256-style: sqrt entero por biseccion, ya que no hay FPU
-         * -- el rango cabe sobrado en 32 bits para estos tamanos. */
+         * -- el rango cabe sobrado en 32 bits para estos tamanos. Solo
+         * reduce decode_w/h -- display_w/h queda intacto, ver
+         * comentario de arriba. */
         long budget_px = (long)VIEW_SCRATCH_SIZE / (long)sizeof(fb_data);
-        long num = budget_px << 16, den = (long)w * h;
+        long num = budget_px << 16, den = (long)(*decode_w) * (*decode_h);
         long mem_scale2 = num / den; /* factor^2 en Q16.16 */
         long lo = 0, hi = 1L << 16, mem_scale;
         while (lo < hi)
@@ -817,14 +852,11 @@ static void compute_cover_target(int src_w, int src_h, int *out_w, int *out_h)
                 hi = mid - 1;
         }
         mem_scale = lo;
-        w = (w * mem_scale) >> 16;
-        h = (h * mem_scale) >> 16;
-        if (w < 1) w = 1;
-        if (h < 1) h = 1;
+        *decode_w = (int)(((long)(*decode_w) * mem_scale) >> 16);
+        *decode_h = (int)(((long)(*decode_h) * mem_scale) >> 16);
+        if (*decode_w < 1) *decode_w = 1;
+        if (*decode_h < 1) *decode_h = 1;
     }
-
-    *out_w = (int)w;
-    *out_h = (int)h;
 }
 
 static void load_current_photo(void)
@@ -848,18 +880,22 @@ static void load_current_photo(void)
     s_bm.maskdata = NULL;
 #endif
 
-    /* D-303: en modo "cubrir" el tamano objetivo exacto ya viene
-     * calculado (recorte incluido) -- sin FORMAT_KEEP_ASPECT, que
-     * volvería a encoger para que quepa entero en la caja (justo lo
-     * que "ajustar" hace y "cubrir" quiere evitar). Sin dimensiones de
+    /* D-303: en modo "cubrir" el tamano de DECODIFICACION exacto ya
+     * viene calculado (nunca mayor al de origen) -- sin
+     * FORMAT_KEEP_ASPECT, que volvería a encoger para que quepa entero
+     * en la caja (justo lo que "ajustar" hace y "cubrir" quiere
+     * evitar). `s_display_w/h` es el tamano FINAL en pantalla, que
+     * `draw_scaled_centered()` usa para agrandar por muestreo si hace
+     * falta mas de lo que se pudo decodificar. Sin dimensiones de
      * origen (sondeo no las pudo leer) cae a "ajustar" sin importar
-     * s_cover_mode -- no hay con que calcular el recorte. */
+     * s_cover_mode -- no hay con que calcular el recorte/agrandado. */
     if (s_cover_mode && s_probed_src_w > 0 && s_probed_src_h > 0)
     {
-        int target_w, target_h;
-        compute_cover_target(s_probed_src_w, s_probed_src_h, &target_w, &target_h);
-        s_bm.width = target_w;
-        s_bm.height = target_h;
+        int decode_w, decode_h;
+        compute_decode_and_display_size(s_probed_src_w, s_probed_src_h,
+                                         &decode_w, &decode_h, &s_display_w, &s_display_h);
+        s_bm.width = decode_w;
+        s_bm.height = decode_h;
         format = FORMAT_NATIVE | FORMAT_RESIZE;
     }
     else
@@ -875,6 +911,67 @@ static void load_current_photo(void)
         ret = read_jpeg_file(path, &s_bm, sizeof(s_view_scratch), format, NULL);
 
     s_loaded_ok = (ret > 0);
+    if (s_loaded_ok && !s_cover_mode)
+    {
+        /* "Ajustar": el decoder ya decodifico al tamano final exacto
+         * (KEEP_ASPECT) -- decode y display son lo mismo, blit 1:1. */
+        s_display_w = s_bm.width;
+        s_display_h = s_bm.height;
+    }
+}
+
+/* D-303: dibuja `src` (decodificado a src_w x src_h, stride src_w)
+ * centrado en pantalla a un tamano de despliegue display_w x
+ * display_h. Tres casos, resueltos con la misma formula de recorte
+ * (nunca deforma, mismo factor en X e Y por construccion de
+ * compute_decode_and_display_size/FORMAT_KEEP_ASPECT):
+ *  - display == pantalla en un eje: ese eje llena exacto, sin recorte
+ *    ni banda.
+ *  - display > pantalla en un eje: recorta ese eje del centro
+ *    ("cubrir").
+ *  - display < pantalla en un eje: banda/letterbox centrado
+ *    ("ajustar", o "cubrir" degradado por el tope de memoria).
+ * Si src coincide con display (el caso normal salvo cuando "cubrir"
+ * agranda mas alla de lo decodificado) es un blit 1:1 sin muestreo. Si
+ * src es mas chico que display, cada pixel de pantalla se resuelve al
+ * pixel de origen mas cercano (nearest-neighbor) -- agrandado real,
+ * mas alla de lo que el decoder de JPEG puede hacer en si mismo. */
+static void draw_scaled_centered(const fb_data *src, int src_w, int src_h,
+                                  int display_w, int display_h)
+{
+    int display_x0 = (display_w > A26_SCREEN_WIDTH) ? (display_w - A26_SCREEN_WIDTH) / 2 : 0;
+    int display_y0 = (display_h > A26_SCREEN_HEIGHT) ? (display_h - A26_SCREEN_HEIGHT) / 2 : 0;
+    int screen_x0 = (display_w < A26_SCREEN_WIDTH) ? (A26_SCREEN_WIDTH - display_w) / 2 : 0;
+    int screen_y0 = (display_h < A26_SCREEN_HEIGHT) ? (A26_SCREEN_HEIGHT - display_h) / 2 : 0;
+    int draw_w = (display_w < A26_SCREEN_WIDTH) ? display_w : A26_SCREEN_WIDTH;
+    int draw_h = (display_h < A26_SCREEN_HEIGHT) ? display_h : A26_SCREEN_HEIGHT;
+
+    if (src_w == display_w && src_h == display_h)
+    {
+        lcd_bitmap_part(src, display_x0, display_y0, src_w, screen_x0, screen_y0, draw_w, draw_h);
+        return;
+    }
+
+    {
+        int x, y;
+        for (y = 0; y < draw_h; y++)
+        {
+            int dy = display_y0 + y;
+            int sy = dy * src_h / display_h;
+            const fb_data *srow;
+            fb_data *drow = FBADDR(screen_x0, screen_y0 + y);
+
+            if (sy >= src_h) sy = src_h - 1;
+            srow = src + (long)sy * src_w;
+            for (x = 0; x < draw_w; x++)
+            {
+                int dx = display_x0 + x;
+                int sx = dx * src_w / display_w;
+                if (sx >= src_w) sx = src_w - 1;
+                drow[x] = srow[sx];
+            }
+        }
+    }
 }
 
 void aura_photo_viewer_draw(aura_nav_t *nav)
@@ -921,25 +1018,8 @@ void aura_photo_viewer_draw(aura_nav_t *nav)
         return;
     }
 
-    /* D-303: una sola formula para "ajustar" (bitmap <= pantalla,
-     * letterbox/pillarbox -- src_x/y quedan en 0, x/y positivos
-     * centran) Y "cubrir" (bitmap >= pantalla en algun eje -- x/y
-     * quedan en 0, src_x/y positivos recortan del centro). El caso
-     * degradado por el tope de memoria de compute_cover_target() (mas
-     * chico que la pantalla en algun eje pese a pedir "cubrir") cae
-     * sola en la misma formula: ese eje simplemente centra como
-     * "ajustar". */
-    {
-        int src_x = (s_bm.width > A26_SCREEN_WIDTH) ? (s_bm.width - A26_SCREEN_WIDTH) / 2 : 0;
-        int src_y = (s_bm.height > A26_SCREEN_HEIGHT) ? (s_bm.height - A26_SCREEN_HEIGHT) / 2 : 0;
-        int dst_x = (s_bm.width < A26_SCREEN_WIDTH) ? (A26_SCREEN_WIDTH - s_bm.width) / 2 : 0;
-        int dst_y = (s_bm.height < A26_SCREEN_HEIGHT) ? (A26_SCREEN_HEIGHT - s_bm.height) / 2 : 0;
-        int draw_w = (s_bm.width < A26_SCREEN_WIDTH) ? s_bm.width : A26_SCREEN_WIDTH;
-        int draw_h = (s_bm.height < A26_SCREEN_HEIGHT) ? s_bm.height : A26_SCREEN_HEIGHT;
-
-        lcd_bitmap_part((const fb_data *)s_view_scratch, src_x, src_y, s_bm.width,
-                         dst_x, dst_y, draw_w, draw_h);
-    }
+    draw_scaled_centered((const fb_data *)s_view_scratch, s_bm.width, s_bm.height,
+                          s_display_w, s_display_h);
 }
 
 void aura_photo_viewer_handle_button(aura_nav_t *nav, long button)
