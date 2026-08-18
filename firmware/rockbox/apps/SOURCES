@@ -351,6 +351,8 @@ aura/aura_style_manifest.c
 aura/aura_sync_marker.c
 aura/aura_sync.c
 aura/aura_fsutil.c
+aura/aura_device_name.c
+aura/aura_device.c
 aura/aura_transitions.c
 aura/aura_video.c
 aura/aura_widgets.c

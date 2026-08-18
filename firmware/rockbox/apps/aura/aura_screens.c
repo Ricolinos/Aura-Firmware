@@ -53,6 +53,7 @@
 #include "apple2026_tokens.h"
 #include "aura_music.h"
 #include "aura_sync.h"
+#include "aura_device.h"
 #include "aura_nowplaying.h"
 #include "aura_transitions.h"
 #include "aura_coverflow.h"
@@ -2082,7 +2083,11 @@ static void compute_panel_content(aura_screen_id_t screen, aura_screen_id_t targ
         if (target == AURA_SCREEN_SETTINGS_ABOUT)
         {
             *icon_renderer = draw_about_icon_renderer;
-            *panel_top = aura_str(AURA_STR_ABOUT_MY_IPOD);
+            /* D-294 (CONTRATO-dispositivo.md SS E): el nombre que Aura
+             * Studio guardo en device.cfg, si lo hay; el literal "Mi
+             * iPod" solo como respaldo. Mismo slot, mismo marquee. */
+            *panel_top = aura_device_name() ? aura_device_name()
+                                            : aura_str(AURA_STR_ABOUT_MY_IPOD);
             *bottom_renderer = draw_about_storage_bars;
             /* D-281 (C1): fondo neutro gris->blanco solo para esta fila --
              * transicion mas fluida hacia el estado expandido (SHELL_BG

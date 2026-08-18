@@ -50,6 +50,7 @@
 #include "aura_screenlock.h"
 #include "aura_shutdown_screen.h"
 #include "aura_sync.h"
+#include "aura_device.h"
 #ifdef HAVE_HARDWARE_CLICK
 #include "piezo.h"
 #endif
@@ -274,6 +275,9 @@ static void aura_main_ensure_media_dirs(void)
  * despues de que Aura Studio pudo escribir en el. */
 static void aura_main_sync_after_disk_handoff(aura_nav_t *nav)
 {
+    /* D-294: el nombre del iPod (device.cfg de Aura Studio) se relee en
+     * los mismos dos momentos: es la otra cosa que Studio pudo escribir. */
+    aura_device_reload();
     aura_sync_check_pending();
     if (aura_sync_needs_screen()
         && aura_nav_current(nav) != AURA_SCREEN_LIBRARY_SYNC)
