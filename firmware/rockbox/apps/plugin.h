@@ -1081,6 +1081,14 @@ extern unsigned char plugin_end_addr[];
 
 int plugin_load(const char* plugin, const void* parameter);
 
+/* Aura (D-298): silencia los splash() nativos en ingles que plugin_load()
+ * muestra en sus dos ramas de error (archivo ausente/corrupto, version de
+ * API incompatible) ANTES de devolver PLUGIN_ERROR. Opt-in por llamador:
+ * activar justo antes de plugin_load(), desactivar justo despues (queda
+ * en false por defecto para el resto de Rockbox). Ningun otro efecto en
+ * el valor de retorno ni en el resto del comportamiento de plugin_load(). */
+void plugin_set_silent_open_errors(bool silent);
+
 /* defined by the plugin */
 extern const struct plugin_api *rb;
 enum plugin_status plugin_start(const void* parameter);

@@ -2901,9 +2901,37 @@ static void draw_about_counts(const aura_manifest_t *m)
  * pantalla completa. */
 static int s_credits_scroll = 0;
 
+/* D-298: cuerpo de creditos + version del Release, en un buffer local
+ * -- aura_str() devuelve un puntero a un arreglo estatico, no se puede
+ * anexar ahi. 700 bytes: el cuerpo base mide ~600 (ES, el mas largo) +
+ * la seccion de version (linea mas larga posible: "Version de
+ * desarrollo"). Se reconstruye en cada dibujo (barato, una vez por
+ * cuadro que la pantalla esta activa) para que un cambio de idioma o
+ * una version.txt releida a mitad de sesion (USB) se reflejen solos. */
+static const char *credits_body_with_version(void)
+{
+    static char buf[700];
+    const char *version = aura_firmware_version();
+
+    strlcpy(buf, aura_str(AURA_STR_ABOUT_CREDITS_BODY), sizeof(buf));
+    if (version)
+    {
+        strlcat(buf, "\n\n", sizeof(buf));
+        strlcat(buf, aura_str(AURA_STR_ABOUT_VERSION_TITLE), sizeof(buf));
+        strlcat(buf, "\n", sizeof(buf));
+        strlcat(buf, version, sizeof(buf));
+    }
+    else
+    {
+        strlcat(buf, "\n\n", sizeof(buf));
+        strlcat(buf, aura_str(AURA_STR_ABOUT_VERSION_DEV), sizeof(buf));
+    }
+    return buf;
+}
+
 static void draw_about_credits(void)
 {
-    const char *body = aura_str(AURA_STR_ABOUT_CREDITS_BODY);
+    const char *body = credits_body_with_version();
     const char *lines[48];
     int lens[48];
     int text_x = AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X;

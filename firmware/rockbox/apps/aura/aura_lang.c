@@ -278,6 +278,11 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_LIBRARY_ERROR_ATTEMPTS]   = "No se pudo actualizar la biblioteca después de tres intentos. Puedes intentarlo de nuevo desde Ajustes → Reconstruir biblioteca.",
     [AURA_STR_LIBRARY_ERROR_HINT]       = "Menú: cerrar",
     [AURA_STR_LIBRARY_NEEDS_REBOOT]     = "La biblioteca ya se leyó completa; el índice se terminará de guardar la próxima vez que enciendas el iPod.",
+
+    [AURA_STR_ABOUT_VERSION_TITLE]      = "Versión",
+    [AURA_STR_ABOUT_VERSION_DEV]        = "Versión de desarrollo",
+    [AURA_STR_VIDEO_CANT_OPEN]          = "No se pudo abrir el video",
+    [AURA_STR_VIDEO_CANT_OPEN_HINT]     = "Reinstala Aura desde Aura Studio",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -530,6 +535,11 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_LIBRARY_ERROR_ATTEMPTS]   = "The library could not be updated after three attempts. You can try again from Settings > Rebuild library.",
     [AURA_STR_LIBRARY_ERROR_HINT]       = "Menu: close",
     [AURA_STR_LIBRARY_NEEDS_REBOOT]     = "The library was fully read; the index will finish saving the next time you turn on the iPod.",
+
+    [AURA_STR_ABOUT_VERSION_TITLE]      = "Version",
+    [AURA_STR_ABOUT_VERSION_DEV]        = "Development version",
+    [AURA_STR_VIDEO_CANT_OPEN]          = "Could not open the video",
+    [AURA_STR_VIDEO_CANT_OPEN_HINT]     = "Reinstall Aura from Aura Studio",
 };
 
 const char *aura_str(aura_str_id_t id)

@@ -28,7 +28,7 @@ cabecera de copyright GPL v2 (ver más abajo). Es el reemplazo de la UI
 de Rockbox (menús, WPS) por la capa "Aura UI", conectado al resto del
 árbol mediante los 20 archivos listados abajo.
 
-## Los 20 archivos de Rockbox modificados fuera de `apps/aura/`
+## Los 23 archivos de Rockbox modificados fuera de `apps/aura/`
 
 Todos conservan su cabecera de copyright original de Rockbox intacta.
 Los cambios de Aura están marcados inline en el propio código con
@@ -43,6 +43,8 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `apps/main.c`
 - `apps/misc.c`
 - `apps/misc.h`
+- `apps/plugin.c` (D-298: `plugin_set_silent_open_errors()` — permite silenciar los dos `splash()` nativos que `plugin_load()` mostraba en sus ramas de error, antes de devolver `PLUGIN_ERROR`; opt-in por llamador, `false` por defecto, sin efecto en el resto de Rockbox)
+- `apps/plugin.h` (D-298: declaración de `plugin_set_silent_open_errors()`)
 - `apps/plugins/mpegplayer/mpeg_settings.c`
 - `apps/plugins/mpegplayer/mpegplayer.c`
 - `apps/plugins/solitaire.c`
@@ -59,7 +61,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 
 (Rutas relativas a `firmware/rockbox/`.)
 
-De estos 21 (`apps/tagcache.h` se sumó con D-293), dos no tenían ningún comentario que mencionara a Aura:
+De estos 23 (`apps/tagcache.h` se sumó con D-293; `apps/plugin.c`/`apps/plugin.h` con D-298), dos no tenían ningún comentario que mencionara a Aura:
 
 - **`utils/mks5lboot/Makefile`**: sí tiene una modificación real vigente
   (backend libusb opcional en macOS, D-050, 2026-08-10) — recibió un

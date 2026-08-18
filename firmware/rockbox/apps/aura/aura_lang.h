@@ -392,6 +392,14 @@ typedef enum {
     AURA_STR_LIBRARY_ERROR_HINT,            /* como salir / que hacer */
     AURA_STR_LIBRARY_NEEDS_REBOOT,          /* commit pospuesto por tagcache */
 
+    /* D-298: version del Release en "Acerca de" -- pantalla de creditos. */
+    AURA_STR_ABOUT_VERSION_TITLE,           /* "Version" (con el tag en la linea siguiente) */
+    AURA_STR_ABOUT_VERSION_DEV,             /* "Version de desarrollo" (sin version.txt) */
+    /* Video no se pudo abrir (D-298): plugin_load() fallo -- ausente
+     * (release viejo sin mpegplayer.rock, D-297) o incompatible. */
+    AURA_STR_VIDEO_CANT_OPEN,
+    AURA_STR_VIDEO_CANT_OPEN_HINT,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

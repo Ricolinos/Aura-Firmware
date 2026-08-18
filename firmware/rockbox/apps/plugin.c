@@ -881,6 +881,20 @@ static const struct plugin_api rockbox_api = {
 static int plugin_buffer_handle;
 static size_t plugin_buffer_size;
 
+/* Aura (D-298): plugin_load() mostraba sus propios splash() nativos en
+ * ingles ("Can't open ...", "Incompatible version") ANTES de devolver
+ * PLUGIN_ERROR -- cromo de Rockbox visible sin forma de evitarlo desde
+ * fuera, aun revisando el valor de retorno (violacion de la regla de
+ * diseno "cero cromo de Rockbox visible", ver CLAUDE.md). Flag opt-in,
+ * false por defecto: ningun llamador fuera de apps/aura/ cambia de
+ * comportamiento. */
+static bool s_silent_open_errors = false;
+
+void plugin_set_silent_open_errors(bool silent)
+{
+    s_silent_open_errors = silent;
+}
+
 int plugin_load(const char* plugin, const void* parameter)
 {
     struct plugin_header *p_hdr;
@@ -944,7 +958,8 @@ int plugin_load(const char* plugin, const void* parameter)
             talk_force_enqueue_next();
         }
         /* (voiced above) */
-        splashf(HZ*2, str(LANG_PLUGIN_CANT_OPEN), plugin);
+        if (!s_silent_open_errors)
+            splashf(HZ*2, str(LANG_PLUGIN_CANT_OPEN), plugin);
         return -1;
     }
 
@@ -968,8 +983,9 @@ int plugin_load(const char* plugin, const void* parameter)
     {
         lc_close(current_plugin_handle);
         current_plugin_handle = NULL;
-        splash(HZ*2, hdr ? ID2P(LANG_PLUGIN_WRONG_VERSION)
-                         : ID2P(LANG_PLUGIN_WRONG_MODEL));
+        if (!s_silent_open_errors)
+            splash(HZ*2, hdr ? ID2P(LANG_PLUGIN_WRONG_VERSION)
+                             : ID2P(LANG_PLUGIN_WRONG_MODEL));
         return -1;
     }
 

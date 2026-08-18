@@ -36,4 +36,14 @@ void aura_device_reload(void);
  * compara punteros para su debounce), o NULL si no hay nombre. */
 const char *aura_device_name(void);
 
+/* D-298: tag exacto del Release con el que se empaqueto este firmware
+ * (.rockbox/aura/version.txt, escrito por package_dist.sh --release-tag
+ * -- PLAN-release-updates.md SS1.0). Solo lo lee "Acerca de", para que
+ * un reporte de hardware sea contrastable contra un commit real; NUNCA
+ * se usa para decidir nada en tiempo de ejecucion. NULL en un build de
+ * desarrollo (sin el archivo). Recargado junto con el nombre del
+ * dispositivo, en aura_device_reload(). */
+#define AURA_FIRMWARE_VERSION_BUF 40
+const char *aura_firmware_version(void);
+
 #endif /* AURA_DEVICE_H */

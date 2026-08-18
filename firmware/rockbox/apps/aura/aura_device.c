@@ -31,11 +31,14 @@
 
 #define AURA_DIR         ROCKBOX_DIR "/aura"
 #define DEVICE_CFG_PATH  AURA_DIR "/device.cfg"
+#define VERSION_TXT_PATH AURA_DIR "/version.txt"
 
 static char s_name[AURA_DEVICE_NAME_BUF];
 static bool s_has_name = false;
+static char s_version[AURA_FIRMWARE_VERSION_BUF];
+static bool s_has_version = false;
 
-void aura_device_reload(void)
+static void reload_device_name(void)
 {
     int fd;
     char line[64]; /* contrato SS A: lineas <= 63 bytes, mismo buffer que aura.cfg */
@@ -61,7 +64,36 @@ void aura_device_reload(void)
     close(fd);
 }
 
+/* version.txt NO es "clave: valor" -- una sola linea con el tag tal
+ * cual (package_dist.sh: `echo "$RELEASE_TAG" > version.txt`). Sin
+ * settings_parseline() de por medio. */
+static void reload_firmware_version(void)
+{
+    int fd;
+
+    s_has_version = false;
+    s_version[0] = '\0';
+
+    fd = open(VERSION_TXT_PATH, O_RDONLY);
+    if (fd < 0)
+        return;
+
+    s_has_version = read_line(fd, s_version, sizeof(s_version)) > 0 && s_version[0] != '\0';
+    close(fd);
+}
+
+void aura_device_reload(void)
+{
+    reload_device_name();
+    reload_firmware_version();
+}
+
 const char *aura_device_name(void)
 {
     return s_has_name ? s_name : NULL;
+}
+
+const char *aura_firmware_version(void)
+{
+    return s_has_version ? s_version : NULL;
 }
