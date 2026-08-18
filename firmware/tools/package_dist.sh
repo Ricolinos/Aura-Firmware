@@ -22,7 +22,12 @@
 #
 # Produce:
 #   firmware/dist/rockbox.ipod             -- binario del firmware
-#   firmware/dist/rockbox.zip              -- árbol .rockbox/ completo
+#   firmware/dist/rockbox.zip              -- árbol .rockbox/ completo (D-297:
+#                                              base real de "make zip" --
+#                                              códecs, plugins/rocks,
+#                                              viewers.config, codepages,
+#                                              langs -- con las fuentes e
+#                                              íconos de Aura encima)
 #   firmware/dist/mks5lboot                -- herramienta de flasheo DFU
 #   firmware/dist/AuraPalette.swift        -- paleta para Aura Studio (design-system/generate.py --swift-out)
 #   firmware/dist/MODIFICATIONS.md         -- listado GPL §2a, para el Release
@@ -50,6 +55,17 @@ BUILD_DIR="$ROOT_DIR/firmware/build-ipod6g"
 DIST_DIR="$ROOT_DIR/firmware/dist"
 TOOLCHAIN="$ROOT_DIR/firmware/toolchain/bin"
 
+# D-297: un release real (--release-tag) construido sobre un arbol
+# sucio produce un rockbox.ipod cuyo rockbox-info.txt queda marcado con
+# una "M" (D-296 lo noto en v0.2.0-beta: "cffffd9f2bM") -- no es
+# bit-provable contra el commit del tag. En desarrollo no bloquea (es
+# normal estar iterando).
+if [[ -n "$RELEASE_TAG" ]] && [[ -n "$(cd "$ROOT_DIR" && git status --porcelain)" ]]; then
+  echo "ERROR: hay cambios sin commitear -- un --release-tag necesita el arbol limpio" >&2
+  echo "  (git status --short en $ROOT_DIR)" >&2
+  exit 1
+fi
+
 if [[ ! -d "$TOOLCHAIN" ]]; then
   echo "ERROR: no se encontró $TOOLCHAIN -- instala el toolchain ARM primero" >&2
   echo "  (ver docs/guia-desarrollo.md, rockboxdev.sh)" >&2
@@ -71,6 +87,19 @@ fi
 echo "==> Compilando el firmware ARM (rockbox.ipod)"
 PATH="$TOOLCHAIN:$PATH" make -j"$(sysctl -n hw.ncpu)"
 
+# D-297: hasta aca, este script armaba .rockbox/ a mano copiando SOLO
+# fuentes/iconos de design-system/out/ -- sin pasar nunca por "make zip",
+# rockbox.zip salia sin codecs/, sin rocks/ (plugins, incluido
+# mpegplayer.rock), sin viewers.config, sin codepages/ ni langs/. En el
+# simulador no se notaba (build_sim.sh SI usa "make install"); en un
+# iPod real: sin mpegplayer.rock no hay video (aura_video.c ignoraba el
+# error, D-298), y una instalacion desde cero se quedaba sin codecs de
+# audio. D-178 (DECISIONS-ARCHIVE.md) ya documentaba "make zip" como el
+# paso correcto -- se perdio al separar los repos (020f746, 2026-08-16)
+# y salio asi en v0.1.0-beta y v0.2.0-beta sin que nadie lo notara.
+echo "==> Empaquetando el arbol .rockbox/ real (make zip: codecs, rocks, viewers.config, codepages, langs)"
+PATH="$TOOLCHAIN:$PATH" make zip
+
 echo "==> Compilando mks5lboot"
 MKS5LBOOT_DIR="$SRC_DIR/utils/mks5lboot"
 (cd "$MKS5LBOOT_DIR" && make)
@@ -87,8 +116,19 @@ echo "==> Armando rockbox.zip (.rockbox/ completo)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/.rockbox"
-# Fuentes e íconos generados por design-system/generate.py (via build_sim.sh)
-cp -R "$ROOT_DIR/design-system/out/fonts" "$STAGE/.rockbox/fonts"
+# D-297: base real -- todo lo que "make zip" acaba de producir
+# (codecs/, rocks/, viewers.config, codepages/, langs/, themes/, wps/,
+# eqs/, recpresets/, debug/, backdrops/, rockbox-info.txt) -- y ENCIMA
+# las fuentes/iconos/tema de Aura (mismo orden que D-178: los assets de
+# Aura ganan si algo colisiona).
+unzip -q "$BUILD_DIR/rockbox.zip" -d "$STAGE"
+# Fuentes e íconos generados por design-system/generate.py (via build_sim.sh).
+# NO se borra "$STAGE/.rockbox/fonts" primero -- ahi ya vino
+# 15-Adobe-Helvetica.fnt (fuente de fabrica de Rockbox, la unica que
+# trae "make zip"); se copian las 14 de Aura ENCIMA, sin tocarla. Mismo
+# comportamiento que build_sim.sh (make install + assets de Aura
+# encima) desde siempre -- el simulador nunca tuvo solo 14 fuentes.
+cp -R "$ROOT_DIR/design-system/out/fonts/." "$STAGE/.rockbox/fonts/"
 mkdir -p "$STAGE/.rockbox/icons/aura"
 cp -R "$ROOT_DIR/design-system/out/icons/light" "$STAGE/.rockbox/icons/aura/light"
 cp -R "$ROOT_DIR/design-system/out/icons/dark" "$STAGE/.rockbox/icons/aura/dark"
@@ -116,8 +156,33 @@ mkdir -p "$STAGE/.rockbox/aura/themes"
 if [[ -n "$RELEASE_TAG" ]]; then
   echo "$RELEASE_TAG" > "$STAGE/.rockbox/aura/version.txt"
 fi
-# rockbox.ipod suelto en la raíz del árbol (el bootloader lo arranca así)
-cp "$BUILD_DIR/rockbox.ipod" "$STAGE/.rockbox/rockbox.ipod"
+# .rockbox/rockbox.ipod (el bootloader lo arranca asi) ya viene dentro
+# del zip de "make zip" -- ya no hace falta copiarlo aparte.
+
+# D-297: centinelas -- si "make zip" alguna vez deja de producir alguno
+# de estos (cambio de layout de Rockbox upstream, target mal
+# configurado, etc.), mejor abortar aqui con un mensaje claro que
+# publicar de nuevo un rockbox.zip mudo (sin video, sin audio en una
+# instalacion desde cero) como paso v0.1.0-beta/v0.2.0-beta.
+SENTINELS=(
+  ".rockbox/rocks/viewers/mpegplayer.rock"
+  ".rockbox/codecs/mpa.codec"
+  ".rockbox/codecs/flac.codec"
+  ".rockbox/codecs/aac.codec"
+  ".rockbox/codecs/alac.codec"
+  ".rockbox/viewers.config"
+  ".rockbox/fonts/a26-title-20.fnt"
+  ".rockbox/icons/aura/masks"
+  ".rockbox/rockbox.ipod"
+)
+for sentinel in "${SENTINELS[@]}"; do
+  if [[ ! -e "$STAGE/$sentinel" ]]; then
+    echo "ERROR: falta $sentinel en el arbol armado -- rockbox.zip saldria incompleto (D-297). Revisa 'make zip' en $BUILD_DIR." >&2
+    exit 1
+  fi
+done
+echo "==> Centinelas verificados: $(find "$STAGE/.rockbox" -type f | wc -l | tr -d ' ') archivos en el arbol"
+
 (cd "$STAGE" && zip -qr "$DIST_DIR/rockbox.zip" .rockbox)
 
 echo "==> Generando AuraPalette.swift (asset del Release para Aura Studio, ver CONTRATO-firmware-studio.md)"

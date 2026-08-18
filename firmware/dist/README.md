@@ -9,7 +9,17 @@ Artefactos que produce el script:
 
 - `rockbox.ipod` — binario del firmware para el iPod Classic 6G.
 - `rockbox.zip` — árbol `.rockbox/` completo (fuentes, íconos, códecs,
-  plugins) para copiar al disco del dispositivo.
+  plugins) para copiar al disco del dispositivo. Base real: el `rockbox.zip`
+  que produce `make zip` en `firmware/build-ipod6g/` (códecs, `rocks/`
+  —incluido `rocks/viewers/mpegplayer.rock`—, `viewers.config`,
+  `codepages/`, `langs/`), con las fuentes/íconos/tema de Aura encima. El
+  script verifica un centinela de cada categoría antes de empaquetar y
+  aborta si falta alguno — ver D-297: `v0.1.0-beta` y `v0.2.0-beta` se
+  publicaron **sin** códecs ni plugins (el script armaba el árbol a mano
+  desde `design-system/out/` solamente, sin pasar nunca por `make zip`),
+  así que ningún video se reproducía en un iPod recién instalado con
+  esos dos releases (y la música solo sonaba si sobrevivían códecs de
+  una instalación previa).
 - `bootloader-ipod6g.ipod` — bootloader de arranque dual (compilación manual,
   ver nota abajo).
 - `mks5lboot` — herramienta para grabar el bootloader por DFU.
