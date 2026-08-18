@@ -1,5 +1,9 @@
 # PLAN — Visor de imágenes (Fotos)
 
+> **ESTADO: EJECUTADO** — 2026-08-17. Histórico. No es trabajo pendiente.
+> Decisiones en `DECISIONS.md` (D-291); el contrato de `Photos/` que este plan
+> propuso vive en `CONTRATO-firmware-studio.md` §D.1.
+
 **Estado**: Fase 0 (diagnóstico) y Fase 1 (plan) terminadas — 2026-08-17. **BARRERA**: la Fase 2 no arranca hasta aprobación explícita del dueño.
 **Alcance**: firmware (`Aura-Firmware`). El contrato de la §6 es lo que desbloquea la pasada posterior en `Aura-Studio`.
 **Numeración**: la bitácora va en `DECISIONS.md` a partir de **D-291** (el encargo decía D-287+, pero D-286…D-290 ya existen).

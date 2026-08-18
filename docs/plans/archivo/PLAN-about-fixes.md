@@ -1,5 +1,8 @@
 # PLAN-about-fixes — Fase 1: correcciones y ampliación de "Acerca de"
 
+> **ESTADO: EJECUTADO** — 2026-08-17. Histórico. No es trabajo pendiente.
+> Decisiones en `DECISIONS.md` (D-280…D-283).
+
 **Fecha: 2026-08-16. Estado: PENDIENTE DE APROBACIÓN DEL DUEÑO. Ningún código editado.**
 
 Base: D-278/D-279 (sesión anterior). Investigación de solo lectura sobre `aura_screens.c` (`about_storage_collect`, `draw_storage_segments`, `draw_about*`, `handle_about`), `aura_selection_summary.c`, `aura_transitions.c`, `aura_manifest.c`, `firmware/common/fat.c`/`disk.c`, `dircache`, `tagcache`, Aura Studio (`LibrarySync.swift`, `MediaCategory.swift`, `CatalogSummary.swift`, `AppPreferences.swift`), y las docs vivas.

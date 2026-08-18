@@ -1,5 +1,8 @@
 # PLAN-scroll-fix — Fase 1: diagnóstico y plan (ScrollIndicator + barra A–Z)
 
+> **ESTADO: EJECUTADO** — 2026-08-17. Histórico. No es trabajo pendiente.
+> Decisiones en `DECISIONS.md` (D-275/D-276).
+
 **Fecha: 2026-08-16. Estado: PENDIENTE DE APROBACIÓN DEL DUEÑO. Ningún código editado.**
 
 Investigación de solo lectura cruzando `docs/aura-design-system/componentes/scroll-indicator.md`, `docs/design/Reglas de diseño Apple2026 (v2).md`, `design-system/tokens.json`, el código real (`aura_scroll_indicator.c/.h`, `aura_menu_list.c`, `aura_widgets.c`, `aura_patterns.c`, `aura_coverflow.c`, `aura_screens.c`, `aura_wheel.c/.h`) y `DECISIONS.md` por fecha.

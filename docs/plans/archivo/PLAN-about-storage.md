@@ -1,5 +1,8 @@
 # PLAN-about-storage — Fase 1: "Acerca de" y su barra de almacenamiento
 
+> **ESTADO: EJECUTADO** — 2026-08-17. Histórico. No es trabajo pendiente.
+> Decisiones en `DECISIONS.md` (D-278/D-279).
+
 **Fecha: 2026-08-16. Estado: PENDIENTE DE APROBACIÓN DEL DUEÑO. Ningún código editado.**
 
 Investigación de solo lectura cruzando `docs/aura-design-system/` (selection-summary, transiciones, color por categoría, taxonomía), el código real (`aura_screens.c`, `aura_selection_summary.c`, `aura_transitions.c`, `aura_manifest.c`, `aura_category.h`, `mv.h`), Aura Studio (`LibrarySync.swift`, `CatalogSummary.swift`) y `DECISIONS.md`.

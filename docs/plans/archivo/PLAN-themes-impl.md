@@ -1,5 +1,12 @@
 # PLAN-themes-impl — Sistema de temas: firmware + Aura Studio (Fase 1: investigación y plan)
 
+> **ESTADO: EJECUTADO PARCIALMENTE** — 2026-08-17. Histórico. No es trabajo pendiente.
+> Decisiones en `DECISIONS.md` (D-289) y en Aura Studio (ST-003…ST-005).
+> Sin ejecutar, a propósito: `accent_default`/`accent_presets` del manifiesto
+> (el firmware los acepta pero no los lee — `CONTRATO-formato-tema.md` §H) y la
+> Fase 2B de Aura Studio (rasterizador nativo de fuentes/íconos del sistema);
+> ambos registrados en D-289 y en `CONTRATO-firmware-studio.md` (pendientes).
+
 **Fecha: 2026-08-17. Estado: PENDIENTE DE APROBACIÓN DEL DUEÑO. Nada modificado en ningún repo** (este archivo es el único escrito, sin commit).
 
 Continúa y aterriza `PLAN-theme-system.md` (especificación del 2026-08-16, hoy solo en el repo archivado `Aura-Proyect`; en Fase 2 se copia aquí como `docs/aura-design-system/sistema/05-temas.md` + este plan). **Toda afirmación de viabilidad de abajo fue re-verificada contra el código actual de `Aura-Firmware` (HEAD `6e73074`, post-D-286) y de `Aura-Studio` (HEAD `4082834`)** — donde la especificación y el código difieren, gana el código y lo señalo.
