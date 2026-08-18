@@ -148,6 +148,34 @@ bool aura_settings_is_first_boot(void)
     return !file_exists(AURA_CFG_PATH);
 }
 
+/* Aura (D-306): apps/main.c deja global_settings.fg_color/bg_color/
+ * lss_color/lse_color/lst_color en Oscuro fijo al arrancar (D-055) --
+ * en ese punto todavia no se cargo aura.cfg, asi que splash.c no tiene
+ * forma de saber que tema eligio el usuario. Esta funcion es lo que los
+ * pone al dia una vez que si se sabe (justo despues de
+ * aura_settings_load(), y cada vez que el usuario cambia el modo desde
+ * Ajustes): sin esto, cualquier pantalla nativa de Rockbox que
+ * sobreviva (hoy, en la practica, el menu de ajustes del plugin
+ * mpegplayer y los splash() re-vestidos por D-055/D-056) se quedaba
+ * siempre oscura sin importar el modo real del usuario. */
+void aura_settings_sync_rockbox_theme_colors(void)
+{
+#ifdef HAVE_LCD_COLOR
+    bool dark = (aura_settings.theme == AURA_THEME_DARK);
+
+    global_settings.fg_color = dark ? A26_COLOR_DARK_TEXT_PRIMARY
+                                     : A26_COLOR_LIGHT_TEXT_PRIMARY;
+    global_settings.bg_color = dark ? A26_COLOR_DARK_SHELL_BG
+                                     : A26_COLOR_LIGHT_SHELL_BG;
+    global_settings.lss_color = dark ? A26_COLOR_DARK_ACCENT
+                                      : A26_COLOR_LIGHT_ACCENT;
+    global_settings.lse_color = dark ? A26_COLOR_DARK_ACCENT
+                                      : A26_COLOR_LIGHT_ACCENT;
+    global_settings.lst_color = dark ? A26_COLOR_DARK_SHELL_BG
+                                      : A26_COLOR_LIGHT_SHELL_BG;
+#endif
+}
+
 void aura_settings_reset_to_defaults(void)
 {
     aura_settings = aura_settings_defaults;

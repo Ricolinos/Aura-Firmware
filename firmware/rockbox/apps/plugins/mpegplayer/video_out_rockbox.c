@@ -217,7 +217,19 @@ static bool vo_draw_frame_cover(uint8_t * const * buf)
     stretch_image_plane(src_v, yuv[2], vo.image_width/2,
                         crop_w/2, crop_h/2, UV_W, UV_H);
 
-    yuv_blit(yuv, 0, 0, SCREEN_WIDTH, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    /* Aura (D-305): el buffer recien armado ya cubre la pantalla
+     * completa (sus coordenadas (i,j) coinciden 1:1 con las de
+     * pantalla) -- pero solo hay que blitear la parte que
+     * vo_set_clip_rect() dejo visible. osd_show() ya recorta
+     * vo.rc_clip para excluir la franja del OSD mientras esta
+     * visible (stream_vo_set_clip(), mpegplayer.c); blitear siempre
+     * 0,0..SCREEN_WIDTH,SCREEN_HEIGHT (como se hacia antes) ignoraba
+     * ese recorte y tapaba la barra de progreso/iconos en cada
+     * cuadro, un parpadeo constante -- el path normal (sin cubrir)
+     * nunca tuvo este bug porque ya usaba vo.output_* desde el
+     * origen. */
+    yuv_blit(yuv, vo.output_x, vo.output_y, SCREEN_WIDTH,
+             vo.output_x, vo.output_y, vo.output_width, vo.output_height);
     return true;
 }
 #endif /* HAVE_LCD_COLOR */

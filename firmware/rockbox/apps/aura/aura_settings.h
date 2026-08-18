@@ -201,6 +201,13 @@ void aura_settings_load(void);
 /* Persiste aura_settings a disco. */
 void aura_settings_save(void);
 
+/* Aura (D-306): sincroniza global_settings.fg_color/bg_color/lss_color/
+ * lse_color/lst_color (los que usa cualquier pantalla nativa de
+ * Rockbox que sobreviva, p. ej. el menu de ajustes de mpegplayer) con
+ * aura_settings.theme. Llamar justo despues de aura_settings_load() y
+ * cada vez que el usuario cambia el modo. */
+void aura_settings_sync_rockbox_theme_colors(void);
+
 /* Vuelve aura_settings a sus valores de fabrica (tema, modo grafico,
  * EQ, idioma, menu principal) y los persiste -- "Restablecer ajustes"
  * (Fase 18). No toca ningun ajuste real de Rockbox; para eso ver

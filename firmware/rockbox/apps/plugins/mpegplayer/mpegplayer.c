@@ -623,6 +623,7 @@ struct osd
     unsigned bgcolor;
     unsigned prog_fillcolor;
     unsigned prog_trackcolor;
+    unsigned accent;
     struct vo_rect update_rect;
     struct vo_rect prog_rect;
     struct vo_rect time_rect;
@@ -734,37 +735,55 @@ static void draw_hline(int x1, int x2, int y)
 #endif
 }
 
-static void draw_vline(int x, int y1, int y2)
+/* Aura (D-305): franja delgada de altura fija con extremos redondeados
+ * (capsula), en vez del rectangulo grueso con borde de 1px y esquinas
+ * cuadradas heredado de Rockbox -- la altura del rect que llega sigue
+ * siendo la de siempre (afecta el resto del layout del OSD, no se
+ * toca), la capsula solo se centra verticalmente dentro de ella. A esta
+ * escala (4px de alto, radio 2) una tabla de inset de 1px en la fila
+ * superior/inferior y 0 en las del medio ya se lee como "redondeado" --
+ * no hace falta trazar un circulo de verdad. */
+#define PROG_PILL_HEIGHT 4
+
+static void draw_pill_segment(int x, int y, int width, unsigned color,
+                              bool round_left, bool round_right)
 {
-#ifdef LCD_LANDSCAPE
-    mylcd_vline(x + osd.x, y1 + osd.y, y2 + osd.y);
-#else
-    y1 = LCD_WIDTH - (y1 + osd.y) - 1;
-    y2 = LCD_WIDTH - (y2 + osd.y) - 1;
-    mylcd_hline(y1, y2, x + osd.x);
-#endif
+    static const int cap_inset[PROG_PILL_HEIGHT] = { 1, 0, 0, 1 };
+    int row;
+
+    if (width <= 0)
+        return;
+
+    mylcd_set_foreground(color);
+
+    for (row = 0; row < PROG_PILL_HEIGHT; row++)
+    {
+        int l = round_left ? cap_inset[row] : 0;
+        int r = round_right ? cap_inset[row] : 0;
+        int row_width = width - l - r;
+
+        if (row_width > 0)
+            draw_fillrect(x + l, y + row, row_width, 1);
+    }
 }
 
 static void draw_scrollbar_draw(int x, int y, int width, int height,
                                 uint32_t min, uint32_t max, uint32_t val)
 {
     unsigned oldfg = mylcd_get_foreground();
+    int bar_y = y + (height - PROG_PILL_HEIGHT) / 2;
+    uint32_t fill_w = muldiv_uint32((uint32_t)width, val, max - min);
+    fill_w = MIN(fill_w, (uint32_t)width);
 
-    draw_hline(x + 1, x + width - 2, y);
-    draw_hline(x + 1, x + width - 2, y + height - 1);
-    draw_vline(x, y + 1, y + height - 2);
-    draw_vline(x + width - 1, y + 1, y + height - 2);
-
-    val = muldiv_uint32(width - 2, val, max - min);
-    val = MIN(val, (uint32_t)(width - 2));
-
-    mylcd_set_foreground(osd.prog_fillcolor);
-
-    draw_fillrect(x + 1, y + 1, val, height - 2);
-
-    mylcd_set_foreground(osd.prog_trackcolor);
-
-    draw_fillrect(x + 1 + val, y + 1, width - 2 - val, height - 2);
+    if (fill_w == 0)
+        draw_pill_segment(x, bar_y, width, osd.prog_trackcolor, true, true);
+    else if (fill_w >= (uint32_t)width)
+        draw_pill_segment(x, bar_y, width, osd.prog_fillcolor, true, true);
+    else
+    {
+        draw_pill_segment(x, bar_y, width, osd.prog_trackcolor, true, true);
+        draw_pill_segment(x, bar_y, (int)fill_w, osd.prog_fillcolor, true, false);
+    }
 
     mylcd_set_foreground(oldfg);
 }
@@ -1313,6 +1332,175 @@ static void osd_text_init(void)
     draw_setfont(FONT_SYSFIXED);
 }
 
+#ifdef HAVE_LCD_COLOR
+/* Aura (D-306): el OSD usaba SIEMPRE la paleta Oscuro compilada, sin
+ * importar el modo claro/oscuro ni el "Estilo" que el usuario tenga
+ * activo en el resto de la app -- los plugins no pueden incluir
+ * apple2026_tokens.h ni llamar a apps/aura/aura_style.c (build y link
+ * separados, solo la tabla rb->), pero SI pueden abrir cualquier
+ * archivo del disco con las mismas primitivas genericas que ya usa
+ * configfile_load() para mpegplayer.cfg -- y la personalizacion de Aura
+ * ya vive en archivos de texto planos y legibles: /.rockbox/aura/aura.cfg
+ * (modo, acento, id del Estilo activo) y, si hay un Estilo custom,
+ * /.rockbox/aura/themes/<id>/theme.cfg (paleta). Formato y claves
+ * confirmados contra apps/aura/aura_settings.c y
+ * apps/aura/aura_style_manifest.c -- mismo riesgo de desincronizacion
+ * silenciosa que los literales de color de siempre si esas claves
+ * cambian de nombre alla. */
+#define AURA_CFG_PATH      "/.rockbox/aura/aura.cfg"
+#define AURA_STYLES_DIR    "/.rockbox/aura/themes"
+#define AURA_STYLE_ID_LEN  33  /* aura_style_manifest.h */
+
+struct aura_osd_palette
+{
+    unsigned bgcolor;
+    unsigned fgcolor;
+    unsigned prog_fillcolor;
+    unsigned prog_trackcolor;
+    unsigned accent;
+};
+
+static bool aura_parse_hex_color(const char *value, unsigned *out)
+{
+    unsigned long v;
+    char *end;
+    const char *p = value;
+
+    if (*p == '#')
+        p++;
+
+    v = rb->strtoul(p, &end, 16);
+
+    if (end == p || *end != '\0' || v > 0xFFFFFFul)
+        return false;
+
+    *out = LCD_RGBPACK((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+    return true;
+}
+
+/* Mismo alfabeto y limite que aura_style_id_is_valid() -- theme_id pasa
+ * a formar parte de una ruta de archivo, tiene que validarse igual de
+ * estricto aca (nunca confiar en el contenido de aura.cfg para
+ * construir una ruta). */
+static bool aura_style_id_ok(const char *id)
+{
+    size_t len = rb->strlen(id), i;
+
+    if (len == 0 || len >= AURA_STYLE_ID_LEN)
+        return false;
+    if (!rb->strcmp(id, "default"))
+        return false;
+
+    for (i = 0; i < len; i++)
+    {
+        char c = id[i];
+        bool ok = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
+        if (!ok)
+            return false;
+    }
+
+    return true;
+}
+
+/* Deja *out con la paleta a usar -- siempre valida, con fallback a los
+ * literales compilados (Oscuro) ante cualquier archivo ausente, clave
+ * faltante o valor malformado (mismo criterio de "fallback de
+ * seguridad" que aura_style.c). */
+static void aura_load_personalization(struct aura_osd_palette *out)
+{
+    int fd;
+    char line[96];
+    char *name, *value;
+    int theme_mode = 1; /* 1 = oscuro (default de aura_settings.c) */
+    char theme_id[AURA_STYLE_ID_LEN];
+    bool have_accent = false;
+    unsigned accent = 0;
+
+    theme_id[0] = '\0';
+
+    /* Defaults compilados -- Fase 20/D-062, re-sincronizados Fase 26 y
+     * D-304 (tokens.json dark.*). Es lo que se usa si aura.cfg falta o
+     * esta incompleto. */
+    out->bgcolor         = LCD_RGBPACK(0x1c, 0x1c, 0x1e);
+    out->fgcolor         = LCD_WHITE;
+    out->prog_fillcolor  = LCD_RGBPACK(0xe5, 0xe5, 0xea);
+    out->prog_trackcolor = LCD_RGBPACK(0x48, 0x48, 0x4a);
+    out->accent          = LCD_RGBPACK(0xff, 0x45, 0x6c);
+
+    fd = rb->open(AURA_CFG_PATH, O_RDONLY);
+    if (fd < 0)
+        return;
+
+    while (rb->read_line(fd, line, sizeof(line)) > 0)
+    {
+        if (!rb->settings_parseline(line, &name, &value))
+            continue;
+
+        if (!rb->strcmp(name, "theme"))
+            theme_mode = rb->atoi(value);
+        else if (!rb->strcmp(name, "theme_id"))
+            rb->strlcpy(theme_id, value, sizeof(theme_id));
+        else if (!rb->strcmp(name, "accent_rgb24"))
+            have_accent = aura_parse_hex_color(value, &accent);
+    }
+
+    rb->close(fd);
+
+    if (theme_mode == 0)
+    {
+        /* Claro -- tokens.json light.* */
+        out->bgcolor         = LCD_WHITE;
+        out->fgcolor         = LCD_RGBPACK(0x00, 0x00, 0x00);
+        out->prog_fillcolor  = LCD_RGBPACK(0x3c, 0x3c, 0x43);
+        out->prog_trackcolor = LCD_RGBPACK(0xe5, 0xe5, 0xea);
+        out->accent          = LCD_RGBPACK(0xff, 0x2d, 0x55);
+    }
+
+    if (have_accent)
+        out->accent = accent;
+
+    if (theme_id[0] && aura_style_id_ok(theme_id))
+    {
+        char path[MAX_PATH];
+        const char *prefix = (theme_mode == 0) ? "palette_light_" : "palette_dark_";
+        size_t prefix_len = rb->strlen(prefix);
+
+        rb->snprintf(path, sizeof(path), "%s/%s/theme.cfg",
+                    AURA_STYLES_DIR, theme_id);
+
+        fd = rb->open(path, O_RDONLY);
+        if (fd < 0)
+            return;
+
+        while (rb->read_line(fd, line, sizeof(line)) > 0)
+        {
+            unsigned color;
+            const char *role;
+
+            if (!rb->settings_parseline(line, &name, &value))
+                continue;
+            if (rb->strncmp(name, prefix, prefix_len))
+                continue;
+            if (!aura_parse_hex_color(value, &color))
+                continue;
+
+            role = name + prefix_len;
+
+            if (!rb->strcmp(role, "shell_bg"))
+                out->bgcolor = color;
+            else if (!rb->strcmp(role, "text_primary"))
+                out->fgcolor = color;
+            else if (!rb->strcmp(role, "progress_fill"))
+                out->prog_fillcolor = color;
+            else if (!rb->strcmp(role, "progress_track"))
+                out->prog_trackcolor = color;
+        }
+
+        rb->close(fd);
+    }
+}
+#endif /* HAVE_LCD_COLOR */
+
 static void osd_init(void)
 {
     osd.flags = 0;
@@ -1320,32 +1508,21 @@ static void osd_init(void)
     osd.print_delay = 75*HZ/100;
     osd.resume_delay = HZ/2;
 #ifdef HAVE_LCD_COLOR
-    /* Fase 20 (PLAN-UX.md) / D-062, valores re-sincronizados en Fase 26
-     * y D-304: paleta Apple2026 (tema Oscuro de design-system/tokens.json)
-     * en vez del azul-lavanda generico de Rockbox -- los plugins no
-     * pueden incluir apple2026_tokens.h (build y link separados, via la
-     * tabla rb->), asi que los valores van literales, igual que ya hacia
-     * este archivo. Es exactamente el tipo de literal que el sistema de
-     * diseno prohibe (SS2) pero que la frontera de plugin obliga aca --
-     * y por eso mismo se desincronizo en silencio durante la Fase 26
-     * (el acento paso de #FF453A a #FF456C y esto no se actualizo hasta
-     * despues): sin un mecanismo que los mantenga atados, revisar este
-     * archivo cada vez que cambie tokens.json queda en manos de quien lo
-     * recuerde. */
-    osd.bgcolor = LCD_RGBPACK(0x1c, 0x1c, 0x1e);   /* dark.shell_bg */
-    osd.fgcolor = LCD_WHITE;
-    /* D-304: la barra de progreso tenia el relleno invertido -- pintaba
-     * el tramo YA REPRODUCIDO en blanco liso y el POR REPRODUCIR en el
-     * acento (#FF456C), al reves de como se usa en el resto de la app
-     * (donde el acento no aparece en absoluto en sliders de progreso;
-     * ver dark.progress_fill/progress_track en tokens.json). */
-    osd.prog_fillcolor = LCD_RGBPACK(0xe5, 0xe5, 0xea);    /* dark.progress_fill */
-    osd.prog_trackcolor = LCD_RGBPACK(0x48, 0x48, 0x4a);   /* dark.progress_track */
+    {
+        struct aura_osd_palette pal;
+        aura_load_personalization(&pal);
+        osd.bgcolor = pal.bgcolor;
+        osd.fgcolor = pal.fgcolor;
+        osd.prog_fillcolor = pal.prog_fillcolor;
+        osd.prog_trackcolor = pal.prog_trackcolor;
+        osd.accent = pal.accent;
+    }
 #else
     osd.bgcolor = GREY_LIGHTGRAY;
     osd.fgcolor = GREY_BLACK;
     osd.prog_fillcolor = GREY_WHITE;
     osd.prog_trackcolor = GREY_DARKGRAY;
+    osd.accent = GREY_WHITE;
 #endif
     osd.curr_time = 0;
     osd.status = OSD_STATUS_STOPPED;
@@ -1504,8 +1681,17 @@ static void osd_refresh_status(void)
         if (--i < 0)
             break;
 
-        mylcd_set_foreground(oldfg);
+        /* Aura (D-306): el trazo principal (no la sombra) usa el
+         * acento del usuario en vez del color de texto -- unico punto
+         * del OSD donde el acento tiene un lugar natural, ya que la
+         * barra de progreso deliberadamente NO lo usa (D-304). */
+        mylcd_set_foreground(osd.accent);
     }
+
+    /* Restaura el color de entrada -- mismo criterio que
+     * draw_scrollbar_draw(): cada funcion de dibujo deja el color como
+     * lo encontro, osd_refresh() no lo hace por ellas. */
+    mylcd_set_foreground(oldfg);
 
     vo_rect_union(&osd.update_rect, &osd.update_rect, &osd.stat_rect);
 #else

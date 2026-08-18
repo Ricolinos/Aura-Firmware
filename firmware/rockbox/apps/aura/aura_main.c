@@ -298,6 +298,7 @@ void aura_main(void)
     if (first_boot)
         aura_settings_apply_core_defaults();
     aura_settings_load();
+    aura_settings_sync_rockbox_theme_colors();
     if (first_boot)
         /* aura_settings_is_first_boot() se basa en si aura.cfg ya
          * existe -- pero aura_settings_save() solo se llama hoy desde

@@ -5032,6 +5032,7 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
         {
             aura_settings.theme = (aura_settings.theme == AURA_THEME_LIGHT)
                 ? AURA_THEME_DARK : AURA_THEME_LIGHT;
+            aura_settings_sync_rockbox_theme_colors();
             aura_settings_save();
             break;
         }
