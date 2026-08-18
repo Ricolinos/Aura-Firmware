@@ -89,6 +89,7 @@
  * activo, con fallback a la paleta Oscura compilada), cargados una vez
  * por osd_init() -- mpeg_settings.c los usa para su menu propio
  * (D-307), que no puede leer el struct osd (estatico en mpegplayer.c). */
-void aura_osd_colors(unsigned *bgcolor, unsigned *fgcolor, unsigned *accent);
+void aura_osd_colors(unsigned *bgcolor, unsigned *fgcolor, unsigned *accent,
+                     unsigned *selection_fill);
 
 #endif /* MPEGPLAYER_H */

@@ -624,6 +624,7 @@ struct osd
     unsigned prog_fillcolor;
     unsigned prog_trackcolor;
     unsigned accent;
+    unsigned selection_fill;
     struct vo_rect update_rect;
     struct vo_rect prog_rect;
     struct vo_rect time_rect;
@@ -1358,6 +1359,7 @@ struct aura_osd_palette
     unsigned prog_fillcolor;
     unsigned prog_trackcolor;
     unsigned accent;
+    unsigned selection_fill;
 };
 
 static bool aura_parse_hex_color(const char *value, unsigned *out)
@@ -1426,6 +1428,7 @@ static void aura_load_personalization(struct aura_osd_palette *out)
     out->prog_fillcolor  = LCD_RGBPACK(0xe5, 0xe5, 0xea);
     out->prog_trackcolor = LCD_RGBPACK(0x48, 0x48, 0x4a);
     out->accent          = LCD_RGBPACK(0xff, 0x45, 0x6c);
+    out->selection_fill  = LCD_RGBPACK(0x2c, 0x2c, 0x2e);
 
     fd = rb->open(AURA_CFG_PATH, O_RDONLY);
     if (fd < 0)
@@ -1454,6 +1457,7 @@ static void aura_load_personalization(struct aura_osd_palette *out)
         out->prog_fillcolor  = LCD_RGBPACK(0x3c, 0x3c, 0x43);
         out->prog_trackcolor = LCD_RGBPACK(0xe5, 0xe5, 0xea);
         out->accent          = LCD_RGBPACK(0xff, 0x2d, 0x55);
+        out->selection_fill  = LCD_RGBPACK(0xe5, 0xe5, 0xea);
     }
 
     if (have_accent)
@@ -1494,6 +1498,8 @@ static void aura_load_personalization(struct aura_osd_palette *out)
                 out->prog_fillcolor = color;
             else if (!rb->strcmp(role, "progress_track"))
                 out->prog_trackcolor = color;
+            else if (!rb->strcmp(role, "selection_fill"))
+                out->selection_fill = color;
         }
 
         rb->close(fd);
@@ -1516,6 +1522,7 @@ static void osd_init(void)
         osd.prog_fillcolor = pal.prog_fillcolor;
         osd.prog_trackcolor = pal.prog_trackcolor;
         osd.accent = pal.accent;
+        osd.selection_fill = pal.selection_fill;
     }
 #else
     osd.bgcolor = GREY_LIGHTGRAY;
@@ -1523,6 +1530,7 @@ static void osd_init(void)
     osd.prog_fillcolor = GREY_WHITE;
     osd.prog_trackcolor = GREY_DARKGRAY;
     osd.accent = GREY_WHITE;
+    osd.selection_fill = GREY_DARKGRAY;
 #endif
     osd.curr_time = 0;
     osd.status = OSD_STATUS_STOPPED;
@@ -1532,11 +1540,13 @@ static void osd_init(void)
     fps_init();
 }
 
-void aura_osd_colors(unsigned *bgcolor, unsigned *fgcolor, unsigned *accent)
+void aura_osd_colors(unsigned *bgcolor, unsigned *fgcolor, unsigned *accent,
+                     unsigned *selection_fill)
 {
     *bgcolor = osd.bgcolor;
     *fgcolor = osd.fgcolor;
     *accent = osd.accent;
+    *selection_fill = osd.selection_fill;
 }
 
 #ifdef HAVE_HEADPHONE_DETECTION

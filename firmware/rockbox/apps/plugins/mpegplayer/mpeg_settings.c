@@ -49,60 +49,102 @@ static struct configdata config[] =
 
 static void mpeg_settings(void);
 
-/* Aura (D-307): reemplaza rb->do_menu()/rb->set_option()/rb->set_int_ex()
- * -- son widgets 100% Rockbox nativo (icono de "atras" propio, resaltado
- * de seleccion propio, tipografia propia) que no leen ni un color de
- * aura.cfg; D-306 solo llega al OSD (codigo de Aura dentro de este mismo
- * plugin), nunca a este menu. aura_menu_draw()/aura_menu_pick() dibujan
- * con rb->lcd_* directo (mismo patron que ya usaba button_loop() para
- * limpiar la pantalla antes/despues de este menu) y los colores reales
- * del usuario via aura_osd_colors() (mpegplayer.c). */
-#define AURA_MENU_ROW_PAD 6
+/* Aura (D-307/D-309): reemplaza rb->do_menu()/rb->set_option()/
+ * rb->set_int_ex() -- son widgets 100% Rockbox nativo (icono de "atras"
+ * propio, resaltado de seleccion propio, tipografia propia) que no leen
+ * ni un color de aura.cfg; D-306 solo llega al OSD (codigo de Aura
+ * dentro de este mismo plugin), nunca a este menu. Geometria calcada de
+ * aura_widgets_draw_list() (apps/aura/aura_widgets.c): ROW_HEIGHT
+ * (type_scale.body=13 + 2*spacing.md=8), ROW_PAD_X (layout.list_inset
+ * =16), PILL_MARGIN_Y=2, radio de pildora=corner_radius_pill=8 --
+ * mismos literales de tokens.json que el resto de este archivo, por la
+ * misma frontera de plugin. La fila seleccionada usa un tinte sutil
+ * (selection_fill) de fondo con el TEXTO en acento -- igual que el
+ * widget real, nunca un bloque solido de acento con texto invertido
+ * (ese fue el primer intento, D-307: ademas de no calzar con el
+ * sistema de diseno, tenia un bug real -- rb->lcd_putsxy() con
+ * DRMODE_SOLID pinta el fondo opaco de cada caracter con
+ * rb->lcd_set_background(), que nunca se actualizaba por fila, dejando
+ * el texto "invertido" blanco sobre blanco e invisible, con solo su
+ * parche opaco de fondo a la vista -- el recuadro vacio que se veia en
+ * pantalla). Con DRMODE_FG (glifos transparentes, sin parche de fondo)
+ * el texto puede dibujarse sobre cualquier superficie sin este riesgo. */
+#define AURA_ROW_HEIGHT    29  /* type_scale.body(13) + 2*spacing.md(8) */
+#define AURA_ROW_PAD_X     16  /* layout.list_inset */
+#define AURA_PILL_MARGIN_Y 2
+#define AURA_TITLE_TOP     10
+#define AURA_LIST_TOP      40
+
+/* Aproximacion de esquina redondeada por inset horizontal de fila,
+ * radio 8 (corner_radius_pill) -- mismo criterio que la barra de
+ * progreso en pildora del OSD (D-305), solo que con mas filas porque
+ * el radio es mayor. */
+static void aura_fill_rounded_pill(int x, int y, int width, int height,
+                                   unsigned color)
+{
+    static const int corner_inset[8] = { 5, 3, 2, 1, 1, 0, 0, 0 };
+    int i;
+
+    rb->lcd_set_drawmode(DRMODE_SOLID);
+    rb->lcd_set_foreground(color);
+
+    for (i = 0; i < 8; i++)
+    {
+        int inset = corner_inset[i];
+        rb->lcd_fillrect(x + inset, y + i, width - 2 * inset, 1);
+        rb->lcd_fillrect(x + inset, y + height - 1 - i, width - 2 * inset, 1);
+    }
+
+    rb->lcd_fillrect(x, y + 8, width, height - 16);
+}
 
 static void aura_menu_draw(const char *title, const char *const *labels,
                            const char *const *values, int count, int sel)
 {
-    unsigned bg, fg, accent;
-    int row_h, y, i;
+    unsigned bg, fg, accent, selection_fill;
+    int text_h, y, i;
 
-    aura_osd_colors(&bg, &fg, &accent);
+    aura_osd_colors(&bg, &fg, &accent, &selection_fill);
 
-    rb->lcd_set_drawmode(DRMODE_SOLID);
     rb->lcd_setfont(FONT_UI);
     rb->lcd_set_background(bg);
     rb->lcd_set_foreground(fg);
+    rb->lcd_set_drawmode(DRMODE_SOLID);
     rb->lcd_clear_display();
 
-    rb->lcd_getstringsize("Ag", NULL, &row_h);
-    row_h += AURA_MENU_ROW_PAD;
+    rb->lcd_getstringsize("Ag", NULL, &text_h);
 
-    rb->lcd_putsxy(8, 8, title);
-    y = row_h + 12;
+    rb->lcd_set_drawmode(DRMODE_FG);
+    rb->lcd_putsxy(AURA_ROW_PAD_X, AURA_TITLE_TOP, title);
+
+    y = AURA_LIST_TOP;
 
     for (i = 0; i < count; i++)
     {
+        int text_y = y + (AURA_ROW_HEIGHT - text_h) / 2;
+
         if (i == sel)
         {
-            rb->lcd_set_foreground(accent);
-            rb->lcd_fillrect(0, y, SCREEN_WIDTH, row_h);
-            rb->lcd_set_foreground(bg);
-        }
-        else
-        {
-            rb->lcd_set_foreground(fg);
+            aura_fill_rounded_pill(AURA_ROW_PAD_X, y + AURA_PILL_MARGIN_Y,
+                                   SCREEN_WIDTH - 2 * AURA_ROW_PAD_X,
+                                   AURA_ROW_HEIGHT - 2 * AURA_PILL_MARGIN_Y,
+                                   selection_fill);
         }
 
-        rb->lcd_putsxy(12, y + AURA_MENU_ROW_PAD / 2, labels[i]);
+        rb->lcd_set_drawmode(DRMODE_FG);
+        rb->lcd_set_foreground(i == sel ? accent : fg);
+
+        rb->lcd_putsxy(AURA_ROW_PAD_X + 4, text_y, labels[i]);
 
         if (values && values[i])
         {
             int vw;
             rb->lcd_getstringsize(values[i], &vw, NULL);
-            rb->lcd_putsxy(SCREEN_WIDTH - vw - 12, y + AURA_MENU_ROW_PAD / 2,
+            rb->lcd_putsxy(SCREEN_WIDTH - AURA_ROW_PAD_X - 4 - vw, text_y,
                           values[i]);
         }
 
-        y += row_h;
+        y += AURA_ROW_HEIGHT;
     }
 
     rb->lcd_update();
@@ -157,17 +199,20 @@ static int aura_menu_pick(const char *title, const char *const *labels,
 #ifdef HAVE_BACKLIGHT_BRIGHTNESS /* Only used for this atm */
 static void aura_adjust_draw(const char *title, const char *value_text)
 {
-    unsigned bg, fg, accent;
+    unsigned bg, fg, accent, selection_fill;
     int tw, th, vw, vh;
 
-    aura_osd_colors(&bg, &fg, &accent);
+    aura_osd_colors(&bg, &fg, &accent, &selection_fill);
+    (void)selection_fill;
 
-    rb->lcd_set_drawmode(DRMODE_SOLID);
     rb->lcd_setfont(FONT_UI);
     rb->lcd_set_background(bg);
-    rb->lcd_set_foreground(fg);
+    rb->lcd_set_drawmode(DRMODE_SOLID);
     rb->lcd_clear_display();
 
+    rb->lcd_set_drawmode(DRMODE_FG);
+
+    rb->lcd_set_foreground(fg);
     rb->lcd_getstringsize(title, &tw, &th);
     rb->lcd_putsxy((SCREEN_WIDTH - tw) / 2, SCREEN_HEIGHT / 2 - th - 8, title);
 
