@@ -115,6 +115,10 @@ static int s_photo_count = -1;
  * si hay 0 o mas) y lo que decide la fila final "...y N mas". */
 static int s_photo_total_count = -1;
 static int s_current_index = 0;
+/* D-303: alternado con SELECT dentro del visor; se reinicia a
+ * "ajustar" (false) cada vez que se entra desde la lista -- ver
+ * aura_photos_handle_button()/aura_photo_viewer_handle_button(). */
+static bool s_cover_mode = false;
 
 static unsigned char s_view_scratch[VIEW_SCRATCH_SIZE];
 static int s_loaded_index = -1;
@@ -132,8 +136,23 @@ static bool is_supported_image(const char *name)
     return has_ext(name, ".jpg") || has_ext(name, ".jpeg") || has_ext(name, ".bmp");
 }
 
+/* D-302 (el dueno, hardware real: "muchas se ven, pero hay otras que
+ * no, empiezan con '._Nombre'"): sidecars AppleDouble de macOS --
+ * resource fork/xattrs que macOS deja junto al archivo real al
+ * escribirlo en un volumen sin ese soporte nativo (el FAT32 del iPod,
+ * o al copiar/extraer desde un ZIP/USB de origen). Comparten la
+ * extension del archivo real ("._Foto.jpg") pero su contenido no es
+ * una imagen -- se listaban igual (misma extension) y nunca abrian.
+ * Nunca son contenido real del usuario, se descartan siempre. */
+static bool is_apple_double_sidecar(const char *name)
+{
+    return name[0] == '.' && name[1] == '_';
+}
+
 static bool is_listable_image(const char *name)
 {
+    if (is_apple_double_sidecar(name))
+        return false;
     return is_supported_image(name) || has_ext(name, ".png") || has_ext(name, ".gif");
 }
 
@@ -647,6 +666,15 @@ void aura_photos_handle_button(aura_nav_t *nav, long button)
         if (sel >= 0 && sel < s_photo_count)
         {
             s_current_index = sel;
+            /* D-303: cada entrada al visor arranca en "ajustar" --
+             * s_loaded_index tambien se invalida aca (no solo cuando
+             * cambia el indice de foto): reabrir la MISMA foto que se
+             * habia dejado en "cubrir" sin esto se saltaba la
+             * redecodificacion (s_loaded_index ya coincidia con
+             * s_current_index) y se seguia viendo "cubrir" pese a que
+             * s_cover_mode ya habia vuelto a false. */
+            s_cover_mode = false;
+            s_loaded_index = -1;
             aura_nav_push(nav, AURA_SCREEN_PHOTO_VIEWER);
         }
         break;
@@ -667,6 +695,14 @@ typedef enum {
 static int s_probed_index = -1;
 static photo_probe_t s_probe_result = PHOTO_PROBE_OK;
 static bool s_probe_needs_indicator = false;
+/* D-303 (el dueno: modo "cubriendo los bordes" en el visor, alternado
+ * con SELECT): dimensiones reales de la foto, conocidas desde la
+ * misma fase de sondeo que ya corria (solo cabeceras) -- hacen falta
+ * para calcular el recorte de "cubrir" antes de decodificar. 0 si el
+ * sondeo no pudo leerlas (cabecera no reconocida): ese caso cae a
+ * modo "ajustar" sin importar s_cover_mode, ver load_current_photo(). */
+static int s_probed_src_w = 0;
+static int s_probed_src_h = 0;
 
 /* D-291: fase barata (solo cabeceras, nunca pixeles) que decide ANTES
  * de decodificar si la foto cabe en el tope, si es un formato que ya
@@ -684,6 +720,8 @@ static void probe_current_photo(void)
     s_probed_index = s_current_index;
     s_probe_result = PHOTO_PROBE_OK;
     s_probe_needs_indicator = false;
+    s_probed_src_w = 0;
+    s_probed_src_h = 0;
 
     if (!s_photos[s_current_index].supported)
     {
@@ -716,13 +754,83 @@ static void probe_current_photo(void)
         s_probe_result = PHOTO_PROBE_TOO_LARGE;
         return;
     }
+    s_probed_src_w = w;
+    s_probed_src_h = h;
     s_probe_needs_indicator = (w > PHOTO_LOADING_INDICATOR_SIDE || h > PHOTO_LOADING_INDICATOR_SIDE);
+}
+
+/* D-303: tamano objetivo de decodificacion para el modo "cubrir" --
+ * agranda lo suficiente para que la foto cubra TODA la pantalla en
+ * ambos ejes (nunca deforma, mismo factor en X e Y), recortando el
+ * sobrante en el eje que le sobre. Dos topes, en este orden:
+ *
+ *  1. El decoder de JPEG de Rockbox SOLO reduce durante la
+ *     decodificacion (escalado en el dominio DCT, potencias de 2) --
+ *     nunca agranda. Pedir un tamano mayor al de origen decodificaria
+ *     a resolucion nativa igual, dejando bm->width/height
+ *     desincronizados de lo que en realidad se escribio en el
+ *     scratch buffer. Por eso el factor de "cubrir" se acota a 1.0:
+ *     una foto mas chica que la pantalla en el eje que le falta
+ *     simplemente no se agranda mas alla de su tamano real (se ve
+ *     igual que en modo "ajustar" en ese caso -- limite real del
+ *     hardware, no un descuido).
+ *  2. `s_view_scratch` es un buffer fijo (VIEW_SCRATCH_SIZE) -- una
+ *     foto de calidad "HD" (640px) en modo "cubrir" puede pedir mas
+ *     pixeles de los que ese buffer tiene espacio (640x640 a 16bpp ya
+ *     excede los 240 KiB reservados). Si el tamano ideal no entra, se
+ *     reduce proporcionalmente (conserva el aspecto) hasta que si.
+ */
+static void compute_cover_target(int src_w, int src_h, int *out_w, int *out_h)
+{
+    /* Aritmetica en punto fijo Q16.16 -- este target no tiene FPU;
+     * mismo criterio general (shift en vez de float) que ya usa
+     * aura_flow.c para su proyeccion de perspectiva, aunque con otro
+     * ancho de shift (10 alla, 16 aca -- este calculo no comparte
+     * ninguna formula con esas, solo la tecnica). */
+    long scale_x = ((long)A26_SCREEN_WIDTH << 16) / src_w;
+    long scale_y = ((long)A26_SCREEN_HEIGHT << 16) / src_h;
+    long scale = (scale_x > scale_y) ? scale_x : scale_y; /* max: cubrir, no ajustar */
+    long w, h;
+
+    if (scale > (1L << 16))
+        scale = 1L << 16; /* nunca agranda mas alla del tamano real (decoder solo reduce) */
+
+    w = (src_w * scale) >> 16;
+    h = (src_h * scale) >> 16;
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
+
+    if ((long)w * h * (long)sizeof(fb_data) > (long)VIEW_SCRATCH_SIZE)
+    {
+        /* isqrt256-style: sqrt entero por biseccion, ya que no hay FPU
+         * -- el rango cabe sobrado en 32 bits para estos tamanos. */
+        long budget_px = (long)VIEW_SCRATCH_SIZE / (long)sizeof(fb_data);
+        long num = budget_px << 16, den = (long)w * h;
+        long mem_scale2 = num / den; /* factor^2 en Q16.16 */
+        long lo = 0, hi = 1L << 16, mem_scale;
+        while (lo < hi)
+        {
+            long mid = (lo + hi + 1) / 2;
+            if ((mid * mid) >> 16 <= mem_scale2)
+                lo = mid;
+            else
+                hi = mid - 1;
+        }
+        mem_scale = lo;
+        w = (w * mem_scale) >> 16;
+        h = (h * mem_scale) >> 16;
+        if (w < 1) w = 1;
+        if (h < 1) h = 1;
+    }
+
+    *out_w = (int)w;
+    *out_h = (int)h;
 }
 
 static void load_current_photo(void)
 {
     char path[MAX_PATH];
-    int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
+    int format;
     int ret;
 
     if (s_loaded_index == s_current_index)
@@ -735,12 +843,31 @@ static void load_current_photo(void)
 
     snprintf(path, sizeof(path), "%s/%s", PHOTOS_DIR, s_photos[s_current_index].filename);
 
-    s_bm.width = A26_SCREEN_WIDTH;
-    s_bm.height = A26_SCREEN_HEIGHT;
     s_bm.data = (char *)s_view_scratch;
 #if (LCD_DEPTH > 1)
     s_bm.maskdata = NULL;
 #endif
+
+    /* D-303: en modo "cubrir" el tamano objetivo exacto ya viene
+     * calculado (recorte incluido) -- sin FORMAT_KEEP_ASPECT, que
+     * volvería a encoger para que quepa entero en la caja (justo lo
+     * que "ajustar" hace y "cubrir" quiere evitar). Sin dimensiones de
+     * origen (sondeo no las pudo leer) cae a "ajustar" sin importar
+     * s_cover_mode -- no hay con que calcular el recorte. */
+    if (s_cover_mode && s_probed_src_w > 0 && s_probed_src_h > 0)
+    {
+        int target_w, target_h;
+        compute_cover_target(s_probed_src_w, s_probed_src_h, &target_w, &target_h);
+        s_bm.width = target_w;
+        s_bm.height = target_h;
+        format = FORMAT_NATIVE | FORMAT_RESIZE;
+    }
+    else
+    {
+        s_bm.width = A26_SCREEN_WIDTH;
+        s_bm.height = A26_SCREEN_HEIGHT;
+        format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
+    }
 
     if (has_ext(path, ".bmp"))
         ret = read_bmp_file(path, &s_bm, sizeof(s_view_scratch), format, NULL);
@@ -794,10 +921,25 @@ void aura_photo_viewer_draw(aura_nav_t *nav)
         return;
     }
 
-    lcd_bitmap((const fb_data *)s_view_scratch,
-               (A26_SCREEN_WIDTH - s_bm.width) / 2,
-               (A26_SCREEN_HEIGHT - s_bm.height) / 2,
-               s_bm.width, s_bm.height);
+    /* D-303: una sola formula para "ajustar" (bitmap <= pantalla,
+     * letterbox/pillarbox -- src_x/y quedan en 0, x/y positivos
+     * centran) Y "cubrir" (bitmap >= pantalla en algun eje -- x/y
+     * quedan en 0, src_x/y positivos recortan del centro). El caso
+     * degradado por el tope de memoria de compute_cover_target() (mas
+     * chico que la pantalla en algun eje pese a pedir "cubrir") cae
+     * sola en la misma formula: ese eje simplemente centra como
+     * "ajustar". */
+    {
+        int src_x = (s_bm.width > A26_SCREEN_WIDTH) ? (s_bm.width - A26_SCREEN_WIDTH) / 2 : 0;
+        int src_y = (s_bm.height > A26_SCREEN_HEIGHT) ? (s_bm.height - A26_SCREEN_HEIGHT) / 2 : 0;
+        int dst_x = (s_bm.width < A26_SCREEN_WIDTH) ? (A26_SCREEN_WIDTH - s_bm.width) / 2 : 0;
+        int dst_y = (s_bm.height < A26_SCREEN_HEIGHT) ? (A26_SCREEN_HEIGHT - s_bm.height) / 2 : 0;
+        int draw_w = (s_bm.width < A26_SCREEN_WIDTH) ? s_bm.width : A26_SCREEN_WIDTH;
+        int draw_h = (s_bm.height < A26_SCREEN_HEIGHT) ? s_bm.height : A26_SCREEN_HEIGHT;
+
+        lcd_bitmap_part((const fb_data *)s_view_scratch, src_x, src_y, s_bm.width,
+                         dst_x, dst_y, draw_w, draw_h);
+    }
 }
 
 void aura_photo_viewer_handle_button(aura_nav_t *nav, long button)
@@ -830,7 +972,6 @@ void aura_photo_viewer_handle_button(aura_nav_t *nav, long button)
         }
         break;
     case BUTTON_MENU:
-    case BUTTON_SELECT:
         /* D-291 §5.3: la lista recupera la seleccion de la foto que se
          * estaba viendo, no la que tenia al entrar -- aura_nav_pop()
          * PRIMERO (decrementa depth), aura_nav_set_selection() DESPUES
@@ -838,6 +979,16 @@ void aura_photo_viewer_handle_button(aura_nav_t *nav, long button)
          * propio visor -- ver aura_nav_set_selection()/aura_nav.c). */
         aura_nav_pop(nav);
         aura_nav_set_selection(nav, s_current_index);
+        break;
+    /* D-303 (encargo del dueno): Select alterna "ajustar" (foto
+     * completa, con bandas si no llena la pantalla) / "cubrir" (llena
+     * la pantalla, recortando el sobrante, sin deformar) -- toma el
+     * lugar que antes tenia como atajo redundante de Menu para salir;
+     * Menu sigue siendo la unica salida. s_loaded_index = -1 fuerza
+     * una redecodificacion con el tamano objetivo del modo nuevo. */
+    case BUTTON_SELECT:
+        s_cover_mode = !s_cover_mode;
+        s_loaded_index = -1;
         break;
     default:
         break;

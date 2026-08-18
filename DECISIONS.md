@@ -276,3 +276,27 @@ gh release create v0.2.1-beta \
 **Hecho**: `credits_body_with_version()` (`aura_screens.c`) ya no concatena el bloque de versión al FINAL del cuerpo de créditos — lo inserta justo después de la primera línea ("Aura"), antes de "Creado por Ricardo Gómez.". Sin tocar las cadenas traducidas (`AURA_STR_ABOUT_CREDITS_BODY` de `aura_lang.c`, ES/EN): se parte el cuerpo en la primera `\n` (`strchr`) y se arma `"Aura\n" + bloque-de-versión + "\n\n" + resto-del-cuerpo-original` en el mismo buffer estático de 700 bytes de siempre. Mismas dos ramas que D-298 (versión real del Release, o "Versión de desarrollo" sin `version.txt`).
 
 **Verificado en el simulador**: capturas de la página de créditos nada más entrar (sin ningún scroll) — la versión aparece de inmediato bajo "Aura", en ambas ramas (con `version.txt` inyectado a mano y sin él). `make test` **11/11**. Build ARM real limpio, sin warnings nuevos (`-Wtype-limits` de siempre en `aura_style.c`, sin relación).
+
+## D-302 — Sidecars AppleDouble de macOS ("._Nombre") ya no se listan como foto/video real
+
+**Encargo**: el dueño reportó en hardware real (tras probar PARTE 2A de Studio) que muchas fotos se ven bien, pero otras "no se ven" — con nombres que empiezan con `._`.
+
+**Causa**: `is_listable_image()` (`aura_photos.c`) e `is_video_file()` (`aura_video.c`) deciden solo por EXTENSIÓN. Un sidecar AppleDouble de macOS (`._Foto.jpg`, el resource fork/xattrs que macOS deja junto al archivo real al escribirlo en un volumen sin ese soporte nativo — el FAT32 del iPod, o al copiar/extraer desde un ZIP/USB de origen) comparte la extensión del archivo real pero su contenido no es una imagen/video decodificable — se listaba igual y nunca abría. Se investigó primero si Aura Studio los estaba importando como si fueran fotos reales (0 evidencia en `biblioteca.json` real del dueño) — la causa está del lado del FIRMWARE, que lista lo que sea que encuentre en `/Photos/`/`/Videos/` sin filtrar estos sidecars, sin importar cómo llegaron ahí.
+
+**Hecho**: `is_apple_double_sidecar()` (nueva, un chequeo trivial: `name[0]=='.' && name[1]=='_'`) en ambos archivos — descarta esos nombres antes de cualquier chequeo de extensión.
+
+**Verificado**: `make test` **11/11**. Build ARM real limpio.
+
+## D-303 — Visor de fotos: modo "cubrir" (llenar pantalla, recortando) alternado con Select
+
+**Encargo**: "que una vez abierta la imagen, al darle Select, se alterne entre dos modos: imagen a pantalla completa (como está ahorita) y cubriendo los bordes (escalando la imagen lo suficiente para que cubra toda la pantalla, pero sin que se deforme)".
+
+**Diseño, con los límites reales del decodificador de JPEG de Rockbox por delante** (no a ciegas):
+1. El decoder (`apps/recorder/jpeg_load.c`) escala SOLO hacia abajo durante la decodificación (dominio DCT, potencias de 2) — nunca agranda. El factor de "cubrir" (`max(pantalla/ancho, pantalla/alto)`) se acota a 1.0: una foto más chica que la pantalla en el eje que le falta no se agranda más allá de su tamaño real — límite real del hardware, no un descuido. Con la calidad "Optimizada" (320px) de Studio esto es frecuente (una foto casi del tamaño de la pantalla no tiene margen para "cubrir" de verdad); con "HD" (640px) casi siempre hay margen de sobra.
+2. `s_view_scratch` es un buffer fijo (`VIEW_SCRATCH_SIZE`, 240 KiB) — una foto "HD" en modo cubrir puede pedir más píxeles de los que caben (640×640 a 16bpp ya excede el buffer). Si el tamaño ideal no entra, se reduce proporcionalmente (raíz cuadrada entera por bisección, sin FPU) hasta que sí.
+
+**Hecho** (`aura_photos.c`): `s_cover_mode` (alternado con Select, reiniciado a "ajustar" cada vez que se entra al visor desde la lista — no persiste entre fotos de sesiones distintas, sí mientras se navega dentro de una misma sesión abierta). `compute_cover_target()` calcula el tamaño objetivo de decodificación con los dos topes de arriba, aritmética en punto fijo Q16.16 (mismo criterio sin-FPU que `aura_flow.c`, otro ancho de shift). El dibujo final se unificó a una sola fórmula con `lcd_bitmap_part()` (antes `lcd_bitmap()` simple) que centra con bandas cuando el bitmap decodificado es más chico que la pantalla ("ajustar") Y recorta del centro cuando es más grande ("cubrir") — el caso degradado por el tope de memoria cae solo en la misma fórmula. Select ya no cierra el visor (eso quedó solo en Menú) — ahora alterna el modo, forzando `s_loaded_index = -1` para redecodificar con el tamaño objetivo nuevo.
+
+**Bug real encontrado verificando en el simulador** (no solo en teoría): al reabrir la MISMA foto que se había dejado en "cubrir", `s_cover_mode` sí se reiniciaba a "ajustar" pero la pantalla seguía mostrando "cubrir" — `s_loaded_index` ya coincidía con `s_current_index` de la sesión anterior, así que `load_current_photo()` se saltaba la redecodificación. Corregido invalidando `s_loaded_index` también en el punto donde se reinicia `s_cover_mode`, no solo en el toggle de Select.
+
+**Verificado en el simulador**: "Portada B.jpg" (320×278, requiere recorte vertical real sin necesitar agrandar) — captura en "ajustar" (barras finas) y en "cubrir" (llena la pantalla, recorte visible arriba/abajo, sin deformar el arte); reabrir la misma foto tras salir confirma el reinicio a "ajustar". `make test` **11/11**. Build ARM real limpio.

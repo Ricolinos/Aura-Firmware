@@ -72,8 +72,17 @@ static bool has_ext(const char *name, const char *ext)
     return nlen > elen && !strcasecmp(name + nlen - elen, ext);
 }
 
+/* D-302: mismo sidecar AppleDouble de macOS que aura_photos.c --
+ * "._Nombre.mpg" comparte extension con un video real pero no lo es. */
+static bool is_apple_double_sidecar(const char *name)
+{
+    return name[0] == '.' && name[1] == '_';
+}
+
 static bool is_video_file(const char *name)
 {
+    if (is_apple_double_sidecar(name))
+        return false;
     return has_ext(name, ".mpg") || has_ext(name, ".mpeg");
 }
 
