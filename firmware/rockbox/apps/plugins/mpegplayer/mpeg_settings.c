@@ -9,408 +9,10 @@ struct mpeg_settings settings;
 
 #define THUMB_DELAY (75*HZ/100)
 
-/* button definitions */
-#if (CONFIG_KEYPAD == IRIVER_H100_PAD) || \
-    (CONFIG_KEYPAD == IRIVER_H300_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_ON
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_OFF
-
-#elif (CONFIG_KEYPAD == IAUDIO_X5M5_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif (CONFIG_KEYPAD == IPOD_4G_PAD) || \
-      (CONFIG_KEYPAD == IPOD_3G_PAD) || \
-      (CONFIG_KEYPAD == IPOD_1G2G_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_SCROLL_FWD
-#define MPEG_START_TIME_DOWN        BUTTON_SCROLL_BACK
-#define MPEG_START_TIME_EXIT        BUTTON_MENU
-
-#elif CONFIG_KEYPAD == GIGABEAT_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#define MPEG_START_TIME_RC_SELECT   (BUTTON_RC_PLAY | BUTTON_REL)
-#define MPEG_START_TIME_RC_LEFT     BUTTON_RC_REW
-#define MPEG_START_TIME_RC_RIGHT    BUTTON_RC_FF
-#define MPEG_START_TIME_RC_UP       BUTTON_RC_VOL_UP
-#define MPEG_START_TIME_RC_DOWN     BUTTON_RC_VOL_DOWN
-#define MPEG_START_TIME_RC_EXIT     (BUTTON_RC_PLAY | BUTTON_REPEAT)
-
-#elif CONFIG_KEYPAD == GIGABEAT_S_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#define MPEG_START_TIME_RC_SELECT   (BUTTON_RC_PLAY | BUTTON_REL)
-#define MPEG_START_TIME_RC_LEFT     BUTTON_RC_REW
-#define MPEG_START_TIME_RC_RIGHT    BUTTON_RC_FF
-#define MPEG_START_TIME_RC_UP       BUTTON_RC_VOL_UP
-#define MPEG_START_TIME_RC_DOWN     BUTTON_RC_VOL_DOWN
-#define MPEG_START_TIME_RC_EXIT     (BUTTON_RC_PLAY | BUTTON_REPEAT)
-
-#elif CONFIG_KEYPAD == IRIVER_H10_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_SCROLL_UP
-#define MPEG_START_TIME_DOWN        BUTTON_SCROLL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif (CONFIG_KEYPAD == SANSA_E200_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_SCROLL_BACK
-#define MPEG_START_TIME_RIGHT2      BUTTON_SCROLL_FWD
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif (CONFIG_KEYPAD == SANSA_FUZE_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_SCROLL_BACK
-#define MPEG_START_TIME_RIGHT2      BUTTON_SCROLL_FWD
-#define MPEG_START_TIME_EXIT        (BUTTON_HOME|BUTTON_REPEAT)
-
-#elif (CONFIG_KEYPAD == SANSA_C200_PAD) || \
-(CONFIG_KEYPAD == SANSA_CLIP_PAD) || \
-(CONFIG_KEYPAD == SANSA_M200_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == MROBE500_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_RC_HEART
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_RC_PLAY
-#define MPEG_START_TIME_DOWN        BUTTON_RC_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_RC_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_RC_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == MROBE100_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_PLAY
-#define MPEG_START_TIME_RIGHT2      BUTTON_MENU
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == IAUDIO_M3_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_RC_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_RC_REW
-#define MPEG_START_TIME_RIGHT       BUTTON_RC_FF
-#define MPEG_START_TIME_UP          BUTTON_RC_VOL_UP
-#define MPEG_START_TIME_DOWN        BUTTON_RC_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_RC_REC
-
-#elif CONFIG_KEYPAD == COWON_D2_PAD
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif (CONFIG_KEYPAD == CREATIVE_ZENXFI3_PAD)
-#define MPEG_START_TIME_SELECT      (BUTTON_PLAY|BUTTON_REL)
-#define MPEG_START_TIME_LEFT        BUTTON_BACK
-#define MPEG_START_TIME_RIGHT       BUTTON_MENU
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        (BUTTON_PLAY|BUTTON_REPEAT)
-
-#elif CONFIG_KEYPAD == PHILIPS_HDD1630_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == PHILIPS_HDD6330_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == PHILIPS_SA9200_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_PREV
-#define MPEG_START_TIME_RIGHT       BUTTON_NEXT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == ONDAVX747_PAD
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == ONDAVX777_PAD
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif (CONFIG_KEYPAD == SAMSUNG_YH820_PAD) || \
-      (CONFIG_KEYPAD == SAMSUNG_YH92X_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_REW
-
-#elif CONFIG_KEYPAD == PBELL_VIBE500_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_PREV
-#define MPEG_START_TIME_RIGHT       BUTTON_NEXT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_LEFT2       BUTTON_OK
-#define MPEG_START_TIME_RIGHT2      BUTTON_CANCEL
-#define MPEG_START_TIME_EXIT        BUTTON_REC
-
-#elif CONFIG_KEYPAD == MPIO_HD200_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_FUNC
-#define MPEG_START_TIME_LEFT        BUTTON_REW
-#define MPEG_START_TIME_RIGHT       BUTTON_FF
-#define MPEG_START_TIME_UP          BUTTON_VOL_UP
-#define MPEG_START_TIME_DOWN        BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_REC
-
-#elif CONFIG_KEYPAD == MPIO_HD300_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_ENTER
-#define MPEG_START_TIME_LEFT        BUTTON_REW
-#define MPEG_START_TIME_RIGHT       BUTTON_FF
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_REC
-
-#elif CONFIG_KEYPAD == SANSA_FUZEPLUS_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == SANSA_CONNECT_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == SAMSUNG_YPR0_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_BACK
-
-#elif (CONFIG_KEYPAD == HM60X_PAD) || (CONFIG_KEYPAD == HM801_PAD)
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == SONY_NWZ_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_BACK
-
-#elif CONFIG_KEYPAD == CREATIVE_ZEN_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_BACK
-
-#elif CONFIG_KEYPAD == DX50_PAD
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_VOL_UP
-#define MPEG_START_TIME_DOWN        BUTTON_VOL_DOWN
-
-#elif CONFIG_KEYPAD == CREATIVE_ZENXFI2_PAD
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == AGPTEK_ROCKER_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == XDUOO_X3_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_PREV
-#define MPEG_START_TIME_RIGHT       BUTTON_NEXT
-#define MPEG_START_TIME_UP          BUTTON_HOME
-#define MPEG_START_TIME_DOWN        BUTTON_OPTION
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == XDUOO_X3II_PAD || CONFIG_KEYPAD == XDUOO_X20_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_PREV
-#define MPEG_START_TIME_RIGHT       BUTTON_NEXT
-#define MPEG_START_TIME_UP          BUTTON_HOME
-#define MPEG_START_TIME_DOWN        BUTTON_OPTION
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == FIIO_M3K_LINUX_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_PREV
-#define MPEG_START_TIME_RIGHT       BUTTON_NEXT
-#define MPEG_START_TIME_UP          BUTTON_HOME
-#define MPEG_START_TIME_DOWN        BUTTON_OPTION
-#define MPEG_START_TIME_LEFT2       BUTTON_VOL_UP
-#define MPEG_START_TIME_RIGHT2      BUTTON_VOL_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == IHIFI_770_PAD || CONFIG_KEYPAD == IHIFI_800_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_HOME
-#define MPEG_START_TIME_RIGHT       BUTTON_VOL_DOWN
-#define MPEG_START_TIME_UP          BUTTON_PREV
-#define MPEG_START_TIME_DOWN        BUTTON_NEXT
-#define MPEG_START_TIME_LEFT2       (BUTTON_POWER + BUTTON_HOME)
-#define MPEG_START_TIME_RIGHT2      (BUTTON_POWER + BUTTON_VOL_DOWN)
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == EROSQ_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_SCROLL_BACK
-#define MPEG_START_TIME_RIGHT       BUTTON_SCROLL_FWD
-#define MPEG_START_TIME_UP          BUTTON_PREV
-#define MPEG_START_TIME_DOWN        BUTTON_NEXT
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == FIIO_M3K_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == MA_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_PLAY
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_BACK
-
-#elif CONFIG_KEYPAD == SHANLING_Q1_PAD || CONFIG_KEYPAD == HIBY_R3PROII_PAD
-#define MPEG_START_TIME_EXIT        BUTTON_POWER
-
-#elif CONFIG_KEYPAD == RG_NANO_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_A
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_LEFT2       BUTTON_L
-#define MPEG_START_TIME_RIGHT2      BUTTON_R
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_START
-
-#elif CONFIG_KEYPAD == CTRU_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_SELECT
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_BACK
-
-#elif CONFIG_KEYPAD == ECHO_R1_PAD
-#define MPEG_START_TIME_SELECT      BUTTON_A
-#define MPEG_START_TIME_LEFT        BUTTON_LEFT
-#define MPEG_START_TIME_RIGHT       BUTTON_RIGHT
-#define MPEG_START_TIME_UP          BUTTON_UP
-#define MPEG_START_TIME_DOWN        BUTTON_DOWN
-#define MPEG_START_TIME_EXIT        BUTTON_B
-
-#else
-#error No keymap defined!
-#endif
-
-#ifdef HAVE_TOUCHSCREEN
-#ifndef MPEG_START_TIME_SELECT
-#define MPEG_START_TIME_SELECT      BUTTON_CENTER
-#endif
-#ifndef MPEG_START_TIME_LEFT
-#define MPEG_START_TIME_LEFT        BUTTON_MIDLEFT
-#endif
-#ifndef MPEG_START_TIME_RIGHT
-#define MPEG_START_TIME_RIGHT       BUTTON_MIDRIGHT
-#endif
-#ifndef MPEG_START_TIME_UP
-#define MPEG_START_TIME_UP          BUTTON_TOPMIDDLE
-#endif
-#ifndef MPEG_START_TIME_DOWN
-#define MPEG_START_TIME_DOWN        BUTTON_BOTTOMMIDDLE
-#endif
-#ifndef MPEG_START_TIME_LEFT2
-#define MPEG_START_TIME_LEFT2       BUTTON_TOPRIGHT
-#endif
-#ifndef MPEG_START_TIME_RIGHT2
-#define MPEG_START_TIME_RIGHT2      BUTTON_TOPLEFT
-#endif
-#ifndef MPEG_START_TIME_EXIT
-#define MPEG_START_TIME_EXIT        BUTTON_TOPLEFT
-#endif
-#endif
+/* Aura (D-307): se elimino el bloque de defines MPEG_START_TIME_* por
+ * target (~400 lineas) -- quedo muerto desde D-062 (get_start_time()/
+ * show_start_menu() ya no existen, eran sus unicos usos), confirmado
+ * sin ningun otro llamador en todo el arbol antes de borrarlo. */
 
 static struct configdata config[] =
 {
@@ -440,78 +42,209 @@ static struct configdata config[] =
 #endif
 };
 
-/* Aura (D-304): D-013 -- Aura no carga el sistema de idiomas .lang de
- * Rockbox, asi que rb->str(LANG_X) siempre resuelve a ingles de fabrica.
- * Se usan literales en espanol directamente, igual que ya hace el resto
- * de la app. */
-static const struct opt_items noyes[2] = {
-    { "No", -1 },
-    { "Si", -1 },
-};
-
-static const struct opt_items singleall[2] = {
-    { "Uno", -1 },
-    { "Todos", -1 },
-};
-
-static const struct opt_items globaloff[2] = {
-    { "Desactivado", -1 },
-    { "Usar ajuste de sonido", -1 },
-};
-
-static const struct opt_items scalemodes[2] = {
-    { "Ajustar", -1 },
-    { "Cubrir", -1 },
-};
+/* Aura (D-013/D-304): rb->str(LANG_X) siempre resuelve a ingles de
+ * fabrica -- los literales de cada opcion (antes struct opt_items para
+ * rb->set_option(), D-304) ahora son arrays const char* locales a cada
+ * funcion (D-307, ver aura_menu_pick()). */
 
 static void mpeg_settings(void);
-static bool mpeg_set_option(const char* string,
-                            void* variable,
-                            enum optiontype type,
-                            const struct opt_items* options,
-                            int numoptions,
-                            void (*function)(int))
+
+/* Aura (D-307): reemplaza rb->do_menu()/rb->set_option()/rb->set_int_ex()
+ * -- son widgets 100% Rockbox nativo (icono de "atras" propio, resaltado
+ * de seleccion propio, tipografia propia) que no leen ni un color de
+ * aura.cfg; D-306 solo llega al OSD (codigo de Aura dentro de este mismo
+ * plugin), nunca a este menu. aura_menu_draw()/aura_menu_pick() dibujan
+ * con rb->lcd_* directo (mismo patron que ya usaba button_loop() para
+ * limpiar la pantalla antes/despues de este menu) y los colores reales
+ * del usuario via aura_osd_colors() (mpegplayer.c). */
+#define AURA_MENU_ROW_PAD 6
+
+static void aura_menu_draw(const char *title, const char *const *labels,
+                           const char *const *values, int count, int sel)
 {
+    unsigned bg, fg, accent;
+    int row_h, y, i;
+
+    aura_osd_colors(&bg, &fg, &accent);
+
+    rb->lcd_set_drawmode(DRMODE_SOLID);
+    rb->lcd_setfont(FONT_UI);
+    rb->lcd_set_background(bg);
+    rb->lcd_set_foreground(fg);
+    rb->lcd_clear_display();
+
+    rb->lcd_getstringsize("Ag", NULL, &row_h);
+    row_h += AURA_MENU_ROW_PAD;
+
+    rb->lcd_putsxy(8, 8, title);
+    y = row_h + 12;
+
+    for (i = 0; i < count; i++)
+    {
+        if (i == sel)
+        {
+            rb->lcd_set_foreground(accent);
+            rb->lcd_fillrect(0, y, SCREEN_WIDTH, row_h);
+            rb->lcd_set_foreground(bg);
+        }
+        else
+        {
+            rb->lcd_set_foreground(fg);
+        }
+
+        rb->lcd_putsxy(12, y + AURA_MENU_ROW_PAD / 2, labels[i]);
+
+        if (values && values[i])
+        {
+            int vw;
+            rb->lcd_getstringsize(values[i], &vw, NULL);
+            rb->lcd_putsxy(SCREEN_WIDTH - vw - 12, y + AURA_MENU_ROW_PAD / 2,
+                          values[i]);
+        }
+
+        y += row_h;
+    }
+
+    rb->lcd_update();
+}
+
+/* Devuelve el indice elegido (0..count-1), o -1 si el usuario cancelo
+ * con MENU o por un evento de sistema (USB, apagado -- mpeg_sysevent()
+ * distingue el segundo caso para que el llamador no siga navegando). */
+static int aura_menu_pick(const char *title, const char *const *labels,
+                          const char *const *values, int count, int start_sel)
+{
+    int sel = (start_sel >= 0 && start_sel < count) ? start_sel : 0;
+
+    rb->button_clear_queue();
     mpeg_sysevent_clear();
 
-    /* This eats SYS_POWEROFF - :\ */
-    bool usb = rb->set_option(string, variable, type, options, numoptions,
-                              function);
+    while (1)
+    {
+        int button;
 
-    if (usb)
-        mpeg_sysevent_set();
+        aura_menu_draw(title, labels, values, count, sel);
 
-    return usb;
+        button = mpeg_button_get(TIMEOUT_BLOCK);
+
+        if (mpeg_sysevent() != 0)
+            return -1;
+
+        switch (button)
+        {
+        case BUTTON_SCROLL_FWD:
+        case BUTTON_SCROLL_FWD | BUTTON_REPEAT:
+            sel = (sel + 1) % count;
+            break;
+
+        case BUTTON_SCROLL_BACK:
+        case BUTTON_SCROLL_BACK | BUTTON_REPEAT:
+            sel = (sel - 1 + count) % count;
+            break;
+
+        case BUTTON_SELECT:
+            return sel;
+
+        case BUTTON_MENU:
+            return -1;
+
+        default:
+            break;
+        }
+    }
 }
 
 #ifdef HAVE_BACKLIGHT_BRIGHTNESS /* Only used for this atm */
-static bool mpeg_set_int(const char *string, const char *unit,
-                         int voice_unit, const int *variable,
-                         void (*function)(int), int step,
-                         int min,
-                         int max,
-                         const char* (*formatter)(char*, size_t, int, const char*),
-                         int32_t (*get_talk_id)(int, int))
+static void aura_adjust_draw(const char *title, const char *value_text)
 {
+    unsigned bg, fg, accent;
+    int tw, th, vw, vh;
+
+    aura_osd_colors(&bg, &fg, &accent);
+
+    rb->lcd_set_drawmode(DRMODE_SOLID);
+    rb->lcd_setfont(FONT_UI);
+    rb->lcd_set_background(bg);
+    rb->lcd_set_foreground(fg);
+    rb->lcd_clear_display();
+
+    rb->lcd_getstringsize(title, &tw, &th);
+    rb->lcd_putsxy((SCREEN_WIDTH - tw) / 2, SCREEN_HEIGHT / 2 - th - 8, title);
+
+    rb->lcd_set_foreground(accent);
+    rb->lcd_getstringsize(value_text, &vw, &vh);
+    rb->lcd_putsxy((SCREEN_WIDTH - vw) / 2, SCREEN_HEIGHT / 2 + 8, value_text);
+
+    rb->lcd_update();
+}
+
+/* Ajustador numerico simple -- solo lo usa el brillo de la luz de
+ * fondo, el unico ajuste de este menu que no es una eleccion entre
+ * unas pocas opciones fijas. IZQUIERDA/DERECHA cambian el valor de a
+ * uno (aplicado en vivo via live_apply, igual que hacia
+ * rb->set_int_ex), SELECT confirma, MENU/evento de sistema cancela y
+ * restaura el valor original. */
+static bool aura_menu_adjust_int(const char *title, int *value, int min, int max,
+                                 const char* (*formatter)(char*, size_t, int, const char*),
+                                 void (*live_apply)(int))
+{
+    int v = *value;
+    int orig = v;
+
+    rb->button_clear_queue();
     mpeg_sysevent_clear();
 
-    bool usb = rb->set_int_ex(string, unit, voice_unit, variable, function,
-                           step, min, max, formatter, get_talk_id);
+    while (1)
+    {
+        char buf[32];
+        const char *text;
+        int button;
 
-    if (usb)
-        mpeg_sysevent_set();
+        text = formatter(buf, sizeof(buf), v, NULL);
 
-    return usb;
+        if (live_apply)
+            live_apply(v);
+
+        aura_adjust_draw(title, text);
+
+        button = mpeg_button_get(TIMEOUT_BLOCK);
+
+        if (mpeg_sysevent() != 0)
+        {
+            if (live_apply)
+                live_apply(orig);
+            return false;
+        }
+
+        switch (button)
+        {
+        case BUTTON_LEFT:
+        case BUTTON_LEFT | BUTTON_REPEAT:
+            if (v > min) v--;
+            break;
+
+        case BUTTON_RIGHT:
+        case BUTTON_RIGHT | BUTTON_REPEAT:
+            if (v < max) v++;
+            break;
+
+        case BUTTON_SELECT:
+            *value = v;
+            return true;
+
+        case BUTTON_MENU:
+            if (live_apply)
+                live_apply(orig);
+            return false;
+
+        default:
+            break;
+        }
+    }
 }
+#endif /* HAVE_BACKLIGHT_BRIGHTNESS */
 
-static int32_t backlight_brightness_getlang(int value, int unit)
-{
-    if (value < 0)
-        return LANG_USE_COMMON_SETTING;
-
-    return TALK_ID(value + MIN_BRIGHTNESS_SETTING, unit);
-}
-
+#ifdef HAVE_BACKLIGHT_BRIGHTNESS /* Only used for this atm */
 void mpeg_backlight_update_brightness(int value)
 {
     if (value >= 0)
@@ -693,25 +426,15 @@ int mpeg_start_menu(uint32_t duration)
 
 int mpeg_menu(void)
 {
+    static const char *const items[] = { "Ajustes", "Salir" };
     int result;
 
-    MENUITEM_STRINGLIST(menu, "Reproductor de video", mpeg_sysevent_callback,
-                        "Ajustes",
-                        "Salir");
-
-    rb->button_clear_queue();
-
-    mpeg_sysevent_clear();
-
-    result = rb->do_menu(&menu, NULL, NULL, false);
+    result = aura_menu_pick("Reproductor de video", items, NULL, 2, 0);
 
     switch (result)
     {
     case MPEG_MENU_SETTINGS:
         mpeg_settings();
-        break;
-
-    case MPEG_MENU_QUIT:
         break;
 
     default:
@@ -726,76 +449,98 @@ int mpeg_menu(void)
 
 static void display_options(void)
 {
+    static const char *const items[] = {
+#if MPEG_OPTION_DITHERING_ENABLED
+        "Tramado",
+#endif
+        "Mostrar FPS",
+        "Limitar FPS",
+        "Omitir fotogramas",
+        "Modo de ajuste",
+#ifdef HAVE_BACKLIGHT_BRIGHTNESS
+        "Brillo de la luz de fondo",
+#endif
+    };
+    static const char *const yesno[] = { "No", "Si" };
+    static const char *const scalemodes[] = { "Ajustar", "Cubrir" };
     int selected = 0;
     int result;
     bool menu_quit = false;
 
-    MENUITEM_STRINGLIST(menu, "Opciones de pantalla", mpeg_sysevent_callback,
-#if MPEG_OPTION_DITHERING_ENABLED
-                        "Tramado",
-#endif
-                        "Mostrar FPS",
-                        "Limitar FPS",
-                        "Omitir fotogramas",
-                        "Modo de ajuste",
-#ifdef HAVE_BACKLIGHT_BRIGHTNESS
-                        "Brillo de la luz de fondo",
-#endif
-                        );
-
-    rb->button_clear_queue();
-
     while (!menu_quit)
     {
-        mpeg_sysevent_clear();
-        result = rb->do_menu(&menu, &selected, NULL, false);
+        result = aura_menu_pick("Opciones de pantalla", items, NULL,
+                                ARRAYLEN(items), selected);
+        if (result >= 0)
+            selected = result;
 
         switch (result)
         {
 #if MPEG_OPTION_DITHERING_ENABLED
         case MPEG_OPTION_DITHERING:
-            result = (settings.displayoptions & LCD_YUV_DITHER) ? 1 : 0;
-            mpeg_set_option("Tramado", &result, RB_INT, noyes, 2, NULL);
-            settings.displayoptions =
-                (settings.displayoptions & ~LCD_YUV_DITHER)
-                      | ((result != 0) ? LCD_YUV_DITHER : 0);
-            rb->lcd_yuv_set_options(settings.displayoptions);
+        {
+            int cur = (settings.displayoptions & LCD_YUV_DITHER) ? 1 : 0;
+            int picked = aura_menu_pick("Tramado", yesno, NULL, 2, cur);
+            if (picked >= 0)
+            {
+                settings.displayoptions =
+                    (settings.displayoptions & ~LCD_YUV_DITHER)
+                          | (picked ? LCD_YUV_DITHER : 0);
+                rb->lcd_yuv_set_options(settings.displayoptions);
+            }
             break;
+        }
 #endif /* MPEG_OPTION_DITHERING_ENABLED */
 
         case MPEG_OPTION_DISPLAY_FPS:
-            mpeg_set_option("Mostrar FPS", &settings.showfps, RB_INT,
-                            noyes, 2, NULL);
+        {
+            int picked = aura_menu_pick("Mostrar FPS", yesno, NULL, 2,
+                                        settings.showfps);
+            if (picked >= 0) settings.showfps = picked;
             break;
+        }
 
         case MPEG_OPTION_LIMIT_FPS:
-            mpeg_set_option("Limitar FPS", &settings.limitfps, RB_INT,
-                            noyes, 2, NULL);
+        {
+            int picked = aura_menu_pick("Limitar FPS", yesno, NULL, 2,
+                                        settings.limitfps);
+            if (picked >= 0) settings.limitfps = picked;
             break;
+        }
 
         case MPEG_OPTION_SKIP_FRAMES:
-            mpeg_set_option("Omitir fotogramas", &settings.skipframes, RB_INT,
-                            noyes, 2, NULL);
+        {
+            int picked = aura_menu_pick("Omitir fotogramas", yesno, NULL, 2,
+                                        settings.skipframes);
+            if (picked >= 0) settings.skipframes = picked;
             break;
+        }
 
         case MPEG_OPTION_SCALE_MODE:
-            mpeg_set_option("Modo de ajuste", &settings.scale_mode, RB_INT,
-                            scalemodes, 2, NULL);
-            vo_update_scale_mode();
+        {
+            int picked = aura_menu_pick("Modo de ajuste", scalemodes, NULL, 2,
+                                        settings.scale_mode);
+            if (picked >= 0)
+            {
+                settings.scale_mode = picked;
+                vo_update_scale_mode();
+            }
             break;
+        }
 
 #ifdef HAVE_BACKLIGHT_BRIGHTNESS
         case MPEG_OPTION_BACKLIGHT_BRIGHTNESS:
-            result = settings.backlight_brightness;
-            mpeg_backlight_update_brightness(result);
-            mpeg_set_int("Brillo de la luz de fondo", NULL, UNIT_INT, &result,
-                         backlight_brightness_function, 1, -1,
-                         MAX_BRIGHTNESS_SETTING - MIN_BRIGHTNESS_SETTING,
-                         backlight_brightness_formatter,
-                         backlight_brightness_getlang);
-            settings.backlight_brightness = result;
+        {
+            int v = settings.backlight_brightness;
+            mpeg_backlight_update_brightness(v);
+            aura_menu_adjust_int("Brillo de la luz de fondo", &v, -1,
+                                 MAX_BRIGHTNESS_SETTING - MIN_BRIGHTNESS_SETTING,
+                                 backlight_brightness_formatter,
+                                 backlight_brightness_function);
+            settings.backlight_brightness = v;
             mpeg_backlight_update_brightness(-1);
             break;
+        }
 #endif /* HAVE_BACKLIGHT_BRIGHTNESS */
 
         default:
@@ -810,55 +555,88 @@ static void display_options(void)
 
 static void audio_options(void)
 {
+    static const char *const items[] = {
+        "Controles de tono",
+        "Configuracion de canales",
+        "Crossfeed",
+        "Ecualizador",
+        "Tramado",
+    };
+    static const char *const off_setting[] = {
+        "Desactivado", "Usar ajuste de sonido"
+    };
     int selected = 0;
     int result;
     bool menu_quit = false;
 
-    MENUITEM_STRINGLIST(menu, "Opciones de audio", mpeg_sysevent_callback,
-                        "Controles de tono",
-                        "Configuracion de canales",
-                        "Crossfeed",
-                        "Ecualizador",
-                        "Tramado");
-
-    rb->button_clear_queue();
-
     while (!menu_quit)
     {
-        mpeg_sysevent_clear();
-        result = rb->do_menu(&menu, &selected, NULL, false);
+        result = aura_menu_pick("Opciones de audio", items, NULL,
+                                ARRAYLEN(items), selected);
+        if (result >= 0)
+            selected = result;
 
         switch (result)
         {
         case MPEG_AUDIO_TONE_CONTROLS:
-            mpeg_set_option("Controles de tono", &settings.tone_controls, RB_INT,
-                            globaloff, 2, NULL);
-            sync_audio_setting(result, false);
+        {
+            int picked = aura_menu_pick("Controles de tono", off_setting, NULL,
+                                        2, settings.tone_controls);
+            if (picked >= 0)
+            {
+                settings.tone_controls = picked;
+                sync_audio_setting(MPEG_AUDIO_TONE_CONTROLS, false);
+            }
             break;
+        }
 
         case MPEG_AUDIO_CHANNEL_MODES:
-            mpeg_set_option("Configuracion de canales", &settings.channel_modes,
-                            RB_INT, globaloff, 2, NULL);
-            sync_audio_setting(result, false);
+        {
+            int picked = aura_menu_pick("Configuracion de canales", off_setting,
+                                        NULL, 2, settings.channel_modes);
+            if (picked >= 0)
+            {
+                settings.channel_modes = picked;
+                sync_audio_setting(MPEG_AUDIO_CHANNEL_MODES, false);
+            }
             break;
+        }
 
         case MPEG_AUDIO_CROSSFEED:
-            mpeg_set_option("Crossfeed", &settings.crossfeed, RB_INT,
-                            globaloff, 2, NULL);
-            sync_audio_setting(result, false);
+        {
+            int picked = aura_menu_pick("Crossfeed", off_setting, NULL, 2,
+                                        settings.crossfeed);
+            if (picked >= 0)
+            {
+                settings.crossfeed = picked;
+                sync_audio_setting(MPEG_AUDIO_CROSSFEED, false);
+            }
             break;
+        }
 
         case MPEG_AUDIO_EQUALIZER:
-            mpeg_set_option("Ecualizador", &settings.equalizer, RB_INT,
-                            globaloff, 2, NULL);
-            sync_audio_setting(result, false);
+        {
+            int picked = aura_menu_pick("Ecualizador", off_setting, NULL, 2,
+                                        settings.equalizer);
+            if (picked >= 0)
+            {
+                settings.equalizer = picked;
+                sync_audio_setting(MPEG_AUDIO_EQUALIZER, false);
+            }
             break;
+        }
 
         case MPEG_AUDIO_DITHERING:
-            mpeg_set_option("Tramado", &settings.dithering, RB_INT,
-                            globaloff, 2, NULL);
-            sync_audio_setting(result, false);
+        {
+            int picked = aura_menu_pick("Tramado", off_setting, NULL, 2,
+                                        settings.dithering);
+            if (picked >= 0)
+            {
+                settings.dithering = picked;
+                sync_audio_setting(MPEG_AUDIO_DITHERING, false);
+            }
             break;
+        }
 
         default:
             menu_quit = true;
@@ -879,23 +657,23 @@ static void clear_resume_count(void)
 
 static void mpeg_settings(void)
 {
+    static const char *const items[] = {
+        "Opciones de pantalla",
+        "Opciones de audio",
+        "Modo de reproduccion",
+        "Borrar todas las reanudaciones",
+    };
+    static const char *const single_all[] = { "Uno", "Todos" };
     int selected = 0;
     int result;
     bool menu_quit = false;
 
-    MENUITEM_STRINGLIST(menu, "Ajustes", mpeg_sysevent_callback,
-                        "Opciones de pantalla",
-                        "Opciones de audio",
-                        "Modo de reproduccion",
-                        "Borrar todas las reanudaciones");
-
-    rb->button_clear_queue();
-
     while (!menu_quit)
     {
-        mpeg_sysevent_clear();
-
-        result = rb->do_menu(&menu, &selected, NULL, false);
+        result = aura_menu_pick("Ajustes", items, NULL, ARRAYLEN(items),
+                                selected);
+        if (result >= 0)
+            selected = result;
 
         switch (result)
         {
@@ -908,9 +686,12 @@ static void mpeg_settings(void)
             break;
 
         case MPEG_SETTING_PLAY_MODE:
-            mpeg_set_option("Modo de reproduccion", &settings.play_mode,
-                            RB_INT, singleall, 2, NULL);
+        {
+            int picked = aura_menu_pick("Modo de reproduccion", single_all,
+                                        NULL, 2, settings.play_mode);
+            if (picked >= 0) settings.play_mode = picked;
             break;
+        }
 
         case MPEG_SETTING_CLEAR_RESUMES:
             clear_resume_count();

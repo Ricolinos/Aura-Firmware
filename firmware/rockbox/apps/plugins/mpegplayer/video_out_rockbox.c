@@ -40,6 +40,7 @@ struct vo_data
      * vo_setup()); el menu de ajustes SI la sincroniza con el default
      * persistido, via vo_update_scale_mode(). */
     int scale_mode;
+    bool scale_mode_locked;
     int output_x;
     int output_y;
     int output_width;
@@ -616,7 +617,25 @@ void vo_setup(const mpeg2_sequence_t * sequence)
     vo.image_chroma_x = vo.image_width / sequence->chroma_width;
     vo.image_chroma_y = vo.image_height / sequence->chroma_height;
 
-    vo.scale_mode = settings.scale_mode;
+    /* Aura (D-308): un codificador MPEG-2 con GOP corto (mpeg2video de
+     * ffmpeg con -g 15, ver FFmpegTranscoder.swift) repite la cabecera
+     * de secuencia varias veces por segundo durante la reproduccion
+     * NORMAL, no solo al abrir el archivo -- video_thread.c llama a
+     * vo_setup() cada vez que libmpeg2 la vuelve a parsear. Sin este
+     * guard, cada repeticion pisaba vo.scale_mode con el default
+     * persistido, revirtiendo el toggle de SELECT casi al instante
+     * (bug real, encontrado investigando por que "cubrir" no se veia
+     * aplicar). Solo la primera vez (justo despues de vo_init(), que
+     * limpia scale_mode_locked) se adopta settings.scale_mode -- de ahi
+     * en mas la sesion de reproduccion conserva lo que el usuario haya
+     * elegido, mismo criterio que s_cover_mode en el visor de fotos
+     * (D-303: persiste mientras se navega dentro de una misma sesion). */
+    if (!vo.scale_mode_locked)
+    {
+        vo.scale_mode = settings.scale_mode;
+        vo.scale_mode_locked = true;
+    }
+
     vo_recalc_rect();
 }
 
@@ -642,6 +661,7 @@ void vo_dimensions(struct vo_ext *sz)
 bool vo_init(void)
 {
     vo.flags = 0;
+    vo.scale_mode_locked = false;
     vo_rect_set_ext(&vo.rc_clip, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
     video_lock_init();
     return true;

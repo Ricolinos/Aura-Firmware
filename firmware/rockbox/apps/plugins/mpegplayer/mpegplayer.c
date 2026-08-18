@@ -1532,6 +1532,13 @@ static void osd_init(void)
     fps_init();
 }
 
+void aura_osd_colors(unsigned *bgcolor, unsigned *fgcolor, unsigned *accent)
+{
+    *bgcolor = osd.bgcolor;
+    *fgcolor = osd.fgcolor;
+    *accent = osd.accent;
+}
+
 #ifdef HAVE_HEADPHONE_DETECTION
 static void osd_set_hp_pause_flag(bool set)
 {

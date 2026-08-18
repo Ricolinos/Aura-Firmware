@@ -85,4 +85,10 @@
 #define LCD_ENABLE_EVENT_0 MAKE_SYS_EVENT(SYS_EVENT_CLS_PRIVATE, 0)
 #define LCD_ENABLE_EVENT_1 MAKE_SYS_EVENT(SYS_EVENT_CLS_PRIVATE, 1)
 
+/* Aura (D-306/D-307): colores reales del usuario (aura.cfg + Estilo
+ * activo, con fallback a la paleta Oscura compilada), cargados una vez
+ * por osd_init() -- mpeg_settings.c los usa para su menu propio
+ * (D-307), que no puede leer el struct osd (estatico en mpegplayer.c). */
+void aura_osd_colors(unsigned *bgcolor, unsigned *fgcolor, unsigned *accent);
+
 #endif /* MPEGPLAYER_H */
