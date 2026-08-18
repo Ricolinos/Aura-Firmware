@@ -2911,21 +2911,40 @@ static int s_credits_scroll = 0;
 static const char *credits_body_with_version(void)
 {
     static char buf[700];
+    const char *body = aura_str(AURA_STR_ABOUT_CREDITS_BODY);
     const char *version = aura_firmware_version();
+    const char *first_nl = strchr(body, '\n');
+    size_t head_len;
 
-    strlcpy(buf, aura_str(AURA_STR_ABOUT_CREDITS_BODY), sizeof(buf));
+    /* D-301 (el dueno: "sube la informacion de la version... para que
+     * este mas accesible" -- antes vivia al FINAL del cuerpo de
+     * creditos, habia que bajar todo el texto con la rueda para verla,
+     * ver D-298). Se inserta justo despues del titulo "Aura" (la
+     * primera linea del cuerpo), antes de "Creado por..." -- visible
+     * de inmediato al entrar a esta pagina, sin scroll. */
+    if (!first_nl)
+    {
+        strlcpy(buf, body, sizeof(buf));
+        return buf;
+    }
+    head_len = (size_t)(first_nl - body) + 1; /* incluye el '\n' */
+    if (head_len >= sizeof(buf))
+        head_len = sizeof(buf) - 1;
+    memcpy(buf, body, head_len);
+    buf[head_len] = '\0';
+
     if (version)
     {
-        strlcat(buf, "\n\n", sizeof(buf));
         strlcat(buf, aura_str(AURA_STR_ABOUT_VERSION_TITLE), sizeof(buf));
         strlcat(buf, "\n", sizeof(buf));
         strlcat(buf, version, sizeof(buf));
     }
     else
     {
-        strlcat(buf, "\n\n", sizeof(buf));
         strlcat(buf, aura_str(AURA_STR_ABOUT_VERSION_DEV), sizeof(buf));
     }
+    strlcat(buf, "\n\n", sizeof(buf));
+    strlcat(buf, body + head_len, sizeof(buf));
     return buf;
 }
 
