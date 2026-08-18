@@ -251,4 +251,6 @@ gh release create v0.2.1-beta \
 
 **Publicado** (OK del dueño recibido en la misma sesión): `main` empujado (`5d1af20..2da4c29`), tag anotado `v0.2.1-beta` empujado, Release creado como pre-release con los 10 assets — https://github.com/Ricolinos/Aura-Firmware/releases/tag/v0.2.1-beta
 
-**Pendiente**: F0.4 (Aura Studio consume el Release, verifica contenido real del zip) y F0.5 (protocolo de hardware).
+**F0.4 hecho del lado de Aura Studio** (ST-018 allá): pin a `v0.2.1-beta`, centinela de contenido de `rockbox.zip` (checksum correcto no detecta un zip incompleto como el de D-297 — verificación nueva por contenido real del zip), y de paso la tabla §E de `CONTRATO-firmware-studio.md` de este repo (que llevaba desde D-296 con el placeholder viejo sin actualizar) se sincronizó completa con la copia de Studio, `cmp` limpio.
+
+**Pendiente**: F0.5 (protocolo de hardware, a cargo del dueño).
