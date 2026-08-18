@@ -126,6 +126,10 @@
 #define MPEG_VOLUP      BUTTON_SCROLL_FWD
 #define MPEG_RW         BUTTON_LEFT
 #define MPEG_FF         BUTTON_RIGHT
+/* Aura (D-304): SELECT no tenia ninguna funcion asignada durante la
+ * reproduccion en este keypad -- se usa para alternar ajustar/cubrir,
+ * el mismo gesto que el visor de fotos (D-303). */
+#define MPEG_TOGGLE_SCALE BUTTON_SELECT
 
 #elif CONFIG_KEYPAD == IAUDIO_X5M5_PAD
 #define MPEG_MENU       (BUTTON_REC | BUTTON_REL)
@@ -618,6 +622,7 @@ struct osd
     unsigned fgcolor;
     unsigned bgcolor;
     unsigned prog_fillcolor;
+    unsigned prog_trackcolor;
     struct vo_rect update_rect;
     struct vo_rect prog_rect;
     struct vo_rect time_rect;
@@ -753,9 +758,11 @@ static void draw_scrollbar_draw(int x, int y, int width, int height,
     val = muldiv_uint32(width - 2, val, max - min);
     val = MIN(val, (uint32_t)(width - 2));
 
+    mylcd_set_foreground(osd.prog_fillcolor);
+
     draw_fillrect(x + 1, y + 1, val, height - 2);
 
-    mylcd_set_foreground(osd.prog_fillcolor);
+    mylcd_set_foreground(osd.prog_trackcolor);
 
     draw_fillrect(x + 1 + val, y + 1, width - 2 - val, height - 2);
 
@@ -1313,25 +1320,32 @@ static void osd_init(void)
     osd.print_delay = 75*HZ/100;
     osd.resume_delay = HZ/2;
 #ifdef HAVE_LCD_COLOR
-    /* Fase 20 (PLAN-UX.md) / D-062, valores re-sincronizados en Fase 26:
-     * paleta Apple2026 (tema Oscuro de design-system/tokens.json) en vez
-     * del azul-lavanda generico de Rockbox -- los plugins no pueden
-     * incluir apple2026_tokens.h (build y link separados, via la tabla
-     * rb->), asi que los valores van literales, igual que ya hacia este
-     * archivo. Es exactamente el tipo de literal que el sistema de
+    /* Fase 20 (PLAN-UX.md) / D-062, valores re-sincronizados en Fase 26
+     * y D-304: paleta Apple2026 (tema Oscuro de design-system/tokens.json)
+     * en vez del azul-lavanda generico de Rockbox -- los plugins no
+     * pueden incluir apple2026_tokens.h (build y link separados, via la
+     * tabla rb->), asi que los valores van literales, igual que ya hacia
+     * este archivo. Es exactamente el tipo de literal que el sistema de
      * diseno prohibe (SS2) pero que la frontera de plugin obliga aca --
      * y por eso mismo se desincronizo en silencio durante la Fase 26
      * (el acento paso de #FF453A a #FF456C y esto no se actualizo hasta
-     * ahora): sin un mecanismo que los mantenga atados, revisar este
-     * archivo cada vez que cambie tokens.json queda en manos de quien
-     * lo recuerde. */
-    osd.bgcolor = LCD_RGBPACK(0x1c, 0x1c, 0x1e);   /* A26_SHELL_BG, oscuro */
+     * despues): sin un mecanismo que los mantenga atados, revisar este
+     * archivo cada vez que cambie tokens.json queda en manos de quien lo
+     * recuerde. */
+    osd.bgcolor = LCD_RGBPACK(0x1c, 0x1c, 0x1e);   /* dark.shell_bg */
     osd.fgcolor = LCD_WHITE;
-    osd.prog_fillcolor = LCD_RGBPACK(0xff, 0x45, 0x6c); /* A26_ACCENT, oscuro */
+    /* D-304: la barra de progreso tenia el relleno invertido -- pintaba
+     * el tramo YA REPRODUCIDO en blanco liso y el POR REPRODUCIR en el
+     * acento (#FF456C), al reves de como se usa en el resto de la app
+     * (donde el acento no aparece en absoluto en sliders de progreso;
+     * ver dark.progress_fill/progress_track en tokens.json). */
+    osd.prog_fillcolor = LCD_RGBPACK(0xe5, 0xe5, 0xea);    /* dark.progress_fill */
+    osd.prog_trackcolor = LCD_RGBPACK(0x48, 0x48, 0x4a);   /* dark.progress_track */
 #else
     osd.bgcolor = GREY_LIGHTGRAY;
     osd.fgcolor = GREY_BLACK;
     osd.prog_fillcolor = GREY_WHITE;
+    osd.prog_trackcolor = GREY_DARKGRAY;
 #endif
     osd.curr_time = 0;
     osd.status = OSD_STATUS_STOPPED;
@@ -2176,7 +2190,7 @@ static int button_loop(void)
 
     /* Start playback at the specified starting time */
     if (osd_play(settings.resume_time) < STREAM_OK) {
-        rb->splash(HZ*2, "Playback failed");
+        rb->splash(HZ*2, "Error al reproducir");
         return VIDEO_STOP;
     }
 
@@ -2298,6 +2312,18 @@ static int button_loop(void)
             /* Make sure it refreshes */
             osd_refresh(OSD_REFRESH_DEFAULT);
             break;
+#endif
+
+#ifdef MPEG_TOGGLE_SCALE
+        case MPEG_TOGGLE_SCALE:
+        {
+            /* Aura (D-304): mismo gesto que el visor de fotos (D-303) --
+             * alterna ajustar/cubrir solo para esta sesion de
+             * reproduccion, sin persistir el cambio. */
+            vo_toggle_scale_mode();
+            stream_draw_frame(true);
+            break;
+            } /* MPEG_TOGGLE_SCALE: */
 #endif
 
         case MPEG_STOP:
@@ -2443,7 +2469,7 @@ enum plugin_status plugin_start(const void* parameter)
 
     if (parameter == NULL) {
         /* No file = GTFO */
-        rb->splash(HZ*2, "No File");
+        rb->splash(HZ*2, "Sin archivo");
         return PLUGIN_ERROR;
     }
 
@@ -2503,10 +2529,10 @@ enum plugin_status plugin_start(const void* parameter)
                 switch (result)
                 {
                 case STREAM_UNSUPPORTED:
-                    errstring = "Unsupported format";
+                    errstring = "Formato no compatible";
                     break;
                 default:
-                    errstring = "Error opening file: %d";
+                    errstring = "Error al abrir el archivo: %d";
                 }
 
                 tick = *rb->current_tick + HZ*2;

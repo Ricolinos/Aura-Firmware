@@ -1,7 +1,7 @@
 
 #include "plugin.h"
 
-#define SETTINGS_VERSION 5
+#define SETTINGS_VERSION 6
 #define SETTINGS_MIN_VERSION 1
 #define SETTINGS_FILENAME "mpegplayer.cfg"
 
@@ -24,9 +24,20 @@ enum mpeg_option_id
     MPEG_OPTION_DISPLAY_FPS,
     MPEG_OPTION_LIMIT_FPS,
     MPEG_OPTION_SKIP_FRAMES,
+    MPEG_OPTION_SCALE_MODE,
 #ifdef HAVE_BACKLIGHT_BRIGHTNESS
     MPEG_OPTION_BACKLIGHT_BRIGHTNESS,
 #endif
+};
+
+/* Aura (D-304): "Ajustar" (con franjas, sin recortar) vs "Cubrir" (llena
+ * la pantalla, recorta el sobrante) -- mismo concepto que el visor de
+ * fotos (D-303), alternable con SELECT durante la reproduccion o desde
+ * este menu. */
+enum mpeg_scale_mode_id
+{
+    MPEG_SCALE_MODE_FIT = 0,
+    MPEG_SCALE_MODE_COVER,
 };
 
 enum mpeg_audio_option_id
@@ -61,7 +72,6 @@ enum mpeg_setting_id
 {
     MPEG_SETTING_DISPLAY_SETTINGS,
     MPEG_SETTING_AUDIO_SETTINGS,
-    MPEG_SETTING_ENABLE_START_MENU,
     MPEG_SETTING_PLAY_MODE,
     MPEG_SETTING_CLEAR_RESUMES,
 };
@@ -69,7 +79,6 @@ enum mpeg_setting_id
 enum mpeg_menu_id
 {
     MPEG_MENU_SETTINGS,
-    MPEG_MENU_RESUME,
     MPEG_MENU_QUIT,
 };
 
@@ -77,6 +86,7 @@ struct mpeg_settings {
     int showfps;               /* flag to display fps */
     int limitfps;              /* flag to limit fps */
     int skipframes;            /* flag to skip frames */
+    int scale_mode;            /* Aura (D-304): ajustar vs cubrir, enum mpeg_scale_mode_id */
     int resume_options;        /* type of resume action at start */
     int resume_count;          /* total # of resumes in config file */
     int resume_time;           /* resume time for current mpeg (in half minutes) */

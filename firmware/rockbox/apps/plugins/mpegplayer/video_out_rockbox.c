@@ -21,6 +21,7 @@
 
 #include "plugin.h"
 #include "mpegplayer.h"
+#include "mpeg_settings.h"
 
 #define VO_NON_NULL_RECT 0x1
 #define VO_VISIBLE       0x2
@@ -33,6 +34,12 @@ struct vo_data
     int image_chroma_y;
     int display_width;
     int display_height;
+    /* Aura (D-304): copia de sesion de settings.scale_mode -- SELECT la
+     * alterna sin persistir (igual que s_cover_mode en aura_photos.c,
+     * D-303: cada video vuelve a arrancar en el default guardado, ver
+     * vo_setup()); el menu de ajustes SI la sincroniza con el default
+     * persistido, via vo_update_scale_mode(). */
+    int scale_mode;
     int output_x;
     int output_y;
     int output_width;
@@ -137,6 +144,84 @@ static inline void yuv_blit(uint8_t * const * buf, int src_x, int src_y,
     video_unlock();
 }
 
+/* Forward decl: definida mas abajo, junto al resto del codigo de
+ * escalado heredado de la miniatura del extinto selector de inicio. */
+void stretch_image_plane(const uint8_t * src, uint8_t *dst, int stride,
+                         int src_w, int src_h, int dst_w, int dst_h);
+
+#ifdef HAVE_LCD_COLOR
+/* Aura (D-304): modo "cubrir pantalla" -- recorta, dentro del frame ya
+ * decodificado, el area con la relacion de aspecto exacta de la
+ * pantalla (sin deformar) y la escala para llenarla por completo, sin
+ * franjas. Mismo criterio que el modo "cubrir" del visor de fotos
+ * (D-303). El escalado nearest-neighbor (stretch_image_plane(), ya
+ * existente para la miniatura del extinto selector de inicio) corre una
+ * vez por frame sobre la memoria "sobrante" del arena de libmpeg2
+ * (mpeg2_get_buf()): investigacion previa (ver DECISIONS.md D-304)
+ * confirmo que ese arena solo lo usa el propio hilo de video, en el
+ * mismo orden secuencial decode->draw, sin necesidad de locking
+ * adicional, y con margen tipico de ~450 KB de sobra sobre los 115200 B
+ * que este buffer necesita a 320x240. Si no hay margen suficiente
+ * (video de resolucion muy superior a la pantalla), se degrada al blit
+ * directo sin cubrir -- igual que ya hace vo_draw_frame_thumb(). */
+static bool vo_draw_frame_cover(uint8_t * const * buf)
+{
+    void *mem;
+    size_t bufsize = 0;
+    uint8_t *yuv[3];
+    int crop_w, crop_h, crop_x, crop_y;
+    const uint8_t *src_y, *src_u, *src_v;
+    enum { UV_W = SCREEN_WIDTH / 2, UV_H = SCREEN_HEIGHT / 2 };
+
+    if (vo.display_width * SCREEN_HEIGHT >= vo.display_height * SCREEN_WIDTH)
+    {
+        /* Fuente relativamente mas ancha que la pantalla: recorta los
+         * costados, conserva el alto completo. */
+        crop_h = vo.display_height;
+        crop_w = muldiv_uint32(crop_h, SCREEN_WIDTH, SCREEN_HEIGHT);
+        crop_w = MIN(crop_w, vo.display_width);
+        crop_x = ((vo.display_width - crop_w) / 2) & ~1;
+        crop_y = 0;
+    }
+    else
+    {
+        /* Fuente relativamente mas alta: recorta arriba/abajo. */
+        crop_w = vo.display_width;
+        crop_h = muldiv_uint32(crop_w, SCREEN_HEIGHT, SCREEN_WIDTH);
+        crop_h = MIN(crop_h, vo.display_height);
+        crop_y = ((vo.display_height - crop_h) / 2) & ~1;
+        crop_x = 0;
+    }
+
+    mem = mpeg2_get_buf(&bufsize);
+
+    if (mem == NULL ||
+        bufsize < (size_t)(SCREEN_WIDTH*SCREEN_HEIGHT) + 2u*(UV_W*UV_H))
+    {
+        DEBUGF("vo cover: insufficient buffer\n");
+        return false;
+    }
+
+    yuv[0] = mem;
+    yuv[1] = yuv[0] + SCREEN_WIDTH*SCREEN_HEIGHT;
+    yuv[2] = yuv[1] + UV_W*UV_H;
+
+    src_y = buf[0] + crop_y*vo.image_width + crop_x;
+    stretch_image_plane(src_y, yuv[0], vo.image_width,
+                        crop_w, crop_h, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    src_u = buf[1] + (crop_y/2)*(vo.image_width/2) + crop_x/2;
+    src_v = buf[2] + (crop_y/2)*(vo.image_width/2) + crop_x/2;
+    stretch_image_plane(src_u, yuv[1], vo.image_width/2,
+                        crop_w/2, crop_h/2, UV_W, UV_H);
+    stretch_image_plane(src_v, yuv[2], vo.image_width/2,
+                        crop_w/2, crop_h/2, UV_W, UV_H);
+
+    yuv_blit(yuv, 0, 0, SCREEN_WIDTH, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    return true;
+}
+#endif /* HAVE_LCD_COLOR */
+
 void vo_draw_frame(uint8_t * const * buf)
 {
     if ((vo.flags & (VO_NON_NULL_RECT | VO_VISIBLE)) !=
@@ -152,6 +237,13 @@ void vo_draw_frame(uint8_t * const * buf)
         vo_draw_black(NULL);
         DEBUGF("vo no frame\n");
     }
+#ifdef HAVE_LCD_COLOR
+    else if (vo.scale_mode == MPEG_SCALE_MODE_COVER
+             && vo_draw_frame_cover(buf))
+    {
+        /* Ya blanqueado por vo_draw_frame_cover() */
+    }
+#endif
     else
     {
         yuv_blit(buf, 0, 0, vo.image_width,
@@ -449,6 +541,57 @@ no_thumb_exit:
     return false;
 }
 
+/* Aura (D-304): recalcula vo.rc_vid a partir de vo.display_width/height
+ * (ya cacheados) y settings.scale_mode -- comun a vo_setup() (primera
+ * vez, tras la cabecera de secuencia) y a vo_update_scale_mode()
+ * (alternar en caliente con SELECT o desde el menu de ajustes, sin
+ * esperar una nueva secuencia). */
+static void vo_recalc_rect(void)
+{
+    if (vo.scale_mode == MPEG_SCALE_MODE_COVER)
+    {
+        /* El recorte+escalado real ocurre en vo_draw_frame_cover() justo
+         * antes del blit -- el rectangulo de destino es siempre la
+         * pantalla completa, nunca hay franjas que calcular aqui. */
+        vo.rc_vid.l = 0;
+        vo.rc_vid.t = 0;
+        vo.rc_vid.r = SCREEN_WIDTH;
+        vo.rc_vid.b = SCREEN_HEIGHT;
+    }
+    else
+    {
+        if (vo.display_width >= SCREEN_WIDTH)
+        {
+            vo.rc_vid.l = 0;
+            vo.rc_vid.r = SCREEN_WIDTH;
+        }
+        else
+        {
+            vo.rc_vid.l = (SCREEN_WIDTH - vo.display_width) / 2;
+#ifdef HAVE_LCD_COLOR
+            vo.rc_vid.l &= ~1;
+#endif
+            vo.rc_vid.r = vo.rc_vid.l + vo.display_width;
+        }
+
+        if (vo.display_height >= SCREEN_HEIGHT)
+        {
+            vo.rc_vid.t = 0;
+            vo.rc_vid.b = SCREEN_HEIGHT;
+        }
+        else
+        {
+            vo.rc_vid.t = (SCREEN_HEIGHT - vo.display_height) / 2;
+#ifdef HAVE_LCD_COLOR
+            vo.rc_vid.t &= ~1;
+#endif
+            vo.rc_vid.b = vo.rc_vid.t + vo.display_height;
+        }
+    }
+
+    vo_set_clip_rect(&vo.rc_clip);
+}
+
 void vo_setup(const mpeg2_sequence_t * sequence)
 {
     vo.image_width = sequence->width;
@@ -461,35 +604,21 @@ void vo_setup(const mpeg2_sequence_t * sequence)
     vo.image_chroma_x = vo.image_width / sequence->chroma_width;
     vo.image_chroma_y = vo.image_height / sequence->chroma_height;
 
-    if (sequence->display_width >= SCREEN_WIDTH)
-    {
-        vo.rc_vid.l = 0;
-        vo.rc_vid.r = SCREEN_WIDTH;
-    }
-    else
-    {
-        vo.rc_vid.l = (SCREEN_WIDTH - sequence->display_width) / 2;
-#ifdef HAVE_LCD_COLOR
-        vo.rc_vid.l &= ~1;
-#endif
-        vo.rc_vid.r = vo.rc_vid.l + sequence->display_width;
-    }
+    vo.scale_mode = settings.scale_mode;
+    vo_recalc_rect();
+}
 
-    if (sequence->display_height >= SCREEN_HEIGHT)
-    {
-        vo.rc_vid.t = 0;
-        vo.rc_vid.b = SCREEN_HEIGHT;
-    }
-    else
-    {
-        vo.rc_vid.t = (SCREEN_HEIGHT - sequence->display_height) / 2;
-#ifdef HAVE_LCD_COLOR
-        vo.rc_vid.t &= ~1;
-#endif
-        vo.rc_vid.b = vo.rc_vid.t + sequence->display_height;
-    }
+void vo_update_scale_mode(void)
+{
+    vo.scale_mode = settings.scale_mode;
+    vo_recalc_rect();
+}
 
-    vo_set_clip_rect(&vo.rc_clip);
+void vo_toggle_scale_mode(void)
+{
+    vo.scale_mode = (vo.scale_mode == MPEG_SCALE_MODE_COVER)
+                     ? MPEG_SCALE_MODE_FIT : MPEG_SCALE_MODE_COVER;
+    vo_recalc_rect();
 }
 
 void vo_dimensions(struct vo_ext *sz)

@@ -1078,7 +1078,7 @@ int stream_init(void)
     if (!grey_init(mem, memsize, GREY_BUFFERED|GREY_ON_COP,
                    LCD_WIDTH, LCD_HEIGHT, &greysize))
     {
-        rb->splash(HZ, "greylib init failed!");
+        rb->splash(HZ, "Fallo al iniciar greylib");
         return STREAM_ERROR;
     }
 
@@ -1097,7 +1097,7 @@ int stream_init(void)
 
     if (stream_mgr.thread == 0)
     {
-        rb->splash(HZ, "Could not create stream manager thread!");
+        rb->splash(HZ, "No se pudo crear el hilo del gestor de flujo");
         return STREAM_ERROR;
     }
 
@@ -1107,29 +1107,29 @@ int stream_init(void)
     /* Initialise our malloc buffer */
     if (!mpeg_alloc_init(mem, memsize))
     {
-        rb->splash(HZ, "Out of memory in stream_init");
+        rb->splash(HZ, "Memoria insuficiente en stream_init");
     }
     /* These inits use the allocator */
     else if (!pcm_output_init())
     {
-        rb->splash(HZ, "Could not initialize PCM!");
+        rb->splash(HZ, "No se pudo inicializar el PCM");
     }
     else if (!audio_thread_init())
     {
-        rb->splash(HZ, "Cannot create audio thread!");
+        rb->splash(HZ, "No se pudo crear el hilo de audio");
     }
     else if (!video_thread_init())
     {
-        rb->splash(HZ, "Cannot create video thread!");
+        rb->splash(HZ, "No se pudo crear el hilo de video");
     }
     /* Disk buffer takes max allotment of what's left so it must be last */
     else if (!disk_buf_init())
     {
-        rb->splash(HZ, "Cannot create buffering thread!");
+        rb->splash(HZ, "No se pudo crear el hilo de buffer");
     }
     else if (!parser_init())
     {
-        rb->splash(HZ, "Parser init failed!");
+        rb->splash(HZ, "Fallo al iniciar el analizador");
     }
     else
     {

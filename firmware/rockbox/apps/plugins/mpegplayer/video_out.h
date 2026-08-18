@@ -56,6 +56,15 @@ bool vo_init (void);
 bool vo_show (bool show);
 bool vo_is_visible(void);
 void vo_setup (const mpeg2_sequence_t * sequence);
+/* Aura (D-304): sincroniza el modo de ajuste de la sesion actual con el
+ * default persistido en settings.scale_mode (se llama tras cambiarlo
+ * desde el menu de ajustes) y recalcula el rectangulo de destino sin
+ * esperar una nueva cabecera de secuencia. */
+void vo_update_scale_mode(void);
+/* Alterna ajustar/cubrir para la sesion actual (SELECT durante la
+ * reproduccion) sin tocar el default persistido -- mismo criterio que
+ * s_cover_mode en el visor de fotos (D-303). */
+void vo_toggle_scale_mode(void);
 void vo_set_clip_rect(const struct vo_rect *rc);
 bool vo_get_clip_rect(struct vo_rect *rc);
 void vo_dimensions(struct vo_ext *sz);

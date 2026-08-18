@@ -28,7 +28,7 @@ cabecera de copyright GPL v2 (ver más abajo). Es el reemplazo de la UI
 de Rockbox (menús, WPS) por la capa "Aura UI", conectado al resto del
 árbol mediante los 20 archivos listados abajo.
 
-## Los 23 archivos de Rockbox modificados fuera de `apps/aura/`
+## Los 27 archivos de Rockbox modificados fuera de `apps/aura/`
 
 Todos conservan su cabecera de copyright original de Rockbox intacta.
 Los cambios de Aura están marcados inline en el propio código con
@@ -45,8 +45,12 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `apps/misc.h`
 - `apps/plugin.c` (D-298: `plugin_set_silent_open_errors()` — permite silenciar los dos `splash()` nativos que `plugin_load()` mostraba en sus ramas de error, antes de devolver `PLUGIN_ERROR`; opt-in por llamador, `false` por defecto, sin efecto en el resto de Rockbox)
 - `apps/plugin.h` (D-298: declaración de `plugin_set_silent_open_errors()`)
-- `apps/plugins/mpegplayer/mpeg_settings.c`
-- `apps/plugins/mpegplayer/mpegplayer.c`
+- `apps/plugins/mpegplayer/mpeg_settings.c` (D-062/D-069, y D-304: ajuste "cubrir pantalla" -- nuevo campo `scale_mode` persistido, entrada de menu, y traduccion completa al espanol de los menus/splashes de este plugin, que hasta ahora quedaban en ingles pese a D-013)
+- `apps/plugins/mpegplayer/mpeg_settings.h` (D-304: `enum mpeg_scale_mode_id`, campo `scale_mode`, `SETTINGS_VERSION` 5→6)
+- `apps/plugins/mpegplayer/mpegplayer.c` (D-062/D-069, y D-304: color de la barra de progreso corregido para seguir la convencion del resto de la app, tecla SELECT ahora alterna ajustar/cubrir, splashes traducidos al espanol)
+- `apps/plugins/mpegplayer/stream_mgr.c` (D-304: splashes de error traducidos al espanol)
+- `apps/plugins/mpegplayer/video_out.h` (D-304: declaraciones de `vo_update_scale_mode()`/`vo_toggle_scale_mode()`)
+- `apps/plugins/mpegplayer/video_out_rockbox.c` (D-304: modo "cubrir pantalla" -- recorte + escalado nearest-neighbor del frame decodificado antes del blit)
 - `apps/plugins/solitaire.c`
 - `apps/settings.h`
 - `apps/tagcache.c` (D-021/D-244, y D-293: contador de trabajos de (re)construcción procesados + consulta/descarte del temporal `database_tmp.tcd` para `apps/aura/aura_sync.c`; confirmación silenciosa del temporal al arrancar en vez del diálogo sí/no de Rockbox; `load_ramcache()` redimensiona la copia en RAM cuando la base creció tras un commit y distingue "no cabe" de "corrupta" en vez de deshabilitar la base en ambos casos, y ya no deja `ramcache_allocated > 0` con el handle liberado — pánico de buflib al siguiente commit; `commit()` prefiere un buffer temporal general al de RAM cuando este es claramente chico para el commit pendiente)
@@ -61,7 +65,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 
 (Rutas relativas a `firmware/rockbox/`.)
 
-De estos 23 (`apps/tagcache.h` se sumó con D-293; `apps/plugin.c`/`apps/plugin.h` con D-298), dos no tenían ningún comentario que mencionara a Aura:
+De estos 27 (`apps/tagcache.h` se sumó con D-293; `apps/plugin.c`/`apps/plugin.h` con D-298; `apps/plugins/mpegplayer/mpeg_settings.h`, `stream_mgr.c`, `video_out.h` y `video_out_rockbox.c` con D-304), dos no tenían ningún comentario que mencionara a Aura:
 
 - **`utils/mks5lboot/Makefile`**: sí tiene una modificación real vigente
   (backend libusb opcional en macOS, D-050, 2026-08-10) — recibió un

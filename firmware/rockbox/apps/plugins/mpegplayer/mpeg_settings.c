@@ -417,6 +417,7 @@ static struct configdata config[] =
     {TYPE_INT, 0, 2, { .int_p = &settings.showfps }, "Show FPS", NULL},
     {TYPE_INT, 0, 2, { .int_p = &settings.limitfps }, "Limit FPS", NULL},
     {TYPE_INT, 0, 2, { .int_p = &settings.skipframes }, "Skip frames", NULL},
+    {TYPE_INT, 0, 1, { .int_p = &settings.scale_mode }, "Scale mode", NULL},
     {TYPE_INT, 0, INT_MAX, { .int_p = &settings.resume_count }, "Resume count",
      NULL},
     {TYPE_INT, 0, MPEG_RESUME_NUM_OPTIONS,
@@ -439,19 +440,28 @@ static struct configdata config[] =
 #endif
 };
 
+/* Aura (D-304): D-013 -- Aura no carga el sistema de idiomas .lang de
+ * Rockbox, asi que rb->str(LANG_X) siempre resuelve a ingles de fabrica.
+ * Se usan literales en espanol directamente, igual que ya hace el resto
+ * de la app. */
 static const struct opt_items noyes[2] = {
-    { STR(LANG_SET_BOOL_NO) },
-    { STR(LANG_SET_BOOL_YES) },
+    { "No", -1 },
+    { "Si", -1 },
 };
 
 static const struct opt_items singleall[2] = {
-    { STR(LANG_SINGLE) },
-    { STR(LANG_ALL) },
+    { "Uno", -1 },
+    { "Todos", -1 },
 };
 
 static const struct opt_items globaloff[2] = {
-    { STR(LANG_OFF) },
-    { STR(LANG_USE_SOUND_SETTING) },
+    { "Desactivado", -1 },
+    { "Usar ajuste de sonido", -1 },
+};
+
+static const struct opt_items scalemodes[2] = {
+    { "Ajustar", -1 },
+    { "Cubrir", -1 },
 };
 
 static void mpeg_settings(void);
@@ -526,7 +536,7 @@ static const char* backlight_brightness_formatter(char *buf, size_t length,
     (void)input;
 
     if (value < 0)
-        return rb->str(LANG_USE_COMMON_SETTING);
+        return "Usar ajuste general";
     else
         rb->snprintf(buf, length, "%d", value + MIN_BRIGHTNESS_SETTING);
     return buf;
@@ -685,10 +695,9 @@ int mpeg_menu(void)
 {
     int result;
 
-    MENUITEM_STRINGLIST(menu, "MPEG Player", mpeg_sysevent_callback,
-                        ID2P(LANG_SETTINGS),
-                        ID2P(LANG_RESUME_PLAYBACK),
-                        ID2P(LANG_MENU_QUIT));
+    MENUITEM_STRINGLIST(menu, "Reproductor de video", mpeg_sysevent_callback,
+                        "Ajustes",
+                        "Salir");
 
     rb->button_clear_queue();
 
@@ -700,9 +709,6 @@ int mpeg_menu(void)
     {
     case MPEG_MENU_SETTINGS:
         mpeg_settings();
-        break;
-
-    case MPEG_MENU_RESUME:
         break;
 
     case MPEG_MENU_QUIT:
@@ -724,15 +730,16 @@ static void display_options(void)
     int result;
     bool menu_quit = false;
 
-    MENUITEM_STRINGLIST(menu, ID2P(LANG_MENU_DISPLAY_OPTIONS), mpeg_sysevent_callback,
+    MENUITEM_STRINGLIST(menu, "Opciones de pantalla", mpeg_sysevent_callback,
 #if MPEG_OPTION_DITHERING_ENABLED
-                        ID2P(LANG_DITHERING),
+                        "Tramado",
 #endif
-                        ID2P(LANG_DISPLAY_FPS),
-                        ID2P(LANG_LIMIT_FPS),
-                        ID2P(LANG_SKIP_FRAMES),
+                        "Mostrar FPS",
+                        "Limitar FPS",
+                        "Omitir fotogramas",
+                        "Modo de ajuste",
 #ifdef HAVE_BACKLIGHT_BRIGHTNESS
-                        ID2P(LANG_BACKLIGHT_BRIGHTNESS),
+                        "Brillo de la luz de fondo",
 #endif
                         );
 
@@ -748,7 +755,7 @@ static void display_options(void)
 #if MPEG_OPTION_DITHERING_ENABLED
         case MPEG_OPTION_DITHERING:
             result = (settings.displayoptions & LCD_YUV_DITHER) ? 1 : 0;
-            mpeg_set_option(rb->str(LANG_DITHERING), &result, RB_INT, noyes, 2, NULL);
+            mpeg_set_option("Tramado", &result, RB_INT, noyes, 2, NULL);
             settings.displayoptions =
                 (settings.displayoptions & ~LCD_YUV_DITHER)
                       | ((result != 0) ? LCD_YUV_DITHER : 0);
@@ -757,25 +764,31 @@ static void display_options(void)
 #endif /* MPEG_OPTION_DITHERING_ENABLED */
 
         case MPEG_OPTION_DISPLAY_FPS:
-            mpeg_set_option(rb->str(LANG_DISPLAY_FPS), &settings.showfps, RB_INT,
+            mpeg_set_option("Mostrar FPS", &settings.showfps, RB_INT,
                             noyes, 2, NULL);
             break;
 
         case MPEG_OPTION_LIMIT_FPS:
-            mpeg_set_option(rb->str(LANG_LIMIT_FPS), &settings.limitfps, RB_INT,
+            mpeg_set_option("Limitar FPS", &settings.limitfps, RB_INT,
                             noyes, 2, NULL);
             break;
 
         case MPEG_OPTION_SKIP_FRAMES:
-            mpeg_set_option(rb->str(LANG_SKIP_FRAMES), &settings.skipframes, RB_INT,
+            mpeg_set_option("Omitir fotogramas", &settings.skipframes, RB_INT,
                             noyes, 2, NULL);
+            break;
+
+        case MPEG_OPTION_SCALE_MODE:
+            mpeg_set_option("Modo de ajuste", &settings.scale_mode, RB_INT,
+                            scalemodes, 2, NULL);
+            vo_update_scale_mode();
             break;
 
 #ifdef HAVE_BACKLIGHT_BRIGHTNESS
         case MPEG_OPTION_BACKLIGHT_BRIGHTNESS:
             result = settings.backlight_brightness;
             mpeg_backlight_update_brightness(result);
-            mpeg_set_int(rb->str(LANG_BACKLIGHT_BRIGHTNESS), NULL, UNIT_INT, &result,
+            mpeg_set_int("Brillo de la luz de fondo", NULL, UNIT_INT, &result,
                          backlight_brightness_function, 1, -1,
                          MAX_BRIGHTNESS_SETTING - MIN_BRIGHTNESS_SETTING,
                          backlight_brightness_formatter,
@@ -801,12 +814,12 @@ static void audio_options(void)
     int result;
     bool menu_quit = false;
 
-    MENUITEM_STRINGLIST(menu, ID2P(LANG_MENU_AUDIO_OPTIONS), mpeg_sysevent_callback,
-                        ID2P(LANG_TONE_CONTROLS),
-                        ID2P(LANG_CHANNEL_CONFIGURATION),
-                        ID2P(LANG_CROSSFEED),
-                        ID2P(LANG_EQUALIZER),
-                        ID2P(LANG_DITHERING));
+    MENUITEM_STRINGLIST(menu, "Opciones de audio", mpeg_sysevent_callback,
+                        "Controles de tono",
+                        "Configuracion de canales",
+                        "Crossfeed",
+                        "Ecualizador",
+                        "Tramado");
 
     rb->button_clear_queue();
 
@@ -818,31 +831,31 @@ static void audio_options(void)
         switch (result)
         {
         case MPEG_AUDIO_TONE_CONTROLS:
-            mpeg_set_option(rb->str(LANG_TONE_CONTROLS), &settings.tone_controls, RB_INT,
+            mpeg_set_option("Controles de tono", &settings.tone_controls, RB_INT,
                             globaloff, 2, NULL);
             sync_audio_setting(result, false);
             break;
 
         case MPEG_AUDIO_CHANNEL_MODES:
-            mpeg_set_option(rb->str(LANG_CHANNEL_CONFIGURATION), &settings.channel_modes,
+            mpeg_set_option("Configuracion de canales", &settings.channel_modes,
                             RB_INT, globaloff, 2, NULL);
             sync_audio_setting(result, false);
             break;
 
         case MPEG_AUDIO_CROSSFEED:
-            mpeg_set_option(rb->str(LANG_CROSSFEED), &settings.crossfeed, RB_INT,
+            mpeg_set_option("Crossfeed", &settings.crossfeed, RB_INT,
                             globaloff, 2, NULL);
             sync_audio_setting(result, false);
             break;
 
         case MPEG_AUDIO_EQUALIZER:
-            mpeg_set_option(rb->str(LANG_EQUALIZER), &settings.equalizer, RB_INT,
+            mpeg_set_option("Ecualizador", &settings.equalizer, RB_INT,
                             globaloff, 2, NULL);
             sync_audio_setting(result, false);
             break;
 
         case MPEG_AUDIO_DITHERING:
-            mpeg_set_option(rb->str(LANG_DITHERING), &settings.dithering, RB_INT,
+            mpeg_set_option("Tramado", &settings.dithering, RB_INT,
                             globaloff, 2, NULL);
             sync_audio_setting(result, false);
             break;
@@ -855,23 +868,6 @@ static void audio_options(void)
         if (mpeg_sysevent() != 0)
             menu_quit = true;
     }
-}
-
-static void resume_options(void)
-{
-    static const struct opt_items items[MPEG_RESUME_NUM_OPTIONS] = {
-        [MPEG_RESUME_MENU_ALWAYS] =
-            { STR(LANG_FORCE_START_MENU) },
-        [MPEG_RESUME_MENU_IF_INCOMPLETE] =
-            { STR(LANG_CONDITIONAL_START_MENU) },
-        [MPEG_RESUME_ALWAYS] =
-            { STR(LANG_AUTO_RESUME) },
-        [MPEG_RESUME_RESTART] =
-            { STR(LANG_RESTART_PLAYBACK) },
-    };
-
-    mpeg_set_option(rb->str(LANG_MENU_RESUME_OPTIONS), &settings.resume_options,
-                    RB_INT, items, MPEG_RESUME_NUM_OPTIONS, NULL);
 }
 
 static void clear_resume_count(void)
@@ -887,12 +883,11 @@ static void mpeg_settings(void)
     int result;
     bool menu_quit = false;
 
-    MENUITEM_STRINGLIST(menu, ID2P(LANG_SETTINGS), mpeg_sysevent_callback,
-                        ID2P(LANG_MENU_DISPLAY_OPTIONS),
-                        ID2P(LANG_MENU_AUDIO_OPTIONS),
-                        ID2P(LANG_MENU_RESUME_OPTIONS),
-                        ID2P(LANG_MENU_PLAY_MODE),
-                        ID2P(LANG_CLEAR_ALL_RESUMES));
+    MENUITEM_STRINGLIST(menu, "Ajustes", mpeg_sysevent_callback,
+                        "Opciones de pantalla",
+                        "Opciones de audio",
+                        "Modo de reproduccion",
+                        "Borrar todas las reanudaciones");
 
     rb->button_clear_queue();
 
@@ -912,12 +907,8 @@ static void mpeg_settings(void)
             audio_options();
             break;
 
-        case MPEG_SETTING_ENABLE_START_MENU:
-            resume_options();
-            break;
-
         case MPEG_SETTING_PLAY_MODE:
-            mpeg_set_option(rb->str(LANG_MENU_PLAY_MODE), &settings.play_mode,
+            mpeg_set_option("Modo de reproduccion", &settings.play_mode,
                             RB_INT, singleall, 2, NULL);
             break;
 
@@ -941,6 +932,7 @@ void init_settings(const char* filename)
     settings.showfps = 0;     /* Do not show FPS */
     settings.limitfps = 1;    /* Limit FPS */
     settings.skipframes = 1;  /* Skip frames */
+    settings.scale_mode = MPEG_SCALE_MODE_FIT; /* Aura (D-304) */
     settings.play_mode = 0;   /* Play single video */
     settings.resume_options = MPEG_RESUME_MENU_ALWAYS; /* Enable start menu */
     settings.resume_count = 0;
