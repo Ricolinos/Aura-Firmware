@@ -271,6 +271,11 @@ static void aura_main_sync_after_disk_handoff(aura_nav_t *nav)
     /* D-294: el nombre del iPod (device.cfg de Aura Studio) se relee en
      * los mismos dos momentos: es la otra cosa que Studio pudo escribir. */
     aura_device_reload();
+    /* D-321: hora/zona horaria que Aura Studio haya dejado en aura.cfg
+     * (rtc_sync_*, tz_local_quarters) -- mismo momento que el resto de
+     * este handoff, es la unica ocasion en que el firmware recupera el
+     * disco despues de una posible escritura de Studio. */
+    aura_settings_apply_pending_clock();
     aura_sync_check_pending();
     if (aura_sync_needs_screen()
         && aura_nav_current(nav) != AURA_SCREEN_LIBRARY_SYNC)

@@ -31,6 +31,7 @@
 #include "eq.h"
 #include "backlight.h"
 #include "string-extra.h"
+#include "rtc.h"
 
 #include "aura_settings.h"
 #include "apple2026_tokens.h"
@@ -330,6 +331,51 @@ void aura_settings_load(void)
     }
 
     aura_settings_apply_eq();
+}
+
+void aura_settings_apply_pending_clock(void)
+{
+    int fd;
+    char line[64];
+    struct tm tm;
+    bool have_year = false, have_month = false, have_day = false;
+    bool have_hour = false, have_min = false, have_sec = false;
+
+    memset(&tm, 0, sizeof(tm));
+
+    fd = open(AURA_CFG_PATH, O_RDONLY);
+    if (fd < 0)
+        return;
+
+    while (read_line(fd, line, sizeof(line)) > 0)
+    {
+        char *name, *value;
+        if (!settings_parseline(line, &name, &value))
+            continue;
+
+        int v = atoi(value);
+        if (!strcmp(name, "rtc_sync_year"))       { tm.tm_year = v - 1900; have_year  = true; }
+        else if (!strcmp(name, "rtc_sync_month")) { tm.tm_mon  = v - 1;    have_month = true; }
+        else if (!strcmp(name, "rtc_sync_day"))   { tm.tm_mday = v;        have_day   = true; }
+        else if (!strcmp(name, "rtc_sync_hour"))  { tm.tm_hour = v;        have_hour  = true; }
+        else if (!strcmp(name, "rtc_sync_min"))   { tm.tm_min  = v;        have_min   = true; }
+        else if (!strcmp(name, "rtc_sync_sec"))   { tm.tm_sec  = v;        have_sec   = true; }
+        else if (!strcmp(name, "tz_local_quarters"))
+            aura_settings.tz_local_quarters = v;
+    }
+    close(fd);
+
+    if (have_year && have_month && have_day && have_hour && have_min && have_sec)
+    {
+#if CONFIG_RTC
+        rtc_write_datetime(&tm);
+#endif
+        /* Reescribe aura.cfg entero desde aura_settings -- las claves
+         * rtc_sync_* recien leidas no forman parte de ese struct, asi
+         * que desaparecen solas del archivo. No hace falta borrarlas a
+         * mano. */
+        aura_settings_save();
+    }
 }
 
 void aura_settings_save(void)

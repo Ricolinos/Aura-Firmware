@@ -544,3 +544,19 @@ Sobre "cubrir pantalla": investigar el escalado de video reveló que la premisa 
 **Verificado**: build ARM completo (`firmware/build-ipod6g`, `make`) — limpio, sin warnings nuevos.
 
 **Pendiente**: confirmación del dueño en hardware real (no queda nada que verificar en simulador, la marca de piezo nunca corría ahí).
+
+## D-321 — Hora y zona horaria automáticas desde Aura Studio (contrato v7, §D.4)
+
+**Encargo**: "cada que el ipod se conecte a Aura Studio, deberá actualizar su hora y region local para no tenerlo que configurar manualmente, igual al instalar o actualizar el firmware."
+
+**Diseño**: el S5L8702 tiene RTC real (`CONFIG_RTC RTC_NANO2G`, `rtc-6g.c`) y Aura ya sabía escribirlo (`rtc_write_datetime()`, usado por las pantallas de Ajustes › Fecha/Ajustes › Hora) — lo que faltaba era un canal para que Studio lo alimentara. Se investigó primero si existía algún canal de "ejecutá esto" entre Studio y firmware: no existe ninguno, todo lo que Studio le "dice" al firmware pasa por claves reconocidas de `aura.cfg` (`settings_parseline()`, `strcmp` contra una lista fija) o por el marcador `/.aura/sync-pending.json` — ambos de solo datos, nunca comandos. Siete claves nuevas en `aura.cfg`: `rtc_sync_year/month/day/hour/min/sec` (**transitorias**, un solo uso — Studio las escribe frescas en cada conexión) y `tz_local_quarters` (ya existía desde D-293 como ajuste interno del reloj mundial; v7 es la primera vez que algo externo también la escribe). `aura_settings_apply_pending_clock()` (nueva, `aura_settings.c`) las lee; si las seis del RTC están completas, llama `rtc_write_datetime()` y `aura_settings_save()` — que al reescribir `aura.cfg` entero desde el struct en memoria descarta solas las claves transitorias, sin necesidad de un borrado explícito. Se llama desde `aura_main_sync_after_disk_handoff()` (D-293) — el mismo y único punto donde el firmware ya recupera el disco tras un posible USB de Studio (arranque y vuelta de la pantalla USB) — así que no hace falta un reinicio completo aparte para que la hora quede corregida.
+
+**Causa de por qué el diseño evita reaplicar una hora vieja**: `aura_settings_load()` (que sí corre en cada arranque normal, con o sin Studio de por medio) nunca toca el RTC — solo `aura_settings_apply_pending_clock()`, llamada específicamente en el handoff de disco, lo hace, y solo si las seis claves transitorias siguen presentes (es decir, si Studio las dejó y el firmware todavía no las consumió). Un iPod que arranca sin haber pasado por Studio nunca ve su hora tocada.
+
+**Deliberadamente fuera de alcance**: idioma (el encargo decía "hora y region", no idioma — un usuario puede preferir un idioma de UI distinto al de macOS a propósito); formato de fecha, 12h/24h, primer día de semana (no son parte del RTC).
+
+**Hecho**: `aura_settings_apply_pending_clock()` + declaración en `aura_settings.h`; enganche en `aura_main_sync_after_disk_handoff()` (`aura_main.c`); `CONTRATO-firmware-studio.md` → **v7**, §D.4 nueva, dos filas nuevas en §D. Copia sincronizada a Aura Studio, `cmp` limpio. Contraparte Studio: **ST-035**.
+
+**Verificado**: build ARM completo, limpio. 11/11 tests de host sin regresión (`aura_settings.c` no es un módulo host-testeable, hace I/O real — mismo criterio que el resto de `aura_settings.c`).
+
+**Pendiente**: confirmación del dueño en hardware real (conectar con la hora del iPod desincronizada, verificar que corrige sola tras desconectar).

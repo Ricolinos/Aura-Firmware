@@ -201,6 +201,17 @@ void aura_settings_load(void);
 /* Persiste aura_settings a disco. */
 void aura_settings_save(void);
 
+/* D-321/ST-035: aplica de una vez la hora/zona que Aura Studio haya
+ * dejado en AURA_CFG_PATH (claves rtc_sync_year/month/day/hour/min/sec,
+ * transitorias, mas tz_local_quarters) -- ver CONTRATO-firmware-studio.md
+ * §D.4. Si las seis claves rtc_sync_* estan presentes, ajusta el RTC
+ * real (bajo CONFIG_RTC) y persiste con aura_settings_save(), que al
+ * reescribir el archivo entero descarta esas claves transitorias solo
+ * conocidas por esta funcion. Llamar despues de aura_settings_load(),
+ * en cada momento en que el firmware recupera el disco tras un posible
+ * USB de Aura Studio (ver aura_main_sync_after_disk_handoff(), D-293). */
+void aura_settings_apply_pending_clock(void);
+
 /* Aura (D-306): sincroniza global_settings.fg_color/bg_color/lss_color/
  * lse_color/lst_color (los que usa cualquier pantalla nativa de
  * Rockbox que sobreviva, p. ej. el menu de ajustes de mpegplayer) con
