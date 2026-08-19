@@ -520,3 +520,15 @@ Sobre "cubrir pantalla": investigar el escalado de video reveló que la premisa 
 **Verificado**: build ARM + simulador limpios (`make -j4` en ambos, cero *warnings* nuevos), `make -C firmware/rockbox/apps/aura/test test` **11/11 suites, sin regresiones**. Simulador lanzado sin errores en consola; verificación visual interactiva (giro de temporada, reproducción instantánea de película, fundido a negro, formato 3:4) queda a cargo del dueño en esta misma sesión de simulador.
 
 **Deliberadamente no resuelto en esta pasada**: la coreografía de entrada con `CoverDrift` (ver simplificación arriba); Movie Flow no se agregó a `ROOT_SHORTCUTS` (Music Flow sí puede vivir como atajo en el menú de inicio, Movie Flow no se pidió ahí); ningún ajuste de Gráficos/Animaciones específico para Movie Flow más allá de heredar el mismo `MVF_FLIP_MS`/fundido gateados por los niveles ya definidos en D-310–D-315.
+
+## D-319 — Contrato v6: fotos de artista (§D.3) — solo formato, sin código todavía
+
+**Encargo**: el dueño pidió mostrar fotos de artista (círculo, estilo Apple Music) en Música → Artistas del firmware, con la metadata sincronizada desde Aura Studio (que ya las descarga, ST-032). Se aprobó un plan de dos fases (`PLAN-biblioteca-medios-v2.md`, carpeta padre) antes de escribir código; esta pasada es solo la Tanda 0: fijar el contrato para que firmware y Studio implementen contra el mismo formato, sin adivinar cada uno por su lado.
+
+**Diseño**: dos elementos opcionales, `.rockbox/aura/artists/<archivo>.jpg` (foto cuadrada ≤128px, mismas reglas de formato que D.1) y `.rockbox/aura/artist_images.cfg` (índice). El índice usa el mismo parser `settings_parseline()` de D.2 pero **con las columnas invertidas** (`archivo: artista`, no `artista: archivo`): un nombre de artista puede traer `:` (p. ej. "Panic! At The Disco: Live"), y el parser corta en el primer `:` — solo el nombre de archivo (FAT-seguro) puede ir primero con seguridad. El firmware compara el tag `artist` de tagcache **byte a byte, sin normalizar** (confirmado: `apps/aura` nunca usa `tag_albumartist`, y `label_cmp()` solo hace case-insensitive ASCII) — la clave que Studio escriba tiene que ser el string UTF-8 exacto del tag, no la clave normalizada que usa internamente para agrupar (`albumArtist ?? artist`, con acentos plegados).
+
+**Hecho**: `CONTRATO-firmware-studio.md` → **v6** (§D: dos filas nuevas; §D.3: formato completo, ejemplo, topes, degradación). Copia sincronizada a Aura Studio, `cmp` limpio. **Sin ningún cambio de código en esta pasada** — el módulo `aura_artist_images.c` y el layout circular de Artistas quedan para la Tanda 3 de `PLAN-biblioteca-medios-v2.md`.
+
+**Verificado**: `cmp` entre ambas copias del contrato. No aplica build/test (solo Markdown).
+
+**Pendiente**: implementación firmware (Tanda 3) y Studio (Tanda 5) del plan.
