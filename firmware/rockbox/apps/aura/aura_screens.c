@@ -62,6 +62,7 @@
 #include "aura_albumart.h"
 #include "aura_art.h"
 #include "aura_coverdrift.h"
+#include "aura_artist_images.h"
 #include "aura_fx.h"
 #include "aura_scroll_indicator.h"
 #include "aura_flow.h"
@@ -4938,6 +4939,14 @@ static bool is_album_list_screen(aura_screen_id_t screen)
         || screen == AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER;
 }
 
+/* D-322: las dos pantallas que listan artistas -- mismo layout de 4
+ * filas/54px que Álbumes, con foto circular en vez de carátula. */
+static bool is_artist_list_screen(aura_screen_id_t screen)
+{
+    return screen == AURA_SCREEN_MUSIC_ARTISTS
+        || screen == AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE;
+}
+
 /* La caratula real usa el MISMO cache/pipeline que MusicFlow
  * (aura_albumart_load_for_album -- cache .pfraw en disco, cero
  * decodificacion JPEG en redibujados posteriores). El bitmap resultante
@@ -5037,6 +5046,123 @@ static void draw_album_list(aura_nav_t *nav, aura_screen_id_t screen)
                                 a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
 }
 
+/* D-322: foto circular de artista, mismo mecanismo por columnas que
+ * draw_album_thumb() -- `lookup_key` es el tag CRUDO de artista
+ * (s_music_cache[i].label, que para todo artista real es igual al tag
+ * de tagcache -- ver run_search() en aura_music.c) o NULL para ir
+ * directo al placeholder (fila sintetica "Todos", o "Artista
+ * desconocido": jerga tecnica traducida, nunca un tag real que buscar). */
+static void draw_artist_thumb(int x, int y, const char *lookup_key)
+{
+    static unsigned char cover_buf[ALBUM_ART_SIZE * ALBUM_ART_SIZE * sizeof(fb_data)];
+    /* aura_artist_art_load()/_load_default() nunca escriben el reflejo
+     * (sin uso en una lista, a diferencia de Music Flow) -- el buffer
+     * solo satisface el contrato del struct aura_albumart_t. */
+    static unsigned char refl_buf[ALBUM_ART_SIZE * sizeof(fb_data)];
+    static fb_data col_buf[ALBUM_ART_SIZE];
+    aura_albumart_t art;
+    const fb_data *cover;
+    int col, row;
+
+    art.size = ALBUM_ART_SIZE;
+    art.radius = ALBUM_ART_SIZE / 2; /* circulo perfecto para size par, D-322 */
+    art.cover_data = cover_buf;
+    art.reflection_data = refl_buf;
+
+    if (!lookup_key || !aura_artist_art_load(lookup_key, &art))
+        aura_artist_art_load_default(&art);
+
+    cover = (const fb_data *)art.cover_data;
+    for (col = 0; col < ALBUM_ART_SIZE; col++)
+    {
+        for (row = 0; row < ALBUM_ART_SIZE; row++)
+            col_buf[row] = cover[col * ALBUM_ART_SIZE + row];
+        lcd_bitmap(col_buf, x + col, y, 1, ALBUM_ART_SIZE);
+    }
+}
+
+static long s_artist_activity_since = 0;
+static int  s_artist_last_selected = -1;
+
+static void draw_artist_list(aura_nav_t *nav, aura_screen_id_t screen)
+{
+    int selected = aura_nav_get_selection(nav);
+    int count = s_music_cache_count;
+    int visible = ALBUM_VISIBLE;
+    int first = 0;
+    int i, w, h;
+
+    a26_shell_clear_screen();
+    aura_widgets_draw_status_bar(aura_str(screen_title_id(screen)));
+
+    if (count > visible)
+    {
+        first = selected - visible / 2;
+        if (first < 0) first = 0;
+        if (first > count - visible) first = count - visible;
+    }
+
+    if (selected != s_artist_last_selected)
+    {
+        s_artist_last_selected = selected;
+        s_artist_activity_since = current_tick;
+    }
+
+    if (selected >= first && selected < first + visible)
+    {
+        int sel_y = ALBUM_LIST_TOP + (selected - first) * ALBUM_ROW_H;
+        a26_shell_fill_rounded_rect(A26_LAYOUT_LIST_INSET, sel_y,
+                                     A26_SCREEN_WIDTH - 2 * A26_LAYOUT_LIST_INSET,
+                                     ALBUM_ROW_H, A26_LAYOUT_CORNER_RADIUS_PILL,
+                                     a26_color(A26_SELECTION_FILL),
+                                     a26_color(A26_SHELL_BG));
+    }
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
+    for (i = first; i < count && i < first + visible; i++)
+    {
+        int row_y = ALBUM_LIST_TOP + (i - first) * ALBUM_ROW_H;
+        int art_y = row_y + (ALBUM_ROW_H - ALBUM_ART_SIZE) / 2;
+        int text_x = ALBUM_ART_X + ALBUM_ART_SIZE + ALBUM_TEXT_GAP;
+        bool is_sel = (i == selected);
+        bool is_all_row = (s_music_cache[i].seek == -1);
+        const char *lookup_key = s_music_cache[i].label;
+        /* D-322 (halo de seleccion): la pastilla de arriba ya pinto
+         * este bloque -- capturar sus pixeles reales ANTES del blit
+         * circular deja restaurarlos fuera del circulo despues, en vez
+         * de un color plano que no coincidiria con la pastilla. */
+        static fb_data saved[ALBUM_ART_SIZE * ALBUM_ART_SIZE];
+
+        if (is_all_row || !strcmp(lookup_key, aura_str(AURA_STR_UNKNOWN_ARTIST)))
+            lookup_key = NULL;
+
+        if (is_sel)
+        {
+            int sy;
+            for (sy = 0; sy < ALBUM_ART_SIZE; sy++)
+                memcpy(&saved[sy * ALBUM_ART_SIZE], FBADDR(ALBUM_ART_X, art_y + sy),
+                       ALBUM_ART_SIZE * sizeof(fb_data));
+        }
+
+        draw_artist_thumb(ALBUM_ART_X, art_y, lookup_key);
+
+        if (is_sel)
+            a26_shell_round_bitmap_corners_over_content(ALBUM_ART_X, art_y,
+                ALBUM_ART_SIZE, ALBUM_ART_SIZE, ALBUM_ART_SIZE / 2, saved, ALBUM_ART_SIZE);
+
+        lcd_set_foreground(is_sel ? a26_color(A26_ACCENT) : a26_color(A26_TEXT_PRIMARY));
+        lcd_getstringsize((const unsigned char *)"Ay", &w, &h);
+        aura_widgets_puts_clipped(text_x, row_y + (ALBUM_ROW_H - h) / 2,
+                                   A26_SCREEN_WIDTH - text_x - A26_LAYOUT_LIST_INSET,
+                                   s_music_cache[i].label);
+    }
+
+    aura_scroll_indicator_draw(A26_SCREEN_WIDTH, ALBUM_LIST_TOP,
+                                ALBUM_VISIBLE * ALBUM_ROW_H, selected, count,
+                                (current_tick - s_artist_activity_since) * 1000L / HZ,
+                                a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
+}
+
 static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
 {
     int i;
@@ -5058,6 +5184,12 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
     if (is_album_list_screen(screen))
     {
         draw_album_list(nav, screen);
+        return;
+    }
+
+    if (is_artist_list_screen(screen))
+    {
+        draw_artist_list(nav, screen);
         return;
     }
 
@@ -5828,6 +5960,13 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             aura_video_invalidate();
             aura_movieflow_invalidate();
         }
+        /* D-322: mismo criterio -- re-lee artist_images.cfg al entrar a
+         * Artistas, sin esperar a un reinicio (un sync por USB durante
+         * la sesion ya lo cubre finish_ok(), pero esto ademas atrapa el
+         * caso de entrar a Artistas ANTES de que corriera ningun sync
+         * en esta sesion). */
+        if (depth_after > depth_before && to == AURA_SCREEN_MUSIC_ARTISTS)
+            aura_artist_images_invalidate();
 
         /* Una pulsacion = una navegacion, aunque el boton se sostenga
          * durante la transicion (los repeats acumulados/venideros de

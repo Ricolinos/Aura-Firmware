@@ -328,6 +328,8 @@ aura/aura_lang.c
 aura/aura_lrc.c
 aura/aura_manifest.c
 aura/aura_media_categories.c
+aura/aura_artist_images_parse.c
+aura/aura_artist_images.c
 aura/aura_motion.c
 aura/aura_wheel.c
 aura/aura_music.c

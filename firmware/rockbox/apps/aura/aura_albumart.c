@@ -43,6 +43,7 @@
 #include "aura_style.h"
 #include "aura_art.h"
 #include "aura_music.h" /* AURA_MUSIC_ITEM_LEN, mismo tope que aura_music_list_playlists() */
+#include "aura_artist_images.h" /* D-322: lookup de la foto por tag de artista */
 
 /* D-291: pfraw_path()/is_cached() siguen siendo la llave PROPIA de este
  * archivo (album_seek+size, sin invalidacion extra -- ya es unica por
@@ -147,14 +148,21 @@ static int default_tile_icon_size(int size)
  * genera design-system/generate.py, elegida por tamano segun el tile
  * (D-231, ver default_tile_icon_size arriba) -- se compone contra el
  * tile con la rampa de antialias real, ningun bitmap nuevo. */
-void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
+/* Compone `icon_name`-`icon_size`.bmp (mascara de cobertura horneada,
+ * design-system/generate.py) centrado sobre un tile plano
+ * A26_SELECTION_FILL -- compartido por el default de Musica ("nota
+ * musical", tamano proporcional al tile) y el placeholder de Artistas
+ * (D-322, "artist", 28px fijo -- ver aura_artist_art_default_tile()).
+ * Tile plano sin icono (mejor que nada) si el asset faltara. */
+static void default_tile_with_icon(fb_data *buf, int size, bool transposed,
+                                    const char *icon_name, int icon_size)
 {
     unsigned tile = a26_color(A26_SELECTION_FILL);
-    /* Tinta de la nota: punto medio entre SHELL_RAIL y TEXT_SECONDARY
-     * -- RAIL solo (primera version) quedaba casi invisible sobre el
-     * tile claro; la referencia del dueno del diseno usa un gris medio
-     * con contraste claramente visible. Mezcla de dos tokens del tema,
-     * ningun color suelto nuevo. */
+    /* Tinta del icono: punto medio entre SHELL_RAIL y TEXT_SECONDARY --
+     * RAIL solo (primera version del default de Musica) quedaba casi
+     * invisible sobre el tile claro; la referencia del dueno del diseno
+     * usa un gris medio con contraste claramente visible. Mezcla de dos
+     * tokens del tema, ningun color suelto nuevo. */
     unsigned ink = a26_shell_blend(a26_color(A26_SHELL_RAIL),
                                     a26_color(A26_TEXT_SECONDARY), 128);
     char rel[MAX_PATH];
@@ -167,11 +175,11 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
 
     /* D-289: mascara del estilo activo, con fallback por archivo al
      * default -- ver aura_style.c. */
-    snprintf(rel, sizeof(rel), "masks/music-%d.bmp", default_tile_icon_size(size));
+    snprintf(rel, sizeof(rel), "masks/%s-%d.bmp", icon_name, icon_size);
     bm.data = (char *)s_decode_scratch;
     ret = aura_style_read_icon_bmp(rel, &bm, sizeof(s_decode_scratch));
     if (ret <= 0)
-        return; /* tile plano sin nota -- mejor que nada si faltara el asset */
+        return; /* tile plano sin icono -- mejor que nada si faltara el asset */
 
     mask = (const fb_data *)bm.data;
     ox = (size - bm.width) / 2;
@@ -190,6 +198,22 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
             buf[di] = a26_shell_blend(tile, ink, cov * 256 / 63);
         }
     }
+}
+
+void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
+{
+    default_tile_with_icon(buf, size, transposed, "music", default_tile_icon_size(size));
+}
+
+/* D-322: placeholder de Artistas -- mismo tile A26_SELECTION_FILL,
+ * icono "artist" (el mismo que ya usa la fila de Artistas del menu de
+ * Musica) a 28px FIJOS (no proporcional como el de Musica -- pedido
+ * explicito del plan, PLAN-biblioteca-medios-v2.md §3.6). */
+#define AURA_ARTIST_PLACEHOLDER_ICON_SIZE 28
+
+static void artist_default_tile(fb_data *buf, int size, bool transposed)
+{
+    default_tile_with_icon(buf, size, transposed, "artist", AURA_ARTIST_PLACEHOLDER_ICON_SIZE);
 }
 
 void aura_albumart_load_default(aura_albumart_t *out)
@@ -454,4 +478,106 @@ bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
                                   out->size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
     out->valid = true;
     return true;
+}
+
+/* D-322 (PLAN-biblioteca-medios-v2.md §3.6): hash FNV-1a de 32 bits del
+ * tag de artista -- clave del cache .pfraw en vez del nombre crudo
+ * (evita depender de longitud/charset del nombre de archivo, y no
+ * colisiona con "<seek>-<size>" de albumes ni "pl-..." de playlists). */
+static uint32_t artist_tag_hash(const char *artist_tag)
+{
+    uint32_t h = 2166136261u;
+    const unsigned char *p = (const unsigned char *)artist_tag;
+
+    while (*p)
+    {
+        h ^= *p++;
+        h *= 16777619u;
+    }
+    return h;
+}
+
+static void artist_pfraw_path(const char *artist_tag, int size, char *out, size_t outsz)
+{
+    snprintf(out, outsz, "%s/ar-%08lx-%d.pfraw", CF_CACHE_DIR,
+             (unsigned long)artist_tag_hash(artist_tag), size);
+}
+
+/* Decodifica la foto real (JPEG, contrato §D.3: baseline, cuadrada,
+ * <=128px) a `s_decode_scratch` -- mismo scratch buffer y mismo formato
+ * que decode_playlist_art()/decode_album_art(). */
+static bool decode_artist_art(const char *jpeg_path, int size)
+{
+    int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
+    struct bitmap bm;
+
+    bm.width = size;
+    bm.height = size;
+    bm.data = (char *)s_decode_scratch;
+#if (LCD_DEPTH > 1)
+    bm.maskdata = NULL;
+#endif
+
+    return read_jpeg_file(jpeg_path, &bm, sizeof(s_decode_scratch), format, NULL) > 0;
+}
+
+/* Foto de artista, CIRCULAR (radius = size/2, aura_art_mask_corners_
+ * transposed() produce un circulo perfecto para `size` par -- D-322).
+ * `extra` de la cache .pfraw es PFRAW_EXTRA_NONE (no el mtime del jpg
+ * que pide el diseño original del plan): aura_sync.c ya vacia
+ * CF_CACHE_DIR entero (incluidos los "ar-*.pfraw") al terminar de
+ * sincronizar la seccion de musica -- el mismo mecanismo que ya
+ * invalida cualquier caratula de album/playlist vieja -- así que
+ * stat-ear el mtime de cada foto en CADA fila visible (Rockbox no
+ * expone un stat de un solo archivo, solo opendir+readdir+
+ * dir_get_info) sería costo real de escaneo de directorio por cuadro
+ * sin ganar invalidacion que el vaciado de cache no cubra ya. Ajuste de
+ * implementacion, mismo comportamiento observable (D-322,
+ * DECISIONS.md). */
+bool aura_artist_art_load(const char *artist_tag, aura_albumart_t *out)
+{
+    static char image_path[MAX_PATH];
+    static char cache_path[MAX_PATH];
+    unsigned bg = a26_color(A26_SHELL_BG);
+
+    out->valid = false;
+    if (!artist_tag || !*artist_tag)
+        return false;
+    if (!aura_artist_images_lookup(artist_tag, image_path, sizeof(image_path)))
+        return false;
+
+    artist_pfraw_path(artist_tag, out->size, cache_path, sizeof(cache_path));
+
+    if (aura_art_read_pfraw(cache_path, out->size, out->radius, PFRAW_EXTRA_NONE, (fb_data *)out->cover_data))
+    {
+        out->valid = true;
+        return true;
+    }
+
+    if (!decode_artist_art(image_path, out->size))
+        return false;
+
+    aura_art_transpose((const fb_data *)s_decode_scratch, (fb_data *)s_transpose_scratch, out->size);
+    aura_art_mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);
+    memcpy(out->cover_data, s_transpose_scratch,
+           (size_t)out->size * out->size * sizeof(fb_data));
+
+    write_pfraw(cache_path, out->size, out->radius, (const fb_data *)out->cover_data);
+
+    out->valid = true;
+    return true;
+}
+
+/* Placeholder circular de Artistas (sin foto, o `artist_tag` vacio --
+ * fila "Todos"): mismo tile que artist_default_tile() de arriba,
+ * recortado al circulo. No pasa por el cache .pfraw -- es una
+ * composicion trivial (un tile + un icono), mas barata que leer un
+ * archivo. */
+void aura_artist_art_load_default(aura_albumart_t *out)
+{
+    unsigned bg = a26_color(A26_SHELL_BG);
+
+    artist_default_tile((fb_data *)out->cover_data, out->size, true);
+    aura_art_mask_corners_transposed((fb_data *)out->cover_data, out->size, out->radius, bg);
+    out->valid = true;
 }

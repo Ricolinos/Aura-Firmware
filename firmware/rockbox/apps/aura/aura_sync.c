@@ -33,6 +33,7 @@
 #include "aura_music.h"
 #include "aura_video.h"
 #include "aura_photos.h"
+#include "aura_artist_images.h"
 
 /* Contrato SS4: el marcador vive en la RAIZ del disco, no bajo
  * /.rockbox/aura -- es la unica cosa que Studio deja para el firmware
@@ -219,6 +220,9 @@ static void finish_ok(void)
     {
         aura_fsutil_clear_dir(CF_CACHE_DIR);
         aura_music_db_reset_triggers();
+        /* D-322: artist_images.cfg vive junto a la musica -- mismo
+         * momento que el resto de lo dependiente de la base nueva. */
+        aura_artist_images_invalidate();
     }
     set_all_sections(AURA_SYNC_SECTION_DONE);
     go_idle();

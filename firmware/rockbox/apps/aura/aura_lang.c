@@ -187,7 +187,11 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_LANG_KO] = "한국어",
     [AURA_STR_LANG_RU] = "Русский",
     [AURA_STR_VIDEOS_MOVIES]  = "Películas",
-    [AURA_STR_VIDEOS_TVSHOWS] = "Programas de TV",
+    /* D-322: "Programas de TV" -> "Series" -- vocabulario unificado con
+     * Aura Studio (MediaCategory.series.displayName, PLAN-biblioteca-
+     * medios-v2.md §1.2 finding 12). Clave de aura_str_id_t sin cambiar
+     * (contrato interno, no de disco). */
+    [AURA_STR_VIDEOS_TVSHOWS] = "Series",
     [AURA_STR_VIDEOS_CLIPS]   = "Videoclips",
     [AURA_STR_VIDEOS_ALL]     = "Todos los videos",
     [AURA_STR_VIDEOS_MOVIEFLOW] = "Movie Flow",
@@ -450,7 +454,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_LANG_KO] = "Korean",
     [AURA_STR_LANG_RU] = "Russian",
     [AURA_STR_VIDEOS_MOVIES]  = "Movies",
-    [AURA_STR_VIDEOS_TVSHOWS] = "TV Shows",
+    [AURA_STR_VIDEOS_TVSHOWS] = "Series",
     [AURA_STR_VIDEOS_CLIPS]   = "Music Videos",
     [AURA_STR_VIDEOS_ALL]     = "All Videos",
     [AURA_STR_VIDEOS_MOVIEFLOW] = "Movie Flow",

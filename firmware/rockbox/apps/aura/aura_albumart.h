@@ -113,4 +113,22 @@ bool aura_albumart_is_cached(int32_t album_seek, int size, int radius);
  * album sin caratula. */
 bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out);
 
+/* Foto de artista (D-322, CONTRATO-firmware-studio.md §D.3): busca el
+ * archivo via aura_artist_images_lookup() (contra `artist_tag`, el
+ * string UTF-8 EXACTO del tag `artist` de tagcache -- sin normalizar),
+ * decodifica y hornea CIRCULAR (out->radius se espera == out->size/2).
+ * Mismo cache .pfraw en disco que las otras dos (clave: hash FNV-1a del
+ * tag + size, prefijo "ar-" -- no colisiona con "<seek>-<size>" de
+ * albumes ni "pl-..." de playlists). Devuelve false (out->valid en
+ * false) si no hay indice, el artista no aparece en el, o el archivo no
+ * se pudo decodificar -- el llamador cae a
+ * aura_artist_art_load_default(). */
+bool aura_artist_art_load(const char *artist_tag, aura_albumart_t *out);
+
+/* Placeholder circular de Artistas (sin foto real, o la fila sintetica
+ * "Todos") -- tile A26_SELECTION_FILL con el icono "artist" de 28px
+ * centrado, recortado al circulo de out->radius. out->valid siempre
+ * queda en true. */
+void aura_artist_art_load_default(aura_albumart_t *out);
+
 #endif /* AURA_ALBUMART_H */

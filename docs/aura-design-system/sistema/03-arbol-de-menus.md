@@ -62,7 +62,7 @@ fila más.
 |---|---|
 | Videos → Movie Flow | ✅ (D-318: carrusel de carteles 3:4, copia casi exacta de Music Flow — ver `componentes/movie-flow.md`) |
 | Videos → Todos los videos | ✅ (visor real) |
-| Videos → Películas · Programas de TV · Videoclips | ✅ (D-316: dejaron de ser inertes — filtran `/Videos` por la categoría del índice opcional de Aura Studio, `CONTRATO-firmware-studio.md` §D.2; vacías con mensaje propio si el índice no existe o esa categoría no tiene contenido) |
+| Videos → Películas · Series · Videoclips | ✅ (D-316: dejaron de ser inertes — filtran `/Videos` por la categoría del índice opcional de Aura Studio, `CONTRATO-firmware-studio.md` §D.2; vacías con mensaje propio si el índice no existe o esa categoría no tiene contenido. D-322: "Programas de TV" renombrado a "Series") |
 | Videos → Ajustes (Salida TV, Señal TV…) | ⛔ sin hardware que los soporte |
 | Fotos → Todas las fotos | ✅ (visor real) |
 | Fotos → Fotos · Imágenes · IA* (D-316) | ✅ tres filas nuevas, mismo criterio de filtrado por índice opcional que Video — "IA*" con asterisco literal en el texto, marca contenido generado por IA |

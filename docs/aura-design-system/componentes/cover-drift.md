@@ -47,8 +47,8 @@ muestra (`componentes/selection-summary.md`). Siempre por debajo de
 **Video (D-316):**
 - **Menú raíz**: fila **"Videos"** — pool combinado Películas + Series.
 - **Submenú de Video**: "Todos los videos" (mismo pool combinado),
-  "Películas" (solo esa categoría), "Series"/"Programas de TV" (solo esa
-  categoría) — **"Videoclips" NUNCA califica**: restricción textual del
+  "Películas" (solo esa categoría), "Series" (solo esa
+  categoría, D-322: renombrada de "Programas de TV") — **"Videoclips" NUNCA califica**: restricción textual del
   dueño del producto (2026-08-18, registrada en DECISIONS.md D-316 — no
   existía como decisión previa en ningún documento): CoverDrift de Video
   solo muestra carteles de películas y series.
