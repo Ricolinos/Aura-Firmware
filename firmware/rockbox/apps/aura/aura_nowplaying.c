@@ -61,6 +61,7 @@
 #include "aura_main.h"
 #include "aura_flow.h"
 #include "aura_patterns.h"
+#include "aura_transitions.h"
 #include "kernel.h"
 
 /* -- Layout (PLAN.md T3.1, componentes/now-playing.md) -------------------
@@ -302,14 +303,38 @@ bool aura_nowplaying_take_fullscreen_exit(void)
 
 static void mode4_morph(int dir); /* definida junto a draw_player */
 
-/* Regreso Modo 4 -> coverflow (correccion 2026-08-12: "si accedimos
- * por coverflow, SI podemos regresar al coverflow"): primero el
- * despliegue inverso del panel (sincrono), y el llamador encadena el
- * morph de regreso al carrusel -- dos morphs confirmados, un solo
- * gesto fluido. */
-void aura_nowplaying_unfold_from_lyrics(void)
+/* PLAN-niveles-fx.md §8.2 (matriz de niveles del dueno, 2026-08-18):
+ * punto unico de entrada/salida del Modo 4 -- decide QUE transicion corre
+ * segun Animaciones, sin que cada llamador repita la eleccion:
+ *   Todas   -> el morph canonico (now-playing.md), sin cambio.
+ *   Minimas -> `Fade-Slide` de pantalla completa (transiciones/00-
+ *              vocabulario.md): lo viejo se desvanece, lo nuevo entra
+ *              desde fuera de la pantalla -- MISMA pieza que ya usa
+ *              DynamicTitle/"Acerca de", ningun patron nuevo.
+ *   Ninguna -> nada (ambas funciones internas ya se auto-excluyen por su
+ *              propio gate; centralizado aca solo para no pedir el
+ *              framebuffer offscreen de mas). */
+static void mode4_transition(aura_nav_t *nav, int dir)
 {
-    mode4_morph(-1);
+    if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE)
+        return;
+
+    if (aura_settings.animation_mode == AURA_ANIM_ALL)
+        mode4_morph(dir);
+    else
+        aura_transition_fade_slide_region(nav, 0, 0, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT, dir);
+}
+
+/* Regreso Modo 4 -> coverflow (correccion 2026-08-12: "si accedimos
+ * por coverflow, SI podemos regresar al coverflow"): primero la salida
+ * del Modo 4 (sincrona), y el llamador encadena el morph/push de regreso
+ * al carrusel -- con Animaciones=Todas, dos morphs confirmados, un solo
+ * gesto fluido; con Minimas/Ninguna, esta salida ya es la unica pieza
+ * animada (el llamador hace un push generico despues, PLAN-niveles-fx.md
+ * §8.1). */
+void aura_nowplaying_unfold_from_lyrics(aura_nav_t *nav)
+{
+    mode4_transition(nav, -1);
 }
 
 /* -- Modos de la rueda (doc SS5): un icono activo a la vez, SELECT
@@ -1984,7 +2009,7 @@ static void wheel_seek(struct mp3entry *id3, int dir, bool show_times)
         s_seek_show_until = current_tick + SEEK_SHOW_TICKS;
 }
 
-static void cycle_mode(int direction)
+static void cycle_mode(aura_nav_t *nav, int direction)
 {
     /* Acotado a NP_MODE_COUNT intentos -- nunca gira en un bucle
      * infinito: Volumen/Busqueda/Estrellas nunca se saltan, asi que
@@ -2013,12 +2038,13 @@ static void cycle_mode(int direction)
     if (s_mode == NP_MODE_PLAYLIST)
         s_playlist_sel = -1;
 
-    /* Entrada/salida del Modo 4 con su morph (encargo 2026-08-12);
-     * salir hacia el modo siguiente es la misma transicion invertida. */
+    /* Entrada/salida del Modo 4 (encargo 2026-08-12, niveles PLAN-
+     * niveles-fx.md §8.2); salir hacia el modo siguiente es la misma
+     * transicion invertida. */
     if (prev != NP_MODE_LYRICS && s_mode == NP_MODE_LYRICS)
-        mode4_morph(1);
+        mode4_transition(nav, 1);
     else if (prev == NP_MODE_LYRICS && s_mode != NP_MODE_LYRICS)
-        mode4_morph(-1);
+        mode4_transition(nav, -1);
 }
 
 void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
@@ -2057,7 +2083,7 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
         }
         else if (s_mode != NP_MODE_PLAYLIST || s_playlist_sel < 0)
         {
-            cycle_mode(1);
+            cycle_mode(nav, 1);
         }
         break;
     case BUTTON_RIGHT | BUTTON_REL:

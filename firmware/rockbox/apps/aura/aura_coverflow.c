@@ -1285,9 +1285,20 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
             /* Arranca la reproduccion real (mismo mecanismo que la
              * lista de canciones vieja) y vuela la caratula hasta
              * NowPlaying con Flip-and-Flow (T3.2(d)) -- la funcion de
-             * transicion ya hace el aura_nav_push() al terminar. */
+             * transicion ya hace el aura_nav_push() al terminar.
+             *
+             * PLAN-niveles-fx.md §8.1 (Minimas/Ninguna): el vuelo se
+             * sustituye por el push generico full<->full -- aca solo se
+             * hace el aura_nav_push() directo (sin transicion propia); el
+             * despachador central de aura_screens.c es quien aplica el
+             * push al detectar el cambio de profundidad de la pila. */
             if (s_track_count > 0 && aura_music_play_songs(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM, s_track_sel))
-                aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek);
+            {
+                if (aura_settings.animation_mode == AURA_ANIM_ALL)
+                    aura_transition_flip_and_flow(nav, s_albums[s_target_index].seek);
+                else
+                    aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
+            }
             break;
         case BUTTON_PLAY:
             /* Mismo comportamiento que en el carrusel: el album

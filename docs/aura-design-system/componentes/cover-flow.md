@@ -284,6 +284,26 @@ animada todavía no alcanza el álbum objetivo" e `idle` como "ya coinciden"
 — mismo resultado observable que el PictureFlow original, sin depender de
 un modelo de botón sostenido que Aura no tiene.
 
+## Niveles de reducción (PLAN-niveles-fx.md, matriz del dueño 2026-08-18)
+
+El canon de esta página es **Animaciones = Todas** (principio de máxima
+fidelidad). Regla de precedencia D-a: Gráficos no toca este componente
+(no dibuja contenido condicionado a él); solo Animaciones:
+
+| Animaciones | Transición CoverFlow ↔ lista | Transición CoverFlow ↔ Reproductor |
+|---|---|---|
+| **Ninguna** | Todas las animaciones internas (scroll, zoom, flip, marquee) se conservan sin cambio — **no consultan Animaciones** por diseño, son contenido en vivo, no transición entre pantallas. Cero transición de entrada/salida | Cero transición: `aura_nav_push()`/`pop()` directo |
+| **Mínimas** | `Push-and-Drop`/revelado reducido (4 cuadros/45Hz, comportamiento ya existente) | **Sustituido por el push genérico full↔full** (`Push-and-Drop` de `aura_transition_slide()`) en ambos sentidos — CoverFlow y el reproductor son ambas pantallas FULL, así que el push ya disponible en el vocabulario resuelve esto sin ningún patrón nuevo. Ni el giro del `Flip-and-Flow` ni el morph de `Flow-Return` corren en este nivel |
+| **Todas** | Canon de esta página | Canon de esta página (`Flip-and-Flow`/`Flow-Return`, ~500ms cada uno) |
+
+Implementación: `aura_coverflow.c` (`BUTTON_SELECT` de `CF_STATE_SHOW_TRACKS`)
+hace `aura_nav_push()` directo cuando Animaciones ≠ Todas, en vez de llamar
+a `aura_transition_flip_and_flow()`; el despachador central
+(`aura_screens.c`, manejo de profundidad de pila) aplica entonces el mismo
+push genérico que usa cualquier otra navegación full↔full, en los dos
+sentidos (entrada y regreso, incluido el regreso encadenado desde el Modo 4
+de Letras — ver `componentes/now-playing.md` § Niveles de reducción).
+
 ## Pendiente de definir
 
 - [x] Sentido del giro del vuelo — confirmado por el dueño (D-274,

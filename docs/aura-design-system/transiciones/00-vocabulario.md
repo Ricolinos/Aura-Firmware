@@ -330,3 +330,11 @@ provisional), ver `aura_transition_flip_and_flow()` / `FLOW_MS` en
 `aura_transitions.c:678`. Vive como `#define` local, sin token en
 `design-system/tokens.json` todavía. Corre a 60 o 30 fps según el ajuste
 `animation_mode`.
+
+**Niveles de reducción (PLAN-niveles-fx.md, 2026-08-18):** este patrón,
+junto con su regreso `Flow-Return`, es exclusivo de **Animaciones =
+Todas** — con Mínimas o Ninguna se sustituye por el `Push-and-Drop`
+genérico full↔full (arriba en esta página), en ambos sentidos, sin
+ningún patrón nuevo: CoverFlow y el reproductor son ambas pantallas FULL,
+así que el push ya cubre el caso. Detalle en
+`componentes/cover-flow.md` § Niveles de reducción.

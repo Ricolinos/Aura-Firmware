@@ -181,20 +181,30 @@ su cuenta.
       efecto?
 
 
-## Regla dura: (split) ⇔ LeftPanel (confirmada 2026-08-13)
+## Regla dura: (split) ⇔ LeftPanel (confirmada 2026-08-13; corregida 2026-08-18)
 
 La barra va en **`(split)` si y solo si el `LeftPanel` de 160px está en
 pantalla**; en cualquier otro caso va en `(full)`. No es una decisión
-por pantalla: **barra y panel se derivan del MISMO dato** (el layout
-declarado por la pantalla, combinado con el ajuste de Gráficos, que
-puede apagar el panel). Consecuencias:
+por pantalla: **barra y panel se derivan del MISMO dato**, la tabla de
+layout declarado por cada pantalla (`aura_widgets_split_active()`).
+Consecuencias:
 
-- Con **Gráficos = Ninguno** no hay `LeftPanel`, así que tampoco hay
-  barra `(split)` ni `SelectionSummary` — todo pasa a `(full)`.
 - Los estados vacíos y de espera heredan el layout de su pantalla; no
   pueden dibujar barra `(full)` dentro de un contexto `(split)`.
 - Una pantalla nueva no elige el ancho de su barra: declara su layout
   y la barra sale de ahí.
+
+**Corrección (PLAN-niveles-fx.md Q1, matriz de niveles del dueño,
+2026-08-18):** antes, el ajuste de **Gráficos** formaba parte de este
+mismo dato — con Gráficos = Ninguno no había `LeftPanel`, así que
+tampoco había barra `(split)` ni `SelectionSummary`, todo pasaba a
+`(full)`. La matriz normativa del dueño define contenido PROPIO para
+Gráficos = Ninguno (degradado de acento en `CoverDrift`, solo texto en
+`SelectionSummary` — ver la sección "Niveles de reducción" de cada
+componente), lo que exige que el panel siga EXISTIENDO en ese nivel.
+Gráficos ya **no** decide layout — sigue decidiendo únicamente qué se
+dibuja *dentro* del panel una vez que el layout ya lo puso ahí (D-a,
+"Gráficos decide qué existe; Animaciones decide cómo se mueve").
 
 ## Título en (full): centrado real (confirmado 2026-08-13)
 

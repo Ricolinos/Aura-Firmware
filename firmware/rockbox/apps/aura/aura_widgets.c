@@ -63,7 +63,14 @@
 #define ROW_HEIGHT    (A26_TYPE_BODY + 2 * A26_SPACING_MD)
 #define ROW_PAD_X     A26_LAYOUT_LIST_INSET
 #define ICON_TEXT_GAP A26_SPACING_MD
-#define PANEL_RETARDO_TICKS HZ
+/* PLAN-niveles-fx.md Q6 (matriz de niveles del dueno, 2026-08-18): mismo
+ * trato que el debounce del panel derecho de la Ruta A
+ * (aura_fx_panel_debounce_ms()) por coherencia -- con Graficos=Todos baja
+ * a la mitad, aunque esta ruta (listas de CONTENIDO) hoy nunca es
+ * (split) en la practica (ver el comentario de aura_widgets_draw_right_
+ * panel_icon() mas abajo). */
+#define PANEL_RETARDO_TICKS \
+    ((aura_settings.graphics_mode == AURA_GFX_ALL) ? (HZ / 2) : HZ)
 
 /* Pastilla de seleccion de lista (doc SS5.1): rectangulo que no toca los
  * bordes -- margen 8px desde el borde de la columna (mas angosto que el
@@ -344,8 +351,18 @@ void aura_widgets_set_list_layout(aura_list_layout_t layout)
 
 int aura_widgets_split_active(void)
 {
-    return s_list_layout == AURA_LIST_SPLIT
-        && aura_settings.graphics_mode != AURA_GFX_NONE;
+    /* PLAN-niveles-fx.md Q1 (matriz de niveles del dueno, 2026-08-18):
+     * antes, Graficos=Ninguno colapsaba (split) a (full) -- la matriz
+     * normativa del dueno define contenido PROPIO para el panel derecho
+     * en ese nivel (degradado de acento en CoverDrift, solo texto en
+     * SelectionSummary), lo que exige que el panel siga EXISTIENDO. El
+     * ajuste de Graficos ya no decide layout (eso lo sigue decidiendo
+     * unicamente `s_list_layout`, la tabla de aura_screens.c) -- solo
+     * decide QUE se dibuja adentro del panel (aura_fx_ss_show_tile(),
+     * aura_fx_coverdrift_pool_cap()), consistente con la regla de
+     * precedencia D-a (Graficos decide que existe DENTRO del panel;
+     * Animaciones decide como se mueve). */
+    return s_list_layout == AURA_LIST_SPLIT;
 }
 
 static int list_width(void)

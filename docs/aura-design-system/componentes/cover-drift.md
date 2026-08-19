@@ -27,15 +27,14 @@ condiciones, `SelectionSummary` en `--layer-base` sigue siendo quien se
 muestra (`componentes/selection-summary.md`). Siempre por debajo de
 `LeftPanel` (`--layer-panel`) cuando este está montado.
 
-## Filas que califican (D-254, ampliado D-266 — solo la categoría Música por ahora)
+## Filas que califican (D-254, ampliado D-266/D-316)
 
+**Música:**
 - **Menú raíz**: cuando la fila resaltada es **"Música"**, **"Canciones
   aleatorias"** o **"Ahora suena"** (D-266 — las tres resuelven a la
   categoría Música, y el dueño pidió explícitamente que las dos filas de
   reproducción también muestren la deriva de carátulas sin entrar a
-  ellas). Videos y Fotos quedan fuera de esta pasada a propósito — el
-  dueño del producto pidió validar el comportamiento en un solo lugar
-  antes de replicarlo.
+  ellas).
 - **Submenú de Música**: Cover Flow, Listas de reproducción, Artistas,
   Álbumes, Recopilaciones, Canciones, Géneros, Autores, Búsqueda —
   **excepto Audiolibros** (fila inerte, sin contenido real detrás).
@@ -44,6 +43,37 @@ muestra (`componentes/selection-summary.md`). Siempre por debajo de
   biblioteca (no hay forma de resolver el álbum exacto de una fila
   específica sin API pública, ver DECISIONS.md D-242) — se hereda la
   colección del padre, no se re-filtra por hijo.
+
+**Video (D-316):**
+- **Menú raíz**: fila **"Videos"** — pool combinado Películas + Series.
+- **Submenú de Video**: "Todos los videos" (mismo pool combinado),
+  "Películas" (solo esa categoría), "Series"/"Programas de TV" (solo esa
+  categoría) — **"Videoclips" NUNCA califica**: restricción textual del
+  dueño del producto (2026-08-18, registrada en DECISIONS.md D-316 — no
+  existía como decisión previa en ningún documento): CoverDrift de Video
+  solo muestra carteles de películas y series.
+- A diferencia de Música, aquí SÍ hay filtro real por fila (Películas y
+  Series NUNCA comparten pool) — posible porque el índice de categoría
+  por archivo (`CONTRATO-firmware-studio.md` §D.2) sí distingue cada
+  video individual, algo que Música no necesita (ya tiene tagcache).
+- Fuente de imagen: el póster opcional `<video>.jpg` hermano del archivo
+  en `/Videos/` (`library-layout-v1.md` §1) — sin póster, ese video
+  simplemente no aparece en el pool (no hay placeholder por-video, cae al
+  resto del pool normalmente).
+
+**Fotos (D-316):**
+- **Menú raíz**: fila **"Fotos"** — pool de TODAS las fotos (sin filtrar).
+- **Submenú de Fotos**: "Todas las fotos" (ídem), "Fotos" (solo categoría
+  Foto), "Imágenes" (solo Imagen), "IA*" (solo IA) — cada una con su
+  propio pool, nunca mezclados.
+- Fuente de imagen: el archivo mismo en `/Photos/` (miniaturas de 320×320
+  decodificadas para CoverDrift, independientes del caché de 48×48 de la
+  lista).
+
+Ambas fuentes dependen del índice OPCIONAL de categoría por archivo
+(`aura_media_categories.h`) — sin él, todas las filas de categoría (no
+"Todos"/"Todas") se ven vacías y caen a `SelectionSummary`, degradación
+honesta, nunca un error.
 
 ## Comportamiento
 
@@ -189,14 +219,50 @@ foto de verdad. Arreglado con una variante nueva,
 (compositing real, mismo patrón que ya usa el compositor de máscaras de
 íconos) -- llamada DESPUÉS de dibujar la carátula, no antes.
 
-## Reutilización
+## Niveles de reducción (PLAN-niveles-fx.md, matriz del dueño 2026-08-18)
+
+El canon de esta página sigue siendo **Animaciones = Todas / Gráficos =
+Todos** (principio de máxima fidelidad, `00-INDICE.md`). Los niveles de
+abajo son sustracciones sobre ese canon — un solo código con puntos de
+sustracción, no implementaciones paralelas. Regla de precedencia (D-a):
+Gráficos decide QUÉ existe, Animaciones decide CÓMO se mueve lo que
+existe. Ver el índice transversal en `sistema/06-niveles-de-fx.md`.
+
+| Gráficos ↓ / Animaciones → | Ninguna | Mínimas | Todas |
+|---|---|---|---|
+| **Ninguno** | Panel de **acento con degradado** (vertical, `aura_selection_summary_draw_accent_gradient_background()`, reutilizado tal cual), estático. Aparición por **corte** (gate de Animaciones apaga el fundido) | Igual, estático; la aparición **conserva el fundido** de 600ms | Igual; aparición con fundido. Sin imágenes, Animaciones no tiene nada más que decidir |
+| **Mínimos** | **5 imágenes** residentes del pool general (sorteo al azar, una vez por arranque o al cambiar de nivel/pool), estáticas; rotación cada 7s por **corte** | 5 imágenes, estáticas; rotación con **cross-fade** de 600ms | 5 imágenes con **drift + cross-fade** completos |
+| **Todos** | Todas las imágenes (comportamiento actual), estáticas, rotación por corte; delay de aparición **500ms** | Todas las imágenes, estáticas, con fade; delay **500ms** | **Canon** de esta página; delay de aparición baja de 2000 a **500ms** |
+
+- **La rotación de imagen cada 7s (`CYCLE_MS`) es contenido, no
+  animación** (D-a) — sigue ocurriendo en TODOS los niveles de
+  Animaciones; lo que Animaciones gobierna es el *cómo* del cambio
+  (drift + fade vs. quieto + corte), nunca el *cuándo*.
+- Con Animaciones ≠ Todas, la imagen activa queda **quieta en el
+  centro** (distancia de deriva forzada a 0) — nunca revela el fondo del
+  panel, el mismo invariante geométrico de siempre sigue garantizado.
+- El umbral de montaje sigue siendo **3 imágenes disponibles** (arriba en
+  esta página) — independiente de Gráficos; con Gráficos = Mínimos y un
+  pool de 3-4 álbumes, el tope de 5 simplemente no se alcanza (`cap =
+  MIN(5, pool)`).
+- El modo de 5 imágenes **no ahorra RAM** respecto al comportamiento
+  actual (que ya solo mantiene 2 imágenes residentes sin importar el
+  tamaño del pool) — gasta ~600KB MÁS (5×200KB vs. ~400KB de hoy). Lo que
+  compra es que el disco deja de despertar cada 7s una vez decodificadas
+  las 5: batería/silencio, no memoria. Implementación:
+  `aura_fx_coverdrift_pool_cap()` (`aura_fx.h`) +
+  `ensure_drift_effective_pool()` (`aura_screens.c`).
+
+## Reutilización (D-316: ya conectado a las 3 fuentes)
 
 El mismo componente (`aura_coverdrift.c`/`.h`) es agnóstico de la fuente de
-imágenes — Fotos y Video quedaron fuera de esta pasada a propósito (el
-dueño del producto los pidió después, uno a la vez, para validar el
-comportamiento en Música primero). Cuando se conecten, debería ser
-cableado nuevo en `aura_screens.c`/`aura_photos.c`/`aura_video.c` sin tocar
-el componente en sí.
+imágenes — confirmado en la práctica: Video y Fotos se conectaron (D-316)
+sin tocar `aura_coverdrift.c`/`.h` en absoluto, todo el cableado nuevo vive
+en `aura_screens.c` (selección de pool + decodificación por fuente) y en
+`aura_video.c`/`aura_photos.c` (filtrado por categoría). Un solo CoverDrift
+visible a la vez — Música, Video y Fotos comparten los mismos buffers de
+decodificación (`s_drift_album_pixels_a/b`), invalidados explícitamente al
+cambiar de fuente (ver "Filas que califican" arriba).
 
 ## Preguntas ya resueltas por la implementación (D-254)
 

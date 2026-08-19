@@ -30,6 +30,7 @@
 #include "aura_patterns.h"
 
 #include "aura_coverdrift.h"
+#include "aura_fx.h"
 
 #define IMAGE_SIZE   AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
 #define CYCLE_MS     AURA_DS_METRICS_COVER_DRIFT_MOVE_DURATION_MS
@@ -309,11 +310,23 @@ void aura_coverdrift_draw(int x, int width,
      * desincronizarse entre si (la causa real del aspecto
      * "escalonado" a velocidad lenta: 8 direcciones sobre apenas
      * ~40px en 7s son bastante menos de 1px por cuadro). */
-    pos_hp = aura_pattern_drift_pos_hp(ANGLES_DEG[s_angle_idx], s_distance, elapsed_ms, CYCLE_MS);
+    /* PLAN-niveles-fx.md D-a: Animaciones decide COMO se mueve lo que
+     * Graficos ya decidio que existe -- con Animaciones != Todas, la
+     * imagen activa queda QUIETA en el centro (distancia 0); el reloj
+     * del ciclo (elapsed_ms/CYCLE_MS) sigue avanzando igual, es lo que
+     * gobierna CUANDO rota de imagen (D-a: la rotacion es contenido, no
+     * animacion) y, si toca, el cross-fade de abajo. */
+    pos_hp = aura_pattern_drift_pos_hp(ANGLES_DEG[s_angle_idx],
+                                        aura_fx_coverdrift_motion() ? s_distance : 0,
+                                        elapsed_ms, CYCLE_MS);
     dx = round_to_nearest_q8(pos_hp.dx256);
     dy = round_to_nearest_q8(pos_hp.dy256);
 
-    if (elapsed_ms < CROSSFADE_MS && s_prev_index >= 0)
+    /* D-a: con Animaciones=Ninguna el cambio de imagen es un CORTE --
+     * aura_fx_coverdrift_crossfade() es la unica puerta nueva, el resto
+     * de la logica (ventana de CROSSFADE_MS, imagen anterior valida) no
+     * cambia. */
+    if (aura_fx_coverdrift_crossfade() && elapsed_ms < CROSSFADE_MS && s_prev_index >= 0)
     {
         int alpha = (int)(elapsed_ms * 256 / CROSSFADE_MS);
         draw_crossfade(images, x, width, margin_x, margin_y, dx, dy, alpha);

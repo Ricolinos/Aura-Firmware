@@ -63,6 +63,10 @@ aura_category_t aura_category_for_screen(aura_screen_id_t screen)
     case AURA_SCREEN_PHOTOS:
     case AURA_SCREEN_PHOTOS_ALL:
     case AURA_SCREEN_PHOTO_VIEWER:
+    /* D-316: las tres filas nuevas de categoria son la misma seccion. */
+    case AURA_SCREEN_PHOTOS_PHOTO:
+    case AURA_SCREEN_PHOTOS_IMAGE:
+    case AURA_SCREEN_PHOTOS_AI:
         return AURA_CATEGORY_PHOTOS;
 
     /* -- Extras -- */

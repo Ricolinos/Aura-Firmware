@@ -400,6 +400,17 @@ typedef enum {
     AURA_STR_VIDEO_CANT_OPEN,
     AURA_STR_VIDEO_CANT_OPEN_HINT,
 
+    /* D-316 (matriz de niveles del dueno + indice de categorias por
+     * archivo, 2026-08-18): filas nuevas del submenu Fotos -- "Fotos" e
+     * "Imagenes" reusan AURA_STR_PHOTOS/AURA_STR_ABOUT_IMAGES (mismo
+     * texto exacto, mismo precedente de reuso que el resto del sistema);
+     * "IA*" es nueva -- el asterisco marca contenido generado por IA,
+     * mismo simbolo en ambos idiomas (encargo textual del dueno). */
+    AURA_STR_PHOTOS_AI,
+    AURA_STR_PHOTOS_EMPTY_PHOTO,
+    AURA_STR_PHOTOS_EMPTY_IMAGE,
+    AURA_STR_PHOTOS_EMPTY_AI,
+
     AURA_STR_COUNT,
 } aura_str_id_t;
 

@@ -47,6 +47,7 @@
 #include "aura_scroll_indicator.h"
 #include "aura_art.h" /* cache .pfraw generico -- D-291, compartido con aura_albumart.c */
 #include "aura_transitions.h" /* Fade-Slide region entre fotos -- D-291 */
+#include "aura_media_categories.h" /* indice opcional Fotos/Imagenes/IA -- D-316 */
 
 #define PHOTOS_DIR      "/Photos"
 /* D-291: 200 -> 500 (limite del contrato Photos/ con Aura Studio,
@@ -104,6 +105,7 @@ typedef struct {
     char display[PHOTO_NAME_LEN]; /* filename sin extension, AUDITORIA-01 A-05 */
     bool supported; /* jpg/bmp = true; png/gif listados pero no decodificables (D-028) */
     long mtime; /* D-291: llave secundaria del cache de miniaturas -- ver photo_pfraw_path() */
+    unsigned char category; /* D-316: aura_photo_cat_t, del indice OPCIONAL de Aura Studio */
 } photo_item_t;
 
 static photo_item_t s_photos[MAX_PHOTOS];
@@ -119,6 +121,20 @@ static int s_current_index = 0;
  * "ajustar" (false) cada vez que se entra desde la lista -- ver
  * aura_photos_handle_button()/aura_photo_viewer_handle_button(). */
 static bool s_cover_mode = false;
+
+/* D-316: subconjunto de s_photos[] que coincide con la categoria de la
+ * pantalla activa -- mismo patron que aura_video.c (ensure_video_filter()):
+ * AURA_PHOTO_CAT_NONE (Todas las fotos) reproduce la lista sin filtrar,
+ * CERO cambio de comportamiento respecto a antes de D-316. */
+static int s_filtered_idx[MAX_PHOTOS];
+static int s_filtered_count = 0;
+static int s_filtered_built_for = 0; /* aura_photo_cat_t + 1; 0 = nada construido */
+/* Filtro activo cuando se entro al visor desde la lista -- LEFT/RIGHT/
+ * SCROLL dentro del visor navegan ESTE subconjunto (D-316), no la lista
+ * completa; `s_viewer_pos` es la posicion dentro de el (lo que la lista
+ * de origen restaura como seleccion al volver con MENU). */
+static aura_photo_cat_t s_viewer_filter = AURA_PHOTO_CAT_NONE;
+static int s_viewer_pos = 0;
 
 static unsigned char s_view_scratch[VIEW_SCRATCH_SIZE];
 static int s_loaded_index = -1;
@@ -336,6 +352,8 @@ static void ensure_photo_list(void)
         strip_ext_for_display(entry->d_name, s_photos[s_photo_count].display, PHOTO_NAME_LEN);
         s_photos[s_photo_count].supported = is_supported_image(entry->d_name);
         s_photos[s_photo_count].mtime = (long)info.mtime;
+        s_photos[s_photo_count].category =
+            (unsigned char)aura_media_categories_photo_lookup(entry->d_name);
         s_photo_count++;
     }
     closedir(d);
@@ -348,12 +366,65 @@ void aura_photos_invalidate(void)
     s_photo_count = -1;
     s_photo_total_count = -1;
     s_loaded_index = -1;
+    s_filtered_built_for = 0;
+    aura_media_categories_invalidate();
 }
 
 int aura_photos_count(void)
 {
     ensure_photo_list();
     return s_photo_total_count;
+}
+
+/* D-316: reconstruye s_filtered_idx[]/s_filtered_count para `cat` --
+ * mismo criterio que ensure_video_filter() (aura_video.c): cacheado por
+ * categoria, recorre s_photos[] (ya ordenado por compare_photo_display())
+ * una vez por cambio de pantalla, nunca por cuadro. El orden alfabetico
+ * ya aplicado sobrevive al filtrado (se recorre en el mismo orden). */
+static void ensure_photo_filter(aura_photo_cat_t cat)
+{
+    int i;
+    int key = (int)cat + 1;
+
+    ensure_photo_list();
+    if (s_filtered_built_for == key)
+        return;
+
+    s_filtered_count = 0;
+    for (i = 0; i < s_photo_count; i++)
+    {
+        if (cat != AURA_PHOTO_CAT_NONE && s_photos[i].category != (unsigned char)cat)
+            continue;
+        s_filtered_idx[s_filtered_count++] = i;
+    }
+    s_filtered_built_for = key;
+}
+
+/* Pantalla -> filtro de categoria (D-316). AURA_SCREEN_PHOTOS_ALL (y
+ * cualquier otra) cae a AURA_PHOTO_CAT_NONE -- sin filtrar. */
+static aura_photo_cat_t screen_to_photo_filter(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_PHOTOS_PHOTO: return AURA_PHOTO_CAT_PHOTO;
+    case AURA_SCREEN_PHOTOS_IMAGE: return AURA_PHOTO_CAT_IMAGE;
+    case AURA_SCREEN_PHOTOS_AI:    return AURA_PHOTO_CAT_AI;
+    default:                       return AURA_PHOTO_CAT_NONE;
+    }
+}
+
+int aura_photos_count_filtered(aura_photo_cat_t cat)
+{
+    ensure_photo_filter(cat);
+    return s_filtered_count;
+}
+
+const char *aura_photos_filtered_filename(aura_photo_cat_t cat, int index)
+{
+    ensure_photo_filter(cat);
+    if (index < 0 || index >= s_filtered_count)
+        return NULL;
+    return s_photos[s_filtered_idx[index]].filename;
 }
 
 static void draw_message(aura_str_id_t msg_id)
@@ -394,15 +465,18 @@ static void draw_message_with_hint(aura_str_id_t msg_id, aura_str_id_t hint_id)
 
 /* D-291: hay mas imagenes en /Photos de las que caben en MAX_PHOTOS --
  * se dice explicitamente en vez de truncar en silencio (ver contrato
- * §6.5 en PLAN-image-viewer.md). */
-static bool has_more_row(void)
+ * §6.5 en PLAN-image-viewer.md). D-316: solo aplica a la lista SIN
+ * filtrar -- las categorias siempre cargan su subconjunto completo
+ * (acotado por el mismo MAX_PHOTOS de la lista base, nunca mas grande). */
+static bool has_more_row(aura_photo_cat_t filter)
 {
-    return s_photo_total_count > s_photo_count;
+    return filter == AURA_PHOTO_CAT_NONE && s_photo_total_count > s_photo_count;
 }
 
-static int display_row_count(void)
+static int display_row_count(aura_photo_cat_t filter)
 {
-    return s_photo_count + (has_more_row() ? 1 : 0);
+    ensure_photo_filter(filter);
+    return s_filtered_count + (has_more_row(filter) ? 1 : 0);
 }
 
 /* -- Miniaturas de la lista (D-291) -----------------------------------------
@@ -565,17 +639,45 @@ static void draw_photos_thumb(int x, int y, int idx)
 static long s_photos_activity_since = 0;
 static int s_photos_last_selected = -1;
 
-static void draw_photos_list(aura_nav_t *nav)
+/* D-316: titulo de barra + mensaje vacio por pantalla -- "Todas las
+ * fotos" conserva su titulo/mensaje de siempre (CERO cambio de
+ * comportamiento); las tres categorias reusan AURA_STR_PHOTOS/
+ * AURA_STR_ABOUT_IMAGES (mismo texto exacto que ya usa "Acerca de") y
+ * AURA_STR_PHOTOS_AI (nueva) como titulo, y sus AURA_STR_PHOTOS_EMPTY_*
+ * correspondientes como mensaje de lista vacia. */
+static aura_str_id_t photo_screen_title_id(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_PHOTOS_PHOTO: return AURA_STR_PHOTOS;
+    case AURA_SCREEN_PHOTOS_IMAGE: return AURA_STR_ABOUT_IMAGES;
+    case AURA_SCREEN_PHOTOS_AI:    return AURA_STR_PHOTOS_AI;
+    default:                       return AURA_STR_PHOTOS;
+    }
+}
+
+static aura_str_id_t photo_empty_message_id(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_PHOTOS_PHOTO: return AURA_STR_PHOTOS_EMPTY_PHOTO;
+    case AURA_SCREEN_PHOTOS_IMAGE: return AURA_STR_PHOTOS_EMPTY_IMAGE;
+    case AURA_SCREEN_PHOTOS_AI:    return AURA_STR_PHOTOS_EMPTY_AI;
+    default:                       return AURA_STR_EMPTY_PHOTOS;
+    }
+}
+
+static void draw_photos_list(aura_nav_t *nav, aura_screen_id_t screen, aura_photo_cat_t filter)
 {
     int selected = aura_nav_get_selection(nav);
-    int count = display_row_count();
+    int count = display_row_count(filter);
     int visible = PHOTO_VISIBLE;
     int first = 0;
     int i, w, h;
     static char s_more_label[48];
 
     a26_shell_clear_screen();
-    aura_widgets_draw_status_bar(aura_str(AURA_STR_PHOTOS));
+    aura_widgets_draw_status_bar(aura_str(photo_screen_title_id(screen)));
 
     if (count > visible)
     {
@@ -606,7 +708,7 @@ static void draw_photos_list(aura_nav_t *nav)
         int row_y = PHOTO_LIST_TOP + (i - first) * PHOTO_ROW_H;
         int text_x = PHOTO_ART_X + PHOTO_ART_SIZE + PHOTO_TEXT_GAP;
         bool is_sel = (i == selected);
-        bool is_more = (i == s_photo_count); /* fila inerte "...y N mas" */
+        bool is_more = (i == s_filtered_count); /* fila inerte "...y N mas" */
 
         lcd_getstringsize((const unsigned char *)"Ay", &w, &h);
 
@@ -621,12 +723,13 @@ static void draw_photos_list(aura_nav_t *nav)
             continue;
         }
 
-        draw_photos_thumb(PHOTO_ART_X, row_y + (PHOTO_ROW_H - PHOTO_ART_SIZE) / 2, i);
+        draw_photos_thumb(PHOTO_ART_X, row_y + (PHOTO_ROW_H - PHOTO_ART_SIZE) / 2,
+                           s_filtered_idx[i]);
 
         lcd_set_foreground(is_sel ? a26_color(A26_ACCENT) : a26_color(A26_TEXT_PRIMARY));
         aura_widgets_puts_clipped(text_x, row_y + (PHOTO_ROW_H - h) / 2,
                                    A26_SCREEN_WIDTH - text_x - A26_LAYOUT_LIST_INSET,
-                                   s_photos[i].display);
+                                   s_photos[s_filtered_idx[i]].display);
     }
 
     aura_scroll_indicator_draw(A26_SCREEN_WIDTH, PHOTO_LIST_TOP,
@@ -635,32 +738,46 @@ static void draw_photos_list(aura_nav_t *nav)
                                 a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
 }
 
-void aura_photos_draw(aura_nav_t *nav)
+void aura_photos_draw(aura_nav_t *nav, aura_screen_id_t screen)
 {
-    ensure_photo_list();
+    aura_photo_cat_t filter = screen_to_photo_filter(screen);
 
-    if (s_photo_count == 0)
+    ensure_photo_filter(filter);
+
+    if (s_filtered_count == 0)
     {
         /* AUDITORIA-01 A-15: "la barra nunca cambia de forma entre
          * pantallas" (doc SS5) -- este vacio era la unica pantalla del
-         * sistema sin ella. */
+         * sistema sin ella. D-316: "Todas las fotos" conserva el
+         * mensaje con pista de siempre; las categorias usan un mensaje
+         * simple (mismo criterio que aura_video.c), sin pista de sync --
+         * el indice de categorias es un detalle interno, no algo que el
+         * usuario deba "arreglar" sincronizando de nuevo. */
         a26_shell_clear_screen();
-        aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_PHOTOS));
-        draw_message_with_hint(AURA_STR_EMPTY_PHOTOS, AURA_STR_EMPTY_PHOTOS_HINT);
+        aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(photo_screen_title_id(screen)));
+        if (filter == AURA_PHOTO_CAT_NONE)
+            draw_message_with_hint(AURA_STR_EMPTY_PHOTOS, AURA_STR_EMPTY_PHOTOS_HINT);
+        else
+            draw_message(photo_empty_message_id(screen));
         return;
     }
 
-    draw_photos_list(nav);
+    draw_photos_list(nav, screen, filter);
 }
 
-void aura_photos_handle_button(aura_nav_t *nav, long button)
+void aura_photos_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button)
 {
+    aura_photo_cat_t filter = screen_to_photo_filter(screen);
     int sel = aura_nav_get_selection(nav);
+    int count;
+
+    ensure_photo_filter(filter);
+    count = s_filtered_count;
 
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < display_row_count() - 1)
+        if (sel < display_row_count(filter) - 1)
             aura_nav_set_selection(nav, sel + 1);
         break;
     case BUTTON_SCROLL_BACK:
@@ -668,11 +785,13 @@ void aura_photos_handle_button(aura_nav_t *nav, long button)
             aura_nav_set_selection(nav, sel - 1);
         break;
     case BUTTON_SELECT:
-        /* sel == s_photo_count solo puede ser la fila inerte "...y N
-         * mas" (has_more_row()) -- nunca abre el visor. */
-        if (sel >= 0 && sel < s_photo_count)
+        /* sel == count solo puede ser la fila inerte "...y N mas"
+         * (has_more_row()) -- nunca abre el visor. */
+        if (sel >= 0 && sel < count)
         {
-            s_current_index = sel;
+            s_viewer_filter = filter;
+            s_viewer_pos = sel;
+            s_current_index = s_filtered_idx[sel];
             /* D-303: cada entrada al visor arranca en "ajustar" --
              * s_loaded_index tambien se invalida aca (no solo cuando
              * cambia el indice de foto): reabrir la MISMA foto que se
@@ -1035,19 +1154,25 @@ void aura_photo_viewer_handle_button(aura_nav_t *nav, long button)
      * transicion prerrenderiza el DESTINO llamando aura_screens_draw(),
      * que lee s_current_index para decidir que foto dibujar. Region =
      * pantalla completa (el visor no tiene StatusBar que excluir). */
+    /* D-316: navega dentro del subconjunto FILTRADO con el que se entro
+     * al visor (s_viewer_filter/s_viewer_pos) -- no la lista completa de
+     * s_photos[]. Con AURA_PHOTO_CAT_NONE (Todas las fotos) el
+     * subconjunto ES la lista completa, CERO cambio de comportamiento. */
     case BUTTON_SCROLL_FWD:
     case BUTTON_RIGHT:
-        if (s_current_index < s_photo_count - 1)
+        if (s_viewer_pos < aura_photos_count_filtered(s_viewer_filter) - 1)
         {
-            s_current_index++;
+            s_viewer_pos++;
+            s_current_index = s_filtered_idx[s_viewer_pos];
             aura_transition_fade_slide_region(nav, 0, 0, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT, 1);
         }
         break;
     case BUTTON_SCROLL_BACK:
     case BUTTON_LEFT:
-        if (s_current_index > 0)
+        if (s_viewer_pos > 0)
         {
-            s_current_index--;
+            s_viewer_pos--;
+            s_current_index = s_filtered_idx[s_viewer_pos];
             aura_transition_fade_slide_region(nav, 0, 0, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT, -1);
         }
         break;
@@ -1056,9 +1181,12 @@ void aura_photo_viewer_handle_button(aura_nav_t *nav, long button)
          * estaba viendo, no la que tenia al entrar -- aura_nav_pop()
          * PRIMERO (decrementa depth), aura_nav_set_selection() DESPUES
          * (para que depth-1 ya apunte al slot de la LISTA, no al del
-         * propio visor -- ver aura_nav_set_selection()/aura_nav.c). */
+         * propio visor -- ver aura_nav_set_selection()/aura_nav.c).
+         * D-316: `s_viewer_pos` (posicion dentro del subconjunto
+         * filtrado), no `s_current_index` (indice absoluto) -- son el
+         * mismo valor solo cuando el filtro es AURA_PHOTO_CAT_NONE. */
         aura_nav_pop(nav);
-        aura_nav_set_selection(nav, s_current_index);
+        aura_nav_set_selection(nav, s_viewer_pos);
         break;
     /* D-303 (encargo del dueno): Select alterna "ajustar" (foto
      * completa, con bandas si no llena la pantalla) / "cubrir" (llena

@@ -39,6 +39,7 @@
 #include "aura_category.h"
 #include "aura_settings.h"
 #include "aura_style.h"
+#include "aura_fx.h"
 
 #include "aura_selection_summary.h"
 
@@ -526,8 +527,15 @@ static void draw_neutral_fade_background(int x, int width)
  * aura_accent() -> aura_accent_light(), accent_derived_lighten/
  * darken_pct = 25%, tokens.json G9: "para el degradado de
  * SelectionSummary"). Mismo blend de 2 tramos que draw_diagonal_
- * gradient() (D-097): 0-128 hacia el centro, 128-256 desde el centro. */
-static void draw_accent_gradient_background(int x, int width)
+ * gradient() (D-097): 0-128 hacia el centro, 128-256 desde el centro.
+ *
+ * PLAN-niveles-fx.md D-c: exportada (aura_selection_summary.h) para que
+ * CoverDrift la reuse tal cual como fondo de Graficos=Ninguno ("color de
+ * acento con un ligero degradado") -- es la version VERTICAL, ya validada
+ * a 160x240 sin bandas; el degradado DIAGONAL del tile
+ * (draw_diagonal_gradient(), arriba) queda exclusivo del tile de 90x90
+ * por la razon ya documentada ahi (bandas en RGB565 a este tamano). */
+void aura_selection_summary_draw_accent_gradient_background(int x, int width)
 {
     unsigned top = aura_accent_dark();
     unsigned mid = aura_accent();
@@ -590,7 +598,7 @@ static void draw_summary(int x, int width, const char *icon_name,
      * de los 6 presets, o un tema instalado sin backgrounds/) o el
      * archivo no carga (dispositivo real sin assets sincronizados, BMP
      * corrupto), cae al degradado CALCULADO desde el acento (D-292,
-     * draw_accent_gradient_background()) -- nunca a un color plano
+     * aura_selection_summary_draw_accent_gradient_background()) -- nunca a un color plano
      * generico ni a "pink" prestado de otro acento: el usuario elige
      * cualquier color y el fondo siempre lo refleja. NEUTRAL_FADE
      * (D-281): degradado de tema, sin acento ni BMP, sin cambio. */
@@ -603,7 +611,7 @@ static void draw_summary(int x, int width, const char *icon_name,
         if (preset && ensure_panel_background(preset))
             lcd_bitmap(s_bg_pixels, x, 0, BG_W, BG_H);
         else
-            draw_accent_gradient_background(x, width);
+            aura_selection_summary_draw_accent_gradient_background(x, width);
     }
 
     /* Sombra de LeftPanel (efectos/01-sombras.md, "SIEMPRE renderiza una
@@ -653,7 +661,50 @@ static void draw_summary(int x, int width, const char *icon_name,
         bottom_h = AURA_DS_METRICS_ABOUT_BAR_H;
     }
 
-    aura_selection_summary_draw_tile(tile_x, tile_y, category, icon_name, renderer);
+    /* PLAN-niveles-fx.md Q1/Q5: con Graficos=Ninguno no se dibuja el tile
+     * (icono+degradado+sombra, la parte cara del componente) -- solo
+     * texto. Sin tile, los dos slots pierden el ancla que los separaba
+     * (el borde del tile) y se recentran como GRUPO unico en los 240px
+     * completos del panel, en vez de cada uno centrado en su mitad. */
+    bool show_tile = aura_fx_ss_show_tile();
+    int top_y, bottom_y, renderer_y;
+
+    if (show_tile)
+    {
+        aura_selection_summary_draw_tile(tile_x, tile_y, category, icon_name, renderer);
+
+        /* D-272 (correccion del dueno, guias verdes propias marcando el
+         * centro real de cada texto): el texto se centra, vertical Y
+         * horizontal, dentro del margen COMPLETO disponible entre el
+         * borde del panel y el borde del tile (region [0, tile_y) arriba,
+         * [tile_y+TILE_SIZE, A26_SCREEN_HEIGHT) abajo). */
+        top_y = (tile_y - top_line_h) / 2;
+        {
+            int region_top = tile_y + TILE_SIZE;
+
+            bottom_y = region_top
+                     + (A26_SCREEN_HEIGHT - region_top - bottom_lines * bottom_line_h) / 2;
+            /* D-279: la barra de "Acerca de" queda a la misma altura que
+             * el texto inferior -- misma formula de centrado, sin +
+             * TEXT_GAP (bottom_h ya lo excluye para el caso renderer). */
+            renderer_y = region_top + (A26_SCREEN_HEIGHT - region_top - bottom_h) / 2;
+        }
+    }
+    else
+    {
+        bool has_top = (top_h != 0);
+        bool has_bottom = (bottom_lines >= 1 || bottom_renderer != NULL);
+        int bottom_content_h = (bottom_lines >= 1)
+            ? bottom_lines * bottom_line_h
+            : (bottom_renderer ? AURA_DS_METRICS_ABOUT_BAR_H : 0);
+        int gap = (has_top && has_bottom) ? TEXT_GAP : 0;
+        int group_h = top_line_h + gap + bottom_content_h;
+        int group_top = (A26_SCREEN_HEIGHT - group_h) / 2;
+
+        top_y = group_top;
+        bottom_y = group_top + top_line_h + gap;
+        renderer_y = bottom_y;
+    }
 
     /* Texto SIEMPRE blanco fijo (D-267) -- ya no A26_TEXT_PRIMARY (ese
      * token varia por tema claro/oscuro; el fondo nuevo es siempre
@@ -664,19 +715,6 @@ static void draw_summary(int x, int width, const char *icon_name,
 
     if (top_h)
     {
-        /* D-272 (correccion del dueno, guias verdes propias marcando el
-         * centro real de cada texto): el texto ya NO se ancla pegado al
-         * borde del tile (`tile_y - top_h`, D-097/D-267) -- se centra,
-         * vertical Y horizontal, dentro del margen COMPLETO disponible
-         * entre el borde del panel y el borde del tile (region [0,
-         * tile_y) arriba, [tile_y+TILE_SIZE, A26_SCREEN_HEIGHT) abajo).
-         * Confirmado con las guias del dueno: cruce arriba en el centro
-         * de [0, tile_y), cruce abajo en el centro de [tile_y+TILE_SIZE,
-         * A26_SCREEN_HEIGHT) -- coincide exacto con esta formula. El
-         * centrado HORIZONTAL (texto dentro de [x, x+width)) ya era
-         * correcto desde antes, sin cambio aca. */
-        int top_y = (tile_y - top_line_h) / 2;
-
         lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_18));
         draw_text_slot(text_x, top_y, text_max_w, top_text,
                         &s_top_shown, &s_top_since, &s_top_overflowing);
@@ -687,10 +725,6 @@ static void draw_summary(int x, int width, const char *icon_name,
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_MEDIUM_16));
     if (bottom_lines >= 1)
     {
-        int region_top = tile_y + TILE_SIZE;
-        int content_h = bottom_lines * bottom_line_h;
-        int bottom_y = region_top + (A26_SCREEN_HEIGHT - region_top - content_h) / 2;
-
         draw_text_slot(text_x, bottom_y, text_max_w,
                         s_bottom_line_buf[0],
                         &s_bottom_shown[0], &s_bottom_since[0], &s_bottom_overflowing[0]);
@@ -706,21 +740,7 @@ static void draw_summary(int x, int width, const char *icon_name,
         s_bottom_overflowing[0] = 0;
         s_bottom_overflowing[1] = 0;
         if (bottom_renderer)
-        {
-            /* D-279 (encargo del dueno: "la barra debe quedar exactamente
-             * en la misma posicion vertical que el texto inferior del
-             * SelectionSummary"): misma formula de centrado que D-272 usa
-             * para el texto -- centrada en el margen completo
-             * [tile_y+TILE_SIZE, A26_SCREEN_HEIGHT), no pegada al borde del
-             * tile (bottom_h ya no lleva + TEXT_GAP, ver arriba). Antes:
-             * y = tile_y+TILE_SIZE+TEXT_GAP (pegada, ~27px mas arriba que
-             * el centro real de ese margen). */
-            int region_top = tile_y + TILE_SIZE;
-            int renderer_y = region_top
-                            + (A26_SCREEN_HEIGHT - region_top - bottom_h) / 2;
-
             bottom_renderer(text_x, renderer_y, text_max_w, bottom_h);
-        }
     }
 }
 

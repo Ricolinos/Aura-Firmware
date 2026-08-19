@@ -29,9 +29,15 @@
 #define AURA_PHOTOS_H
 
 #include "aura_nav.h"
+#include "aura_media_categories.h"
 
-void aura_photos_draw(aura_nav_t *nav);
-void aura_photos_handle_button(aura_nav_t *nav, long button);
+/* D-316: `screen` decide el filtro de categoria -- AURA_SCREEN_PHOTOS_
+ * PHOTO/IMAGE/AI filtran por la categoria correspondiente del indice
+ * OPCIONAL de Aura Studio (aura_media_categories.h); cualquier otra
+ * pantalla (AURA_SCREEN_PHOTOS_ALL) sigue mostrando la lista completa
+ * sin filtrar, CERO cambio de comportamiento respecto a antes de D-316. */
+void aura_photos_draw(aura_nav_t *nav, aura_screen_id_t screen);
+void aura_photos_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button);
 
 void aura_photo_viewer_draw(aura_nav_t *nav);
 void aura_photo_viewer_handle_button(aura_nav_t *nav, long button);
@@ -47,5 +53,14 @@ void aura_photos_invalidate(void);
  * vacio del panel derecho del menu (D-291), que podia desincronizarse
  * de lo que en verdad hay en el disco. */
 int aura_photos_count(void);
+
+/* D-316: cuenta/nombre de archivo de la foto filtrada #index dentro de
+ * la categoria `cat` -- usado por CoverDrift (aura_screens.c) para
+ * construir su pool de fotos sin duplicar el escaneo/almacenamiento de
+ * este modulo. `cat` = AURA_PHOTO_CAT_NONE devuelve la lista completa
+ * sin filtrar. `aura_photos_filtered_filename()` devuelve NULL fuera de
+ * rango. */
+int aura_photos_count_filtered(aura_photo_cat_t cat);
+const char *aura_photos_filtered_filename(aura_photo_cat_t cat, int index);
 
 #endif /* AURA_PHOTOS_H */

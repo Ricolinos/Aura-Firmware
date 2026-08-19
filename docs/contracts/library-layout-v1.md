@@ -1,6 +1,6 @@
 # Contrato de estructura de biblioteca en el iPod — v1
 
-**Versión 1.1 — 2026-08-18 (D-293/D-298 en `Aura-Firmware`, ST-012 en Aura Studio).** Copia idéntica en ambos repositorios: `Aura-Firmware/docs/contracts/library-layout-v1.md` es la fuente canónica; Aura Studio la copia a `docs/contracts/library-layout-v1.md`. Todo cambio futuro sube la versión de este documento **y**, solo cuando cambia el esquema del marcador en sí, el campo `version` de §4 (v1.1 no lo toca — ver §6) — misma convención que `CONTRATO-firmware-studio.md` (que lo referencia desde su §D).
+**Versión 1.2 — 2026-08-18 (D-316 en `Aura-Firmware`).** Copia idéntica en ambos repositorios: `Aura-Firmware/docs/contracts/library-layout-v1.md` es la fuente canónica; Aura Studio la copia a `docs/contracts/library-layout-v1.md`. Todo cambio futuro sube la versión de este documento **y**, solo cuando cambia el esquema del marcador en sí, el campo `version` de §4 (v1.1 no lo toca — ver §6) — misma convención que `CONTRATO-firmware-studio.md` (que lo referencia desde su §D).
 
 Consolida en un solo lugar lo que antes estaba repartido entre código de los dos lados: **dónde** deja Aura Studio cada cosa en el disco del iPod y **cómo** la encuentra el firmware. Lo que no está aquí (categorías, nombre del dispositivo, formato de imágenes) vive en sus propios contratos y aquí solo se referencia (§5).
 
@@ -13,7 +13,7 @@ Rutas absolutas desde la raíz del volumen FAT32 del iPod. Studio crea `Music/`,
 | Directorio | Contenido | Escribe | Lee |
 |---|---|---|---|
 | `/Music/` | Audio. **Tres layouts** posibles, elegidos por el usuario en Studio (`AppPreferences.MusicOrganization`): `Artista/Álbum/archivo` (por defecto), `Álbum/archivo`, `Artista/archivo`. Nombre del archivo según `MusicFilenameFormat` (`Título`, `NN Título`, `Título - Artista`, `Título - Álbum`). Artista/álbum desconocidos → carpeta `Desconocido`. Saneo FAT32 (`PathSanitizer`): `/ \ : * ? " < > \|` → `_`, sin `.`/espacio finales | Studio | Firmware (tagcache indexa **todo el disco**, `tagcache_scan_paths = "/"`; no depende del layout) |
-| `/Videos/` | **Plano**, sin subcarpetas: `<archivo>.mpg`/`.mpeg` (MPEG-2, `mpegplayer`). Póster opcional `<archivo>.jpg` hermano (mismo nombre base). Nombre de archivo **≤ 95 bytes UTF-8 incluyendo la extensión** (D-298: `VIDEO_NAME_LEN` del firmware es 96 con el NUL) | Studio | Firmware (`aura_video.c`, `opendir("/Videos")`, filtro por extensión) |
+| `/Videos/` | **Plano**, sin subcarpetas: `<archivo>.mpg`/`.mpeg` (MPEG-2, `mpegplayer`). Póster opcional `<archivo>.jpg` hermano (mismo nombre base) — **D-316: el firmware ahora sí lo lee**, como cartel de `CoverDrift` para Películas/Series. Nombre de archivo **≤ 95 bytes UTF-8 incluyendo la extensión** (D-298: `VIDEO_NAME_LEN` del firmware es 96 con el NUL) | Studio | Firmware (`aura_video.c`, `opendir("/Videos")`, filtro por extensión; `aura_screens.c` para el póster) |
 | `/Photos/` | **Plano**, un JPEG por foto — formato exacto en `CONTRATO-firmware-studio.md` §D.1 (referencia, §5) | Studio | Firmware (`aura_photos.c`); miniaturas en `/.rockbox/aura/photocache/` (solo firmware) |
 | `/Playlists/` | `<Nombre>.m3u8` (rutas absolutas del iPod, UTF-8) + portada opcional `<Nombre>.jpg` | Studio (y el firmware al crear listas en el aparato) | Firmware (`aura_music.c`, `catalog_get_directory()`) |
 | `/.rockbox/aura/themes/<id>/` | Paquetes de tema — `CONTRATO-formato-tema.md` (referencia, §5) | Studio | Firmware |
@@ -100,6 +100,7 @@ El firmware escribe en `/.rockbox/aura/aura.cfg` la clave **de solo escritura** 
 | Tema | Dónde vive |
 |---|---|
 | Índice de categorías / conteos para "Acerca de" (`sync_summary.cfg`), `ratings.cfg`, `sync_manifest.json`, `aura.cfg` (claves) | `CONTRATO-firmware-studio.md` §D |
+| Índice de categoría POR ARCHIVO de Video/Fotos (`video_categories.cfg`/`photo_categories.cfg`, opcional, D-316) — distinto de los conteos agregados de la fila anterior | `CONTRATO-firmware-studio.md` §D.2 |
 | Nombre del dispositivo (`device.cfg`) | `CONTRATO-dispositivo.md` |
 | Formato de imágenes de `/Photos/` (JPEG baseline, ≤ 640 px, nombres) | `CONTRATO-firmware-studio.md` §D.1 |
 | Formato del paquete de tema | `CONTRATO-formato-tema.md` |
@@ -107,5 +108,6 @@ El firmware escribe en `/.rockbox/aura/aura.cfg` la clave **de solo escritura** 
 
 ## 6 — Historial
 
+- **v1.2 (2026-08-18, D-316)** — §1, fila `/Videos/`: el firmware ahora lee el póster `<archivo>.jpg` (contract ya lo contemplaba desde v1, nunca se consumía) para el cartel de `CoverDrift`. §5: nueva referencia a `CONTRATO-firmware-studio.md` §D.2, el índice OPCIONAL de categoría por archivo de Video/Fotos (`video_categories.cfg`/`photo_categories.cfg`) — distinto de los conteos agregados que ya existían. No cambia el esquema del marcador de §4.
 - **v1.1 (2026-08-18, D-298)** — §1, fila `/Videos/`: se documenta el límite de nombre de archivo (≤ 95 bytes UTF-8 con extensión), que ya regía de facto por `PHOTO_NAME_LEN` en Fotos pero no estaba escrito para Videos (`VIDEO_NAME_LEN` era 64, truncaba nombres largos en silencio). No cambia el esquema del marcador de §4: el campo `version` se queda en `1` — esto es una aclaración de un límite ya existente en la práctica, no un cambio de formato del marcador.
 - **v1 (2026-08-17)** — Primera versión: estructura de directorios, colocación de carátulas y letras, marcador de sincronización (`/.aura/sync-pending.json`, `version: 1`, `sync_marker_supported: 1`).

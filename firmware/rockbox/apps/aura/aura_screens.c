@@ -40,6 +40,7 @@
 #include "fs_defines.h"
 #include "rbpaths.h"
 #include "recorder/bmp.h"
+#include "recorder/jpeg_load.h"
 #include "file.h"
 #include "dir.h"
 #include "dircache.h"
@@ -61,6 +62,7 @@
 #include "aura_albumart.h"
 #include "aura_art.h"
 #include "aura_coverdrift.h"
+#include "aura_fx.h"
 #include "aura_scroll_indicator.h"
 #include "aura_flow.h"
 #include "rtc.h"
@@ -314,7 +316,11 @@ static int clamp_menu_count(int n)
 
 /* Videos y Fotos del original (2026-08-13). Las filas que no tienen
  * contenido propio en Aura van INERTES (el reproductor de video real
- * vive en "Todos los videos", que si funciona). */
+ * vive en "Todos los videos", que si funciona).
+ * D-316 (matriz del dueno + indice de categorias por archivo,
+ * 2026-08-18): Peliculas/Series/Videoclips dejan de ser inertes -- ya
+ * filtran /Videos por categoria (aura_video.c), ver `dimmed` en
+ * draw_nav_list(). */
 static const nav_entry_t videos_entries[] = {
     { AURA_STR_VIDEOS_ALL,     "video",  AURA_SCREEN_VIDEOS_ALL },
     { AURA_STR_VIDEOS_MOVIES,  "movie",  AURA_SCREEN_VIDEOS_MOVIES },
@@ -322,8 +328,16 @@ static const nav_entry_t videos_entries[] = {
     { AURA_STR_VIDEOS_CLIPS,   "clip",   AURA_SCREEN_VIDEOS_CLIPS },
 };
 
+/* D-316: tres filas nuevas -- Fotos/Imagenes/IA filtran /Photos por la
+ * categoria del indice OPCIONAL de Aura Studio (aura_media_categories.h),
+ * mismo criterio que Video. Sin icono propio (no existe un asset "camera"/
+ * "sparkles" en el set de iconos hoy) -- reusan "image", igual que "Todas
+ * las fotos". */
 static const nav_entry_t photos_entries[] = {
     { AURA_STR_PHOTOS_ALL, "image", AURA_SCREEN_PHOTOS_ALL },
+    { AURA_STR_PHOTOS,       "image", AURA_SCREEN_PHOTOS_PHOTO },
+    { AURA_STR_ABOUT_IMAGES, "image", AURA_SCREEN_PHOTOS_IMAGE },
+    { AURA_STR_PHOTOS_AI,    "image", AURA_SCREEN_PHOTOS_AI },
 };
 
 static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
@@ -391,6 +405,10 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_VIDEOS_CLIPS:        return AURA_STR_VIDEOS_CLIPS;
     case AURA_SCREEN_VIDEOS_ALL:          return AURA_STR_VIDEOS;
     case AURA_SCREEN_PHOTOS_ALL:          return AURA_STR_PHOTOS;
+    /* D-316 */
+    case AURA_SCREEN_PHOTOS_PHOTO:        return AURA_STR_PHOTOS;
+    case AURA_SCREEN_PHOTOS_IMAGE:        return AURA_STR_ABOUT_IMAGES;
+    case AURA_SCREEN_PHOTOS_AI:           return AURA_STR_PHOTOS_AI;
     case AURA_SCREEN_SETTINGS_COPYRIGHT:  return AURA_STR_SETTINGS_COPYRIGHT;
     case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER: return AURA_STR_MUSIC_ALBUMS;
     case AURA_SCREEN_MUSIC_SONGS_BY_ARTIST:
@@ -794,6 +812,150 @@ static bool music_row_wants_coverdrift(aura_screen_id_t container, aura_screen_i
     return false;
 }
 
+/* -- CoverDrift en Video y Fotos (D-316, "etapas 3-4" pendientes desde
+ * D-259/D-261) -----------------------------------------------------
+ *
+ * `drift_pool_t` identifica de que POOL de imagenes se sirve CoverDrift
+ * -- mas fino que aura_category_t (Musica/Video/Fotos): dos filas de la
+ * MISMA categoria pueden necesitar pools DISTINTOS (Peliculas vs. Series
+ * son ambos "Video" pero jamas deben mezclar sus carteles), a diferencia
+ * de Musica, donde todas las filas comparten un unico pool general de
+ * albumes. Reemplaza a `coverdrift_category` como llave de identidad en
+ * panel_identity_equal() -- una categoria por si sola ya no alcanza para
+ * saber si dos filas comparten pool. */
+typedef enum {
+    AURA_DRIFT_POOL_MUSIC = 0,
+    /* Peliculas + Series combinadas -- filas "Videos" (raiz) y "Todos
+     * los videos". Restriccion textual del dueno (2026-08-18): CoverDrift
+     * de Video SOLO muestra carteles de peliculas y series, nunca de
+     * videoclips -- ver aura_video_coverdrift_count()/_filename() mas
+     * abajo, que excluyen AURA_VIDEO_CAT_CLIP de este pool. */
+    AURA_DRIFT_POOL_VIDEO_ALL,
+    AURA_DRIFT_POOL_VIDEO_MOVIES,
+    AURA_DRIFT_POOL_VIDEO_SERIES,
+    AURA_DRIFT_POOL_PHOTO_ALL,
+    AURA_DRIFT_POOL_PHOTO_PHOTO,
+    AURA_DRIFT_POOL_PHOTO_IMAGE,
+    AURA_DRIFT_POOL_PHOTO_AI,
+} drift_pool_t;
+
+/* AURA_SCREEN_VIDEOS_CLIPS deliberadamente ausente -- restriccion
+ * textual del dueno del producto (2026-08-18): "solo se vean portadas
+ * de peliculas y series [nunca videoclips]" (registrada en DECISIONS.md
+ * D-316, no existia como decision previa en ningun documento -- ver la
+ * busqueda exhaustiva citada ahi). */
+static bool video_row_wants_coverdrift(aura_screen_id_t container, aura_screen_id_t target,
+                                        drift_pool_t *out_pool)
+{
+    if (container == AURA_SCREEN_ROOT && target == AURA_SCREEN_VIDEOS)
+    {
+        *out_pool = AURA_DRIFT_POOL_VIDEO_ALL;
+        return true;
+    }
+    if (container == AURA_SCREEN_VIDEOS)
+    {
+        if (target == AURA_SCREEN_VIDEOS_ALL)
+        { *out_pool = AURA_DRIFT_POOL_VIDEO_ALL; return true; }
+        if (target == AURA_SCREEN_VIDEOS_MOVIES)
+        { *out_pool = AURA_DRIFT_POOL_VIDEO_MOVIES; return true; }
+        if (target == AURA_SCREEN_VIDEOS_TVSHOWS)
+        { *out_pool = AURA_DRIFT_POOL_VIDEO_SERIES; return true; }
+    }
+    return false;
+}
+
+static bool photo_row_wants_coverdrift(aura_screen_id_t container, aura_screen_id_t target,
+                                        drift_pool_t *out_pool)
+{
+    if (container == AURA_SCREEN_ROOT && target == AURA_SCREEN_PHOTOS)
+    {
+        *out_pool = AURA_DRIFT_POOL_PHOTO_ALL;
+        return true;
+    }
+    if (container == AURA_SCREEN_PHOTOS)
+    {
+        if (target == AURA_SCREEN_PHOTOS_ALL)
+        { *out_pool = AURA_DRIFT_POOL_PHOTO_ALL; return true; }
+        if (target == AURA_SCREEN_PHOTOS_PHOTO)
+        { *out_pool = AURA_DRIFT_POOL_PHOTO_PHOTO; return true; }
+        if (target == AURA_SCREEN_PHOTOS_IMAGE)
+        { *out_pool = AURA_DRIFT_POOL_PHOTO_IMAGE; return true; }
+        if (target == AURA_SCREEN_PHOTOS_AI)
+        { *out_pool = AURA_DRIFT_POOL_PHOTO_AI; return true; }
+    }
+    return false;
+}
+
+/* Punto unico: prueba las tres fuentes en orden y devuelve el pool. */
+static bool row_wants_coverdrift(aura_screen_id_t container, aura_screen_id_t target,
+                                  drift_pool_t *out_pool)
+{
+    if (music_row_wants_coverdrift(container, target))
+    {
+        *out_pool = AURA_DRIFT_POOL_MUSIC;
+        return true;
+    }
+    if (video_row_wants_coverdrift(container, target, out_pool))
+        return true;
+    if (photo_row_wants_coverdrift(container, target, out_pool))
+        return true;
+    return false;
+}
+
+/* Video: cuenta/nombre de archivo del pool `pool` (Peliculas+Series
+ * combinadas, o cada una por separado) -- AURA_VIDEO_CAT_CLIP nunca
+ * aparece aca, ver el comentario de drift_pool_t. */
+static int video_coverdrift_count(drift_pool_t pool)
+{
+    if (pool == AURA_DRIFT_POOL_VIDEO_MOVIES)
+        return aura_video_count_filtered(AURA_VIDEO_CAT_MOVIE);
+    if (pool == AURA_DRIFT_POOL_VIDEO_SERIES)
+        return aura_video_count_filtered(AURA_VIDEO_CAT_SERIES);
+    /* AURA_DRIFT_POOL_VIDEO_ALL: peliculas + series, NUNCA videoclips. */
+    return aura_video_count_filtered(AURA_VIDEO_CAT_MOVIE)
+         + aura_video_count_filtered(AURA_VIDEO_CAT_SERIES);
+}
+
+static const char *video_coverdrift_filename(drift_pool_t pool, int index)
+{
+    int movies;
+
+    if (pool == AURA_DRIFT_POOL_VIDEO_MOVIES)
+        return aura_video_filtered_filename(AURA_VIDEO_CAT_MOVIE, index);
+    if (pool == AURA_DRIFT_POOL_VIDEO_SERIES)
+        return aura_video_filtered_filename(AURA_VIDEO_CAT_SERIES, index);
+
+    movies = aura_video_count_filtered(AURA_VIDEO_CAT_MOVIE);
+    if (index < movies)
+        return aura_video_filtered_filename(AURA_VIDEO_CAT_MOVIE, index);
+    return aura_video_filtered_filename(AURA_VIDEO_CAT_SERIES, index - movies);
+}
+
+static int photo_coverdrift_count(drift_pool_t pool)
+{
+    switch (pool)
+    {
+    case AURA_DRIFT_POOL_PHOTO_PHOTO: return aura_photos_count_filtered(AURA_PHOTO_CAT_PHOTO);
+    case AURA_DRIFT_POOL_PHOTO_IMAGE: return aura_photos_count_filtered(AURA_PHOTO_CAT_IMAGE);
+    case AURA_DRIFT_POOL_PHOTO_AI:    return aura_photos_count_filtered(AURA_PHOTO_CAT_AI);
+    default:                          return aura_photos_count_filtered(AURA_PHOTO_CAT_NONE);
+    }
+}
+
+static const char *photo_coverdrift_filename(drift_pool_t pool, int index)
+{
+    switch (pool)
+    {
+    case AURA_DRIFT_POOL_PHOTO_PHOTO: return aura_photos_filtered_filename(AURA_PHOTO_CAT_PHOTO, index);
+    case AURA_DRIFT_POOL_PHOTO_IMAGE: return aura_photos_filtered_filename(AURA_PHOTO_CAT_IMAGE, index);
+    case AURA_DRIFT_POOL_PHOTO_AI:    return aura_photos_filtered_filename(AURA_PHOTO_CAT_AI, index);
+    default:                          return aura_photos_filtered_filename(AURA_PHOTO_CAT_NONE, index);
+    }
+}
+
+/* drift_pool_count() (necesita s_drift_album_pool_count, declarado mas
+ * abajo) vive junto al resto del pool de Musica -- ver esa seccion. */
+
 /* Pool GENERAL de todas las caratulas de album de la biblioteca (no el
  * album exacto de la fila resaltada -- D-242, esta misma sesion, ya
  * encontro que resolver eso no tiene API publica, el mapeo vive en
@@ -804,6 +966,108 @@ static int32_t s_drift_album_pool_seeks[AURA_MUSIC_MAX_ITEMS];
 static int s_drift_album_pool_count = 0;
 static int s_drift_album_pool_generation = -1;
 static bool s_drift_album_pool_was_ready = false;
+
+/* D-316: cuenta real del pool ACTIVO segun cual sea -- usada tanto para
+ * el umbral de montaje (aura_coverdrift_should_mount(), >=3, D-254) como
+ * para el `count` que se le pasa a aura_coverdrift_draw(). Vive aca
+ * (no junto a video_coverdrift_count()/photo_coverdrift_count(), mas
+ * arriba en este archivo) porque necesita s_drift_album_pool_count, que
+ * recien se acaba de declarar. */
+static int drift_pool_count(drift_pool_t pool)
+{
+    int count;
+
+    if (pool == AURA_DRIFT_POOL_MUSIC)
+        count = s_drift_album_pool_count;
+    else if (pool == AURA_DRIFT_POOL_VIDEO_ALL || pool == AURA_DRIFT_POOL_VIDEO_MOVIES
+             || pool == AURA_DRIFT_POOL_VIDEO_SERIES)
+        count = video_coverdrift_count(pool);
+    else
+        count = photo_coverdrift_count(pool);
+
+    /* D-316: s_drift_album_images[]/effective_drift_seek()/etc. estan
+     * dimensionados a AURA_MUSIC_MAX_ITEMS (300) -- el pool de Musica
+     * nunca lo excede (tagcache ya lo acota ahi), pero el de Fotos SI
+     * podria (MAX_PHOTOS=500 en aura_photos.c) si el usuario tuviera mas
+     * de 300 fotos de una misma categoria. Acotar aca en vez de crecer
+     * ese arreglo: nadie necesita CoverDrift rotando entre mas de 300
+     * imagenes distintas para que la sensacion de variedad funcione. */
+    if (count > AURA_MUSIC_MAX_ITEMS)
+        count = AURA_MUSIC_MAX_ITEMS;
+    return count;
+}
+
+/* PLAN-niveles-fx.md D-d/§5: subconjunto RESIDENTE del pool general para
+ * Graficos=Minimos -- hasta AURA_DS_METRICS_COVER_DRIFT_POOL_CAP_MINIMAL
+ * (5) seeks elegidos al azar, sorteados UNA vez por arranque y re-
+ * sorteados solo si cambia el nivel de Graficos o el pool general se
+ * regenera (biblioteca resincronizada) -- nunca en cada cuadro. Con
+ * Graficos=Todos este subconjunto no se usa -- ese nivel sigue leyendo
+ * directo de s_drift_album_pool_seeks/_count (comportamiento actual, el
+ * pool completo por rotacion). */
+static int32_t s_drift_effective_seeks[AURA_DS_METRICS_COVER_DRIFT_POOL_CAP_MINIMAL];
+static int s_drift_effective_count = 0;
+static int s_drift_effective_pool_generation = -1;
+static bool s_drift_effective_built_for_minimal = false;
+
+/* Numero de imagenes que CoverDrift debe considerar este cuadro, segun
+ * el ajuste de Graficos (D-a: Graficos decide QUE existe) -- construye/
+ * refresca el sorteo de Minimos bajo demanda. Devuelve 0 en Ninguno (el
+ * llamador dibuja el degradado de acento en su lugar, nunca decodifica
+ * nada). */
+static int ensure_drift_effective_pool(void)
+{
+    int cap;
+
+    if (aura_settings.graphics_mode != AURA_GFX_MINIMAL)
+    {
+        s_drift_effective_built_for_minimal = false;
+        return aura_fx_coverdrift_pool_cap(s_drift_album_pool_count);
+    }
+
+    cap = aura_fx_coverdrift_pool_cap(s_drift_album_pool_count);
+    if (s_drift_effective_built_for_minimal
+        && s_drift_effective_pool_generation == s_drift_album_pool_generation
+        && s_drift_effective_count == cap)
+        return s_drift_effective_count;
+
+    /* Fisher-Yates parcial sobre una copia de indices del pool general --
+     * static (no en la pila): mismo criterio de D-226 en este archivo,
+     * hasta AURA_MUSIC_MAX_ITEMS=300 ints (1200B) es demasiado para el
+     * stack de 8KB del hilo "main" sumado al resto de lo que ya vive ahi
+     * en este punto de la pila. */
+    {
+        static int s_shuffle_idx[AURA_MUSIC_MAX_ITEMS];
+        int i, n = s_drift_album_pool_count;
+
+        for (i = 0; i < n; i++)
+            s_shuffle_idx[i] = i;
+        for (i = 0; i < cap; i++)
+        {
+            int j = i + rand() % (n - i);
+            int tmp = s_shuffle_idx[i];
+            s_shuffle_idx[i] = s_shuffle_idx[j];
+            s_shuffle_idx[j] = tmp;
+            s_drift_effective_seeks[i] = s_drift_album_pool_seeks[s_shuffle_idx[i]];
+        }
+    }
+    s_drift_effective_count = cap;
+    s_drift_effective_pool_generation = s_drift_album_pool_generation;
+    s_drift_effective_built_for_minimal = true;
+    return s_drift_effective_count;
+}
+
+/* Seek del indice `idx` dentro del pool EFECTIVO de este cuadro (el
+ * subconjunto de Minimos, o el pool completo en Todos) -- -1 fuera de
+ * rango. Unico punto que decide de cual de los dos arreglos leer. */
+static int32_t effective_drift_seek(int idx)
+{
+    if (aura_settings.graphics_mode == AURA_GFX_MINIMAL)
+        return (idx >= 0 && idx < s_drift_effective_count)
+            ? s_drift_effective_seeks[idx] : -1;
+    return (idx >= 0 && idx < s_drift_album_pool_count)
+        ? s_drift_album_pool_seeks[idx] : -1;
+}
 
 /* aura_music_db_ready() (aura_music.c) no es solo una consulta -- es lo
  * que DISPARA tagcache_rebuild() la primera vez (Aura no tiene pantalla
@@ -867,6 +1131,22 @@ static fb_data s_drift_album_pixels_a[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
 static fb_data s_drift_album_pixels_b[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
                                        * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
 
+/* D-316: pool activo para esta ronda de decodificacion -- lo fija
+ * draw_panel_identity() (mas abajo) segun id->coverdrift_pool ANTES de
+ * llamar a aura_coverdrift_advance_if_due()/ensure_drift_albums_decoded()/
+ * aura_coverdrift_draw(). Un solo CoverDrift visible a la vez (mismo
+ * invariante que el resto de este mecanismo), asi que un estado global
+ * compartido es seguro -- evita triplicar los buffers de pixeles/bitmap
+ * (~400KB) por fuente cuando Musica, Video y Fotos jamas decodifican al
+ * mismo tiempo. */
+static drift_pool_t s_drift_active_pool = AURA_DRIFT_POOL_MUSIC;
+
+static bool has_ext_ci(const char *name, const char *ext)
+{
+    size_t nlen = strlen(name), elen = strlen(ext);
+    return nlen > elen && !strcasecmp(name + nlen - elen, ext);
+}
+
 static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
 {
     enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
@@ -874,26 +1154,106 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
     static unsigned char refl_buf[SZ *
         (SZ * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
         * sizeof(fb_data)];
-    aura_albumart_t art;
-    const fb_data *cover;
     int col, row;
 
-    if (pool_idx < 0 || pool_idx >= s_drift_album_pool_count)
-        return false;
+    if (s_drift_active_pool == AURA_DRIFT_POOL_MUSIC)
+    {
+        aura_albumart_t art;
+        const fb_data *cover;
+        int32_t seek = effective_drift_seek(pool_idx);
 
-    art.size = SZ;
-    art.radius = A26_LAYOUT_CORNER_RADIUS_CARD;
-    art.cover_data = cover_buf;
-    art.reflection_data = refl_buf;
+        if (seek < 0)
+            return false;
 
-    if (!aura_albumart_load_for_album(s_drift_album_pool_seeks[pool_idx], &art))
-        return false;
+        art.size = SZ;
+        art.radius = A26_LAYOUT_CORNER_RADIUS_CARD;
+        art.cover_data = cover_buf;
+        art.reflection_data = refl_buf;
 
-    cover = (const fb_data *)art.cover_data;
-    for (col = 0; col < SZ; col++)
+        if (!aura_albumart_load_for_album(seek, &art))
+            return false;
+
+        cover = (const fb_data *)art.cover_data;
+        for (col = 0; col < SZ; col++)
+            for (row = 0; row < SZ; row++)
+                dst[row * SZ + col] = cover[col * SZ + row];
+        return true;
+    }
+
+    /* Video (carteles) o Fotos (miniaturas): archivo de imagen directo,
+     * sin tagcache -- reusa cover_buf como scratch de decodificacion
+     * (misma bolsa de bytes, nunca activa a la vez que el camino de
+     * Musica de arriba). CONTRATO-firmware-studio.md SS-CAT: el cartel
+     * de un video es `<archivo sin extension>.jpg` hermano en /Videos;
+     * una foto/imagen/IA es el archivo mismo en /Photos. */
+    {
+        char path[MAX_PATH];
+        const char *filename;
+        struct bitmap bm;
+        unsigned bg = a26_color(A26_SHELL_BG);
+        int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
+        int ox, oy, ret;
+        bool is_video = (s_drift_active_pool == AURA_DRIFT_POOL_VIDEO_ALL
+                          || s_drift_active_pool == AURA_DRIFT_POOL_VIDEO_MOVIES
+                          || s_drift_active_pool == AURA_DRIFT_POOL_VIDEO_SERIES);
+
+        if (is_video)
+        {
+            char base[MAX_PATH];
+            char *dot;
+
+            filename = video_coverdrift_filename(s_drift_active_pool, pool_idx);
+            if (!filename)
+                return false;
+            strlcpy(base, filename, sizeof(base));
+            dot = strrchr(base, '.');
+            if (dot)
+                *dot = '\0';
+            snprintf(path, sizeof(path), "/Videos/%s.jpg", base);
+        }
+        else
+        {
+            filename = photo_coverdrift_filename(s_drift_active_pool, pool_idx);
+            if (!filename)
+                return false;
+            snprintf(path, sizeof(path), "/Photos/%s", filename);
+        }
+
+        bm.width = SZ;
+        bm.height = SZ;
+        bm.data = (char *)cover_buf;
+#if (LCD_DEPTH > 1)
+        bm.maskdata = NULL;
+#endif
+        if (has_ext_ci(path, ".bmp"))
+            ret = read_bmp_file(path, &bm, sizeof(cover_buf), format, NULL);
+        else
+            ret = read_jpeg_file(path, &bm, sizeof(cover_buf), format, NULL);
+        if (ret <= 0)
+            return false;
+
+        /* Centrado sobre lienzo SZxSZ, banda de fondo del shell si el
+         * origen no llena algun eje (letterbox/pillarbox, mismo criterio
+         * que photo_thumb_decode_and_cache() en aura_photos.c) -- fila-
+         * contigua directo, formato que ya espera aura_coverdrift_draw()
+         * (sin transponer: a diferencia del camino de Musica, esta
+         * fuente nunca pasa por el cache .pfraw columna-contigua de
+         * Cover Flow). */
+        ox = (SZ - bm.width) / 2;
+        oy = (SZ - bm.height) / 2;
         for (row = 0; row < SZ; row++)
-            dst[row * SZ + col] = cover[col * SZ + row];
-    return true;
+        {
+            int sy = row - oy;
+            for (col = 0; col < SZ; col++)
+            {
+                int sx = col - ox;
+                dst[row * SZ + col] = (sx >= 0 && sx < bm.width && sy >= 0 && sy < bm.height)
+                    ? ((const fb_data *)cover_buf)[sy * bm.width + sx]
+                    : bg;
+            }
+        }
+        return true;
+    }
 }
 
 static void ensure_drift_albums_decoded(void)
@@ -901,8 +1261,9 @@ static void ensure_drift_albums_decoded(void)
     enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
     int active = aura_coverdrift_active_index();
     int prev = aura_coverdrift_prev_index();
+    int pool_count = drift_pool_count(s_drift_active_pool);
 
-    if (active >= 0 && active < s_drift_album_pool_count && active != s_drift_album_buf_a_idx)
+    if (active >= 0 && active < pool_count && active != s_drift_album_buf_a_idx)
     {
         s_drift_album_buf_a_idx = active;
         s_drift_album_images[active].bmp = NULL;
@@ -915,7 +1276,7 @@ static void ensure_drift_albums_decoded(void)
         }
     }
 
-    if (prev >= 0 && prev < s_drift_album_pool_count && prev != s_drift_album_buf_b_idx)
+    if (prev >= 0 && prev < pool_count && prev != s_drift_album_buf_b_idx)
     {
         s_drift_album_buf_b_idx = prev;
         s_drift_album_images[prev].bmp = NULL;
@@ -987,7 +1348,11 @@ typedef struct
     aura_screen_id_t container_screen;
     aura_screen_id_t selected_target;
     bool coverdrift;
-    aura_category_t coverdrift_category;
+    /* D-316: llave de identidad real cuando coverdrift==true -- mas fina
+     * que una categoria (Peliculas y Series son ambas "Video" pero jamas
+     * deben compartir pool, a diferencia de Musica, donde toda fila
+     * comparte un unico pool general de albumes). Ver drift_pool_t. */
+    drift_pool_t coverdrift_pool;
     aura_ss_background_t background; /* D-281 */
 } panel_identity_t;
 
@@ -1013,7 +1378,7 @@ static bool panel_identity_equal(const panel_identity_t *a, const panel_identity
     if (a->coverdrift != b->coverdrift)
         return false;
     if (a->coverdrift)
-        return a->coverdrift_category == b->coverdrift_category;
+        return a->coverdrift_pool == b->coverdrift_pool;
     return a->title == b->title
         && a->panel_icon == b->panel_icon
         && a->panel_top == b->panel_top
@@ -1082,10 +1447,47 @@ static void draw_panel_identity(int panel_x, int panel_w, const panel_identity_t
 {
     if (id->coverdrift)
     {
-        aura_coverdrift_advance_if_due(panel_w, s_drift_album_pool_count);
-        ensure_drift_albums_decoded();
-        aura_coverdrift_draw(panel_x, panel_w,
-                              s_drift_album_images, s_drift_album_pool_count);
+        /* PLAN-niveles-fx.md Q1/D-a: con Graficos=Ninguno la identidad
+         * "CoverDrift" se mantiene (misma sesion por categoria, mismo
+         * debounce/fundido de D-262 -- ver Q4) pero NO se decodifica ni
+         * dibuja ninguna imagen -- el panel muestra el degradado de
+         * acento (D-c), la unica pieza que Animaciones podria mover
+         * (el drift) no existe para nada en este nivel. */
+        if (aura_settings.graphics_mode == AURA_GFX_NONE)
+        {
+            aura_selection_summary_draw_accent_gradient_background(panel_x, panel_w);
+            aura_shell_draw_left_panel_shadow_over_content(panel_x, 0, A26_SCREEN_HEIGHT);
+        }
+        else
+        {
+            int count;
+
+            /* D-316: cambiar de FUENTE (Musica <-> Video <-> Fotos, o de
+             * pool dentro de Video/Fotos, p.ej. Peliculas -> Series)
+             * invalida los dos buffers compartidos -- sin esto, un indice
+             * numericamente igual al de la fuente anterior (p.ej. ambos
+             * pools traen algo en su posicion 0) haria que
+             * ensure_drift_albums_decoded() diera por decodificada una
+             * imagen que en realidad es de la fuente VIEJA. */
+            if (s_drift_active_pool != id->coverdrift_pool)
+            {
+                s_drift_active_pool = id->coverdrift_pool;
+                s_drift_album_buf_a_idx = -1;
+                s_drift_album_buf_b_idx = -1;
+            }
+
+            /* El sorteo/tope de 5 en Graficos=Minimos (PLAN-niveles-fx.md
+             * D-d) es exclusivo del pool de Musica -- Video/Fotos siempre
+             * usan su pool completo (sin ese ajuste, no pedido para
+             * ellos). */
+            count = (s_drift_active_pool == AURA_DRIFT_POOL_MUSIC)
+                ? ensure_drift_effective_pool()
+                : drift_pool_count(s_drift_active_pool);
+
+            aura_coverdrift_advance_if_due(panel_w, count);
+            ensure_drift_albums_decoded();
+            aura_coverdrift_draw(panel_x, panel_w, s_drift_album_images, count);
+        }
     }
     else if (id->icon_renderer || id->bottom_renderer)
     {
@@ -1235,10 +1637,17 @@ static void render_panel_debounced(int panel_x, int panel_w, const char *title,
     pending.container_screen = container_screen;
     pending.selected_target = selected_target;
     pending.background = background;
-    pending.coverdrift = music_row_wants_coverdrift(container_screen, selected_target)
-        && aura_coverdrift_should_mount(s_drift_album_pool_count);
-    pending.coverdrift_category = pending.coverdrift
-        ? aura_category_for_screen(selected_target) : AURA_CATEGORY_NONE;
+    /* D-316: row_wants_coverdrift() prueba Musica/Video/Fotos en orden y
+     * devuelve el POOL exacto (nunca solo la categoria, ver drift_pool_t)
+     * -- el umbral de montaje (>=3, D-254) se aplica sobre la cuenta real
+     * de ESE pool, sea cual sea la fuente. */
+    {
+        drift_pool_t pool = AURA_DRIFT_POOL_MUSIC;
+        bool wants = row_wants_coverdrift(container_screen, selected_target, &pool);
+
+        pending.coverdrift = wants && aura_coverdrift_should_mount(drift_pool_count(pool));
+        pending.coverdrift_pool = pending.coverdrift ? pool : AURA_DRIFT_POOL_MUSIC;
+    }
 
     if (!s_panel_has_committed || pending.title != s_panel_committed.title)
     {
@@ -1291,9 +1700,9 @@ static void render_panel_debounced(int panel_x, int panel_w, const char *title,
     }
 
     {
-        long debounce_ms = s_panel_pending_target.coverdrift
-            ? AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_MS
-            : AURA_DS_METRICS_RIGHT_PANEL_DEBOUNCE_FAST_MS;
+        /* PLAN-niveles-fx.md D-b: con Graficos=Todos, ambos plazos bajan
+         * al mismo valor corto (500ms) -- ver aura_fx_panel_debounce_ms(). */
+        long debounce_ms = aura_fx_panel_debounce_ms(s_panel_pending_target.coverdrift);
 
         if ((current_tick - s_panel_pending_since) * 1000L / HZ >= debounce_ms)
         {
@@ -1711,38 +2120,51 @@ static const char *music_row_empty_description(aura_screen_id_t target)
     return aura_str(empty_id);
 }
 
-/* Peliculas/Series/Videoclips (D-264): filas INERTES/atenuadas hoy (ver
- * `dimmed` en draw_nav_list()) -- todavia sin desglose real por
- * subcarpeta (esa clasificacion es trabajo aparte, no incluido en esta
- * pasada), asi que su texto "vacio" se muestra SIEMPRE mientras sigan
- * inertes, no condicionado a un conteo que este archivo todavia no
- * puede calcular. "Todos" (VIDEOS_ALL) si tiene un conteo real via el
- * manifiesto -- mismo dato que ya usa la pantalla completa de Acerca
- * de. */
+/* Peliculas/Series/Videoclips (D-316, ya NO inertes -- ver `dimmed` en
+ * draw_nav_list()): condicionado al conteo real FILTRADO de cada
+ * categoria (aura_video_count_filtered()), mismo criterio que "Todos"
+ * (VIDEOS_ALL) ya usaba desde D-291 -- cuenta real de /Videos, no
+ * sync_summary.cfg (ese manifiesto solo se reescribe en cada sync de
+ * Studio, podia desincronizarse de lo que en verdad hay en el disco). */
 static const char *video_row_empty_description(aura_screen_id_t target)
 {
     switch (target)
     {
-    case AURA_SCREEN_VIDEOS_MOVIES:  return aura_str(AURA_STR_VIDEOS_EMPTY_MOVIES);
-    case AURA_SCREEN_VIDEOS_TVSHOWS: return aura_str(AURA_STR_VIDEOS_EMPTY_TVSHOWS);
-    case AURA_SCREEN_VIDEOS_CLIPS:   return aura_str(AURA_STR_VIDEOS_EMPTY_CLIPS);
+    case AURA_SCREEN_VIDEOS_MOVIES:
+        return (aura_video_count_filtered(AURA_VIDEO_CAT_MOVIE) > 0)
+            ? NULL : aura_str(AURA_STR_VIDEOS_EMPTY_MOVIES);
+    case AURA_SCREEN_VIDEOS_TVSHOWS:
+        return (aura_video_count_filtered(AURA_VIDEO_CAT_SERIES) > 0)
+            ? NULL : aura_str(AURA_STR_VIDEOS_EMPTY_TVSHOWS);
+    case AURA_SCREEN_VIDEOS_CLIPS:
+        return (aura_video_count_filtered(AURA_VIDEO_CAT_CLIP) > 0)
+            ? NULL : aura_str(AURA_STR_VIDEOS_EMPTY_CLIPS);
     case AURA_SCREEN_VIDEOS_ALL:
-        /* D-291: cuenta real de /Videos, no sync_summary.cfg -- ese
-         * manifiesto solo se reescribe en cada sync de Studio, asi que
-         * podia desincronizarse de lo que en verdad hay en el disco
-         * (copia manual, sync interrumpido). */
         return (aura_video_count() > 0) ? NULL : aura_str(AURA_STR_EMPTY_VIDEOS);
     default: return NULL;
     }
 }
 
+/* D-316: mismo criterio que video_row_empty_description() -- las tres
+ * categorias nuevas se condicionan a su conteo filtrado real. */
 static const char *photos_row_empty_description(aura_screen_id_t target)
 {
-    if (target != AURA_SCREEN_PHOTOS_ALL)
-        return NULL;
-    /* D-291: idem video_row_empty_description() arriba -- cuenta real
-     * de /Photos. */
-    return (aura_photos_count() > 0) ? NULL : aura_str(AURA_STR_EMPTY_PHOTOS);
+    switch (target)
+    {
+    case AURA_SCREEN_PHOTOS_ALL:
+        /* D-291: cuenta real de /Photos, no sync_summary.cfg. */
+        return (aura_photos_count() > 0) ? NULL : aura_str(AURA_STR_EMPTY_PHOTOS);
+    case AURA_SCREEN_PHOTOS_PHOTO:
+        return (aura_photos_count_filtered(AURA_PHOTO_CAT_PHOTO) > 0)
+            ? NULL : aura_str(AURA_STR_PHOTOS_EMPTY_PHOTO);
+    case AURA_SCREEN_PHOTOS_IMAGE:
+        return (aura_photos_count_filtered(AURA_PHOTO_CAT_IMAGE) > 0)
+            ? NULL : aura_str(AURA_STR_PHOTOS_EMPTY_IMAGE);
+    case AURA_SCREEN_PHOTOS_AI:
+        return (aura_photos_count_filtered(AURA_PHOTO_CAT_AI) > 0)
+            ? NULL : aura_str(AURA_STR_PHOTOS_EMPTY_AI);
+    default: return NULL;
+    }
 }
 
 /* HH:MM real (D-264, fila "Fecha y hora"): reusa aura_format_clock()
@@ -2134,11 +2556,10 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].full_screen_target = (items[i].toggle < 0) && !items[i].value
             && entries[i].target != AURA_SCREEN_SETTINGS_REPEAT
             && !screen_uses_split_layout(entries[i].target);
-        /* Filas del arbol del original sin contenido propio todavia. */
+        /* Filas del arbol del original sin contenido propio todavia.
+         * D-316: Peliculas/Series/Videoclips dejan de ser inertes -- ya
+         * filtran /Videos por categoria (ver aura_video.c). */
         items[i].dimmed = (entries[i].target == AURA_SCREEN_MUSIC_COMPILATIONS
-                           || entries[i].target == AURA_SCREEN_VIDEOS_MOVIES
-                           || entries[i].target == AURA_SCREEN_VIDEOS_TVSHOWS
-                           || entries[i].target == AURA_SCREEN_VIDEOS_CLIPS
                            || entries[i].target == AURA_SCREEN_MUSIC_AUDIOBOOKS
                            || entries[i].target == AURA_SCREEN_EXTRAS_CONTACTS);
     }
@@ -4933,7 +5354,8 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_music_browse(nav, screen);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
         draw_playlists(nav);
-    else if (screen == AURA_SCREEN_PHOTOS_ALL)
+    else if (screen == AURA_SCREEN_PHOTOS_ALL || screen == AURA_SCREEN_PHOTOS_PHOTO
+             || screen == AURA_SCREEN_PHOTOS_IMAGE || screen == AURA_SCREEN_PHOTOS_AI)
         /* D-291: AURA_SCREEN_PHOTOS (la fila-menu "Todas las fotos" que
          * cuelga del menu raiz) ya la intercepta draw_nav_list() mas
          * arriba en esta misma cadena -- el contenido real de la lista
@@ -4942,12 +5364,17 @@ void aura_screens_draw(aura_nav_t *nav)
          * fotos reales en el disco). Mismo bug para Video, dos lineas
          * abajo. Ambos habian sido corregidos en D-251 y se perdieron
          * en el revert de D-253 (DECISIONS-ARCHIVE.md) sin reaplicarse
-         * -- ver PLAN-image-viewer.md. */
-        aura_photos_draw(nav);
+         * -- ver PLAN-image-viewer.md. D-316: las tres categorias nuevas
+         * (Fotos/Imagenes/IA) comparten el mismo camino, filtrado por
+         * `screen` dentro de aura_photos_draw(). */
+        aura_photos_draw(nav, screen);
     else if (screen == AURA_SCREEN_PHOTO_VIEWER)
         aura_photo_viewer_draw(nav);
-    else if (screen == AURA_SCREEN_VIDEOS_ALL)
-        aura_video_draw(nav);
+    else if (screen == AURA_SCREEN_VIDEOS_ALL || screen == AURA_SCREEN_VIDEOS_MOVIES
+             || screen == AURA_SCREEN_VIDEOS_TVSHOWS || screen == AURA_SCREEN_VIDEOS_CLIPS)
+        /* D-316: Peliculas/Series/Videoclips dejan de ser filas inertes
+         * -- comparten aura_video_draw(), filtrado por `screen`. */
+        aura_video_draw(nav, screen);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_draw();
     else
@@ -4998,11 +5425,9 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
          * switch in situ y NO navega -- doc de comportamiento SS1,
          * `[OPCION]` "no tiene mecanica propia" (D-075). Distinto de
          * cualquier otra fila de Ajustes, que si empuja su pantalla. */
-        /* Filas inertes: presentes, no elegibles. */
+        /* Filas inertes: presentes, no elegibles. D-316: Peliculas/
+         * Series/Videoclips salen de esta lista -- ya navegan. */
         if (entries[sel].target == AURA_SCREEN_MUSIC_COMPILATIONS
-            || entries[sel].target == AURA_SCREEN_VIDEOS_MOVIES
-            || entries[sel].target == AURA_SCREEN_VIDEOS_TVSHOWS
-            || entries[sel].target == AURA_SCREEN_VIDEOS_CLIPS
             || entries[sel].target == AURA_SCREEN_MUSIC_AUDIOBOOKS
             || entries[sel].target == AURA_SCREEN_EXTRAS_CONTACTS)
             break;
@@ -5324,12 +5749,14 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_music_browse(nav, screen, button);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
         handle_playlists(nav, button);
-    else if (screen == AURA_SCREEN_PHOTOS_ALL)
-        aura_photos_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_PHOTOS_ALL || screen == AURA_SCREEN_PHOTOS_PHOTO
+             || screen == AURA_SCREEN_PHOTOS_IMAGE || screen == AURA_SCREEN_PHOTOS_AI)
+        aura_photos_handle_button(nav, screen, button);
     else if (screen == AURA_SCREEN_PHOTO_VIEWER)
         aura_photo_viewer_handle_button(nav, button);
-    else if (screen == AURA_SCREEN_VIDEOS_ALL)
-        aura_video_handle_button(nav, button);
+    else if (screen == AURA_SCREEN_VIDEOS_ALL || screen == AURA_SCREEN_VIDEOS_MOVIES
+             || screen == AURA_SCREEN_VIDEOS_TVSHOWS || screen == AURA_SCREEN_VIDEOS_CLIPS)
+        aura_video_handle_button(nav, screen, button);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_handle_button(nav, button);
     else
@@ -5393,11 +5820,20 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
              * despliegue inverso del panel encadenado con el morph de
              * regreso al carrusel. A cualquier otro destino, la
              * pantalla se comporta como pantalla completa y se
-             * desplaza a la derecha dando paso al menu anterior. */
+             * desplaza a la derecha dando paso al menu anterior.
+             *
+             * PLAN-niveles-fx.md §8.1 (Mínimas): el segundo morph
+             * (Flow-Return) se sustituye por el push generico full<->full
+             * -- ambas pantallas ya son FULL (screen_uses_split_layout()
+             * no las incluye), asi que aura_transition_slide() calcula
+             * solo ese ancho sin necesitar ningun caso especial. */
             if (is_coverflow_screen(to))
             {
-                aura_nowplaying_unfold_from_lyrics();
-                aura_transition_flow_return(nav);
+                aura_nowplaying_unfold_from_lyrics(nav);
+                if (aura_settings.animation_mode == AURA_ANIM_ALL)
+                    aura_transition_flow_return(nav);
+                else
+                    aura_transition_slide(nav, -1, A26_SCREEN_WIDTH, false);
             }
             else
                 aura_transition_slide(nav, -1, A26_SCREEN_WIDTH, false);
@@ -5407,17 +5843,31 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         {
             /* Regreso reproductor -> Cover Flow (encargo 2026-08-12):
              * morph de la caratula de frente + laterales/titulo
-             * entrando desde los bordes -- nunca el slide generico. */
-            aura_transition_flow_return(nav);
+             * entrando desde los bordes -- nunca el slide generico.
+             * PLAN-niveles-fx.md §8.1: en Minimas/Ninguna, el morph se
+             * sustituye por el mismo push full<->full de arriba. */
+            if (aura_settings.animation_mode == AURA_ANIM_ALL)
+                aura_transition_flow_return(nav);
+            else
+                aura_transition_slide(nav, -1, A26_SCREEN_WIDTH, false);
         }
         else if (is_coverflow_screen(screen) && to == AURA_SCREEN_NOWPLAYING)
         {
-            /* Flip-and-Flow + morph de entrada (now-playing.md) ya
-             * corrieron DENTRO de aura_transition_flip_and_flow() --
-             * aplicar el push generico encima era exactamente el bug
-             * que el dueno del diseno reporto (2026-08-12): la
-             * transicion correcta es el morph, no empujar la pantalla
-             * del reproductor desde la derecha. */
+            /* Con Animaciones=Todas, Flip-and-Flow + morph de entrada
+             * (now-playing.md) ya corrieron DENTRO de
+             * aura_transition_flip_and_flow() -- aplicar el push generico
+             * encima era exactamente el bug que el dueno del diseno
+             * reporto (2026-08-12): la transicion correcta es el morph,
+             * no empujar la pantalla del reproductor desde la derecha.
+             *
+             * PLAN-niveles-fx.md §8.1 (Minimas/Ninguna): aura_coverflow.c
+             * ya NO llama a aura_transition_flip_and_flow() en estos
+             * niveles -- solo hizo un aura_nav_push() directo, sin
+             * transicion propia -- asi que aca corre el mismo push
+             * generico full<->full (direction=+1, sin revelado: esta
+             * entrada nunca pasa por CoverDrift). */
+            if (aura_settings.animation_mode != AURA_ANIM_ALL)
+                aura_transition_slide(nav, 1, A26_SCREEN_WIDTH, false);
         }
         else if ((depth_after > depth_before && to == AURA_SCREEN_SETTINGS_ABOUT
                       && aura_screens_about_reveal_active())
@@ -5470,9 +5920,12 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             /* Se consulta la tabla directamente y no
              * aura_widgets_split_active(), que refleja el layout de la
              * ultima pantalla dibujada -- aca hacen falta los dos
-             * extremos de la navegacion, no el estado del renderer. */
-            int width = (aura_settings.graphics_mode != AURA_GFX_NONE
-                         && screen_uses_split_layout(screen)
+             * extremos de la navegacion, no el estado del renderer.
+             * PLAN-niveles-fx.md Q1: el ajuste de Graficos ya NO decide
+             * si el panel derecho existe (aura_widgets_split_active()) --
+             * el empuje T1/T3 sigue esa misma regla, solo la tabla de
+             * layout por pantalla decide el ancho. */
+            int width = (screen_uses_split_layout(screen)
                          && screen_uses_split_layout(to))
                         ? A26_LAYOUT_PANEL_LEFT_WIDTH
                         : A26_SCREEN_WIDTH;

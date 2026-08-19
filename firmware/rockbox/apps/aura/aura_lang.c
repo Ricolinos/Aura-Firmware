@@ -283,6 +283,11 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_VERSION_DEV]        = "Versión de desarrollo",
     [AURA_STR_VIDEO_CANT_OPEN]          = "No se pudo abrir el video",
     [AURA_STR_VIDEO_CANT_OPEN_HINT]     = "Reinstala Aura desde Aura Studio",
+
+    [AURA_STR_PHOTOS_AI]                = "IA*",
+    [AURA_STR_PHOTOS_EMPTY_PHOTO]       = "No hay fotos",
+    [AURA_STR_PHOTOS_EMPTY_IMAGE]       = "No hay imágenes",
+    [AURA_STR_PHOTOS_EMPTY_AI]          = "No hay imágenes de IA",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -540,6 +545,11 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_ABOUT_VERSION_DEV]        = "Development version",
     [AURA_STR_VIDEO_CANT_OPEN]          = "Could not open the video",
     [AURA_STR_VIDEO_CANT_OPEN_HINT]     = "Reinstall Aura from Aura Studio",
+
+    [AURA_STR_PHOTOS_AI]                = "AI*",
+    [AURA_STR_PHOTOS_EMPTY_PHOTO]       = "No photos",
+    [AURA_STR_PHOTOS_EMPTY_IMAGE]       = "No images",
+    [AURA_STR_PHOTOS_EMPTY_AI]          = "No AI images",
 };
 
 const char *aura_str(aura_str_id_t id)

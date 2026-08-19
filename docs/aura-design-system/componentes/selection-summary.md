@@ -327,6 +327,29 @@ Debe renderizarse una sombra que simule que `LeftPanel` está por encima de
 este componente — spec completo en `efectos/01-sombras.md` (regla
 actualizada, compartida con `CoverDrift`).
 
+## Niveles de reducción (PLAN-niveles-fx.md, matriz del dueño 2026-08-18)
+
+El canon de esta página es **Gráficos = Todos** (principio de máxima
+fidelidad). Este componente no tiene animaciones propias (sus cambios de
+VALOR ya son un corte por diseño, ver arriba) — el eje de Animaciones no
+tiene nada que decidir aquí; solo Gráficos:
+
+| Gráficos | Comportamiento |
+|---|---|
+| **Ninguno** | **Solo texto, sin ícono** — no se dibuja el tile (ni degradado diagonal, ni sombra SDF, ni símbolo). Sin el ancla del tile, los dos slots de texto se **recentran como grupo único** en los 240px del panel (antes cada uno se centraba en su propia mitad alrededor del tile) |
+| **Mínimos** | Comportamiento de esta página; delay de actualización **1000ms** (el valor vigente desde D-266) |
+| **Todos** | Canon de esta página; delay de actualización baja de 1000 a **500ms** |
+
+El degradado VERTICAL de acento de esta página
+(`aura_selection_summary_draw_accent_gradient_background()`, sección
+"Fondo del panel completo") está **exportado** — es la pieza que
+`CoverDrift` reutiliza tal cual como fondo de Gráficos = Ninguno (D-c,
+`docs/aura-design-system/componentes/cover-drift.md`); el degradado
+DIAGONAL del tile (`draw_diagonal_gradient()`) sigue siendo exclusivo de
+este componente — a 160×240 deja bandas visibles en RGB565 (nota ya
+documentada arriba). Implementación: `aura_fx_ss_show_tile()`
+(`aura_fx.h`), `draw_summary()` (`aura_selection_summary.c`).
+
 ## Pendiente de definir
 
 - [ ] Producción de un ícono único por cada ítem de todo el árbol de menús

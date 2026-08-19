@@ -151,4 +151,13 @@ void aura_selection_summary_draw_tile(int x, int y, aura_category_t category,
                                        const char *icon_name,
                                        aura_selection_summary_icon_renderer_t renderer);
 
+/* Degradado VERTICAL de 3 puntos (acento oscuro -> acento -> acento claro,
+ * D-292) que este componente usa como fallback de su fondo cuando el
+ * acento activo no tiene imagen propia -- exportado (PLAN-niveles-fx.md
+ * D-c) para que CoverDrift lo reuse tal cual como fondo de Graficos=
+ * Ninguno ("color de acento con un ligero degradado"). Llena
+ * [x, x+width) x [0, A26_SCREEN_HEIGHT) -- mismo hueco que el resto de
+ * este componente. */
+void aura_selection_summary_draw_accent_gradient_background(int x, int width);
+
 #endif /* AURA_SELECTION_SUMMARY_H */

@@ -168,6 +168,15 @@ typedef enum {
      * anadir-al-final". */
     AURA_SCREEN_SETTINGS_REBUILD_LIBRARY,
     AURA_SCREEN_LIBRARY_SYNC,
+    /* D-316 (matriz de niveles del dueno + indice de categorias por
+     * archivo, 2026-08-18): tres filas nuevas del submenu Fotos,
+     * hermanas de AURA_SCREEN_PHOTOS_ALL -- filtran /Photos por la
+     * categoria que Aura Studio ya calcula para su catalogo local
+     * (biblioteca.json) y ahora tambien exporta al dispositivo (ver
+     * aura_media_categories.h). Al final del enum, "solo-anadir-al-final". */
+    AURA_SCREEN_PHOTOS_PHOTO,
+    AURA_SCREEN_PHOTOS_IMAGE,
+    AURA_SCREEN_PHOTOS_AI,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 

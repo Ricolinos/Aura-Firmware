@@ -29,9 +29,16 @@
 #define AURA_VIDEO_H
 
 #include "aura_nav.h"
+#include "aura_media_categories.h"
 
-void aura_video_draw(aura_nav_t *nav);
-void aura_video_handle_button(aura_nav_t *nav, long button);
+/* D-316: `screen` decide el filtro de categoria -- AURA_SCREEN_VIDEOS_
+ * MOVIES/TVSHOWS/CLIPS filtran por la categoria correspondiente del
+ * indice OPCIONAL de Aura Studio (aura_media_categories.h); cualquier
+ * otra pantalla (AURA_SCREEN_VIDEOS_ALL) sigue mostrando la lista
+ * completa sin filtrar, CERO cambio de comportamiento respecto a antes
+ * de D-316. */
+void aura_video_draw(aura_nav_t *nav, aura_screen_id_t screen);
+void aura_video_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button);
 
 /* Mismo bug hermano que aura_photos_invalidate() (D-291): sin esto,
  * un sync por USB durante la sesion no se refleja hasta reiniciar. */
@@ -42,5 +49,14 @@ void aura_video_invalidate(void);
  * sync_summary.cfg como fuente del estado vacio de "Todos los
  * videos". */
 int aura_video_count(void);
+
+/* D-316: cuenta/nombre de archivo del video filtrado #index dentro de
+ * la categoria `cat` -- usado por CoverDrift (aura_screens.c) para
+ * construir su pool de video sin duplicar el escaneo/almacenamiento de
+ * este modulo. `cat` = AURA_VIDEO_CAT_NONE devuelve la lista completa
+ * sin filtrar (mismo criterio que aura_video_draw()/_handle_button()).
+ * `aura_video_filtered_filename()` devuelve NULL fuera de rango. */
+int aura_video_count_filtered(aura_video_cat_t cat);
+const char *aura_video_filtered_filename(aura_video_cat_t cat, int index);
 
 #endif /* AURA_VIDEO_H */

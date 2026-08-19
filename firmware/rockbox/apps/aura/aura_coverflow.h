@@ -20,11 +20,14 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-/* Coverflow: version simplificada para el modo grafico Completo.
- * Reemplaza a la lista plana de Albumes (AURA_SCREEN_MUSIC_ALBUMS /
- * AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST) solo cuando
- * aura_settings.graphics_mode == AURA_GFX_ALL -- con Graficos en Ninguno/Minimos
- * esas pantallas siguen siendo la lista de aura_screens.c. Ver D-025.
+/* Coverflow: pantalla propia con su propia entrada de menu
+ * (AURA_SCREEN_MUSIC_COVERFLOW, is_coverflow_screen() en aura_screens.c)
+ * -- NO reemplaza condicionalmente a la lista plana de Albumes segun el
+ * ajuste de Graficos; ese acoplamiento (D-025) se revirtio, ver
+ * aura_nav.h y aura_screens.c:is_coverflow_screen(). El ajuste que SI
+ * gobierna este componente es Animaciones, no Graficos -- ver
+ * "Niveles de reduccion" en docs/aura-design-system/componentes/
+ * cover-flow.md.
  */
 #ifndef AURA_COVERFLOW_H
 #define AURA_COVERFLOW_H

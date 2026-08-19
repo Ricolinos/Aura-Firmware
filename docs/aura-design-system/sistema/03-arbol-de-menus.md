@@ -61,9 +61,10 @@ fila más.
 | Fila | Estado |
 |---|---|
 | Videos → Todos los videos | ✅ (visor real) |
-| Videos → Películas · Programas de TV · Videoclips | ◐ |
+| Videos → Películas · Programas de TV · Videoclips | ✅ (D-316: dejaron de ser inertes — filtran `/Videos` por la categoría del índice opcional de Aura Studio, `CONTRATO-firmware-studio.md` §D.2; vacías con mensaje propio si el índice no existe o esa categoría no tiene contenido) |
 | Videos → Ajustes (Salida TV, Señal TV…) | ⛔ sin hardware que los soporte |
 | Fotos → Todas las fotos | ✅ (visor real) |
+| Fotos → Fotos · Imágenes · IA* (D-316) | ✅ tres filas nuevas, mismo criterio de filtrado por índice opcional que Video — "IA*" con asterisco literal en el texto, marca contenido generado por IA |
 
 ## Extras
 
@@ -129,8 +130,8 @@ que ninguna cambie de `AURA_SCREEN_ID` ni de clave en `aura.cfg`:
 | Modo (Claro/Oscuro) | ✅ **`InlineValue`** (D-292, renombrada de "Tema") — valor visible en la fila, sin submenú; SELECT alterna. Ver `componentes/left-panel.md` |
 | Temas | ✅ (D-289, renombrada de "Estilo", `sistema/05-temas.md` — lista dinámica de paquetes de tema instalados, leída del disco; no confundir con "Modo") |
 | Color de acento | ✅ |
-| Animaciones | ✅ |
-| Gráficos | ✅ |
+| Animaciones | ✅ — qué gobierna cada nivel: `sistema/06-niveles-de-fx.md` |
+| Gráficos | ✅ — qué gobierna cada nivel: `sistema/06-niveles-de-fx.md` |
 | Mostrar sombras | ✅ |
 | Mostrar iconos | ✅ |
 

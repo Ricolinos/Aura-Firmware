@@ -41,6 +41,7 @@
 #include "apple2026_tokens.h"
 #include "aura_statusbar.h"
 #include "aura_status_bar_v2.h"
+#include "aura_media_categories.h"
 
 /* Aura solo reproduce su formato interno (MPEG-1/2 320x240, generado
  * por Aura Studio al sincronizar) delegando en el plugin mpegplayer
@@ -60,11 +61,25 @@
 
 static char s_videos[MAX_VIDEOS][VIDEO_NAME_LEN];
 static char s_videos_display[MAX_VIDEOS][VIDEO_NAME_LEN]; /* sin extension, AUDITORIA-01 A-05 */
+/* D-316: categoria de cada video segun el indice OPCIONAL de Aura Studio
+ * (aura_media_categories.h) -- resuelta UNA vez por archivo al escanear,
+ * nunca en cada cuadro. AURA_VIDEO_CAT_NONE si el indice no existe o no
+ * trae entrada para este archivo. */
+static unsigned char s_videos_cat[MAX_VIDEOS];
 static int s_video_count = -1;
 /* D-298: total real en /Videos, puede ser mayor que s_video_count
  * (MAX_VIDEOS). Mismo patron que s_photo_total_count en aura_photos.c. */
 static int s_video_total_count = -1;
 static char s_more_label[40];
+
+/* D-316: subconjunto de s_videos[] que coincide con la categoria de la
+ * pantalla activa -- reconstruido bajo demanda (ensure_video_filter()),
+ * nunca en cada cuadro. AURA_VIDEO_CAT_NONE (Todos los videos) copia el
+ * indice identidad sin filtrar -- CERO cambio de comportamiento para esa
+ * pantalla, que ya funcionaba antes de D-316. */
+static int s_filtered_idx[MAX_VIDEOS];
+static int s_filtered_count = 0;
+static int s_filtered_built_for = -1; /* aura_video_cat_t + 1, o 0 = nada construido */
 
 static bool has_ext(const char *name, const char *ext)
 {
@@ -122,6 +137,8 @@ static void ensure_video_list(void)
             continue; /* se sigue contando para el total, sin guardar */
         strlcpy(s_videos[s_video_count], entry->d_name, VIDEO_NAME_LEN);
         strip_ext_for_display(entry->d_name, s_videos_display[s_video_count], VIDEO_NAME_LEN);
+        s_videos_cat[s_video_count] =
+            (unsigned char)aura_media_categories_video_lookup(entry->d_name);
         s_video_count++;
     }
     closedir(d);
@@ -131,6 +148,8 @@ void aura_video_invalidate(void)
 {
     s_video_count = -1;
     s_video_total_count = -1;
+    s_filtered_built_for = -1;
+    aura_media_categories_invalidate();
 }
 
 int aura_video_count(void)
@@ -139,33 +158,122 @@ int aura_video_count(void)
     return s_video_count;
 }
 
-void aura_video_draw(aura_nav_t *nav)
+/* D-316: reconstruye s_filtered_idx[]/s_filtered_count para la
+ * categoria `cat` -- AURA_VIDEO_CAT_NONE reproduce la lista SIN filtrar
+ * (identidad), cualquier otro valor solo incluye los videos cuya
+ * categoria del indice coincide. Cacheado por `cat`: no vuelve a
+ * recorrer s_videos[] en cada cuadro mientras la pantalla activa no
+ * cambie. */
+static void ensure_video_filter(aura_video_cat_t cat)
 {
-    int i, row_count;
+    int i;
+    int key = (int)cat + 1;
+
+    ensure_video_list();
+    if (s_filtered_built_for == key)
+        return;
+
+    s_filtered_count = 0;
+    for (i = 0; i < s_video_count; i++)
+    {
+        if (cat != AURA_VIDEO_CAT_NONE && s_videos_cat[i] != (unsigned char)cat)
+            continue;
+        s_filtered_idx[s_filtered_count++] = i;
+    }
+    s_filtered_built_for = key;
+}
+
+/* Pantalla -> filtro de categoria (D-316). AURA_SCREEN_VIDEOS_ALL (y
+ * cualquier otra) cae a AURA_VIDEO_CAT_NONE -- sin filtrar. */
+static aura_video_cat_t screen_to_video_filter(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_VIDEOS_MOVIES:  return AURA_VIDEO_CAT_MOVIE;
+    case AURA_SCREEN_VIDEOS_TVSHOWS: return AURA_VIDEO_CAT_SERIES;
+    case AURA_SCREEN_VIDEOS_CLIPS:   return AURA_VIDEO_CAT_CLIP;
+    default:                         return AURA_VIDEO_CAT_NONE;
+    }
+}
+
+int aura_video_count_filtered(aura_video_cat_t cat)
+{
+    ensure_video_filter(cat);
+    return s_filtered_count;
+}
+
+const char *aura_video_filtered_filename(aura_video_cat_t cat, int index)
+{
+    ensure_video_filter(cat);
+    if (index < 0 || index >= s_filtered_count)
+        return NULL;
+    return s_videos[s_filtered_idx[index]];
+}
+
+/* D-316: titulo de barra + mensaje vacio por pantalla -- "Todos los
+ * videos" conserva el mensaje/titulo de siempre (CERO cambio de
+ * comportamiento); las tres categorias reusan los mismos AURA_STR_
+ * VIDEOS_EMPTY_* que ya existian como texto FIJO del panel izquierdo
+ * (aura_screens.c, mientras las filas eran inertes, D-264) -- ahora
+ * tambien sirven de mensaje real de pantalla vacia, condicionado al
+ * conteo filtrado real en vez de mostrarse siempre. */
+static aura_str_id_t video_screen_title_id(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_VIDEOS_MOVIES:  return AURA_STR_VIDEOS_MOVIES;
+    case AURA_SCREEN_VIDEOS_TVSHOWS: return AURA_STR_VIDEOS_TVSHOWS;
+    case AURA_SCREEN_VIDEOS_CLIPS:   return AURA_STR_VIDEOS_CLIPS;
+    default:                         return AURA_STR_VIDEOS;
+    }
+}
+
+static aura_str_id_t video_empty_message_id(aura_screen_id_t screen)
+{
+    switch (screen)
+    {
+    case AURA_SCREEN_VIDEOS_MOVIES:  return AURA_STR_VIDEOS_EMPTY_MOVIES;
+    case AURA_SCREEN_VIDEOS_TVSHOWS: return AURA_STR_VIDEOS_EMPTY_TVSHOWS;
+    case AURA_SCREEN_VIDEOS_CLIPS:   return AURA_STR_VIDEOS_EMPTY_CLIPS;
+    default:                         return AURA_STR_EMPTY_VIDEOS;
+    }
+}
+
+void aura_video_draw(aura_nav_t *nav, aura_screen_id_t screen)
+{
+    aura_video_cat_t filter = screen_to_video_filter(screen);
+    int i, row_count, count;
     bool has_more;
     static aura_list_item_t items[MAX_VIDEOS + 1];
 
-    ensure_video_list();
-    has_more = s_video_total_count > s_video_count;
+    ensure_video_filter(filter);
+    count = s_filtered_count;
+    /* "...y N mas" solo tiene sentido en la lista SIN filtrar -- las
+     * categorias siempre cargan su subconjunto completo (acotado por el
+     * mismo MAX_VIDEOS de la lista base, nunca mas grande que ella). */
+    has_more = (filter == AURA_VIDEO_CAT_NONE) && (s_video_total_count > s_video_count);
     a26_shell_clear_screen();
 
-    if (s_video_count == 0)
+    if (count == 0)
     {
         int w, h;
+        aura_str_id_t title_id = video_screen_title_id(screen);
+        aura_str_id_t msg_id = video_empty_message_id(screen);
+
         /* AUDITORIA-01 A-15: mismo vacio que Fotos -- la barra nunca
          * cambia de forma entre pantallas (doc SS5). */
-        aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_VIDEOS));
+        aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(title_id));
         lcd_setfont(a26_font(A26_FONT_STYLE_BODY));
         lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
-        lcd_getstringsize((const unsigned char *)aura_str(AURA_STR_EMPTY_VIDEOS), &w, &h);
+        lcd_getstringsize((const unsigned char *)aura_str(msg_id), &w, &h);
         lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, (A26_SCREEN_HEIGHT - h) / 2,
-                   (const unsigned char *)aura_str(AURA_STR_EMPTY_VIDEOS));
+                   (const unsigned char *)aura_str(msg_id));
         return;
     }
 
-    for (i = 0; i < s_video_count; i++)
+    for (i = 0; i < count; i++)
     {
-        items[i].label = s_videos_display[i];
+        items[i].label = s_videos_display[s_filtered_idx[i]];
         /* Sin icono por fila (AUDITORIA-01 A-06, mismo criterio que
          * Fotos): "video" repetido en cada fila es el anti-patron SS8,
          * no una decision. */
@@ -174,13 +282,13 @@ void aura_video_draw(aura_nav_t *nav)
         items[i].toggle = -1;
         items[i].dimmed = 0;
     }
-    row_count = s_video_count;
+    row_count = count;
     if (has_more)
     {
         /* Fila inerte "...y N mas" -- mismo patron que Fotos (D-291).
          * No es elegible: aura_video_handle_button() sigue acotando la
-         * seleccion a s_video_count - 1, esta fila queda siempre fuera
-         * de ese rango. */
+         * seleccion a count - 1, esta fila queda siempre fuera de ese
+         * rango. */
         snprintf(s_more_label, sizeof(s_more_label), aura_str(AURA_STR_LIST_MORE_FMT),
                  s_video_total_count - s_video_count);
         items[row_count].label = s_more_label;
@@ -190,7 +298,7 @@ void aura_video_draw(aura_nav_t *nav)
         items[row_count].dimmed = 1;
         row_count++;
     }
-    aura_widgets_draw_list(aura_str(AURA_STR_VIDEOS), items, row_count,
+    aura_widgets_draw_list(aura_str(video_screen_title_id(screen)), items, row_count,
                             aura_nav_get_selection(nav));
 }
 
@@ -257,14 +365,19 @@ static void show_cant_open_video(void)
      * pantalla (Videos) normalmente, sin pasos extra aca. */
 }
 
-void aura_video_handle_button(aura_nav_t *nav, long button)
+void aura_video_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button)
 {
+    aura_video_cat_t filter = screen_to_video_filter(screen);
     int sel = aura_nav_get_selection(nav);
+    int count;
+
+    ensure_video_filter(filter);
+    count = s_filtered_count;
 
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
-        if (sel < s_video_count - 1)
+        if (sel < count - 1)
             aura_nav_set_selection(nav, sel + 1);
         break;
     case BUTTON_SCROLL_BACK:
@@ -272,11 +385,11 @@ void aura_video_handle_button(aura_nav_t *nav, long button)
             aura_nav_set_selection(nav, sel - 1);
         break;
     case BUTTON_SELECT:
-        if (s_video_count > 0)
+        if (count > 0 && sel >= 0 && sel < count)
         {
             char path[MAX_PATH];
             int ret;
-            snprintf(path, sizeof(path), "%s/%s", VIDEOS_DIR, s_videos[sel]);
+            snprintf(path, sizeof(path), "%s/%s", VIDEOS_DIR, s_videos[s_filtered_idx[sel]]);
             /* D-298: sin esto, plugin_load() mostraba su propio splash()
              * nativo en ingles ("Can't open ...") ANTES de devolver el
              * error -- cromo de Rockbox visible sin forma de evitarlo

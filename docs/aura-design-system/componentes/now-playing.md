@@ -361,6 +361,39 @@ ancho de la barra planea del nivel de volumen a la posición real.
 
 En el Modo 4 (Letras), la barra se comprime a 122px de ancho (ver Modo 4).
 
+## Niveles de reducción del Modo 4 (PLAN-niveles-fx.md, matriz del dueño 2026-08-18)
+
+El canon de esta página es el morph de Animaciones = Todas (~330ms,
+descrito arriba en "Modo 4"). Entrar/salir de cualquier otro modo de la
+rueda ya es instantáneo en todos los niveles (sin cambio). Para el Modo 4
+específicamente:
+
+| Animaciones | Entrada/salida del Modo 4 |
+|---|---|
+| **Ninguna** | Cambio instantáneo, un parpadeo — sin transición (comportamiento ya existente) |
+| **Mínimas** | `Fade-Slide` de pantalla completa (`transiciones/00-vocabulario.md`) — lo viejo se desvanece, lo nuevo entra desde fuera de la pantalla. MISMA pieza que ya usa `DynamicTitle`/"Acerca de", ningún patrón nuevo |
+| **Todas** | El morph canónico de esta página (proyección por columnas, ~330ms) |
+
+Implementación: `mode4_transition()` (`aura_nowplaying.c`) es el punto
+único que decide — reemplaza las llamadas directas a `mode4_morph()` en
+`cycle_mode()` y en `aura_nowplaying_unfold_from_lyrics()` (la salida
+encadenada con el regreso a CoverFlow, ver `componentes/cover-flow.md` §
+Niveles de reducción: en Mínimas/Ninguna esta salida ya es la única pieza
+animada — el llamador hace el push genérico después, no un segundo
+morph).
+
+**Optimización de rendimiento del morph canónico (Todas):** el dueño
+reportó el morph "muy lento en hardware". El perfil estático
+(PLAN-niveles-fx.md §6) identificó como sospechoso dominante la falta de
+caché de íconos en RAM (~13-15 lecturas de BMP desde disco por cuadro, sin
+ningún caché — `aura_widgets.c`/`aura_style.c`), más divisiones enteras
+por píxel en el tinte de la hoja de vidrio y `lcd_update()` completo por
+cuadro. El plan de optimización (caché de íconos, LUTs, prerender de
+invariantes) conserva la definición del efecto — es trabajo de
+rendimiento pendiente de ejecutar y medir en hardware real con la
+instrumentación D-300 ya presente en `mode4_morph()`, no un cambio de
+niveles.
+
 ## Pendiente de definir
 
 - [ ] Validar las medidas estimadas de la carátula (x≈10, y≈43, ≈135×135px)
