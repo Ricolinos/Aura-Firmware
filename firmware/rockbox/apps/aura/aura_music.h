@@ -64,13 +64,6 @@ bool aura_music_take_redraw_request(void);
 int aura_music_count_artists(void);
 int aura_music_count_albums(void);
 
-/* D-214 (temporal, diagnostico del freeze de reproduccion): dibuja
- * `label` en una franja al pie de la pantalla y actualiza de inmediato
- * -- ver el comentario grande junto a la definicion en aura_music.c.
- * Retirar junto con el resto de las marcas cuando el freeze quede
- * confirmado resuelto. */
-void aura_music_debug_mark(const char *label);
-
 /* Llena `out` (hasta `max_items`) con los resultados de navegar
  * `screen`, aplicando el contexto de filtro activo (ver
  * aura_music_select_*). Devuelve la cantidad de items. */

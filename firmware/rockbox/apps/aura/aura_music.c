@@ -79,33 +79,6 @@ static int32_t s_genre_seek = -1;
 static int32_t s_composer_seek = -1;
 static int s_filter_generation = 0;
 
-/* D-214 (temporal, encargo del dueno 2026-08-14: "audita la
- * configuracion del firmware para lograr reproducir las canciones"):
- * el freeze reportado al reproducir no se pudo reproducir en el
- * simulador ni diagnosticar mas alla por analisis estatico -- todo
- * indica que es especifico de hardware real (threading/timing del ARM
- * real, o algo del pipeline de audio/codec que el simulador no emula).
- * Sin acceso al hardware, la unica forma real de progresar es que la
- * ULTIMA linea visible en pantalla, justo antes de que se trabe, diga
- * en que paso se quedo. Dibuja directo sobre el framebuffer (fuera del
- * sistema de viewports de Aura, `lcd_set_viewport(NULL)`) y actualiza
- * de inmediato -- si el sistema se cuelga justo despues de una marca,
- * esa marca ya llego a la pantalla fisica antes del cuelgue.
- *
- * Retirar esta funcion (y sus llamados) en cuanto el freeze quede
- * confirmado resuelto -- no es parte del diseño final. */
-void aura_music_debug_mark(const char *label)
-{
-    lcd_set_viewport(NULL);
-    lcd_set_drawmode(DRMODE_SOLID);
-    lcd_set_foreground(LCD_WHITE);
-    lcd_set_background(LCD_BLACK);
-    lcd_setfont(FONT_SYSFIXED);
-    lcd_fillrect(0, LCD_HEIGHT - 8, LCD_WIDTH, 8);
-    lcd_putsxy(0, LCD_HEIGHT - 8, (const unsigned char *)label);
-    lcd_update_rect(0, LCD_HEIGHT - 8, LCD_WIDTH, 8);
-}
-
 /* Suficiente para varios cientos de valores unicos (artista/album/genero);
  * tagcache_search_set_uniqbuf() ignora este buffer para tags no-unicos
  * (tag_title), ver D-021. */
@@ -234,25 +207,15 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
 
     (void)id;
 
-    aura_music_debug_mark("B1 buffer_event entro");
-
     if (!global_settings.runtimedb || !id3 || !tagcache_is_fully_initialized())
-    {
-        aura_music_debug_mark("B2 buffer_event skip");
         return;
-    }
 
     if (!tagcache_find_index(&tcs, id3->path))
-    {
-        aura_music_debug_mark("B3 find_index fallo");
         return;
-    }
-    aura_music_debug_mark("B4 find_index OK");
 
     if (!id3->rating)
         id3->rating = tagcache_get_numeric(&tcs, tag_rating);
     tagcache_search_finish(&tcs);
-    aura_music_debug_mark("B5 buffer_event fin");
 }
 
 /* D-224 (encargo del dueno, 2026-08-13: musicflow "muy lento", pidiendo
@@ -961,16 +924,10 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
 
 bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index)
 {
-    aura_music_debug_mark("D1 build_playlist...");
     if (!build_playlist_from_songs(songs_screen))
-    {
-        aura_music_debug_mark("D1 build_playlist FALLO");
         return false;
-    }
 
-    aura_music_debug_mark("D2 playlist_start...");
     playlist_start(start_index, 0, 0);
-    aura_music_debug_mark("D3 playlist_start OK");
     return true;
 }
 
@@ -998,9 +955,7 @@ bool aura_music_play_track(int32_t idx_id)
         playlist_create(NULL, NULL);
         if (playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true) >= 0)
         {
-            aura_music_debug_mark("T1 playlist_start...");
             playlist_start(0, 0, 0);
-            aura_music_debug_mark("T2 playlist_start OK");
             ok = true;
         }
     }

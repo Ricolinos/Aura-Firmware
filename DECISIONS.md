@@ -532,3 +532,15 @@ Sobre "cubrir pantalla": investigar el escalado de video reveló que la premisa 
 **Verificado**: `cmp` entre ambas copias del contrato. No aplica build/test (solo Markdown).
 
 **Pendiente**: implementación firmware (Tanda 3) y Studio (Tanda 5) del plan.
+
+## D-320 — Retira el overlay de depuración de D-214 (texto blanco/negro al pie de pantalla)
+
+**Encargo**: el dueño, en hardware real: "en la esquina inferior izquierda... cada que hay un suceso en el hardware, como cuando se pone a cargar, o cuando suena el piezo. Eso ya no quiero que se vea."
+
+**Causa**: `aura_music_debug_mark()` (`aura_music.c:97-107` antes de este cambio) era instrumentación temporal de D-214 (freeze de reproducción, 2026-08-14) que dibujaba directo al framebuffer, fuera del sistema de viewports, para dejar en pantalla la última marca alcanzada antes de un posible cuelgue. El propio comentario de origen ya decía: "Retirar esta función (y sus llamados) en cuanto el freeze quede confirmado resuelto — no es parte del diseño final." El freeze se confirmó resuelto en **D-226** (desborde real de stack en `aura_transition_flip_and_flow()`, corregido con buffers `static`) y las marcas nunca se retiraron. La marca "K1/K2 piezo" (`aura_main.c`, gateada `#if !defined(SIMULATOR)`) explica por qué el dueño la vio solo en hardware y coincidiendo con cada botón (el Clicker de Aura viene encendido por default); las marcas "B1-B5" (`aura_music_buffer_event()`) y "D1-D3"/"T1-T2" (arranque de playlist) explican la coincidencia con "cuando se pone a cargar" (rebuffer/reingreso de pista al reanudar).
+
+**Hecho**: eliminada la función `aura_music_debug_mark()` completa (`aura_music.c`, `aura_music.h`) y sus 7 llamados (`aura_music.c:237,241,247,250,255,964,967,971,973,1001,1003`; `aura_main.c:167,169`, junto con el comentario que las explicaba). Ningún archivo fuera de `apps/aura/` — sin entrada en `MODIFICATIONS.md`.
+
+**Verificado**: build ARM completo (`firmware/build-ipod6g`, `make`) — limpio, sin warnings nuevos.
+
+**Pendiente**: confirmación del dueño en hardware real (no queda nada que verificar en simulador, la marca de piezo nunca corría ahí).

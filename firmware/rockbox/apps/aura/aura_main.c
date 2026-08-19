@@ -159,15 +159,7 @@ static void aura_main_play_keyclick(void)
      * HAVE_HARDWARE_CLICK si este definido ahi. */
 #if !defined(SIMULATOR)
     if (global_settings.keyclick)
-    {
-        /* D-214 (temporal, diagnostico del freeze): confirma si el
-         * piezo se dispara justo antes de un cuelgue -- ver el
-         * comentario grande de aura_music_debug_mark() en
-         * aura_music.c. */
-        aura_music_debug_mark("K1 piezo...");
         piezo_button_beep(false, false);
-        aura_music_debug_mark("K2 piezo OK");
-    }
 #endif
 #endif
 }
