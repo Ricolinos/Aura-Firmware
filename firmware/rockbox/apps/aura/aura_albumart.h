@@ -22,15 +22,15 @@
  ****************************************************************************/
 /* Carga de caratulas por album (no por pista actual -- eso lo resuelve
  * aura_nowplaying.c solo), con cache en disco `.pfraw` (PLAN.md
- * T3.2(a), componentes/cover-flow.md) -- unico consumidor real:
- * Coverflow (aura_coverflow.c).
+ * T3.2(a), componentes/music-flow.md) -- unico consumidor real:
+ * Music Flow (aura_musicflow.c).
  *
  * El bitmap queda TRANSPUESTO en memoria (columna contigua, no fila)
  * con las esquinas ya redondeadas horneadas -- mismo formato conceptual
  * que el cache de apps/plugins/pictureflow/pictureflow.c (regla dura 7:
  * extender, no reimplementar), personalizado con el enmascarado de
  * esquinas que pictureflow.c no tiene (ver aura_albumart.c). El
- * consumidor (draw_slide_perspective en aura_coverflow.c) lee este
+ * consumidor (draw_slide_perspective en aura_musicflow.c) lee este
  * layout directo -- ningun otro modulo debe asumir fila-contigua aqui.
  */
 #ifndef AURA_ALBUMART_H

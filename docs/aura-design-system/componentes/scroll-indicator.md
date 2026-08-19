@@ -3,7 +3,7 @@
 Barra de desplazamiento de las listas de Aura: dentro de `LeftPanel`
 (`componentes/left-panel.md`) y, desde D-275, **el mismo componente** en las
 listas de contenido a pantalla completa (ver "En listas a pantalla completa"
-abajo), en el reverso de `CoverFlow` y en las listas de álbumes/playlists.
+abajo), en el reverso de `Music Flow` y en las listas de álbumes/playlists.
 
 ## Posición
 

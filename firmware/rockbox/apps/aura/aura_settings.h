@@ -50,7 +50,7 @@ typedef enum {
 } aura_anim_mode_t;
 
 /* Graficos: todo lo que se DIBUJA de mas (panel derecho de preview,
- * coverflow, caratulas). Nada que ver con el movimiento. */
+ * musicflow, caratulas). Nada que ver con el movimiento. */
 typedef enum {
     AURA_GFX_NONE = 0,    /* Ninguno */
     AURA_GFX_MINIMAL,     /* Minimos */

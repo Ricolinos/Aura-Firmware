@@ -28,10 +28,10 @@
 #include "aura_nav.h"
 
 /* Geometria de la inclinacion real de la caratula (T3.1, DECISIONS.md
- * D-099) -- publica porque componentes/cover-flow.md acopla la
+ * D-099) -- publica porque componentes/music-flow.md acopla la
  * coreografia `Flip-and-Flow` (T3.2(d)) a esta MISMA geometria
  * exacta ("si se cambia una, se cambia la otra"): la caratula que
- * vuela desde Cover Flow tiene que aterrizar en este angulo/posicion
+ * vuela desde Music Flow tiene que aterrizar en este angulo/posicion
  * exactos, no una aproximacion recalculada aparte. */
 #define AURA_NOWPLAYING_TILT_IANGLE 20     /* 7 grados * 1024/360, redondeado */
 /* PFreal, re-derivado (2026-08-12) para el signo de angulo corregido
@@ -48,18 +48,18 @@
 bool aura_nowplaying_active(void);
 
 /* Y de la fila de iconos de modos del ultimo render no-compacto --
- * para el morph de entrada desde Cover Flow (aura_transitions.c). */
+ * para el morph de entrada desde Music Flow (aura_transitions.c). */
 int aura_nowplaying_last_mode_row_y(void);
 
 /* Consumido por aura_screens al hacer pop desde el reproductor: true
  * (una sola vez) si la salida vino del Modo 4 (letras, pantalla
  * completa) -- el pop usa el slide de pantalla completa hacia el menu
- * anterior en vez del morph de regreso al coverflow. */
+ * anterior en vez del morph de regreso al musicflow. */
 bool aura_nowplaying_take_fullscreen_exit(void);
 
 /* Despliegue inverso del Modo 4 (panel -> layout normal), sincrono --
  * lo encadena aura_screens antes del morph de regreso al carrusel
- * cuando la salida del Modo 4 va hacia el coverflow. */
+ * cuando la salida del Modo 4 va hacia el musicflow. */
 void aura_nowplaying_unfold_from_lyrics(aura_nav_t *nav);
 
 /* true mientras el Modo 4 (hoja de vidrio) esta en pantalla -- las

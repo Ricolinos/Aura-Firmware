@@ -304,8 +304,8 @@ son el mismo gesto de reloj en dos ejes.
 **Tipo:** Coreografiado, 3 fases secuenciales, conecta dos pantallas sin
 corte.
 
-Observado/definido para la salida de CoverFlow hacia el reproductor
-(`componentes/cover-flow.md`). Al confirmar una selección dentro de un
+Observado/definido para la salida de Music Flow hacia el reproductor
+(`componentes/music-flow.md`). Al confirmar una selección dentro de un
 elemento "volteado" (flip):
 
 1. **Unflip:** el elemento gira de regreso a su cara frontal (la carátula
@@ -335,6 +335,6 @@ provisional), ver `aura_transition_flip_and_flow()` / `FLOW_MS` en
 junto con su regreso `Flow-Return`, es exclusivo de **Animaciones =
 Todas** — con Mínimas o Ninguna se sustituye por el `Push-and-Drop`
 genérico full↔full (arriba en esta página), en ambos sentidos, sin
-ningún patrón nuevo: CoverFlow y el reproductor son ambas pantallas FULL,
+ningún patrón nuevo: Music Flow y el reproductor son ambas pantallas FULL,
 así que el push ya cubre el caso. Detalle en
-`componentes/cover-flow.md` § Niveles de reducción.
+`componentes/music-flow.md` § Niveles de reducción.

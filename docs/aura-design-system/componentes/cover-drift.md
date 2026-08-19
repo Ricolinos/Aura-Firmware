@@ -35,7 +35,7 @@ muestra (`componentes/selection-summary.md`). Siempre por debajo de
   categoría Música, y el dueño pidió explícitamente que las dos filas de
   reproducción también muestren la deriva de carátulas sin entrar a
   ellas).
-- **Submenú de Música**: Cover Flow, Listas de reproducción, Artistas,
+- **Submenú de Música**: Music Flow, Listas de reproducción, Artistas,
   Álbumes, Recopilaciones, Canciones, Géneros, Autores, Búsqueda —
   **excepto Audiolibros** (fila inerte, sin contenido real detrás).
 - Todas las filas que califican, sin importar cuál exactamente, muestran la
@@ -169,7 +169,7 @@ más rápido y sin ceremonia, para que recorrer el menú no se sienta lento.
 
 **La identidad se compara por CATEGORÍA para CoverDrift, no por fila exacta
 (D-260, preservado por D-262)** — moverse entre filas que califican DENTRO
-de la misma categoría (p. ej. de "Música" en el menú raíz a "Cover Flow" en
+de la misma categoría (p. ej. de "Música" en el menú raíz a "Music Flow" en
 el submenú de Música, o entre cualquier par de filas del submenú) NO cuenta
 como un cambio de identidad y por lo tanto NO dispara ningún fundido — es
 la misma sesión continua, siempre en vivo. Solo cuenta como cambio real
@@ -186,7 +186,7 @@ antemano sería inviable). Presupuesto real, todo en buffers `static` fijos
 - Dos tiles finales decodificados (activa + anterior): 320×320×2 bytes cada
   uno ≈ 400KB en total.
 - Buffers de trabajo de decodificación/transposición (`aura_albumart.c`,
-  compartidos con Cover Flow, redimensionados para este tamaño mayor):
+  compartidos con Music Flow, redimensionados para este tamaño mayor):
   ≈800KB.
 - Pool de seeks + estructuras auxiliares: ≈23KB.
 

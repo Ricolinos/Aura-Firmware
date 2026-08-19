@@ -53,7 +53,7 @@
  * origen segun la direccion. Ver D-058 en DECISIONS.md.
  *
  * `cover_drift_was_active` (D-261, generalizado de la variante que
- * D-259 construyo SOLO para aura_transition_coverflow_enter()): true
+ * D-259 construyo SOLO para aura_transition_musicflow_enter()): true
  * si CoverDrift estaba mostrandose en el panel derecho del origen en
  * el instante exacto en que se disparo esta transicion (ver
  * aura_screens_coverdrift_active_for()). Cuando es true Y `width` es
@@ -61,7 +61,7 @@
  * esta coreografia tiene sentido), LeftPanel Y el panel derecho (con
  * la caratula de CoverDrift) salen CADA UNO hacia su propio borde,
  * revelando el destino ya renderizado, quieto, detras de ambos desde
- * el primer cuadro -- igual que la entrada a Cover Flow con CoverDrift
+ * el primer cuadro -- igual que la entrada a Music Flow con CoverDrift
  * (D-259). Si `cover_drift_was_active` es true pero `width` no es
  * pantalla completa (por ejemplo un T1 split->split), se ignora con
  * seguridad y corre el push clasico de siempre -- el contrato real
@@ -74,10 +74,10 @@
 void aura_transition_slide(aura_nav_t *nav, int direction, int width,
                             bool cover_drift_was_active);
 
-/* T4 (revelado de Coverflow, L4): el contenido nuevo emerge desde
+/* T4 (revelado de Music Flow, L4): el contenido nuevo emerge desde
  * ambos bordes hacia el centro en vez de deslizar desde uno solo --
- * distingue visualmente la entrada a Coverflow de una navegacion de
- * lista comun. No hace nada en modo Ultra (Coverflow no existe ahi).
+ * distingue visualmente la entrada a Music Flow de una navegacion de
+ * lista comun. No hace nada en modo Ultra (Music Flow no existe ahi).
  *
  * `cover_drift_was_active` (D-259, prueba acotada SOLO a esta entrada
  * -- encargo del dueno del producto): true si CoverDrift estaba
@@ -86,13 +86,13 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
  * aura_screens_coverdrift_active_for()). Cuando es true, LeftPanel Y el
  * panel derecho (con la caratula de CoverDrift) salen CADA UNO hacia su
  * propio borde -- izquierdo a la izquierda, derecho a la derecha --
- * revelando el Coverflow ya renderizado, quieto, detras de ambos desde
+ * revelando el Music Flow ya renderizado, quieto, detras de ambos desde
  * el primer cuadro. Cuando es false, coreografia identica a la de
- * siempre (sin cambios): LeftPanel sale por la izquierda, Coverflow
+ * siempre (sin cambios): LeftPanel sale por la izquierda, Music Flow
  * entra desde el borde derecho. */
-void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_active);
+void aura_transition_musicflow_enter(aura_nav_t *nav, bool cover_drift_was_active);
 
-/* `Flip-and-Flow` (PLAN.md T3.2(d), componentes/cover-flow.md,
+/* `Flip-and-Flow` (PLAN.md T3.2(d), componentes/music-flow.md,
  * transiciones/00-vocabulario.md): al elegir una cancion en Cover
  * Flow, la caratula del album (ya decodificada a su tamano final de
  * NowPlaying, AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE) vuela desde su
@@ -105,16 +105,16 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
  * AURA_SCREEN_NOWPLAYING al terminar. No hace nada (deja que el
  * llamador navegue directo) si `album_seek` no tiene caratula real --
  * no hay nada que volar. */
-/* Vuelo Cover Flow -> reproductor (rehecho 2026-08-12): arranca del
- * reverso crecido (geometria publica en aura_coverflow.h), media
+/* Vuelo Music Flow -> reproductor (rehecho 2026-08-12): arranca del
+ * reverso crecido (geometria publica en aura_musicflow.h), media
  * vuelta continua con las laterales saliendo hacia sus bordes, y al
  * aterrizar corre el morph de entrada de now-playing.md y hace el
  * aura_nav_push() -- el llamador NO aplica transicion generica encima. */
 void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek);
 
-/* Regreso reproductor -> Cover Flow: morph de posicion/geometria de la
+/* Regreso reproductor -> Music Flow: morph de posicion/geometria de la
  * caratula de frente (sin giro), laterales y titulo entrando desde los
- * bordes. Llamar DESPUES del pop (nav ya apunta al Cover Flow); deja
+ * bordes. Llamar DESPUES del pop (nav ya apunta al Music Flow); deja
  * el carrusel en reposo. */
 void aura_transition_flow_return(aura_nav_t *nav);
 

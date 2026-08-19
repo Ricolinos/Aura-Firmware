@@ -80,7 +80,7 @@ un padding superior de solo **2px** bajo la `StatusBar` (no el 4px
 estándar) — maximiza cuántas filas caben. El cálculo dado da 4 filas
 completas más una quinta al 95% de su alto, que se lee como **5 elementos
 visibles**. La carátula reutiliza el mismo pipeline y caché en disco
-(`.pfraw`) que CoverFlow — carátula real si existe, tile "Default" (nota
+(`.pfraw`) que Music Flow — carátula real si existe, tile "Default" (nota
 gris) si no — sin costo de decodificación JPEG en redibujados
 posteriores. Aplica a las 3 pantallas que listan álbumes (Álbumes,
 Álbumes por artista, Álbumes por autor).

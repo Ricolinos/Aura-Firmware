@@ -13,7 +13,7 @@
 `LeftPanel` no se remonta al navegar entre menú y submenú — es el mismo
 componente montado durante toda la navegación en `split`, solo cambia el
 contenido de `MenuList` (ver abajo). Ejemplo: Menú principal → Música →
-(submenú con Cover Flow, Genius, Listas de reproducción, Artista, Álbumes...)
+(submenú con Music Flow, Genius, Listas de reproducción, Artista, Álbumes...)
 es una sola instancia de `LeftPanel` actualizando su lista, no una nueva
 pantalla con un `LeftPanel` nuevo.
 

@@ -323,7 +323,7 @@ aura/aura_status_bar_v2.c
 aura/aura_selection_summary.c
 aura/aura_coverdrift.c
 aura/aura_flow.c
-aura/aura_coverflow.c
+aura/aura_musicflow.c
 aura/aura_lang.c
 aura/aura_lrc.c
 aura/aura_manifest.c
@@ -356,5 +356,6 @@ aura/aura_device_name.c
 aura/aura_device.c
 aura/aura_transitions.c
 aura/aura_video.c
+aura/aura_movieflow.c
 aura/aura_widgets.c
 aura/aura_main.c

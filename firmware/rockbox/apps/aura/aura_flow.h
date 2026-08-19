@@ -20,7 +20,7 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-/* Nucleo matematico de Cover Flow real (Fase 31.1, PLAN-APPLE2026.md).
+/* Nucleo matematico de Music Flow real (Fase 31.1, PLAN-APPLE2026.md).
  *
  * Cosechado de `apps/plugins/pictureflow/pictureflow.c` (D-vease
  * PLAN-APPLE2026.md SS0: "el renderizador de perspectiva por columnas

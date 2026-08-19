@@ -255,7 +255,7 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
     aura_music_debug_mark("B5 buffer_event fin");
 }
 
-/* D-224 (encargo del dueno, 2026-08-13: coverflow "muy lento", pidiendo
+/* D-224 (encargo del dueno, 2026-08-13: musicflow "muy lento", pidiendo
  * cotejar contra el funcionamiento real de pictureflow.c). Investigacion
  * previa a este commit: pictureflow.c nunca decodifica JPEG durante el
  * render -- la PRIMERA vez que arranca sobre una biblioteca nueva hace
@@ -270,11 +270,11 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
  * el mismo mecanismo, regla dura 7: extender, no reimplementar) pero
  * NUNCA la pasada previa: decodificaba en el momento del primer
  * cache-miss, DENTRO del cuadro de render del carrusel
- * (aura_coverflow.c:get_slot_for()) -- eso se siente como una traba
+ * (aura_musicflow.c:get_slot_for()) -- eso se siente como una traba
  * cada vez que aparece en pantalla un album que nunca se vio antes.
  * Esta funcion es esa pasada previa que faltaba, con el mismo patron de
  * Aura (nada de hilos nuevos, ver mas abajo): recorre TODOS los albumes
- * (aura_music_browse(), la misma enumeracion que ya usa Cover Flow) y
+ * (aura_music_browse(), la misma enumeracion que ya usa Music Flow) y
  * llama aura_albumart_load_for_album() por cada uno -- la MISMA funcion
  * que get_slot_for() ya usa, asi que el resultado en disco es identico
  * bit a bit, ningun camino nuevo. aura_albumart_is_cached() (header-only,
@@ -315,9 +315,9 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
  * MENOR prioridad; esto es lo opuesto: el hilo de UI cediendole tiempo
  * a los demas, incluido el de audio, que tiene prioridad MAYOR y puede
  * interrumpir cuando lo necesite). */
-#define AURA_PRECACHE_COVER_SIZE     AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE
-#define AURA_PRECACHE_CORNER_RADIUS  AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
-#define AURA_PRECACHE_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
+#define AURA_PRECACHE_COVER_SIZE     AURA_DS_METRICS_MUSIC_FLOW_CENTER_SLIDE_SIZE
+#define AURA_PRECACHE_CORNER_RADIUS  AURA_DS_METRICS_MUSIC_FLOW_CORNER_RADIUS
+#define AURA_PRECACHE_REFLECTION_PCT AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
 #define AURA_PRECACHE_REFLECTION_H   (AURA_PRECACHE_COVER_SIZE * AURA_PRECACHE_REFLECTION_PCT / 100)
 
 /* Scratch estatico (no en el stack del hilo de UI) para la caratula y
@@ -764,7 +764,7 @@ int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_i
     case AURA_SCREEN_MUSIC_ARTISTS:
         return run_search(tag_artist, false, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_ALBUMS:
-    case AURA_SCREEN_MUSIC_COVERFLOW:
+    case AURA_SCREEN_MUSIC_FLOW:
         return run_search(tag_album, false, false, false, false, out, max_items);
     case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST:
         return run_search(tag_album, true, false, false, false, out, max_items);

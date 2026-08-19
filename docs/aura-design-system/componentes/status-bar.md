@@ -130,7 +130,7 @@ sin blur, barata en una franja de 320×20px) con blur real como mejora
 opcional, y dejaba el color sólido solo como fallback "si ninguna
 traslucencia resultaba viable". En `(split)` la barra vive sobre el
 `LeftPanel` blanco, donde cualquier blend es indistinguible de un color
-sólido; en `(full)` sí hay contenido debajo (`NowPlaying`, `CoverFlow`),
+sólido; en `(full)` sí hay contenido debajo (`NowPlaying`, `Music Flow`),
 y aun así el dueño eligió el relleno sólido — queda cerrado.
 
 En ambos estados, `StatusBar` se ancla arriba — eso no cambia entre estados.

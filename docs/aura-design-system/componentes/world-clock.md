@@ -27,7 +27,7 @@ acento, como cualquier lista del sistema.
 Ambas comparten el aro en tinta primaria, las marcas de 12/3/6/9 y dos
 manecillas. La **horaria avanza con los minutos**, no a saltos de hora.
 Las manecillas se calculan con la LUT de senos en punto fijo del
-sistema (la misma de CoverFlow, `IANGLE 1024` = vuelta completa): cero
+sistema (la misma de Music Flow, `IANGLE 1024` = vuelta completa): cero
 coma flotante, cero tabla nueva.
 
 ## Husos

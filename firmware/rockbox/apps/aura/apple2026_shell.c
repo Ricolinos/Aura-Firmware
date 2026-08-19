@@ -59,7 +59,7 @@ unsigned a26_color(a26_token_t token)
          * el token al ajuste vivo, no al del tema activo. Antes cada
          * consumidor debia acordarse de llamar aura_accent() en vez
          * del token; los que no (texto seleccionado de listas de
-         * contenido, tracklist de Cover Flow, toggles viejos) se
+         * contenido, tracklist de Music Flow, toggles viejos) se
          * quedaban en el rosa default aunque el usuario eligiera otro
          * color -- inconsistencia real vista en el simulador con acento
          * azul (2026-08-12). Un solo punto de verdad aca la elimina

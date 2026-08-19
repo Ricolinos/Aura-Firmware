@@ -24,7 +24,7 @@
  * barra de desplazamiento con tamano FIJO (no proporcional al
  * contenido), capsula, que solo aparece si la lista tiene mas de
  * AURA_DS_METRICS_SCROLL_INDICATOR_MIN_ITEMS_TO_SHOW items. Vive en el
- * padding derecho de LeftPanel/MenuList, en el reverso de Cover Flow,
+ * padding derecho de LeftPanel/MenuList, en el reverso de Music Flow,
  * en las listas de albumes/playlists y -- desde D-275 -- tambien en
  * las listas de contenido a pantalla completa (aura_widgets_draw_list),
  * que antes tenian su propio scrollbar del sistema viejo (D-073).

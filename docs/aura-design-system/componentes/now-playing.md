@@ -13,7 +13,7 @@ salvo en el Modo 4 (Letras), que la oculta (ver
 Decisión: se rescata la **geometría, tamaño y posición de la carátula del
 Now Playing original del iPod Classic** — con todo y reflejo — pero
 manteniendo la interfaz nueva de Aura alrededor y aplicando las esquinas
-redondeadas ya definidas (8px, mismas de CoverFlow).
+redondeadas ya definidas (8px, mismas de Music Flow).
 
 Medidas estimadas de la captura del firmware original (escala a 320×240
 reales — ⚠️ valores aproximados leídos de captura, a validar contra el
@@ -24,7 +24,7 @@ dispositivo o el prototipo):
 | Posición (esquina sup. izq. del área de carátula) | x ≈ 10px, y ≈ 43px |
 | Tamaño de la carátula | ≈ 135×135px |
 | Inclinación | **7° (fijado formalmente)** — rotación sutil en Y: el borde derecho ligeramente comprimido/retrocedido, la carátula "mira" apenas hacia la derecha |
-| Reflejo | Debajo de la carátula, hereda la misma perspectiva, con desvanecimiento hacia abajo. **Proporción: "más sutil que el original", idéntica a la definida en CoverFlow** — mismo reflejo en ambas pantallas, sin cambio durante la transición |
+| Reflejo | Debajo de la carátula, hereda la misma perspectiva, con desvanecimiento hacia abajo. **Proporción: "más sutil que el original", idéntica a la definida en Music Flow** — mismo reflejo en ambas pantallas, sin cambio durante la transición |
 
 ## Barra unificada de progreso/volumen (confirmada 2026-08-12)
 
@@ -78,20 +78,20 @@ En **cualquier modo de la rueda**, incluido el principal:
 
 **Punto clave de continuidad:** esa inclinación sutil ES el ángulo de
 aterrizaje de `Flip-and-Flow` — el original ya estaba diseñado como si la
-carátula viniera de Cover Flow. La spec de ambos componentes queda acoplada
-por diseño: el slide central de CoverFlow al hacer flip/unflip termina
+carátula viniera de Music Flow. La spec de ambos componentes queda acoplada
+por diseño: el slide central de Music Flow al hacer flip/unflip termina
 exactamente en esta posición/ángulo/tamaño.
 
 **Esquinas redondeadas:** la carátula y su reflejo llevan el radio de 8px
-definido en `componentes/cover-flow.md` (heredadas del bitmap `.pfraw` ya
+definido en `componentes/music-flow.md` (heredadas del bitmap `.pfraw` ya
 enmascarado — sin costo extra en runtime).
 
-## Regla de continuidad con CoverFlow (requisito duro)
+## Regla de continuidad con Music Flow (requisito duro)
 
 La carátula del álbum y su reflejo en NowPlaying **deben renderizarse en la
 misma posición y ángulo en los que "cae" la carátula al final del patrón
 `Flip-and-Flow`** (`transiciones/00-vocabulario.md`,
-`componentes/cover-flow.md`). Esto es lo que produce la ilusión de
+`componentes/music-flow.md`). Esto es lo que produce la ilusión de
 transición continua: la carátula nunca se corta ni se re-renderiza — es el
 mismo elemento que viaja de una pantalla a la otra.
 
@@ -99,7 +99,7 @@ mismo elemento que viaja de una pantalla a la otra.
 NowPlaying no es una decisión libre de esta pantalla — está acoplada a la
 coreografía de `Flip-and-Flow`. Si se cambia una, se cambia la otra.
 
-### Entrada desde CoverFlow (confirmada)
+### Entrada desde Music Flow (confirmada)
 
 Cuando se llega a NowPlaying vía `Flip-and-Flow`, la carátula es el único
 elemento que ya está "en su lugar" (llegó con la transición). Los demás
@@ -121,24 +121,24 @@ una vez que el contenido ya está en su lugar (consistente con
 `Push-and-Drop`, donde la barra siempre entra después del contenido).
 
 La carátula llega con el vuelo de media vuelta descrito en
-`componentes/cover-flow.md` ("Vuelo CoverFlow → reproductor", ~500ms):
+`componentes/music-flow.md` ("Vuelo Music Flow → reproductor", ~500ms):
 aterriza en el tilt/posición exactos de esta pantalla con su reflejo ya
 apareciendo en proporción — el morph de grupos de arriba arranca justo
 al aterrizar.
 
-### Salida hacia CoverFlow (confirmada 2026-08)
+### Salida hacia Music Flow (confirmada 2026-08)
 
 Al regresar con MENU, NO se repite el vuelo en inversa: la carátula ya
 está de frente, así que hace un **morph fluido de posición y geometría**
 directo al centro del carrusel (sin giro, sin pasar por el reverso), con
 el reflejo visible todo el trayecto; las tapas laterales entran desde los
 bordes y el título/artista suben desde el borde inferior. Detalle
-completo en `componentes/cover-flow.md` ("Regreso reproductor →
-CoverFlow").
+completo en `componentes/music-flow.md` ("Regreso reproductor →
+Music Flow").
 
-### Entrada desde otros orígenes (no CoverFlow) — confirmada
+### Entrada desde otros orígenes (no Music Flow) — confirmada
 
-Cuando se llega a NowPlaying sin pasar por CoverFlow (ej. seleccionando
+Cuando se llega a NowPlaying sin pasar por Music Flow (ej. seleccionando
 una canción desde una lista): **toda la pantalla, excepto la `StatusBar`,
 entra desde la derecha empujando a la pantalla anterior**; la `StatusBar`
 entra desde arriba **después** de que la pantalla del reproductor terminó
@@ -290,8 +290,8 @@ el morph de regreso al carrusel):**
 **Salidas:**
 
 - **Al modo siguiente** (Select): la misma transición, invertida.
-- **Del reproductor** (Menu): si se **entró por coverflow, SÍ se
-  regresa al coverflow** (corrección 2026-08-12): el despliegue inverso
+- **Del reproductor** (Menu): si se **entró por musicflow, SÍ se
+  regresa al musicflow** (corrección 2026-08-12): el despliegue inverso
   del panel se **encadena con el morph de regreso al carrusel** — dos
   morphs confirmados, un solo gesto fluido. A cualquier otro destino,
   la pantalla se comporta como pantalla completa y **se desplaza hacia
@@ -377,7 +377,7 @@ específicamente:
 Implementación: `mode4_transition()` (`aura_nowplaying.c`) es el punto
 único que decide — reemplaza las llamadas directas a `mode4_morph()` en
 `cycle_mode()` y en `aura_nowplaying_unfold_from_lyrics()` (la salida
-encadenada con el regreso a CoverFlow, ver `componentes/cover-flow.md` §
+encadenada con el regreso a Music Flow, ver `componentes/music-flow.md` §
 Niveles de reducción: en Mínimas/Ninguna esta salida ya es la única pieza
 animada — el llamador hace el push genérico después, no un segundo
 morph).
@@ -401,7 +401,7 @@ niveles.
 - [x] Orden y duración del stagger de entrada — ratificado por el dueño
       (D-274, 2026-08-16): tres grupos de contenido en paralelo, 8 cuadros
       (4 en modo reducido), `StatusBar` cae al final. Ver "Entrada desde
-      CoverFlow".
+      Music Flow".
 - [x] Umbrales de los silencios del `LyricsPanel` — ratificados por el
       dueño (D-274, 2026-08-16): ≥8s de hueco mínimo, ~3s de lectura de la
       línea saliente. Ya no son provisionales (ver

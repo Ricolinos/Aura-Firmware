@@ -44,7 +44,7 @@ solo decide si esa aparición se funde o se corta.
 |---|---|---|
 | `CoverDrift` | `componentes/cover-drift.md` § Niveles de reducción | Ambos (matriz 3×3) |
 | `SelectionSummary` | `componentes/selection-summary.md` § Niveles de reducción | Solo Gráficos (sin animaciones propias) |
-| `CoverFlow` ↔ Reproductor | `componentes/cover-flow.md` § Niveles de reducción | Solo Animaciones |
+| `Music Flow` ↔ Reproductor | `componentes/music-flow.md` § Niveles de reducción | Solo Animaciones |
 | Reproductor, Modo 4 (Letras) | `componentes/now-playing.md` § Niveles de reducción del Modo 4 | Solo Animaciones |
 | Transiciones generales | `transiciones/00-vocabulario.md` (tabla completo/reducido de cada patrón + nota de `Flip-and-Flow`) | Solo Animaciones |
 

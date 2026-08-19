@@ -74,8 +74,8 @@
 #define ART_SIZE     AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
 #define ART_X        AURA_DS_METRICS_NOW_PLAYING_COVER_X
 #define ART_Y        AURA_DS_METRICS_NOW_PLAYING_COVER_Y
-#define ART_RADIUS   AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
-#define ART_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
+#define ART_RADIUS   AURA_DS_METRICS_MUSIC_FLOW_CORNER_RADIUS
+#define ART_REFLECTION_PCT AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
 #define REFL_GAP     2
 
 #define TEXT_X     (ART_X + ART_SIZE + A26_SPACING_LG)
@@ -277,7 +277,7 @@ static unsigned s_panel_top = 0, s_panel_bot = 0, s_panel_ink = 0;
  * `static`: 2D de hasta COVER_CACHE_MAX_COLS columnas x
  * COVER_CACHE_MAX_ROWS filas (margenes holgados sobre el maximo real
  * medido, 135 columnas x ~169 filas a t256=0) -- muy por debajo de lo
- * que ya reserva aura_coverflow.c para su propio cache de caratulas
+ * que ya reserva aura_musicflow.c para su propio cache de caratulas
  * (~42KB por slot, decenas de slots). */
 #define COVER_CACHE_MAX_COLS (ART_SIZE + ART_SIZE / 5)              /* 162 */
 #define COVER_CACHE_MAX_ROWS (ART_SIZE + (ART_SIZE * 60 / 100))     /* 216, mismo margen que col_buf */
@@ -325,8 +325,8 @@ static void mode4_transition(aura_nav_t *nav, int dir)
         aura_transition_fade_slide_region(nav, 0, 0, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT, dir);
 }
 
-/* Regreso Modo 4 -> coverflow (correccion 2026-08-12: "si accedimos
- * por coverflow, SI podemos regresar al coverflow"): primero la salida
+/* Regreso Modo 4 -> musicflow (correccion 2026-08-12: "si accedimos
+ * por musicflow, SI podemos regresar al musicflow"): primero la salida
  * del Modo 4 (sincrona), y el llamador encadena el morph/push de regreso
  * al carrusel -- con Animaciones=Todas, dos morphs confirmados, un solo
  * gesto fluido; con Minimas/Ninguna, esta salida ya es la unica pieza
@@ -415,9 +415,9 @@ static void derive_sibling_path(const char *audio_path, const char *new_ext,
 }
 
 /* Recorta las 4 esquinas de un bitmap EN MEMORIA (no en pantalla) al
- * radio de CoverFlow (componentes/now-playing.md: "esquinas... heredadas
+ * radio de MusicFlow (componentes/now-playing.md: "esquinas... heredadas
  * del bitmap .pfraw ya enmascarado"). El cache .pfraw con LUT por
- * esquina es trabajo de T3.2 (Cover Flow real) -- esta caratula se
+ * esquina es trabajo de T3.2 (Music Flow real) -- esta caratula se
  * proyecta con inclinacion via aura_flow (no un blit rectangular
  * simple), asi que a26_shell_round_bitmap_corners() (que pinta
  * directo sobre la pantalla ya dibujada) no aplica: hace falta
@@ -597,16 +597,16 @@ static void aura_format_track_time(unsigned long ms, char *buf, size_t bufsz)
  *
  * "Esa inclinacion sutil ES el angulo de aterrizaje de Flip-and-Flow" --
  * se reusa DIRECTO el motor de proyeccion por columnas de aura_flow.c
- * (T1.1 de la Fase 31 anterior, ya extendido y probado por Cover Flow
- * viejo en aura_coverflow.c::draw_slide_perspective(), regla dura 7: no
+ * (T1.1 de la Fase 31 anterior, ya extendido y probado por Music Flow
+ * viejo en aura_musicflow.c::draw_slide_perspective(), regla dura 7: no
  * reimplementar, extender). Mismo signo de angulo que la lateral
- * DERECHA de Cover Flow (angle = -iangle): "borde derecho retrocedido,
+ * DERECHA de Music Flow (angle = -iangle): "borde derecho retrocedido,
  * mira hacia la derecha" es exactamente esa convencion, solo que a 7
  * grados en vez de a los ~70 grados de una lateral completa.
  *
  * `AURA_NOWPLAYING_TILT_CX` (posicion horizontal en PFreal) es una
  * constante derivada -- no una formula que se resuelve por si sola en
- * runtime, mismo criterio que CF_OFFSETX_R en aura_coverflow.c --
+ * runtime, mismo criterio que CF_OFFSETX_R en aura_musicflow.c --
  * buscada para que el borde IZQUIERDO de la proyeccion caiga en ART_X
  * con ART_SIZE=135 y este angulo exacto (ver DECISIONS.md D-099 para
  * el metodo: busqueda numerica contra la misma formula de
@@ -2205,7 +2205,7 @@ void aura_nowplaying_handle_button(aura_nav_t *nav, long button)
             /* Salida de pantalla completa (encargo 2026-08-12): desde
              * el Modo 4 se SALE del reproductor -- la pantalla se
              * desplaza a la derecha hacia el MENU anterior, nunca
-             * transiciona al coverflow (aura_screens consume el flag
+             * transiciona al musicflow (aura_screens consume el flag
              * y salta el morph de regreso al carrusel). */
             s_exit_fullscreen = true;
             s_mode = NP_MODE_VOLUME;

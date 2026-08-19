@@ -57,7 +57,7 @@
  * BM_SCALED_SIZE en recorder/bmp.h) -- dimensionado sobre el mayor
  * consumidor real, no un numero fijo adivinado. D-254 (CoverDrift en
  * Musica) es hoy ese consumidor: AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
- * es mayor que los 130px de Cover Flow, que era el limite implicito de
+ * es mayor que los 130px de Music Flow, que era el limite implicito de
  * los 64KB anteriores (bug real encontrado en verificacion: pedir
  * 290px ahi hacia que read_jpeg_file()/read_bmp_file() fallaran en
  * silencio por falta de espacio -- degradaba al placeholder solido sin
@@ -107,13 +107,13 @@ static void write_pfraw(const char *path, int size, int radius, const fb_data *d
  * completamente en ese pequeno cuadro"). Causa real: esta funcion
  * siempre pedia la mascara "music" de A26_ICON_SIZE_SELECTION_SUMMARY_
  * SYMBOL (60px, generate.py), sin importar el `size` del tile que la
- * va a mostrar -- correcto para Cover Flow/transiciones (130-135px,
+ * va a mostrar -- correcto para Music Flow/transiciones (130-135px,
  * 60px cabe con margen) pero la lista de albumes usa ALBUM_ART_SIZE=48,
  * MENOR que el propio icono: `ox`/`oy` (mas abajo) daban negativo y la
  * nota se recortaba contra los cuatro bordes del tile.
  *
  * Fix: elegir la mascara horneada mas grande que siga respetando la
- * MISMA proporcion icono/tile que ya se veia bien en Cover Flow
+ * MISMA proporcion icono/tile que ya se veia bien en Music Flow
  * (60/130 =~ 46%), en vez de un tamano fijo -- design-system/generate.py
  * hornea "music" en un conjunto fijo de tamanos (ver icons/masks/
  * music-*.bmp): 12/16/20/24/28/36/48/60/64px. Para 130/135px esto
@@ -124,7 +124,7 @@ static int default_tile_icon_size(int size)
 {
     static const int available[] = { 12, 16, 20, 24, 28, 36, 48, 60, 64 };
     int target = size * A26_ICON_SIZE_SELECTION_SUMMARY_SYMBOL
-                 / AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE;
+                 / AURA_DS_METRICS_MUSIC_FLOW_CENTER_SLIDE_SIZE;
     int best = available[0];
     size_t i;
 
@@ -201,7 +201,7 @@ void aura_albumart_load_default(aura_albumart_t *out)
 
     aura_art_generate_reflection((const fb_data *)out->cover_data,
                                   (fb_data *)out->reflection_data,
-                                  out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT,
+                                  out->size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT,
                                   bg, true);
     out->valid = true;
 }
@@ -317,7 +317,7 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
          * memoria -- liviano, sin decodificacion de por medio. */
         aura_art_generate_reflection((const fb_data *)out->cover_data,
                                       (fb_data *)out->reflection_data,
-                                      out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
+                                      out->size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
         out->valid = true;
         return true;
     }
@@ -334,7 +334,7 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
 
     aura_art_generate_reflection((const fb_data *)out->cover_data,
                                   (fb_data *)out->reflection_data,
-                                  out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
+                                  out->size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
     out->valid = true;
     return true;
 }
@@ -434,7 +434,7 @@ bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
     {
         aura_art_generate_reflection((const fb_data *)out->cover_data,
                                       (fb_data *)out->reflection_data,
-                                      out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
+                                      out->size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
         out->valid = true;
         return true;
     }
@@ -451,7 +451,7 @@ bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
 
     aura_art_generate_reflection((const fb_data *)out->cover_data,
                                   (fb_data *)out->reflection_data,
-                                  out->size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
+                                  out->size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT, bg, true);
     out->valid = true;
     return true;
 }

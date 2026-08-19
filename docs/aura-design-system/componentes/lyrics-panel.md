@@ -80,7 +80,7 @@ se desvanecen del layout normal del reproductor renacen aquí.
   visualiza en la barra de progreso del panel izquierdo y en el avance
   de la propia letra.
 - **Select**: sale al modo siguiente con el morph invertido.
-- **Menu**: sale del reproductor. Si se **entró por coverflow**, el
+- **Menu**: sale del reproductor. Si se **entró por musicflow**, el
   despliegue inverso del panel se **encadena con el morph de regreso
   al carrusel** (un solo gesto fluido); a cualquier otro destino, la
   pantalla completa **se desplaza hacia la derecha** dando paso al

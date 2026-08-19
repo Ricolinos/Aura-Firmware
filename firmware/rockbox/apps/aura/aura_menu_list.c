@@ -224,7 +224,7 @@ void aura_menu_list_draw(int x, int y, const aura_menu_item_v2_t *items,
         /* La sangria mueve TODA la fila (icono + texto), no solo el
          * texto -- con solo el texto desplazado, los iconos quedaban
          * alineados entre padre e hijo y la jerarquia no se leia
-         * (verificado por pixel: icono de "Cover Flow" en el mismo x
+         * (verificado por pixel: icono de "Music Flow" en el mismo x
          * que el de "Musica"). Referencia del dueno del diseno,
          * 2026-08-13 (Menu principal configurable). */
         int indent_px = items[i].indent * 12;

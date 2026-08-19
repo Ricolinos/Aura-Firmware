@@ -54,7 +54,7 @@ void aura_widgets_draw_list(const char *title, const aura_list_item_t *items,
                              int count, int selected);
 
 /* True si el modo grafico activo usa pantalla dividida (todos menos
- * Ultra). Lo consultan las pantallas con dibujo propio (Coverflow,
+ * Ultra). Lo consultan las pantallas con dibujo propio (Music Flow,
  * Now Playing) para decidir su propio layout. */
 /* Layout de la pantalla actual. No todas las pantallas del firmware
  * original son divididas ni todas son de ancho completo: la tabla que

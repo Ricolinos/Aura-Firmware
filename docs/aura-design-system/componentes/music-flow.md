@@ -1,10 +1,10 @@
-# CoverFlow
+# Music Flow
 
-Vista de navegación de álbumes por carátulas — versión Aura del Cover Flow
+Vista de navegación de álbumes por carátulas — versión Aura del Music Flow
 clásico. Es una **habitación** en términos de
 `sistema/02-navegacion-menus-contenido.md`: muestra contenido (álbumes),
 no es un menú, y por tanto vive a pantalla completa, nunca en `LeftPanel`.
-Se entra desde el submenú Música, donde **"Cover Flow" es una puerta
+Se entra desde el submenú Música, donde **"Music Flow" es una puerta
 propia** (primera opción del submenú), nunca un disfraz automático de
 "Álbumes".
 
@@ -12,7 +12,7 @@ propia** (primera opción del submenú), nunca un disfraz automático de
 
 Rockbox ya incluye **PictureFlow** (`apps/plugins/pictureflow/pictureflow.c`,
 ~5,000 líneas en C, GPL v2, portado del PictureFlow de Ariya Hidayat). El
-iPod Classic 6G corrió Cover Flow de fábrica — el hardware lo soporta con
+iPod Classic 6G corrió Music Flow de fábrica — el hardware lo soporta con
 certeza. Estrategia: **adaptar y re-estilizar PictureFlow para Aura**, no
 reescribir desde cero.
 
@@ -74,7 +74,7 @@ Se usa igual en el carrusel, el reproductor y las transiciones de vuelo.
 | Esquinas | **8px de radio** (confirmado 2026-08, antes 5 provisional) — aplica en TODAS las pantallas donde se renderice el álbum, con antialias de cobertura fraccional |
 | Texto | DOS líneas centradas bajo el central: título del álbum (Bold 12) + artista (Regular 12, secundario) |
 
-La `StatusBar` se muestra en modo `(full)` — CoverFlow vive debajo de ella.
+La `StatusBar` se muestra en modo `(full)` — Music Flow vive debajo de ella.
 
 ## Comportamientos (confirmados 2026-08)
 
@@ -172,7 +172,7 @@ usaba (siempre 0). Se aplica idéntico a cada tapa visible del carrusel
 (central y laterales) — a diferencia de ángulo/posición/fade (que sí
 se siguen graduando con `t_center` según qué tan lateral es cada una,
 eso no cambió). La coreografía de vuelo de entrada/salida al abrir/
-cerrar Cover Flow (tapas que aparecen/desaparecen por los bordes) sigue
+cerrar Music Flow (tapas que aparecen/desaparecen por los bordes) sigue
 excluida del efecto — es una animación de otro tipo, no scroll dentro
 del carrusel.
 
@@ -202,16 +202,16 @@ desliza hacia abajo, agrandándose en proporción** con el zoom del giro
 
 **Giro al reverso (SELECT ↔ reverso, fases `cover_in`/`cover_out`):
 300ms por fase** (D-274, decisión del dueño 2026-08-16; antes 260ms
-provisional de D-104). Es un timing distinto del vuelo CoverFlow →
+provisional de D-104). Es un timing distinto del vuelo Music Flow →
 reproductor de 500ms descrito abajo — son dos coreografías, no una.
 
 ## Transiciones (confirmadas 2026-08)
 
-### Entrada a CoverFlow (desde el submenú Música)
+### Entrada a Music Flow (desde el submenú Música)
 
 Caso sin `CoverDrift` activo (el comportamiento de siempre, sin cambios):
 `LeftPanel` Y su StatusBar `(split)` salen empujados hacia la izquierda,
-mientras la pantalla del CoverFlow entra desde el borde derecho POR ENCIMA
+mientras la pantalla del Music Flow entra desde el borde derecho POR ENCIMA
 del `SelectionSummary`; cuando el contenido terminó de entrar, la StatusBar
 `(full)` entra CAYENDO desde arriba (el `Push-and-Drop` de
 `status-bar.md`).
@@ -220,17 +220,17 @@ Caso CON `CoverDrift` activo (D-259, implementado — **prueba acotada SOLO a
 esta entrada** a pedido del dueño del producto, antes de replicarla a
 cualquier otro punto de entrada a pantalla completa): ambos paneles salen
 CADA UNO hacia su propio borde (izquierdo a la izquierda, derecho a la
-derecha) y el CoverFlow se revela DETRÁS — ya renderizado completo, quieto,
+derecha) y el Music Flow se revela DETRÁS — ya renderizado completo, quieto,
 desde el primer cuadro, no entrando desde ningún borde. La StatusBar
-`(full)` de CoverFlow sigue cayendo desde arriba al final, igual que en el
+`(full)` de Music Flow sigue cayendo desde arriba al final, igual que en el
 caso sin `CoverDrift`. `aura_screens_coverdrift_active_for()`
 (`aura_screens.c`) decide, en el instante exacto del `SELECT`, si
 `CoverDrift` estaba realmente montado (no solo armado) para la fila
-"Cover Flow" — nunca puede dar verdadero desde ningún otro origen que el
+"Music Flow" — nunca puede dar verdadero desde ningún otro origen que el
 submenú de Música (`music_row_wants_coverdrift()` no califica ningún otro
 para este destino).
 
-### Vuelo CoverFlow → reproductor (reemplaza al `Flip-and-Flow` original)
+### Vuelo Music Flow → reproductor (reemplaza al `Flip-and-Flow` original)
 
 Al seleccionar una canción en el reverso (~500ms, decisión del dueño):
 
@@ -243,12 +243,12 @@ Al seleccionar una canción en el reverso (~500ms, decisión del dueño):
    borde** (las de la derecha por la derecha, las de la izquierda por la
    izquierda).
 3. Al aterrizar corre el morph de entrada del reproductor
-   (`now-playing.md`, "Entrada desde CoverFlow").
+   (`now-playing.md`, "Entrada desde Music Flow").
 
 La carátula nunca se corta ni se re-renderiza: es el mismo elemento que
 viaja de una pantalla a la otra (requisito duro de continuidad).
 
-### Regreso reproductor → CoverFlow
+### Regreso reproductor → Music Flow
 
 NO es la inversa del vuelo: la carátula ya está de frente, así que **no
 hay giro ni paso por el reverso** — hace un **morph fluido de posición y
@@ -270,7 +270,7 @@ una transición se ignoran hasta soltarlo (nunca navegaciones en cadena).
 | `CoverStack` | El carrusel de slides — central + 3 por lado en ángulo |
 | `CoverReflection` | El reflejo bajo las carátulas (compartido con el reproductor: mismo material, mismo pico de 45%) |
 | `CoverLabel` | Las dos líneas de texto (álbum Bold + artista Regular) bajo el central |
-| `TrackList` (de CoverFlow) | El reverso de 200px con cabecera, lista numerada y ScrollIndicator |
+| `TrackList` (de Music Flow) | El reverso de 200px con cabecera, lista numerada y ScrollIndicator |
 
 ## Curva de aceleración del scroll (confirmada, D-077/D-103)
 
@@ -290,13 +290,13 @@ El canon de esta página es **Animaciones = Todas** (principio de máxima
 fidelidad). Regla de precedencia D-a: Gráficos no toca este componente
 (no dibuja contenido condicionado a él); solo Animaciones:
 
-| Animaciones | Transición CoverFlow ↔ lista | Transición CoverFlow ↔ Reproductor |
+| Animaciones | Transición Music Flow ↔ lista | Transición Music Flow ↔ Reproductor |
 |---|---|---|
 | **Ninguna** | Todas las animaciones internas (scroll, zoom, flip, marquee) se conservan sin cambio — **no consultan Animaciones** por diseño, son contenido en vivo, no transición entre pantallas. Cero transición de entrada/salida | Cero transición: `aura_nav_push()`/`pop()` directo |
-| **Mínimas** | `Push-and-Drop`/revelado reducido (4 cuadros/45Hz, comportamiento ya existente) | **Sustituido por el push genérico full↔full** (`Push-and-Drop` de `aura_transition_slide()`) en ambos sentidos — CoverFlow y el reproductor son ambas pantallas FULL, así que el push ya disponible en el vocabulario resuelve esto sin ningún patrón nuevo. Ni el giro del `Flip-and-Flow` ni el morph de `Flow-Return` corren en este nivel |
+| **Mínimas** | `Push-and-Drop`/revelado reducido (4 cuadros/45Hz, comportamiento ya existente) | **Sustituido por el push genérico full↔full** (`Push-and-Drop` de `aura_transition_slide()`) en ambos sentidos — Music Flow y el reproductor son ambas pantallas FULL, así que el push ya disponible en el vocabulario resuelve esto sin ningún patrón nuevo. Ni el giro del `Flip-and-Flow` ni el morph de `Flow-Return` corren en este nivel |
 | **Todas** | Canon de esta página | Canon de esta página (`Flip-and-Flow`/`Flow-Return`, ~500ms cada uno) |
 
-Implementación: `aura_coverflow.c` (`BUTTON_SELECT` de `CF_STATE_SHOW_TRACKS`)
+Implementación: `aura_musicflow.c` (`BUTTON_SELECT` de `CF_STATE_SHOW_TRACKS`)
 hace `aura_nav_push()` directo cuando Animaciones ≠ Todas, en vez de llamar
 a `aura_transition_flip_and_flow()`; el despachador central
 (`aura_screens.c`, manejo de profundidad de pila) aplica entonces el mismo

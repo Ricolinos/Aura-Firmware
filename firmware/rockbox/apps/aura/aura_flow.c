@@ -32,7 +32,7 @@ int aura_flow_fmul(int a, int b)
  * cuando este modulo se escribio (D-079), todavia no estaba conectado
  * a pantalla ("este modulo no corre en tiempo real todavia... la
  * version portable importa mas que la mas rapida", comentario
- * original) -- pero aura_coverflow_draw() SI lo llama en tiempo real
+ * original) -- pero aura_musicflow_draw() SI lo llama en tiempo real
  * hoy, una vez por columna de pantalla de CADA tapa visible (hasta
  * ~9), en CADA cuadro mientras el carrusel se desliza. El bucle de
  * hasta 30 iteraciones de corrimiento+comparacion que habia aca es

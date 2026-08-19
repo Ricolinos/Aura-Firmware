@@ -39,7 +39,7 @@
 #include "aura_albumart.h"
 #include "aura_art.h"
 #include "aura_nowplaying.h"
-#include "aura_coverflow.h"
+#include "aura_musicflow.h"
 #include "aura_statusbar.h"
 #include "aura_status_bar_v2.h"
 #include "aura_lang.h"
@@ -121,12 +121,12 @@ static int eased_offset(int width, int i, int frames)
 /* -- Revelado detras de paneles con CoverDrift (D-259, generalizado
  * D-261) -----------------------------------------------------------
  *
- * D-259 construyo esto SOLO dentro de aura_transition_coverflow_enter(),
- * para la entrada a Cover Flow con CoverDrift activo. D-261 lo extrae
+ * D-259 construyo esto SOLO dentro de aura_transition_musicflow_enter(),
+ * para la entrada a Music Flow con CoverDrift activo. D-261 lo extrae
  * a dos funciones compartidas para que aura_transition_slide() (el
  * push generico, usado por CUALQUIER otra navegacion split->full)
  * pueda usar la misma coreografia -- CERO cambio de comportamiento
- * para Cover Flow, que ahora es un llamador mas de estas mismas dos
+ * para Music Flow, que ahora es un llamador mas de estas mismas dos
  * funciones en vez de tener su propia copia del codigo. */
 static fb_data s_outgoing_fb[A26_SCREEN_WIDTH * A26_SCREEN_HEIGHT];
 
@@ -213,7 +213,7 @@ static void reveal_behind_panels(int panel_w, int bar_h, unsigned bg,
 /* Espejo temporal EXACTO de reveal_behind_panels() (D-267, encargo del
  * dueno de producto: "la transicion... deberia ser exactamente la misma
  * transicion, pero invertida cuando retrocedamos, por ejemplo, al salir
- * del coverflow"). Roles de los dos buffers INTERCAMBIADOS respecto a la
+ * del musicflow"). Roles de los dos buffers INTERCAMBIADOS respecto a la
  * version de entrada: aca `s_push_fb` ya tiene el DESTINO (split, la
  * pantalla a la que se vuelve -- lo pre-renderiza el paso 1 de
  * aura_transition_slide(), IGUAL que para cualquier otro llamador, sin
@@ -238,7 +238,7 @@ static void reveal_behind_panels_exit(int panel_w, int bar_h, unsigned bg,
         int left_w = panel_w - d;
         int right_w = panel_w - d;
 
-        /* Base: lo saliente (p.ej. Cover Flow), pantalla completa. */
+        /* Base: lo saliente (p.ej. Music Flow), pantalla completa. */
         lcd_bitmap_part(s_outgoing_fb, 0, bar_h, A26_SCREEN_WIDTH,
                          0, bar_h, A26_SCREEN_WIDTH, A26_SCREEN_HEIGHT - bar_h);
         for (y = 0; y < bar_h; y++)
@@ -851,12 +851,12 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
     TRANSITION_LOG("push", frames, start_tick);
 }
 
-/* Entrada a Cover Flow (coreografia del dueno del diseno, 2026-08-12,
+/* Entrada a Music Flow (coreografia del dueno del diseno, 2026-08-12,
  * caso SIN CoverDrift -- se mantiene identica, sin cambios, para
- * cualquier entrada a Coverflow donde CoverDrift no estaba activo):
+ * cualquier entrada a Music Flow donde CoverDrift no estaba activo):
  * LeftPanel Y su StatusBar (split) salen empujados hacia la izquierda
  * ("la barra de estado se va junto con el panel izquierdo"), mientras
- * la pantalla del Cover Flow entra desde el borde derecho POR ENCIMA
+ * la pantalla del Music Flow entra desde el borde derecho POR ENCIMA
  * del SelectionSummary, que se queda quieto debajo hasta ser cubierto.
  * Cuando el contenido termino de entrar, la StatusBar (full) del Cover
  * Flow entra CAYENDO desde arriba -- el mismo Push-and-Drop que
@@ -867,7 +867,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
  * ahora que existe, D-254 a D-258; PRUEBA ACOTADA a proposito SOLO a
  * esta entrada -- encargo explicito del dueno del producto, antes de
  * replicarla en cualquier otro punto de entrada a pantalla completa):
- * el panel derecho TAMBIEN sale, hacia la derecha, y el Cover Flow se
+ * el panel derecho TAMBIEN sale, hacia la derecha, y el Music Flow se
  * revela DETRAS de ambos paneles, renderizado desde el primer cuadro
  * (no entra desde un borde -- ya esta ahi, quieto, todo el tiempo).
  * Mismo Drop de StatusBar en la Fase 2, sin cambios, para ambos
@@ -875,7 +875,7 @@ void aura_transition_slide(aura_nav_t *nav, int direction, int width,
  * capture_outgoing_split_frame()/reveal_behind_panels() (arriba en
  * este archivo), compartidas con aura_transition_slide() -- esta
  * funcion es un llamador mas, sin cambio de comportamiento propio. */
-void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_active)
+void aura_transition_musicflow_enter(aura_nav_t *nav, bool cover_drift_was_active)
 {
     int frames, frame_delay, i, y;
     int d_prev = 0;
@@ -903,14 +903,14 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
 
     /* D-259/D-261: captura EXACTA de lo que hay en pantalla ahora mismo
      * (LeftPanel + panel derecho con CoverDrift) -- tiene que ser ANTES
-     * de renderizar Cover Flow al framebuffer real (mas abajo), o ese
+     * de renderizar Music Flow al framebuffer real (mas abajo), o ese
      * contenido real se pierde. Solo hace falta en el caso CON
      * CoverDrift -- el caso SIN el sigue leyendo el framebuffer en vivo
      * via memmove, sin cambios. */
     if (cover_drift_was_active)
         capture_outgoing_split_frame();
 
-    /* Cover Flow completo (con su barra full incluida) renderizado UNA
+    /* Music Flow completo (con su barra full incluida) renderizado UNA
      * vez al framebuffer offscreen -- misma mecanica que el push. La
      * franja de su barra (y < bar_h) NO se blitea en la fase de
      * deslizamiento: cae despues, en la fase Drop. */
@@ -928,7 +928,7 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
     if (cover_drift_was_active)
     {
         /* D-259/D-261: ambos paneles salen hacia SU borde, revelando
-         * Cover Flow (ya renderizado completo, quieto) segun se abren
+         * Music Flow (ya renderizado completo, quieto) segun se abren
          * -- ver reveal_behind_panels() arriba en este archivo. */
         reveal_behind_panels(panel_w, bar_h, bg, frames, frame_delay);
     }
@@ -936,7 +936,7 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
     {
         /* Fase 1 original, sin cambios: deslizamiento simultaneo. El
          * panel izquierdo (barra split incluida: TODAS las filas de
-         * x < panel_w) recorre panel_w px; el Cover Flow recorre la
+         * x < panel_w) recorre panel_w px; el Music Flow recorre la
          * pantalla completa en el mismo numero de cuadros (entra "al
          * doble de velocidad", asi ambos terminan juntos). El hueco
          * entre el panel saliente y el contenido entrante muestra el
@@ -967,7 +967,7 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
                 }
             }
 
-            /* Cover Flow entrando desde la derecha (solo el cuerpo, la
+            /* Music Flow entrando desde la derecha (solo el cuerpo, la
              * barra cae en la fase 2): sus columnas [0, d_cf) aparecen en
              * x = [320-d_cf, 320). La franja superior queda en fondo plano
              * mientras tanto. */
@@ -1018,10 +1018,10 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
         }
     }
 
-    TRANSITION_LOG("coverflow-enter", frames, start_tick);
+    TRANSITION_LOG("musicflow-enter", frames, start_tick);
 }
 
-/* -- Vuelo Cover Flow -> reproductor (rehecho 2026-08-12 por encargo
+/* -- Vuelo Music Flow -> reproductor (rehecho 2026-08-12 por encargo
  * del dueno del diseno, reemplaza al Flip-and-Flow de T3.2(d)/D-113):
  *
  * Arranca desde el REVERSO CRECIDO (200px, la lista de canciones
@@ -1038,7 +1038,7 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
  *   proporcion.
  *
  * Mientras tanto (primera mitad), las tapas laterales salen
- *   deslizandose hacia SU borde (aura_coverflow_draw_exit_frame).
+ *   deslizandose hacia SU borde (aura_musicflow_draw_exit_frame).
  *
  * El tamano interpola de forma continua via la camara del proyector
  * (distance = CAM * fuente/visual - CAM), igual que el zoom del flip
@@ -1047,15 +1047,15 @@ void aura_transition_coverflow_enter(aura_nav_t *nav, bool cover_drift_was_activ
  * bloqueante como el resto de las transiciones. */
 #define FLOW_MS 500 /* decision del dueno del diseno (antes 350 provisional) */
 
-static fb_data s_back_tex[AURA_COVERFLOW_BACK_SIZE * AURA_COVERFLOW_BACK_SIZE];
+static fb_data s_back_tex[AURA_MUSICFLOW_BACK_SIZE * AURA_MUSICFLOW_BACK_SIZE];
 
 void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
 {
     int size = AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE;
-    int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
+    int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
     /* D-226 (encargo del dueno, 2026-08-14: freeze real al reproducir
-     * desde Cover Flow, sospecha propia del dueno de que era la
-     * transicion coverflow->reproductor -- confirmado). Estos dos
+     * desde Music Flow, sospecha propia del dueno de que era la
+     * transicion musicflow->reproductor -- confirmado). Estos dos
      * buffers eran locales de PILA: 135*135*2 (cover_buf) +
      * 135*33*2 (refl_buf) = 45360 bytes, ~44KB, en una sola llamada.
      * El hilo que corre esta funcion (el hilo "main" de Rockbox --
@@ -1078,16 +1078,16 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
      * solo hilo de UI, disparada por botones, sin recursion). */
     static unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
     static unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
-                            * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
+                            * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
                             * sizeof(fb_data)];
-    static fb_data col_buf[AURA_COVERFLOW_BACK_SIZE + 8];
-    static fb_data rcol_buf[AURA_COVERFLOW_BACK_SIZE / 2];
+    static fb_data col_buf[AURA_MUSICFLOW_BACK_SIZE + 8];
+    static fb_data rcol_buf[AURA_MUSICFLOW_BACK_SIZE / 2];
     aura_albumart_t art;
     int frames, frame_delay, i, row, col;
     long start_tick = current_tick;
-    int back = AURA_COVERFLOW_BACK_SIZE;
+    int back = AURA_MUSICFLOW_BACK_SIZE;
     /* Centros de despegue (reverso) y aterrizaje (reproductor). */
-    int y0 = AURA_COVERFLOW_BACK_Y + back / 2;
+    int y0 = AURA_MUSICFLOW_BACK_Y + back / 2;
     int y1 = AURA_DS_METRICS_NOW_PLAYING_COVER_Y + size / 2;
     unsigned bg = a26_color(A26_SHELL_BG);
 
@@ -1101,13 +1101,13 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
      * su lista real), transpuesto para el walker de columnas. */
     for (row = 0; row < back; row++)
     {
-        const fb_data *src = FBADDR(AURA_COVERFLOW_BACK_X, AURA_COVERFLOW_BACK_Y + row);
+        const fb_data *src = FBADDR(AURA_MUSICFLOW_BACK_X, AURA_MUSICFLOW_BACK_Y + row);
         for (col = 0; col < back; col++)
             s_back_tex[(size_t)col * back + row] = src[col];
     }
 
     art.size = size;
-    art.radius = AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS;
+    art.radius = AURA_DS_METRICS_MUSIC_FLOW_CORNER_RADIUS;
     art.cover_data = cover_buf;
     art.reflection_data = refl_buf;
     if (!aura_albumart_load_for_album(album_seek, &art))
@@ -1151,7 +1151,7 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
         /* Fondo: laterales saliendo hacia sus bordes (primera mitad) y
          * la barra full del destino -- el morph de entrada de abajo se
          * encarga del resto del chrome del reproductor. */
-        aura_coverflow_draw_exit_frame(phase_b ? 256 : tp);
+        aura_musicflow_draw_exit_frame(phase_b ? 256 : tp);
 
         aura_flow_begin_projection(&proj, &slide, src_size);
         while (proj.screen_x < AURA_FLOW_SCREEN_W)
@@ -1209,7 +1209,7 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
 
     aura_nav_push(nav, AURA_SCREEN_NOWPLAYING);
 
-    /* -- Morph de entrada (now-playing.md, "Entrada desde CoverFlow"):
+    /* -- Morph de entrada (now-playing.md, "Entrada desde MusicFlow"):
      * la caratula es el unico elemento que ya esta en su lugar (llego
      * con el vuelo de arriba); el resto entra por grupos, cada uno con
      * su coreografia confirmada por el documento:
@@ -1313,7 +1313,7 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
         }
 
         /* StatusBar (full) cayendo desde arriba, al final -- mismo Drop
-         * que la entrada a Cover Flow. */
+         * que la entrada a Music Flow. */
         {
             int drop_frames = (aura_settings.animation_mode == AURA_ANIM_ALL)
                 ? AURA_DS_METRICS_PUSH_AND_DROP_DROP_FRAMES_ALL
@@ -1337,44 +1337,44 @@ void aura_transition_flip_and_flow(aura_nav_t *nav, int32_t album_seek)
     TRANSITION_LOG("flow-to-player", frames, start_tick);
 }
 
-/* -- Regreso reproductor -> Cover Flow (encargo 2026-08-12): la
+/* -- Regreso reproductor -> Music Flow (encargo 2026-08-12): la
  * caratula YA esta de frente en el reproductor, asi que no hay giro ni
  * paso por el reverso -- es un MORPH fluido de posicion y geometria
  * (135px/tilt 7 -> 130px/frontal en el centro del carrusel), con el
  * reflejo visible todo el trayecto. Las tapas laterales entran desde
  * los bordes de la pantalla y el titulo/artista suben desde el borde
- * inferior (aura_coverflow_draw_return_frame). Al aterrizar, el
+ * inferior (aura_musicflow_draw_return_frame). Al aterrizar, el
  * carrusel queda en reposo (settle_idle) mostrando la caratula. */
 void aura_transition_flow_return(aura_nav_t *nav)
 {
     int size = AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE;
-    int carousel = AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE;
-    int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
+    int carousel = AURA_DS_METRICS_MUSIC_FLOW_CENTER_SLIDE_SIZE;
+    int refl_h = aura_art_reflection_height(size, AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT);
     /* D-226: mismo desborde de pila que aura_transition_flip_and_flow()
      * de arriba (~44KB de cover_buf/refl_buf contra un stack de hilo
      * "main" de solo 8KB) -- static por la misma razon. */
     static unsigned char cover_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * sizeof(fb_data)];
     static unsigned char refl_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE
-                            * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
+                            * (AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE * AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100)
                             * sizeof(fb_data)];
     static fb_data col_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE + 8];
     static fb_data rcol_buf[AURA_DS_METRICS_NOW_PLAYING_COVER_SIZE / 2];
     aura_albumart_t art;
     int frames, frame_delay, i;
     long start_tick = current_tick;
-    int32_t seek = aura_coverflow_current_album_seek();
+    int32_t seek = aura_musicflow_current_album_seek();
     int y0 = AURA_DS_METRICS_NOW_PLAYING_COVER_Y + size / 2;
-    int y1 = 30 + carousel / 2; /* CF_TOP_Y + centro -- misma linea media del carrusel */
+    int y1 = 30 + carousel / 2; /* MF_TOP_Y + centro -- misma linea media del carrusel */
 
     (void)nav; /* el pop ya ocurrio; nav queda en la firma por simetria
                 * con el resto de las transiciones */
-    aura_coverflow_settle_idle();
+    aura_musicflow_settle_idle();
 
     if (!lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE || seek < 0)
         return;
 
     art.size = size;
-    art.radius = AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS;
+    art.radius = AURA_DS_METRICS_MUSIC_FLOW_CORNER_RADIUS;
     art.cover_data = cover_buf;
     art.reflection_data = refl_buf;
     if (!aura_albumart_load_for_album(seek, &art))
@@ -1403,7 +1403,7 @@ void aura_transition_flow_return(aura_nav_t *nav)
         slide.distance = AURA_FLOW_CAM_DIST * size / size_vis - AURA_FLOW_CAM_DIST;
         slide.cx = aura_pattern_lerp(AURA_NOWPLAYING_TILT_CX, 0, t);
 
-        aura_coverflow_draw_return_frame(t);
+        aura_musicflow_draw_return_frame(t);
 
         aura_flow_begin_projection(&proj, &slide, size);
         while (proj.screen_x < AURA_FLOW_SCREEN_W)
@@ -1450,7 +1450,7 @@ void aura_transition_flow_return(aura_nav_t *nav)
 
         /* Textos AL FINAL del cuadro: encima del reflejo, como en el
          * carrusel en reposo -- sin salto de capas al aterrizar. */
-        aura_coverflow_draw_return_texts(t);
+        aura_musicflow_draw_return_texts(t);
 
         lcd_update();
         drain_button_queue_if_full();

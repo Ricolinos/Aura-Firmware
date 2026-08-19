@@ -85,6 +85,9 @@ typedef enum {
     AURA_SCREEN_VIDEOS_TVSHOWS,
     AURA_SCREEN_VIDEOS_CLIPS,
     AURA_SCREEN_VIDEOS_ALL,
+    /* Movie Flow (D-318): copia casi exacta de Music Flow para Video --
+     * ver aura_movieflow.h. */
+    AURA_SCREEN_VIDEOS_MOVIEFLOW,
     AURA_SCREEN_PHOTOS_ALL,
     AURA_SCREEN_SETTINGS_COPYRIGHT,
     AURA_SCREEN_SETTINGS_AUDIOBOOKS,
@@ -131,16 +134,16 @@ typedef enum {
      * identificador es solo el token estable de la fila. */
     AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW,
     AURA_SCREEN_SETTINGS_SHOW_ICONS,
-    /* Cover Flow como puerta propia del submenu Musica (D-025 la tenia
+    /* Music Flow como puerta propia del submenu Musica (D-025 la tenia
      * como una variante automatica de AURA_SCREEN_MUSIC_ALBUMS segun
      * aura_settings.graphics_mode -- eso hacia que entrar a Albumes, o a
-     * Albumes-por-artista, disparara Cover Flow sin que el usuario lo
+     * Albumes-por-artista, disparara Music Flow sin que el usuario lo
      * eligiera. componentes/left-panel.md la documenta como una entrada
      * de menu hermana de Artista/Albumes, asi que ahora es su propio
      * destino: Albumes vuelve a ser SIEMPRE la lista plana). Agregada al
      * final del enum, mismo criterio "solo-anadir-al-final" que el resto
      * de este archivo. */
-    AURA_SCREEN_MUSIC_COVERFLOW,
+    AURA_SCREEN_MUSIC_FLOW,
     /* Apagado por inactividad (Task A, encargo del dueno): pantalla de
      * eleccion en Ajustes que envuelve global_settings.poweroff (nucleo
      * de Rockbox) -- ver aura_screens.c. Agregada al final del enum,

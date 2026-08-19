@@ -55,8 +55,8 @@
  * (Musica/Video/Fotos/Alarmas/etc.) mas altas para que se lean menos
  * apretadas -- de ~10 filas visibles a 7 (visible_rows() se recalcula
  * solo, ver abajo). SPACING_MD en vez de SPACING_SM (21->29px) en vez
- * de subir A26_TYPE_BODY: ese tamano de fuente lo comparten CoverFlow/
- * Now Playing/Fotos/Video (aura_coverflow.c, aura_nowplaying.c, etc.),
+ * de subir A26_TYPE_BODY: ese tamano de fuente lo comparten MusicFlow/
+ * Now Playing/Fotos/Video (aura_musicflow.c, aura_nowplaying.c, etc.),
  * que el encargo dice explicitamente NO tocar -- y agregar un tamano
  * de fuente nuevo excederia MAXUSERFONTS=12 (firmware/export/font.h),
  * ya al limite exacto con las 12 fuentes existentes. */

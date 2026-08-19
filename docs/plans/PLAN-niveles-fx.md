@@ -9,7 +9,7 @@ Aprobado con las recomendaciones del plan (Q1–Q6). **Ejecutado**: §7 (arquite
 **Deliberadamente no ejecutado, pendiente:**
 - §6.3 — optimización del morph del Modo 4 en hardware (D-315): el perfil estático identificó los sospechosos, pero cada paso de optimización exige medir con la instrumentación D-300 en un iPod real antes/después, algo que este entorno no puede hacer. El diagnóstico completo queda en `now-playing.md` § Niveles de reducción del Modo 4 y en §6 de este documento.
 - §14.1/§14.3 — doble decodificación por ciclo de `CoverDrift` y `aura_coverdrift_animating()` que nunca vuelve a `false` (hallazgos laterales, D-311): riesgo de introducir un bug real sin poder compilar-y-medir superó el beneficio en esta pasada.
-- Verificación **en hardware real** de todo lo demás (los dos delays de 500ms, el push sustituto CoverFlow↔Reproductor, el Fade-Slide del Modo 4, las 9 combinaciones de niveles, cambio en caliente sin estados huérfanos) — este entorno no tiene acceso a un iPod físico ni a una sesión interactiva del simulador; solo se verificó que compila y que la lógica pura (tests de host) sigue pasando.
+- Verificación **en hardware real** de todo lo demás (los dos delays de 500ms, el push sustituto Music Flow↔Reproductor, el Fade-Slide del Modo 4, las 9 combinaciones de niveles, cambio en caliente sin estados huérfanos) — este entorno no tiene acceso a un iPod físico ni a una sesión interactiva del simulador; solo se verificó que compila y que la lógica pura (tests de host) sigue pasando.
 
 ## 0. Resumen ejecutivo — premisas del encargo que hay que corregir antes de planear
 
@@ -42,7 +42,7 @@ Base: `firmware/rockbox/apps/aura/`.
 
 Patrón repetido a mano en cada sitio: gate `== AURA_ANIM_NONE` (return temprano, junto con `lcd_active()`) + calidad `== AURA_ANIM_ALL ? tokens_ALL : tokens_MINIMAL` (`apple2026_tokens.h:185-194`: 8/4 cuadros, 60/45 fps, drop 5/3). **No existe ningún helper central** (`aura_fx_level()` ni similar).
 
-Granularidad actual: los 3 niveles son reales pero **globales** — ningún sitio distingue por componente; MINIMAL y ALL solo difieren en cuadros/fps, nunca en *qué* transición corre. Excepción relevante: **las animaciones internas de CoverFlow (scroll, zoom, flip, marquee) no consultan `animation_mode` en absoluto** (`aura_coverflow.c`, state-driven contra `current_tick`) — casualmente es exactamente lo que la celda "Ninguna" pide conservar.
+Granularidad actual: los 3 niveles son reales pero **globales** — ningún sitio distingue por componente; MINIMAL y ALL solo difieren en cuadros/fps, nunca en *qué* transición corre. Excepción relevante: **las animaciones internas de Music Flow (scroll, zoom, flip, marquee) no consultan `animation_mode` en absoluto** (`aura_musicflow.c`, state-driven contra `current_tick`) — casualmente es exactamente lo que la celda "Ninguna" pide conservar.
 
 ### 1.2 — Ajuste "Gráficos"
 
@@ -54,7 +54,7 @@ Granularidad actual: los 3 niveles son reales pero **globales** — ningún siti
 | UI | `aura_screens.c:274`, `:451-453`, `:649-651`; strings "Ninguno/Mínimos/Todos" `aura_lang.c:75-77` |
 | **Consumo: solo 2 sitios reales, ambos binarios** | `aura_widgets.c:345-349` (`aura_widgets_split_active()`: `!= AURA_GFX_NONE` apaga LeftPanel/panel derecho/barra split; 8 consumidores) y `aura_screens.c:5474` (ancho de transición T1 vs T3) |
 
-**`AURA_GFX_MINIMAL` y `AURA_GFX_ALL` son hoy indistinguibles**: ningún sitio compara contra ellos. El nivel es un booleano con 3 etiquetas. Comentario obsoleto en `aura_coverflow.h:23-27` (describe un acoplamiento con `AURA_GFX_ALL` revertido en D-025).
+**`AURA_GFX_MINIMAL` y `AURA_GFX_ALL` son hoy indistinguibles**: ningún sitio compara contra ellos. El nivel es un booleano con 3 etiquetas. Comentario obsoleto en `aura_musicflow.h:23-27` (describe un acoplamiento con `AURA_GFX_ALL` revertido en D-025).
 
 ### 1.3 — Los delays del panel derecho
 
@@ -168,7 +168,7 @@ La instrumentación ya existe: D-300 dejó `DEBUGF` por fase en `mode4_morph` (`
 
 ### 6.3 — Plan de optimización (conserva el efecto; orden = impacto esperado)
 
-1. **Caché de íconos en RAM** (mata al sospechoso 1). Precedente en el propio repo: D-224 resolvió "coverflow muy lento" con exactamente este patrón (`aura_music.c:258-290`). Beneficia a todo el sistema, no solo al morph. Diseño: caché pequeño keyed por (nombre, tamaño, variante) sobre el buffer de máscaras, invalidado al cambiar de estilo/tema.
+1. **Caché de íconos en RAM** (mata al sospechoso 1). Precedente en el propio repo: D-224 resolvió "musicflow muy lento" con exactamente este patrón (`aura_music.c:258-290`). Beneficia a todo el sistema, no solo al morph. Diseño: caché pequeño keyed por (nombre, tamaño, variante) sobre el buffer de máscaras, invalidado al cambiar de estilo/tema.
 2. **Precalcular invariantes antes del bucle**: layout/wrap del texto de letras (sospechoso 5), colores del panel, `aura_shadows_enabled()` fuera de los bucles de píxel (`:715-717, :1762`).
 3. **LUT del degradado del vidrio**: `m4_grad_diag()` depende solo de `(x_rel+y)` ∈ [0, 430] → LUT de 431 entradas por carátula (misma llave de invalidación que `s_panel_colors_valid`). Elimina las 45 600 divisiones/cuadro (sospechoso 2).
 4. **StatusBar compuesta una vez** a un buffer de 320×20 y solo desplazada (sospechoso 6; generaliza la técnica `stripe_base` que D-300 ya usó para la franja de sombra).
@@ -210,15 +210,15 @@ static inline bool aura_fx_coverdrift_fade(void);     /* anim != NONE           
 
 ## 8. FASE 1 — Cambios por componente, celda por celda
 
-### 8.1 — CoverFlow
+### 8.1 — Music Flow
 
 | Celda | Estado | Cambio |
 |---|---|---|
-| Ninguna: animaciones internas se conservan | **Ya correcto por construcción**: scroll/zoom/flip/marquee no consultan `animation_mode` (`aura_coverflow.c`) | Ninguno. Se documenta como intencional para que nadie lo "arregle" |
+| Ninguna: animaciones internas se conservan | **Ya correcto por construcción**: scroll/zoom/flip/marquee no consultan `animation_mode` (`aura_musicflow.c`) | Ninguno. Se documenta como intencional para que nadie lo "arregle" |
 | Ninguna: cero transiciones al entrar/salir | **Ya correcto**: gates en `aura_transitions.c:890` (entrada), `:1094` (flip-and-flow hace `aura_nav_push` y retorna), `:1373` (flow-return, con `settle_idle` antes del gate), `:636` (salida genérica) | Ninguno |
-| Mínimas: se conserva CoverFlow↔lista | Hoy corre a 4 cuadros/45 fps | Ninguno (ya es la versión reducida del canon) |
-| Mínimas: **Flip-and-Flow → empuje de pantalla completa, ambos sentidos** | Hoy MINIMAL = mismo vuelo a 30 fps | El empuje **ya existe y es simétrico**: `aura_transition_slide(nav, ±1, A26_SCREEN_WIDTH, false)` (`aura_transitions.c:612`) — CoverFlow y NowPlaying son ambas FULL, `bar_changes == false`, push limpio de 4 cuadros. Es el patrón `Push-and-Drop` full↔full del vocabulario, no un patrón nuevo. Tres cambios de "quitar excepciones", condicionados a `!aura_fx_flip_and_flow()`: (1) `aura_coverflow.c:1289-1291` → `aura_nav_push()` directo; (2) `aura_screens.c:5413-5421` rama vacía → cae al push genérico; (3) `aura_screens.c:5397-5412` ramas de `flow_return` → push genérico con `direction = -1`. El regreso desde Modo 4 a CoverFlow en Mínimas deja de encadenar dos morphs: sale de Letras según §8.2 y hace el push |
-| Todas | Canon (`cover-flow.md`, vuelo 500 ms) | Ninguno |
+| Mínimas: se conserva Music Flow↔lista | Hoy corre a 4 cuadros/45 fps | Ninguno (ya es la versión reducida del canon) |
+| Mínimas: **Flip-and-Flow → empuje de pantalla completa, ambos sentidos** | Hoy MINIMAL = mismo vuelo a 30 fps | El empuje **ya existe y es simétrico**: `aura_transition_slide(nav, ±1, A26_SCREEN_WIDTH, false)` (`aura_transitions.c:612`) — Music Flow y NowPlaying son ambas FULL, `bar_changes == false`, push limpio de 4 cuadros. Es el patrón `Push-and-Drop` full↔full del vocabulario, no un patrón nuevo. Tres cambios de "quitar excepciones", condicionados a `!aura_fx_flip_and_flow()`: (1) `aura_musicflow.c:1289-1291` → `aura_nav_push()` directo; (2) `aura_screens.c:5413-5421` rama vacía → cae al push genérico; (3) `aura_screens.c:5397-5412` ramas de `flow_return` → push genérico con `direction = -1`. El regreso desde Modo 4 a Music Flow en Mínimas deja de encadenar dos morphs: sale de Letras según §8.2 y hace el push |
+| Todas | Canon (`music-flow.md`, vuelo 500 ms) | Ninguno |
 
 ### 8.2 — Reproductor musical (cambio de modos / Modo 4)
 
@@ -273,10 +273,10 @@ Conclusión honesta: el modo **no ahorra RAM** respecto a hoy — gasta ~600 KB 
 
 El canon sigue siendo "Todas"; los niveles se documentan como **sustracciones**, conforme al principio de máxima fidelidad (`00-INDICE.md` §"Principio de documentación").
 
-- Sección **"Niveles de reducción"** (tabla normativa de la matriz correspondiente) en: `componentes/cover-drift.md`, `componentes/selection-summary.md`, `componentes/cover-flow.md`, `componentes/now-playing.md`, y la tabla de "Transiciones generales" en `transiciones/00-vocabulario.md` (que ya tiene la tabla completo/reducido de cuadros — se completa con la columna "Ninguna" y la sustitución de los morphs en Mínimas).
+- Sección **"Niveles de reducción"** (tabla normativa de la matriz correspondiente) en: `componentes/cover-drift.md`, `componentes/selection-summary.md`, `componentes/music-flow.md`, `componentes/now-playing.md`, y la tabla de "Transiciones generales" en `transiciones/00-vocabulario.md` (que ya tiene la tabla completo/reducido de cuadros — se completa con la columna "Ninguna" y la sustitución de los morphs en Mínimas).
 - Página nueva **`sistema/06-niveles-de-fx.md`**: el hueco es real (hoy los niveles solo existen dispersos); contiene la regla de precedencia, las 6 tablas completas y referencias a las secciones por componente. Las páginas de componente mandan sobre el detalle; esta es el índice transversal.
 - `sistema/03-arbol-de-menus.md`: las filas Animaciones/Gráficos enlazan a la página nueva.
-- De paso: corregir el comentario obsoleto `aura_coverflow.h:23-27` y la referencia colgada a `PLAN-theme-system.md` en `selection-summary.md`/`now-playing.md`.
+- De paso: corregir el comentario obsoleto `aura_musicflow.h:23-27` y la referencia colgada a `PLAN-theme-system.md` en `selection-summary.md`/`now-playing.md`.
 
 ---
 
@@ -322,7 +322,7 @@ Commits atómicos, en este orden (cada uno: build ARM + simulador SDL limpios, `
 9. Perfilado D-300 en hardware (§6.2) → commits de optimización del morph en el orden §6.3, midiendo tras cada uno.
 10. Design system (§10) + `DECISIONS.md` (§11).
 
-Verificación obligatoria **en hardware** (el simulador no es evidencia de fluidez): los dos delays de 500 ms, el push sustituto CoverFlow↔Reproductor en ambos sentidos, el fade+slide del Modo 4 en Mínimas, y el morph optimizado en Todas. Prueba de las **9 combinaciones** de niveles contra las matrices de §2 en CoverDrift y SelectionSummary, incluido el **cambio en caliente** (sin reinicio, sin estados huérfanos: imagen congelada al bajar Gráficos, panel sin repintar al subirlo). Ajustes existentes del usuario sobreviven: no cambia el formato de `aura.cfg` (mismas claves/enums; la migración vieja de `:328-329` sigue funcionando).
+Verificación obligatoria **en hardware** (el simulador no es evidencia de fluidez): los dos delays de 500 ms, el push sustituto Music Flow↔Reproductor en ambos sentidos, el fade+slide del Modo 4 en Mínimas, y el morph optimizado en Todas. Prueba de las **9 combinaciones** de niveles contra las matrices de §2 en CoverDrift y SelectionSummary, incluido el **cambio en caliente** (sin reinicio, sin estados huérfanos: imagen congelada al bajar Gráficos, panel sin repintar al subirlo). Ajustes existentes del usuario sobreviven: no cambia el formato de `aura.cfg` (mismas claves/enums; la migración vieja de `:328-329` sigue funcionando).
 
 Reglas de siempre: `lcd_active()` en toda animación; sin RGB hardcodeado (degradado por `aura_accent*()`/tokens); textos de UI en es-MX añadidos al final de ambos `.lang`; GPL v2 en archivos nuevos de `apps/aura/`; sin cambios fuera de `apps/aura/` (si alguno apareciera → `MODIFICATIONS.md` en la misma pasada). Sin push.
 
@@ -333,6 +333,6 @@ Reglas de siempre: `lcd_active()` en toda animación; sin RGB hardcodeado (degra
 1. **Doble decodificación por ciclo de CoverDrift** (`aura_screens.c:899-931`): cada avance decodifica 2 imágenes (2×200 KB del disco + 2 reflejos) cuando bastaría 1 intercambiando los roles de los buffers A/B. Propuesto arreglarlo dentro del commit 5 (le da sentido al modo residente); beneficia a todos los niveles.
 2. **El reflejo de CoverDrift se genera y se tira** en cada carga (`refl_buf` 50 KB + cómputo, `aura_albumart.c:318-321, 339-341`): CoverDrift nunca lo usa. Candidato a eliminarse de esa ruta.
 3. **`aura_coverdrift_animating()` nunca vuelve a `false`** tras el primer montaje (`aura_coverdrift.c:96-103`; `s_index` no se resetea) → `aura_main.c:591-592` pide cuadros a 20 fps permanentemente con la pantalla encendida, aunque CoverDrift ya no esté visible. CPU/batería desperdiciadas; arreglo pequeño (resetear al desmontar identidad).
-4. **Comentario obsoleto** `aura_coverflow.h:23-27` (acoplamiento con `AURA_GFX_ALL` revertido en D-025) — se corrige en §10.
+4. **Comentario obsoleto** `aura_musicflow.h:23-27` (acoplamiento con `AURA_GFX_ALL` revertido en D-025) — se corrige en §10.
 5. **La sombra del tile de SelectionSummary ignora el toggle "Mostrar sombras"** (única del sistema, ya anotado en `efectos/01-sombras.md`) — ajuste de una línea si se quiere cerrar de paso.
 6. La **caché de íconos** del §6.3-1 acelera todo el shell (listas, barra de estado), no solo el morph — vale la pena aunque el perfilado señalara otro cuello primero.

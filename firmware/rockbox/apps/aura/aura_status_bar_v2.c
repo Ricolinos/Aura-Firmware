@@ -47,7 +47,7 @@
  *
  * Progreso 0..256 animado con aura_pattern_lerp() (T1.1, cero
  * matematica nueva) -- mismo patron de redirigir-sin-salto ya usado en
- * CoverDrift/CoverFlow/morph de NowPlaying: `s_anim_from` guarda el
+ * CoverDrift/MusicFlow/morph de NowPlaying: `s_anim_from` guarda el
  * progreso real al momento en que arranca la animacion ACTUAL, para
  * que revelar de nuevo mientras todavia se esta ocultando (u ocultar
  * mientras todavia entra) nunca salte, solo cambie de direccion desde
@@ -150,7 +150,7 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
      * Es la decision FINAL del dueno (2026-08-16, D-274), no un
      * fallback: la traslucencia que el documento sugeria como opcion
      * quedo descartada aun ahora que si hay contenido detras de la
-     * barra en (full) (NowPlaying/CoverFlow). Nacio provisional en
+     * barra en (full) (NowPlaying/MusicFlow). Nacio provisional en
      * D-096, cuando SelectionSummary/CoverDrift aun no existian. */
     lcd_set_foreground(bg);
     lcd_fillrect(x, 0, width, AURA_DS_METRICS_STATUSBAR_HEIGHT);

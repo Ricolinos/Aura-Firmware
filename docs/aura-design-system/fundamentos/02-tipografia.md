@@ -31,7 +31,7 @@ glifos rotos, `docs/screenshots/theme-default-inter-lucide/`).
 
 **Actualizado 2026-08-14, dos pasadas el mismo día** (D-205: tipografía de
 listas y barra de estado más grande y legible, mismo alcance de D-195 pero
-sin tocar CoverFlow/NowPlaying → `StatusBar` 8px a 10px. D-207: "el texto
+sin tocar Music Flow/NowPlaying → `StatusBar` 8px a 10px. D-207: "el texto
 casi no se nota, 2px más grande" → `StatusBar` 10px a 12px): reutiliza
 estilos `ds_*` ya cargados en cada pasada (D-205: `DS_REG_10`/`DS_BOLD_10`,
 compartidos con `np_counter`/alarmas; D-207: `DS_REG_12`/`DS_BOLD_12`,
@@ -117,7 +117,7 @@ hueco libre. Cualquier estilo nuevo exige retirar uno o subir el límite.
 ## Listas de contenido completo (Música/Video/Fotos/Alarmas, `aura_widgets_draw_list`)
 
 **Nuevo 2026-08-14.** Sistema Apple2026 viejo (no `aura_ds`), sin doc propia
-todavía -- `A26_TYPE_BODY` (13px Regular, compartido con CoverFlow/NowPlaying/
+todavía -- `A26_TYPE_BODY` (13px Regular, compartido con Music Flow/NowPlaying/
 Fotos/Video) era el tamaño Regular más grande posible sin agregar un `.fnt`
 nuevo (ver `design-system/tokens.json`, `comment_ds`; el presupuesto de
 fuentes exacto está arriba). Para subir la legibilidad sin fuente nueva ni

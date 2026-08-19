@@ -30,7 +30,7 @@
 #include "audio.h"
 #include "tick.h"
 
-#include "aura_coverflow.h"
+#include "aura_musicflow.h"
 #include "aura_music.h"
 #include "aura_albumart.h"
 #include "aura_art.h"
@@ -50,7 +50,7 @@
 #include "aura_statusbar.h"
 #include "aura_status_bar_v2.h"
 
-/* Coverflow simplificado (D-025): en vez de perspectiva 3D real por
+/* Music Flow simplificado (D-025): en vez de perspectiva 3D real por
  * cuadro (demasiado costosa para un ARM926EJ-S a ~216MHz), todas las
  * caratulas visibles se decodifican una sola vez al mismo tamano fijo
  * y se cachean; la caratula central se dibuja a brillo completo, las
@@ -61,23 +61,23 @@
  * de "dos eventos en menos de HZ/6 = paso 2".
  */
 
-/* PLAN.md T3.2(b), componentes/cover-flow.md + G16: portada central
+/* PLAN.md T3.2(b), componentes/music-flow.md + G16: portada central
  * ~100px, radio de esquina 5px (empata Selector), reflejo al 25% del
  * alto del slide (mas sutil que el original de PictureFlow, ~33%), 3
  * por lado visibles -- los 4 provisionales de G16, ya resueltos en
  * T0.1/tokens.json, no inventados aqui. */
-#define CF_COVER_SIZE     AURA_DS_METRICS_COVER_FLOW_CENTER_SLIDE_SIZE
-#define CF_CORNER_RADIUS  AURA_DS_METRICS_COVER_FLOW_CORNER_RADIUS
-#define CF_REFLECTION_PCT AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
-#define CF_TOP_Y          30 /* borde superior del central, medido de la referencia de Apple */
-#define CF_VISIBLE_RADIUS AURA_DS_METRICS_COVER_FLOW_SIDE_SLIDES_PER_SIDE
+#define MF_COVER_SIZE     AURA_DS_METRICS_MUSIC_FLOW_CENTER_SLIDE_SIZE
+#define MF_CORNER_RADIUS  AURA_DS_METRICS_MUSIC_FLOW_CORNER_RADIUS
+#define MF_REFLECTION_PCT AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT
+#define MF_TOP_Y          30 /* borde superior del central, medido de la referencia de Apple */
+#define MF_VISIBLE_RADIUS AURA_DS_METRICS_MUSIC_FLOW_SIDE_SLIDES_PER_SIDE
 /* D-224 (encargo del dueno, 2026-08-13: "preparar los siguientes 15 a
  * menos que haya memoria suficiente"): visibles + 15 de margen por
  * lado, no solo 3 -- el iPod 6G del proyecto (MEMORYSIZE=64, ver
  * firmware/export/config.h) sobra para esto. Costo por slot: cover_buf
- * (CF_COVER_SIZE^2 * 2B = 130*130*2 = 33800B) + reflection_buf
- * (CF_COVER_SIZE*CF_REFLECTION_H*2B = 130*32*2 = 8320B) = 42120B; con
- * el CF_VISIBLE_RADIUS=3 vigente hoy, 2*(3+15)+3 = 39 slots =~1.60MB
+ * (MF_COVER_SIZE^2 * 2B = 130*130*2 = 33800B) + reflection_buf
+ * (MF_COVER_SIZE*MF_REFLECTION_H*2B = 130*32*2 = 8320B) = 42120B; con
+ * el MF_VISIBLE_RADIUS=3 vigente hoy, 2*(3+15)+3 = 39 slots =~1.60MB
  * (~2.5% de los 64MB) -- s_slots es estatico (BSS), no vive en el
  * stack, ver su declaracion mas abajo. get_slot_for() ya evita relleno
  * inutil de esos slots extra: solo carga bajo demanda cuando el
@@ -88,8 +88,8 @@
  * por una biblioteca grande, la ventana de RAM cubra un tramo mas largo
  * antes de tener que re-leer el .pfraw de un album ya visitado
  * recientemente. */
-#define CF_CACHE_SLOTS    (2 * (CF_VISIBLE_RADIUS + 15) + 3)
-#define CF_SIDE_FADE      165 /* de 255 -- laterales visibles como en la referencia, no apagadas */
+#define MF_CACHE_SLOTS    (2 * (MF_VISIBLE_RADIUS + 15) + 3)
+#define MF_SIDE_FADE      165 /* de 255 -- laterales visibles como en la referencia, no apagadas */
 
 /* Reverso crecido (encargo del dueno del diseno, 2026-08-12): al
  * voltearse, el album pasa de 130px a 200x200 -- centrado en el area
@@ -98,22 +98,22 @@
  * del carrusel se deslizan fuera de pantalla durante el giro para
  * cederle el espacio. 200 elegido por el dueno del diseno sobre la
  * tabla de opciones (180/200/220). Definidos aca arriba (no junto al
- * render del panel) porque aura_coverflow_pending() -- que vive
+ * render del panel) porque aura_musicflow_pending() -- que vive
  * temprano en el archivo -- consulta la ventana del Fade-on-Idle. */
-#define CF_TRACK_ROW_H_EARLY 20 /* == CF_TRACK_ROW_H, ver abajo */
-#define CF_BACK_SIZE   200
-#define CF_BACK_X      ((A26_SCREEN_WIDTH - CF_BACK_SIZE) / 2)
-#define CF_BACK_Y      (A26_LAYOUT_STATUSBAR_HEIGHT \
-                        + (A26_SCREEN_HEIGHT - A26_LAYOUT_STATUSBAR_HEIGHT - CF_BACK_SIZE) / 2)
-#define CF_BACK_HEADER_H 20
-#define CF_BACK_PADDING  4  /* padding interno del reverso (encargo 2026-08-12) */
+#define MF_TRACK_ROW_H_EARLY 20 /* == MF_TRACK_ROW_H, ver abajo */
+#define MF_BACK_SIZE   200
+#define MF_BACK_X      ((A26_SCREEN_WIDTH - MF_BACK_SIZE) / 2)
+#define MF_BACK_Y      (A26_LAYOUT_STATUSBAR_HEIGHT \
+                        + (A26_SCREEN_HEIGHT - A26_LAYOUT_STATUSBAR_HEIGHT - MF_BACK_SIZE) / 2)
+#define MF_BACK_HEADER_H 20
+#define MF_BACK_PADDING  4  /* padding interno del reverso (encargo 2026-08-12) */
 /* Zoom del giro: la tapa (y su reflejo, en proporcion) crece de
- * CF_COVER_SIZE a CF_BACK_SIZE DURANTE la rotacion -- acercando la
+ * MF_COVER_SIZE a MF_BACK_SIZE DURANTE la rotacion -- acercando la
  * camara del proyector (distance negativo): escala = CAM_DIST /
  * (CAM_DIST + d)  =>  d = CAM_DIST * COVER/BACK - CAM_DIST. */
-#define CF_GROW_DISTANCE (AURA_FLOW_CAM_DIST * CF_COVER_SIZE / CF_BACK_SIZE \
+#define MF_GROW_DISTANCE (AURA_FLOW_CAM_DIST * MF_COVER_SIZE / MF_BACK_SIZE \
                           - AURA_FLOW_CAM_DIST)
-#define CF_BACK_VISIBLE_ROWS ((CF_BACK_SIZE - CF_BACK_HEADER_H) / CF_TRACK_ROW_H_EARLY)
+#define MF_BACK_VISIBLE_ROWS ((MF_BACK_SIZE - MF_BACK_HEADER_H) / MF_TRACK_ROW_H_EARLY)
 
 /* Reloj de actividad del ScrollIndicator del reverso (Fade-on-Idle) --
  * a nivel de archivo porque la puerta de energia (pending()) tambien
@@ -144,23 +144,23 @@ static int marquee_phase_scrolling(long since)
  * aura_art_reflection_height(), pero constante en tiempo de
  * compilacion (hace falta para dimensionar el buffer estatico de cada
  * slot). */
-#define CF_REFLECTION_H   (CF_COVER_SIZE * CF_REFLECTION_PCT / 100)
+#define MF_REFLECTION_H   (MF_COVER_SIZE * MF_REFLECTION_PCT / 100)
 /* Lineas de texto bajo el central (titulo bold + artista regular,
  * posiciones medidas de la referencia del original: ~y182/y202 en
  * 320x240 con central de 130 a partir de y30). */
-#define CF_TITLE_Y  (CF_TOP_Y + CF_COVER_SIZE + 22)
-#define CF_ARTIST_Y (CF_TITLE_Y + 18)
+#define MF_TITLE_Y  (MF_TOP_Y + MF_COVER_SIZE + 22)
+#define MF_ARTIST_Y (MF_TITLE_Y + 18)
 
 typedef struct {
     int album_index; /* -1 = slot libre/no cargado */
     aura_albumart_t art;
-    unsigned char cover_buf[CF_COVER_SIZE * CF_COVER_SIZE * sizeof(fb_data)];
-    unsigned char reflection_buf[CF_COVER_SIZE * CF_REFLECTION_H * sizeof(fb_data)];
-} cf_slot_t;
+    unsigned char cover_buf[MF_COVER_SIZE * MF_COVER_SIZE * sizeof(fb_data)];
+    unsigned char reflection_buf[MF_COVER_SIZE * MF_REFLECTION_H * sizeof(fb_data)];
+} mf_slot_t;
 
-static cf_slot_t s_slots[CF_CACHE_SLOTS];
+static mf_slot_t s_slots[MF_CACHE_SLOTS];
 
-/* -- Estados idle/scrolling (PLAN.md T3.2(b), componentes/cover-flow.md:
+/* -- Estados idle/scrolling (PLAN.md T3.2(b), componentes/music-flow.md:
  * "idle -- carrusel quieto en un album" / "scrolling -- desplazandose
  * entre albumes") --------------------------------------------------------
  *
@@ -182,7 +182,7 @@ static cf_slot_t s_slots[CF_CACHE_SLOTS];
  * redirigir sin salto si el usuario sigue girando la rueda antes de que
  * el paso anterior termine de asentarse -- mismo patron ya usado en
  * CoverDrift/T2.9 y el morph de NowPlaying/T3.1c). */
-#define CF_SCROLL_ANIM_MS 220 /* confirmado en cover-flow.md (D-103; ancla del ease del zoom, D-245/D-249) */
+#define MF_SCROLL_ANIM_MS 220 /* confirmado en music-flow.md (D-103; ancla del ease del zoom, D-245/D-249) */
 static int s_target_index = 0;
 static int s_anim_from_x256 = 0;
 static long s_anim_since = 0;
@@ -193,9 +193,9 @@ static long s_anim_since = 0;
  * Mismo patron target/from/since que s_target_index/s_anim_from_x256/
  * s_anim_since de arriba, para una segunda dimension de animacion (la
  * escala en vez de la posicion): un "paso real" de scroll dispara un
- * zoom-out hacia CF_ZOOM_SCALE_SHRUNK; en cuanto la posicion se asienta
+ * zoom-out hacia MF_ZOOM_SCALE_SHRUNK; en cuanto la posicion se asienta
  * (anim_pos_x256() alcanza el indice objetivo) se dispara el zoom-in de
- * vuelta a CF_ZOOM_SCALE_NORMAL. Si el usuario sigue girando la rueda
+ * vuelta a MF_ZOOM_SCALE_NORMAL. Si el usuario sigue girando la rueda
  * mientras ya esta encogida, el target no cambia -- no vuelve a pulsar
  * por cada paso de una rafaga, se queda encogida hasta que de verdad se
  * detiene.
@@ -205,15 +205,15 @@ static long s_anim_since = 0;
  * ease-out (D-247), ease-in/ease-in (D-248), y de vuelta a ease-in/
  * ease-out (D-249, combinacion elegida por el dueno del producto como
  * la correcta) pero con un encogimiento mas pronunciado -- ver
- * CF_ZOOM_SCALE_SHRUNK. */
-#define CF_ZOOM_SCALE_NORMAL  256 /* 100%: distance=0, identico al render de siempre */
-#define CF_ZOOM_SCALE_SHRUNK  216 /* ~84%: D-249, mas pronunciado que el 240 (~94%) original -- ver docs/aura-design-system/componentes/cover-flow.md */
-#define CF_ZOOM_OUT_MS 150 /* ease-in, corto: el arranque debe sentirse inmediato */
-#define CF_ZOOM_IN_MS  CF_SCROLL_ANIM_MS /* ease-out, mismo tiempo que el asentamiento de posicion */
-static int s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
-static int s_zoom_from_256 = CF_ZOOM_SCALE_NORMAL;
+ * MF_ZOOM_SCALE_SHRUNK. */
+#define MF_ZOOM_SCALE_NORMAL  256 /* 100%: distance=0, identico al render de siempre */
+#define MF_ZOOM_SCALE_SHRUNK  216 /* ~84%: D-249, mas pronunciado que el 240 (~94%) original -- ver docs/aura-design-system/componentes/music-flow.md */
+#define MF_ZOOM_OUT_MS 150 /* ease-in, corto: el arranque debe sentirse inmediato */
+#define MF_ZOOM_IN_MS  MF_SCROLL_ANIM_MS /* ease-out, mismo tiempo que el asentamiento de posicion */
+static int s_zoom_target_256 = MF_ZOOM_SCALE_NORMAL;
+static int s_zoom_from_256 = MF_ZOOM_SCALE_NORMAL;
 static long s_zoom_since = 0;
-static int s_zoom_shrinking = 0; /* 1 mientras va hacia SHRUNK (ease-in, CF_ZOOM_OUT_MS), 0 hacia NORMAL (ease-out, CF_ZOOM_IN_MS) */
+static int s_zoom_shrinking = 0; /* 1 mientras va hacia SHRUNK (ease-in, MF_ZOOM_OUT_MS), 0 hacia NORMAL (ease-out, MF_ZOOM_IN_MS) */
 
 /* Escala interpolada actual de la caratula central, 256=tamano normal.
  * Cuando from==target (caso comun: reposo total, nunca hubo scroll o
@@ -231,7 +231,7 @@ static int zoom_scale_256(void)
         return s_zoom_target_256;
 
     elapsed_ms = (current_tick - s_zoom_since) * 1000L / HZ;
-    duration_ms = s_zoom_shrinking ? CF_ZOOM_OUT_MS : CF_ZOOM_IN_MS;
+    duration_ms = s_zoom_shrinking ? MF_ZOOM_OUT_MS : MF_ZOOM_IN_MS;
     t = s_zoom_shrinking ? aura_motion_ease_in(elapsed_ms, duration_ms)
                           : aura_motion_ease_out(elapsed_ms, duration_ms);
     return aura_pattern_lerp(s_zoom_from_256, s_zoom_target_256, t);
@@ -240,21 +240,21 @@ static int zoom_scale_256(void)
 /* Distancia de camara (canal `slide.distance` de aura_flow, el mismo
  * que ya usa el crecimiento 130->200px del flip) equivalente a la
  * escala interpolada actual -- formula inversa de la ya documentada en
- * CF_GROW_DISTANCE (escala = CAM_DIST/(CAM_DIST+d) => d =
+ * MF_GROW_DISTANCE (escala = CAM_DIST/(CAM_DIST+d) => d =
  * CAM_DIST*(256-escala)/escala). Con escala==256 (reposo) da
  * exactamente 0, igual que el `slide.distance = 0` que reemplaza.
  *
  * D-246 (encargo del dueno del producto: "no solo la tapa central,
  * todas junto con ella, para dar sensacion de rapidez fluida"): este
  * MISMO valor se le pasa por igual a TODAS las tapas visibles del
- * carrusel (ver aura_coverflow_draw() y draw_slide_perspective()) --
+ * carrusel (ver aura_musicflow_draw() y draw_slide_perspective()) --
  * ya no se atenua hacia 0 segun que tan lateral sea cada una. */
 static int zoom_distance(void)
 {
     int scale = zoom_scale_256();
-    if (scale >= CF_ZOOM_SCALE_NORMAL)
+    if (scale >= MF_ZOOM_SCALE_NORMAL)
         return 0;
-    return AURA_FLOW_CAM_DIST * (CF_ZOOM_SCALE_NORMAL - scale) / scale;
+    return AURA_FLOW_CAM_DIST * (MF_ZOOM_SCALE_NORMAL - scale) / scale;
 }
 
 /* Para pending()/animating(): mientras la escala todavia no alcanzo su
@@ -273,10 +273,10 @@ static int zoom_animating(void)
  * (rafaga de pasos), no reinicia nada -- ver comentario de arriba. */
 static void zoom_trigger_scroll_start(void)
 {
-    if (s_zoom_target_256 == CF_ZOOM_SCALE_SHRUNK)
+    if (s_zoom_target_256 == MF_ZOOM_SCALE_SHRUNK)
         return;
     s_zoom_from_256 = zoom_scale_256();
-    s_zoom_target_256 = CF_ZOOM_SCALE_SHRUNK;
+    s_zoom_target_256 = MF_ZOOM_SCALE_SHRUNK;
     s_zoom_since = current_tick;
     s_zoom_shrinking = 1;
 }
@@ -285,10 +285,10 @@ static void zoom_trigger_scroll_start(void)
  * asento. Idempotente igual que la anterior. */
 static void zoom_trigger_settle(void)
 {
-    if (s_zoom_target_256 == CF_ZOOM_SCALE_NORMAL)
+    if (s_zoom_target_256 == MF_ZOOM_SCALE_NORMAL)
         return;
     s_zoom_from_256 = zoom_scale_256();
-    s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
+    s_zoom_target_256 = MF_ZOOM_SCALE_NORMAL;
     s_zoom_since = current_tick;
     s_zoom_shrinking = 0;
 }
@@ -300,8 +300,8 @@ static void zoom_trigger_settle(void)
  * sentido. */
 static void zoom_settle_idle(void)
 {
-    s_zoom_target_256 = CF_ZOOM_SCALE_NORMAL;
-    s_zoom_from_256 = CF_ZOOM_SCALE_NORMAL;
+    s_zoom_target_256 = MF_ZOOM_SCALE_NORMAL;
+    s_zoom_from_256 = MF_ZOOM_SCALE_NORMAL;
 }
 
 static aura_screen_id_t s_cache_screen = AURA_SCREEN_COUNT;
@@ -311,16 +311,16 @@ static int s_album_count = 0;
 
 /* Posicion animada actual, en unidades de "indice de album" x256 --
  * interpola desde `s_anim_from_x256` hacia `s_target_index*256` en
- * CF_SCROLL_ANIM_MS. Nunca se llama dos veces por cuadro con resultados
+ * MF_SCROLL_ANIM_MS. Nunca se llama dos veces por cuadro con resultados
  * distintos: current_tick es estable dentro de un mismo cuadro. */
 static int anim_pos_x256(void)
 {
     long elapsed_ms = (current_tick - s_anim_since) * 1000L / HZ;
-    int t = aura_motion_linear(elapsed_ms, CF_SCROLL_ANIM_MS);
+    int t = aura_motion_linear(elapsed_ms, MF_SCROLL_ANIM_MS);
     return aura_pattern_lerp(s_anim_from_x256, s_target_index * 256, t);
 }
 
-/* -- Flip + TrackList (PLAN.md T3.2(c), componentes/cover-flow.md:
+/* -- Flip + TrackList (PLAN.md T3.2(c), componentes/music-flow.md:
  * "seleccion de album: flip clasico fiel al iPod original -- la
  * portada gira/voltea como carta y detras esta la lista de pistas")
  * --------------------------------------------------------------------
@@ -333,15 +333,15 @@ static int anim_pos_x256(void)
  * y cambia a un camino de render aparte (2D plano) en show_tracks; se
  * sigue el mismo criterio aca, ver draw_slide_flip(). */
 typedef enum {
-    CF_STATE_IDLE = 0,
-    CF_STATE_COVER_IN,
-    CF_STATE_SHOW_TRACKS,
-    CF_STATE_COVER_OUT,
-} cf_state_t;
+    MF_STATE_IDLE = 0,
+    MF_STATE_COVER_IN,
+    MF_STATE_SHOW_TRACKS,
+    MF_STATE_COVER_OUT,
+} mf_state_t;
 
-#define CF_FLIP_MS AURA_DS_METRICS_COVER_FLOW_FLIP_MS /* 300ms por fase cover_in/cover_out, decision del dueno (D-274; antes 260 provisional, D-104) */
+#define MF_FLIP_MS AURA_DS_METRICS_MUSIC_FLOW_FLIP_MS /* 300ms por fase cover_in/cover_out, decision del dueno (D-274; antes 260 provisional, D-104) */
 
-static cf_state_t s_state = CF_STATE_IDLE;
+static mf_state_t s_state = MF_STATE_IDLE;
 static long s_state_since = 0;
 static aura_music_item_t s_tracks[AURA_MUSIC_MAX_ITEMS];
 static int s_track_count = 0;
@@ -350,25 +350,25 @@ static int s_track_sel = 0;
 static int flip_progress_256(void)
 {
     long elapsed_ms = (current_tick - s_state_since) * 1000L / HZ;
-    return aura_motion_linear(elapsed_ms, CF_FLIP_MS);
+    return aura_motion_linear(elapsed_ms, MF_FLIP_MS);
 }
 
 /* Solo la POSICION -- para el gate de SELECT (ver mas abajo), que
  * necesita saber si la tapa objetivo ya esta en su lugar, no si el
  * zoom (D-245) sigue interpolando de vuelta a tamano normal. Antes de
- * D-245 esto era exactamente lo que hacia aura_coverflow_pending(); al
+ * D-245 esto era exactamente lo que hacia aura_musicflow_pending(); al
  * sumarle zoom_animating() para la cadencia de render, el gate de
  * SELECT habria heredado ~220ms extra de espera injustificada cada vez
  * que se selecciona justo al terminar de scrollear. */
 static int position_pending(void)
 {
     return anim_pos_x256() != s_target_index * 256
-        || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
+        || s_state == MF_STATE_COVER_IN || s_state == MF_STATE_COVER_OUT;
 }
 
-int aura_coverflow_pending(void)
+int aura_musicflow_pending(void)
 {
-    if (s_state == CF_STATE_SHOW_TRACKS)
+    if (s_state == MF_STATE_SHOW_TRACKS)
     {
         /* Marquee de la cabecera: mientras desborde, el ciclo completo
          * necesita cuadros con cadencia gruesa (para cruzar la
@@ -380,7 +380,7 @@ int aura_coverflow_pending(void)
          * pedir cuadros mientras el fundido (entrada + persistencia +
          * salida) siga corriendo, o el pulgar se congela a medio
          * aparecer. */
-        if (s_track_count > CF_BACK_VISIBLE_ROWS)
+        if (s_track_count > MF_BACK_VISIBLE_ROWS)
         {
             long idle_ms = (current_tick - s_track_activity_since) * 1000L / HZ;
             if (aura_scroll_indicator_pending(idle_ms))
@@ -390,22 +390,22 @@ int aura_coverflow_pending(void)
 
     return anim_pos_x256() != s_target_index * 256
         || zoom_animating()
-        || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
+        || s_state == MF_STATE_COVER_IN || s_state == MF_STATE_COVER_OUT;
 }
 
-int aura_coverflow_animating(void)
+int aura_musicflow_animating(void)
 {
     /* Cadencia fina solo cuando los pixeles se mueven de verdad: el
      * carrusel/flip, el zoom de la caratula central (D-245), o el
      * tramo de MOVIMIENTO del marquee de la cabecera -- no durante su
      * tramo estatico ni la persistencia del ScrollIndicator (esos van
      * por pending() a cadencia gruesa). */
-    if (s_state == CF_STATE_SHOW_TRACKS)
+    if (s_state == MF_STATE_SHOW_TRACKS)
         return s_header_overflowing && marquee_phase_scrolling(s_header_since);
 
     return anim_pos_x256() != s_target_index * 256
         || zoom_animating()
-        || s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT;
+        || s_state == MF_STATE_COVER_IN || s_state == MF_STATE_COVER_OUT;
 }
 
 static void ensure_albums(aura_screen_id_t screen)
@@ -418,13 +418,13 @@ static void ensure_albums(aura_screen_id_t screen)
     if (s_cache_screen == screen && s_cache_generation == gen)
         return;
 
-    /* El browse de Cover Flow (tag_album, sin filtros) NO depende de la
+    /* El browse de Music Flow (tag_album, sin filtros) NO depende de la
      * generacion de filtros: la generacion sube, entre otras cosas,
      * cuando ESTE MISMO componente llama a aura_music_select_album() al
      * abrir la lista de canciones de una tapa. Resetear la posicion en
      * ese caso era el bug reportado por el dueno del diseno
      * (2026-08-12): "el estado del resto de caratulas se debe mantener,
-     * no regresar al inicio del coverflow". La posicion/animacion solo
+     * no regresar al inicio del musicflow". La posicion/animacion solo
      * se reinicia al entrar desde OTRA pantalla cacheada distinta (o si
      * la lista encogio por debajo del indice actual). */
     same_list = (s_cache_screen == screen);
@@ -441,11 +441,11 @@ static void ensure_albums(aura_screen_id_t screen)
         zoom_settle_idle();
     }
 
-    for (i = 0; i < CF_CACHE_SLOTS; i++)
+    for (i = 0; i < MF_CACHE_SLOTS; i++)
         s_slots[i].album_index = -1;
 }
 
-static cf_slot_t *get_slot_for(int album_index)
+static mf_slot_t *get_slot_for(int album_index)
 {
     static int s_slots_theme = -1;
     int i, target, free_slot = -1, farthest = -1, farthest_dist = -1;
@@ -457,15 +457,15 @@ static cf_slot_t *get_slot_for(int album_index)
     if (s_slots_theme != (int)aura_settings.theme)
     {
         s_slots_theme = (int)aura_settings.theme;
-        for (i = 0; i < CF_CACHE_SLOTS; i++)
+        for (i = 0; i < MF_CACHE_SLOTS; i++)
             s_slots[i].album_index = -1;
     }
 
-    for (i = 0; i < CF_CACHE_SLOTS; i++)
+    for (i = 0; i < MF_CACHE_SLOTS; i++)
         if (s_slots[i].album_index == album_index)
             return &s_slots[i];
 
-    for (i = 0; i < CF_CACHE_SLOTS; i++)
+    for (i = 0; i < MF_CACHE_SLOTS; i++)
     {
         int dist;
         if (s_slots[i].album_index == -1)
@@ -483,8 +483,8 @@ static cf_slot_t *get_slot_for(int album_index)
     target = (free_slot >= 0) ? free_slot : farthest;
 
     s_slots[target].album_index = album_index;
-    s_slots[target].art.size = CF_COVER_SIZE;
-    s_slots[target].art.radius = CF_CORNER_RADIUS;
+    s_slots[target].art.size = MF_COVER_SIZE;
+    s_slots[target].art.radius = MF_CORNER_RADIUS;
     s_slots[target].art.cover_data = s_slots[target].cover_buf;
     s_slots[target].art.reflection_data = s_slots[target].reflection_buf;
     if (!aura_albumart_load_for_album(s_albums[album_index].seek, &s_slots[target].art))
@@ -493,10 +493,10 @@ static cf_slot_t *get_slot_for(int album_index)
     return &s_slots[target];
 }
 
-/* D-219 (encargo del dueno, 2026-08-14: coverflow "deberia ser mas
+/* D-219 (encargo del dueno, 2026-08-14: musicflow "deberia ser mas
  * rapido y fluido"): `draw_slide_perspective()` llama esto una vez POR
  * PIXEL de CADA columna de CADA tapa lateral visible -- con
- * CF_COVER_SIZE=130 y hasta ~8 laterales en pantalla, son decenas de
+ * MF_COVER_SIZE=130 y hasta ~8 laterales en pantalla, son decenas de
  * miles de llamadas por cuadro mientras el carrusel se desliza, y cada
  * una hacia TRES divisiones enteras de 8 bits (una por canal) -- el
  * ARM926EJ-S del iPod no tiene divisor de hardware, cada division
@@ -528,14 +528,14 @@ static fb_data lut_pixel(unsigned px, const unsigned char *lut_r,
 /* D-240 (sesion 2026-08-14, "todavia se puede optimizar mas"):
  * `fade` (ver draw_slide_perspective) solo es CONTINUO mientras una
  * tapa esta a menos de un paso de indice del centro animado
- * (t_center<256) -- aura_pattern_lerp() satura a CF_SIDE_FADE exacto
+ * (t_center<256) -- aura_pattern_lerp() satura a MF_SIDE_FADE exacto
  * en cuanto t_center llega a 256 (progress_256>=256 => return b, ver
- * aura_patterns.c). Con CF_VISIBLE_RADIUS=3 se dibujan hasta 8
- * laterales por cuadro; EN REPOSO las 8 estan en fade==CF_SIDE_FADE
+ * aura_patterns.c). Con MF_VISIBLE_RADIUS=3 se dibujan hasta 8
+ * laterales por cuadro; EN REPOSO las 8 estan en fade==MF_SIDE_FADE
  * fijo (ninguna esta "a medio paso" del centro), y DURANTE el scroll
  * a lo sumo 2 (las vecinas inmediatas del indice animado) tienen un
  * fade realmente en transicion -- las otras 6+ siguen fijas en
- * CF_SIDE_FADE. build_fade_lut() (256*3 divisiones enteras, sin
+ * MF_SIDE_FADE. build_fade_lut() (256*3 divisiones enteras, sin
  * divisor de hardware en el ARM926EJ-S) se reconstruia identica para
  * cada una de esas tapas "lejanas", cada cuadro: una sola tabla
  * compartida, invalidada solo cuando cambia el color de fondo (tema),
@@ -553,9 +553,9 @@ static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
 
     if (bg_r != cached_bg_r || bg_g != cached_bg_g || bg_b != cached_bg_b)
     {
-        build_fade_lut(lut_r, CF_SIDE_FADE, bg_r);
-        build_fade_lut(lut_g, CF_SIDE_FADE, bg_g);
-        build_fade_lut(lut_b, CF_SIDE_FADE, bg_b);
+        build_fade_lut(lut_r, MF_SIDE_FADE, bg_r);
+        build_fade_lut(lut_g, MF_SIDE_FADE, bg_g);
+        build_fade_lut(lut_b, MF_SIDE_FADE, bg_b);
         cached_bg_r = bg_r;
         cached_bg_g = bg_g;
         cached_bg_b = bg_b;
@@ -569,7 +569,7 @@ static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
 /* -- Perspectiva real (Fase 31.1/31.2, D-079/D-080; T3.2(a) extiende a
  * datos transpuestos; T3.2(b) generaliza a offset CONTINUO) -------------
  *
- * Geometria de "reposo" de un coverflow clasico (pictureflow.c
+ * Geometria de "reposo" de un musicflow clasico (pictureflow.c
  * reset_slides(), resuelta a numeros concretos para 320x240 -- ver
  * test_realistic_side_slide_layout() en test_flow.c). Se usa para TODAS
  * las tapas, central incluida (offset=0, angle=0, cx=0 -- angulo 0 en
@@ -578,9 +578,9 @@ static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
  * datos fila-contigua y quedo incompatible cuando el cache .pfraw
  * (T3.2(a)) empezo a guardar las caratulas TRANSPUESTAS -- unificar en
  * una sola funcion evita mantener dos formatos de lectura de pixel. */
-#define CF_ITILT           199    /* ~70 grados: 70*1024/360, mismo valor fijo de pictureflow.c (no depende del tamano del slide) */
-#define CF_OFFSETX_R       92000  /* separacion centro-a-lateral, re-derivada para CF_COVER_SIZE=130 contra la referencia del original de Apple (la primera lateral queda pegada al borde del central) */
-#define CF_SLIDE_SPACING_R 29000  /* laterales apretadas y traslapadas (~28px entre vecinas), como la referencia */
+#define MF_ITILT           199    /* ~70 grados: 70*1024/360, mismo valor fijo de pictureflow.c (no depende del tamano del slide) */
+#define MF_OFFSETX_R       92000  /* separacion centro-a-lateral, re-derivada para MF_COVER_SIZE=130 contra la referencia del original de Apple (la primera lateral queda pegada al borde del central) */
+#define MF_SLIDE_SPACING_R 29000  /* laterales apretadas y traslapadas (~28px entre vecinas), como la referencia */
 
 /* `offset_x256` es la distancia (en unidades de "album", x256) entre
  * esta tapa y la posicion animada actual del carrusel -- puede ser
@@ -593,7 +593,7 @@ static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
  * vez de saltar.
  *
  * `zoom_dist` (D-245/D-246) es el `slide.distance` que produce el zoom
- * de scroll -- calculado UNA vez por cuadro en aura_coverflow_draw()
+ * de scroll -- calculado UNA vez por cuadro en aura_musicflow_draw()
  * (ver zoom_distance()), no por tapa, para no repetir su division en
  * cada una de las ~9 tapas visibles. A diferencia de angle/cx/fade
  * (que SI se atenuan con t_center segun que tan lateral es cada tapa,
@@ -602,7 +602,7 @@ static void get_far_fade_lut(int bg_r, int bg_g, int bg_b,
  * pidio explicitamente que todo el carrusel se encoja junto, no solo
  * la central, para que la sensacion sea de velocidad fluida del
  * conjunto en vez de un efecto aislado en una sola tapa. */
-static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
+static void draw_slide_perspective(const mf_slot_t *slot, int offset_x256,
                                     int zoom_dist)
 {
     aura_flow_slide_t slide;
@@ -614,20 +614,20 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
     int fade;
     const fb_data *cover = (const fb_data *)slot->art.cover_data;   /* transpuesto: cover[col*size+row] */
     const fb_data *refl = (const fb_data *)slot->art.reflection_data; /* transpuesto: refl[col*refl_h+row] */
-    /* D-240: CF_COVER_SIZE/CF_REFLECTION_PCT son macros (constantes de
-     * compilacion) -- aura_art_reflection_height(CF_COVER_SIZE,
-     * CF_REFLECTION_PCT) siempre devolvia el mismo valor que
-     * CF_REFLECTION_H (definido arriba con la MISMA formula, para
+    /* D-240: MF_COVER_SIZE/MF_REFLECTION_PCT son macros (constantes de
+     * compilacion) -- aura_art_reflection_height(MF_COVER_SIZE,
+     * MF_REFLECTION_PCT) siempre devolvia el mismo valor que
+     * MF_REFLECTION_H (definido arriba con la MISMA formula, para
      * dimensionar cover_buf/reflection_buf) pero via una llamada real a
      * otra unidad de compilacion, una vez por tapa visible por cuadro.
      * Usar la macro ya existente evita esa llamada+division redundante. */
-    int refl_h = CF_REFLECTION_H;
-    int total_h = CF_COVER_SIZE + refl_h;
+    int refl_h = MF_REFLECTION_H;
+    int total_h = MF_COVER_SIZE + refl_h;
     unsigned bg = a26_color(A26_SHELL_BG);
     int bg_r = RGB_UNPACK_RED(bg);
     int bg_g = RGB_UNPACK_GREEN(bg);
     int bg_b = RGB_UNPACK_BLUE(bg);
-    static fb_data col_buf[CF_COVER_SIZE + CF_REFLECTION_H];
+    static fb_data col_buf[MF_COVER_SIZE + MF_REFLECTION_H];
     /* D-219: tablas de blend, ver build_fade_lut() -- una sola vez por
      * tapa, no una vez por pixel. D-240: usadas solo para el fade EN
      * TRANSICION (ver get_far_fade_lut() arriba); use_lut_* apunta a
@@ -643,15 +643,15 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
      * la carga muestra su borde hacia el centro de la pantalla. En
      * offset==0 (sign==0) todo colapsa a angulo/cx cero, sin distorsion,
      * igual que antes. */
-    slide.angle = -sign * aura_pattern_lerp(0, CF_ITILT, t_center);
+    slide.angle = -sign * aura_pattern_lerp(0, MF_ITILT, t_center);
     slide.distance = zoom_dist;
-    slide.cx = sign * (aura_pattern_lerp(0, CF_OFFSETX_R, t_center)
-                        + (int)((long)CF_SLIDE_SPACING_R * extra_x256 / 256));
+    slide.cx = sign * (aura_pattern_lerp(0, MF_OFFSETX_R, t_center)
+                        + (int)((long)MF_SLIDE_SPACING_R * extra_x256 / 256));
 
-    fade = aura_pattern_lerp(255, CF_SIDE_FADE, t_center);
+    fade = aura_pattern_lerp(255, MF_SIDE_FADE, t_center);
     if (fade < 255)
     {
-        if (fade == CF_SIDE_FADE)
+        if (fade == MF_SIDE_FADE)
         {
             /* Caso comun (ver comentario de get_far_fade_lut()): tabla
              * compartida, sin reconstruir. */
@@ -670,25 +670,25 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
         }
     }
 
-    aura_flow_begin_projection(&proj, &slide, CF_COVER_SIZE);
+    aura_flow_begin_projection(&proj, &slide, MF_COVER_SIZE);
 
     while (proj.screen_x < AURA_FLOW_SCREEN_W)
     {
         int col = aura_flow_source_column(&proj);
         int dy = aura_flow_vertical_scale(&proj);
         int p = 0, dest_row, n_rows = 0;
-        const fb_data *cover_col = cover + (size_t)col * CF_COVER_SIZE;
+        const fb_data *cover_col = cover + (size_t)col * MF_COVER_SIZE;
         const fb_data *refl_col = refl + (size_t)col * refl_h;
         /* Centrado VERTICAL por columna (correccion contra la captura
          * del original de Apple, 2026-08-12): cada columna se ancla de
          * modo que la CARATULA quede centrada en su linea media -- la
          * perspectiva encoge ambos bordes (superior e inferior
-         * convergen hacia el punto de fuga), como el Cover Flow real.
+         * convergen hacia el punto de fuga), como el Music Flow real.
          * Anclar todas las columnas al mismo borde superior (la
          * version anterior) producia tapas con el borde de arriba
          * perfectamente horizontal, que es lo que delato el error. */
-        int cover_disp = (CF_COVER_SIZE << AURA_FLOW_SHIFT) / dy;
-        int y_col = CF_TOP_Y + CF_COVER_SIZE / 2 - cover_disp / 2;
+        int cover_disp = (MF_COVER_SIZE << AURA_FLOW_SHIFT) / dy;
+        int y_col = MF_TOP_Y + MF_COVER_SIZE / 2 - cover_disp / 2;
 
         for (dest_row = 0; dest_row < total_h; dest_row++)
         {
@@ -697,9 +697,9 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
 
             if (source_row >= total_h)
                 break;
-            px = (source_row < CF_COVER_SIZE)
+            px = (source_row < MF_COVER_SIZE)
                 ? cover_col[source_row]
-                : refl_col[source_row - CF_COVER_SIZE];
+                : refl_col[source_row - MF_COVER_SIZE];
             col_buf[dest_row] = (fade < 255) ? lut_pixel(px, use_lut_r, use_lut_g, use_lut_b) : px;
             p += dy;
             n_rows++;
@@ -715,7 +715,7 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
 /* Flip real (giro sobre el eje Y): reusa DIRECTO el mismo motor de
  * proyeccion por columnas que draw_slide_perspective() (regla dura 7),
  * con un angulo continuo 0->256 (0->90 grados en unidades IANGLE,
- * 1024=360) en vez de la formula de lateral con tope en CF_ITILT. A 90
+ * 1024=360) en vez de la formula de lateral con tope en MF_ITILT. A 90
  * grados la tapa se ve de perfil (practicamente invisible) -- mas alla
  * (90-180) mostraria el reverso de la MISMA imagen reflejado, que no
  * es contenido real (una caratula no tiene "parte de atras"), asi que
@@ -725,14 +725,14 @@ static void draw_slide_perspective(const cf_slot_t *slot, int offset_x256,
  * comentario de la maquina de estados arriba). Sin reflejo ni
  * atenuacion durante el giro: es una animacion corta y unica, no vale
  * la pena la complejidad de desvanecerlas de paso. */
-static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
+static void draw_slide_flip(const mf_slot_t *slot, int iangle_0_to_256)
 {
     aura_flow_slide_t slide;
     aura_flow_projection_t proj;
     const fb_data *cover = (const fb_data *)slot->art.cover_data;
     const fb_data *refl = (const fb_data *)slot->art.reflection_data;
-    static fb_data col_buf[CF_BACK_SIZE + 8];
-    static fb_data refl_buf[CF_REFLECTION_H * CF_BACK_SIZE / CF_COVER_SIZE + 8];
+    static fb_data col_buf[MF_BACK_SIZE + 8];
+    static fb_data refl_buf[MF_REFLECTION_H * MF_BACK_SIZE / MF_COVER_SIZE + 8];
     /* Transicion del reflejo (encargo del dueno del diseno,
      * 2026-08-12: "que no aparezca y desaparezca repentinamente...
      * que gire a la vez que se desvanece y desaparece hacia abajo...
@@ -746,35 +746,35 @@ static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
     int refl_drop = ((256 - refl_vis) * 64) / 256;
     /* Centro vertical: viaja del centro del carrusel al centro del
      * reverso crecido, atado al mismo angulo que el zoom. */
-    int center_y = aura_pattern_lerp(CF_TOP_Y + CF_COVER_SIZE / 2,
-                                      CF_BACK_Y + CF_BACK_SIZE / 2,
+    int center_y = aura_pattern_lerp(MF_TOP_Y + MF_COVER_SIZE / 2,
+                                      MF_BACK_Y + MF_BACK_SIZE / 2,
                                       iangle_0_to_256);
     unsigned bg = a26_color(A26_SHELL_BG);
 
     slide.angle = iangle_0_to_256;
     /* Zoom continuo 130 -> 200 durante la rotacion (y de vuelta en
      * COVER_OUT, que pasa el angulo invertido). */
-    slide.distance = (CF_GROW_DISTANCE * iangle_0_to_256) / 256;
+    slide.distance = (MF_GROW_DISTANCE * iangle_0_to_256) / 256;
     slide.cx = 0;
 
-    aura_flow_begin_projection(&proj, &slide, CF_COVER_SIZE);
+    aura_flow_begin_projection(&proj, &slide, MF_COVER_SIZE);
 
     while (proj.screen_x < AURA_FLOW_SCREEN_W)
     {
         int col = aura_flow_source_column(&proj);
         int dy = aura_flow_vertical_scale(&proj);
         int p = 0, dest_row, n_rows = 0;
-        const fb_data *cover_col = cover + (size_t)col * CF_COVER_SIZE;
-        const fb_data *refl_col = refl + (size_t)col * CF_REFLECTION_H;
+        const fb_data *cover_col = cover + (size_t)col * MF_COVER_SIZE;
+        const fb_data *refl_col = refl + (size_t)col * MF_REFLECTION_H;
 
-        int cover_disp = (CF_COVER_SIZE << AURA_FLOW_SHIFT) / dy;
+        int cover_disp = (MF_COVER_SIZE << AURA_FLOW_SHIFT) / dy;
         int y_col = center_y - cover_disp / 2;
 
         for (dest_row = 0; dest_row < (int)(sizeof(col_buf) / sizeof(col_buf[0])); dest_row++)
         {
             int source_row = p >> AURA_FLOW_SHIFT;
 
-            if (source_row >= CF_COVER_SIZE)
+            if (source_row >= MF_COVER_SIZE)
                 break;
             col_buf[dest_row] = cover_col[source_row];
             p += dy;
@@ -794,7 +794,7 @@ static void draw_slide_flip(const cf_slot_t *slot, int iangle_0_to_256)
             {
                 int source_row = p >> AURA_FLOW_SHIFT;
 
-                if (source_row >= CF_REFLECTION_H)
+                if (source_row >= MF_REFLECTION_H)
                     break;
                 refl_buf[dest_row] = a26_shell_blend(bg, refl_col[source_row], refl_vis);
                 p += dy;
@@ -826,17 +826,17 @@ static void draw_clipped_text(int x, int y, int w, const char *text)
     lcd_set_viewport(saved);
 }
 
-/* TrackList (componentes/cover-flow.md, G16: "lista simple centrada en
+/* TrackList (componentes/music-flow.md, G16: "lista simple centrada en
  * la cara trasera", ya resuelto en PLAN.md -- no una re-implementacion
  * de MenuList v2 completo). Ocupa el mismo hueco que la caratula, no
  * la pantalla completa -- "detras esta la lista de pistas" es
  * literal: mismo lugar, no una pantalla nueva. */
-#define CF_TRACK_ROW_H 20 /* filas mas espaciadas -> pastilla mas gruesa (encargo 2026-08-12) */
+#define MF_TRACK_ROW_H 20 /* filas mas espaciadas -> pastilla mas gruesa (encargo 2026-08-12) */
 /* El texto de la lista vive 10px MAS adentro que el padding (encargo
  * 2026-08-12: "a 10px mas alejado de los bordes, para que el selector
  * pueda respetar el padding interno") -- la pastilla usa los 4px de
  * padding, el texto usa padding+10. */
-#define CF_TRACK_TEXT_INSET (CF_BACK_PADDING + 10)
+#define MF_TRACK_TEXT_INSET (MF_BACK_PADDING + 10)
 
 /* Artista del album objetivo, cacheado por seleccion (lookup de
  * tagcache solo al cambiar de album, nunca por cuadro) -- compartido
@@ -857,11 +857,11 @@ static const char *target_artist(void)
 
 static void draw_tracklist_panel(void)
 {
-    int panel_x = CF_BACK_X;
-    int panel_y = CF_BACK_Y;
-    int pad = CF_BACK_PADDING;
-    int list_y = panel_y + CF_BACK_HEADER_H + 1; /* +1: el separador */
-    int visible = CF_BACK_VISIBLE_ROWS;
+    int panel_x = MF_BACK_X;
+    int panel_y = MF_BACK_Y;
+    int pad = MF_BACK_PADDING;
+    int list_y = panel_y + MF_BACK_HEADER_H + 1; /* +1: el separador */
+    int visible = MF_BACK_VISIBLE_ROWS;
     int first, i, w, h;
     unsigned bg = a26_color(A26_SHELL_BG);
     /* "Un poco menos blanco" que el fondo, para que el reverso se note
@@ -876,7 +876,7 @@ static void draw_tracklist_panel(void)
      * CADA cuadro que este panel estaba visible (hasta HZ/20 = 20
      * veces por segundo mientras el marquee desborda o el
      * ScrollIndicator sigue en su ventana de Fade-on-Idle, ver
-     * aura_coverflow_pending()), aunque el texto resultante fuera
+     * aura_musicflow_pending()), aunque el texto resultante fuera
      * BYTE POR BYTE identico cuadro a cuadro. static + gate detras del
      * mismo chequeo `s_header_for_index != s_target_index` que ya
      * existia para resetear el reloj del marquee -- se reformatea una
@@ -885,8 +885,8 @@ static void draw_tracklist_panel(void)
     const char *artist = target_artist();
     long header_elapsed_ms;
 
-    a26_shell_fill_rounded_rect(panel_x, panel_y, CF_BACK_SIZE, CF_BACK_SIZE,
-                                 CF_CORNER_RADIUS, panel_bg, bg);
+    a26_shell_fill_rounded_rect(panel_x, panel_y, MF_BACK_SIZE, MF_BACK_SIZE,
+                                 MF_CORNER_RADIUS, panel_bg, bg);
 
     /* Cabecera "Album - Artista" con Marquee Loop cuando no cabe
      * (marquee-text.md: 2s estatico + 5s de loop continuo) -- mismo
@@ -908,25 +908,25 @@ static void draw_tracklist_panel(void)
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_10));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
     lcd_getstringsize((const unsigned char *)s_header_cache, &w, &h);
-    if (w <= CF_BACK_SIZE - 2 * pad)
+    if (w <= MF_BACK_SIZE - 2 * pad)
     {
-        lcd_putsxy(panel_x + (CF_BACK_SIZE - w) / 2,
-                   panel_y + (CF_BACK_HEADER_H - h) / 2,
+        lcd_putsxy(panel_x + (MF_BACK_SIZE - w) / 2,
+                   panel_y + (MF_BACK_HEADER_H - h) / 2,
                    (const unsigned char *)s_header_cache);
         s_header_overflowing = 0;
     }
     else
         s_header_overflowing = aura_marquee_draw(panel_x + pad,
-                                                  panel_y + (CF_BACK_HEADER_H - h) / 2,
-                                                  CF_BACK_SIZE - 2 * pad,
+                                                  panel_y + (MF_BACK_HEADER_H - h) / 2,
+                                                  MF_BACK_SIZE - 2 * pad,
                                                   s_header_cache, header_elapsed_ms);
 
     /* Separador cabecera/lista: barra de 1px al ancho del contenido
      * (respeta el padding interno de 4px, misma regla que el divisor
      * de seccion de MenuList). */
     lcd_set_foreground(a26_color(A26_SHELL_RAIL));
-    lcd_hline(panel_x + pad, panel_x + CF_BACK_SIZE - pad - 1,
-              panel_y + CF_BACK_HEADER_H);
+    lcd_hline(panel_x + pad, panel_x + MF_BACK_SIZE - pad - 1,
+              panel_y + MF_BACK_HEADER_H);
 
     if (s_track_count == 0)
         return;
@@ -949,9 +949,9 @@ static void draw_tracklist_panel(void)
      * en el color primario. */
     if (s_track_sel >= first && s_track_sel < first + visible)
     {
-        int sel_y = list_y + (s_track_sel - first) * CF_TRACK_ROW_H;
+        int sel_y = list_y + (s_track_sel - first) * MF_TRACK_ROW_H;
         a26_shell_fill_rounded_rect(panel_x + pad, sel_y,
-                                     CF_BACK_SIZE - 2 * pad, CF_TRACK_ROW_H,
+                                     MF_BACK_SIZE - 2 * pad, MF_TRACK_ROW_H,
                                      AURA_DS_METRICS_SELECTOR_CORNER_RADIUS,
                                      a26_color(A26_SELECTION_FILL), panel_bg);
     }
@@ -960,7 +960,7 @@ static void draw_tracklist_panel(void)
     for (i = 0; i < visible && first + i < s_track_count; i++)
     {
         int idx = first + i;
-        int row_y = list_y + i * CF_TRACK_ROW_H + (CF_TRACK_ROW_H - A26_TYPE_CAPTION) / 2;
+        int row_y = list_y + i * MF_TRACK_ROW_H + (MF_TRACK_ROW_H - A26_TYPE_CAPTION) / 2;
         char row[AURA_MUSIC_ITEM_LEN + 8];
 
         /* "N. Nombre de la cancion" (encargo 2026-08-12) -- numero de
@@ -969,8 +969,8 @@ static void draw_tracklist_panel(void)
 
         lcd_set_foreground(idx == s_track_sel ? aura_accent()
                                                : a26_color(A26_TEXT_PRIMARY));
-        draw_clipped_text(panel_x + CF_TRACK_TEXT_INSET, row_y,
-                           CF_BACK_SIZE - 2 * CF_TRACK_TEXT_INSET, row);
+        draw_clipped_text(panel_x + MF_TRACK_TEXT_INSET, row_y,
+                           MF_BACK_SIZE - 2 * MF_TRACK_TEXT_INSET, row);
     }
 
     /* ScrollIndicator (T2.4, Fade-on-Idle) dentro del padding derecho
@@ -978,8 +978,8 @@ static void draw_tracklist_panel(void)
     if (s_track_count > visible)
     {
         long idle_ms = (current_tick - s_track_activity_since) * 1000L / HZ;
-        aura_scroll_indicator_draw(panel_x + CF_BACK_SIZE - pad,
-                                    list_y, visible * CF_TRACK_ROW_H,
+        aura_scroll_indicator_draw(panel_x + MF_BACK_SIZE - pad,
+                                    list_y, visible * MF_TRACK_ROW_H,
                                     s_track_sel, s_track_count, idle_ms,
                                     panel_bg, a26_color(A26_SHELL_RAIL));
     }
@@ -995,16 +995,16 @@ static void draw_message(aura_str_id_t msg_id)
                (const unsigned char *)aura_str(msg_id));
 }
 
-typedef struct { int idx; int offset_x256; } cf_entry_t;
+typedef struct { int idx; int offset_x256; } mf_entry_t;
 
-void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
+void aura_musicflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 {
     int pos_x256, center_idx, i, n, zoom_dist;
-    cf_entry_t entries[2 * CF_VISIBLE_RADIUS + 3];
+    mf_entry_t entries[2 * MF_VISIBLE_RADIUS + 3];
     (void)nav;
 
     a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW));
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_FLOW));
 
     if (!aura_music_db_ready())
     {
@@ -1028,10 +1028,10 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     /* Transicion de fase de flip -- se resuelve UNA vez por cuadro,
      * antes del render, para que el resto de la funcion vea un estado
      * ya consistente (nunca a medio cambiar mientras dibuja). */
-    if (s_state == CF_STATE_COVER_IN && flip_progress_256() >= 256)
-        s_state = CF_STATE_SHOW_TRACKS;
-    else if (s_state == CF_STATE_COVER_OUT && flip_progress_256() >= 256)
-        s_state = CF_STATE_IDLE;
+    if (s_state == MF_STATE_COVER_IN && flip_progress_256() >= 256)
+        s_state = MF_STATE_SHOW_TRACKS;
+    else if (s_state == MF_STATE_COVER_OUT && flip_progress_256() >= 256)
+        s_state = MF_STATE_IDLE;
 
     /* Ventana de indices alrededor de la posicion ANIMADA (no del
      * objetivo comprometido) -- mientras "scrolling" (T3.2(b)), la
@@ -1050,7 +1050,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     zoom_dist = zoom_distance();
 
     n = 0;
-    for (i = -(CF_VISIBLE_RADIUS + 1); i <= CF_VISIBLE_RADIUS + 1; i++)
+    for (i = -(MF_VISIBLE_RADIUS + 1); i <= MF_VISIBLE_RADIUS + 1; i++)
     {
         int idx = center_idx + i;
         if (idx < 0 || idx >= s_album_count)
@@ -1065,13 +1065,13 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
      * reales (perspectiva, no una grilla de columnas fijas) y pueden
      * solaparse con la central cerca del borde -- dibujar la mas
      * cercana al final garantiza que quede siempre encima, como en
-     * cualquier coverflow real. Insercion simple: `n` nunca pasa de
+     * cualquier musicflow real. Insercion simple: `n` nunca pasa de
      * 2*radio+3 (un puñado de elementos). */
     {
         int a, b;
         for (a = 1; a < n; a++)
         {
-            cf_entry_t key = entries[a];
+            mf_entry_t key = entries[a];
             int key_abs = key.offset_x256 < 0 ? -key.offset_x256 : key.offset_x256;
             b = a - 1;
             while (b >= 0)
@@ -1090,24 +1090,24 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
     {
         int idx = entries[i].idx;
         int offset_x256 = entries[i].offset_x256;
-        cf_slot_t *slot;
+        mf_slot_t *slot;
 
         /* Flip/TrackList (T3.2(c)): mientras no este IDLE, la tapa
          * objetivo (la unica que puede estar flipeando/mostrando su
          * lista -- scroll_step() no se llama en estos estados, ver
-         * aura_coverflow_handle_button) se reemplaza por su propio
+         * aura_musicflow_handle_button) se reemplaza por su propio
          * render en vez del carrusel normal; las laterales siguen
          * dibujandose igual que siempre. */
-        if (s_state != CF_STATE_IDLE && idx == s_target_index)
+        if (s_state != MF_STATE_IDLE && idx == s_target_index)
         {
             slot = get_slot_for(idx);
             if (slot->art.valid)
             {
-                if (s_state == CF_STATE_COVER_IN)
+                if (s_state == MF_STATE_COVER_IN)
                     draw_slide_flip(slot, flip_progress_256());
-                else if (s_state == CF_STATE_COVER_OUT)
+                else if (s_state == MF_STATE_COVER_OUT)
                     draw_slide_flip(slot, 256 - flip_progress_256());
-                else /* CF_STATE_SHOW_TRACKS */
+                else /* MF_STATE_SHOW_TRACKS */
                     draw_tracklist_panel();
             }
             continue;
@@ -1118,8 +1118,8 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         /* Sin marco de acento (AUDITORIA-01 A-11, Principio 1 "nada de
          * marcos/biseles" + Principio 2 "el acento nunca es decoracion
          * de superficie") -- la central ya se distingue por brillo (255
-         * vs CF_SIDE_FADE), tamano y perspectiva, igual que en
-         * cualquier coverflow real; el marco era decoracion, no
+         * vs MF_SIDE_FADE), tamano y perspectiva, igual que en
+         * cualquier musicflow real; el marco era decoracion, no
          * significado. Un solo camino de render para central y
          * laterales, con distancia CONTINUA (ver comentario de
          * draw_slide_perspective). */
@@ -1142,11 +1142,11 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
         int text_dy = 0;
         int text_hidden = 0;
 
-        if (s_state == CF_STATE_COVER_IN)
+        if (s_state == MF_STATE_COVER_IN)
             text_dy = 64 * flip_progress_256() / 256;
-        else if (s_state == CF_STATE_SHOW_TRACKS)
+        else if (s_state == MF_STATE_SHOW_TRACKS)
             text_hidden = 1;
-        else if (s_state == CF_STATE_COVER_OUT)
+        else if (s_state == MF_STATE_COVER_OUT)
             text_dy = 64 * (256 - flip_progress_256()) / 256;
 
         if (!text_hidden)
@@ -1154,7 +1154,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
             lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
             lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
             lcd_getstringsize((const unsigned char *)label, &w, &h);
-            lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_TITLE_Y + text_dy,
+            lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, MF_TITLE_Y + text_dy,
                        (const unsigned char *)label);
 
             if (artist[0])
@@ -1162,7 +1162,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
                 lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
                 lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
                 lcd_getstringsize((const unsigned char *)artist, &w, &h);
-                lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_ARTIST_Y + text_dy,
+                lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, MF_ARTIST_Y + text_dy,
                            (const unsigned char *)artist);
             }
         }
@@ -1170,11 +1170,11 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
 }
 
 /* Velocidad real del clickwheel (AUDITORIA-01 A-13, doc de diseno SS7 +
- * Fase 29 del plan: "modulo unico consumido por listas, coverflow y
+ * Fase 29 del plan: "modulo unico consumido por listas, musicflow y
  * scrub") -- reemplaza la heuristica vieja de "dos eventos en menos de
  * HZ/6 = paso 2", una aproximacion barata de antes de que existiera
  * aura_wheel_step() con la velocidad angular real del driver. Las
- * listas ya migraron en D-077/Fase 29; coverflow habia quedado afuera,
+ * listas ya migraron en D-077/Fase 29; musicflow habia quedado afuera,
  * vacio real no anotado en su momento. */
 /* Salto rapido por bloque (encargo del dueno del diseno, 2026-08-12):
  * los botones backward/forward desplazan el carrusel 10 albumes de un
@@ -1183,7 +1183,7 @@ void aura_coverflow_draw(aura_nav_t *nav, aura_screen_id_t screen)
  * lee como un barrido veloz). Acotado en los extremos, sin loop -- el
  * carrusel nunca salta de inicio a final ni viceversa, igual que el
  * scroll de la rueda. */
-#define CF_FAST_JUMP 10
+#define MF_FAST_JUMP 10
 
 static void jump_albums(int delta)
 {
@@ -1209,7 +1209,7 @@ static void jump_albums(int delta)
  * la confirmacion visual). Si la tapa enfocada ES el album que este
  * mismo carrusel ya puso a sonar, PLAY alterna pausa/reanudar
  * (semantica natural de play/pausa; sin esto no habria forma de pausar
- * dentro del Cover Flow) -- ratificado en cover-flow.md (D-115). */
+ * dentro del Music Flow) -- ratificado en music-flow.md (D-115). */
 static int32_t s_playing_album_seek = -1;
 
 static void play_or_toggle_focused_album(void)
@@ -1258,7 +1258,7 @@ static void scroll_step(int dir)
     s_anim_since = current_tick;
 }
 
-void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button)
+void aura_musicflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button)
 {
     (void)screen;
 
@@ -1266,10 +1266,10 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
      * ignora -- mismo criterio real que pictureflow.c usa para sus
      * transiciones (el usuario no puede interrumpir un flip a medio
      * camino). Solo IDLE y SHOW_TRACKS reaccionan a botones. */
-    if (s_state == CF_STATE_COVER_IN || s_state == CF_STATE_COVER_OUT)
+    if (s_state == MF_STATE_COVER_IN || s_state == MF_STATE_COVER_OUT)
         return;
 
-    if (s_state == CF_STATE_SHOW_TRACKS)
+    if (s_state == MF_STATE_SHOW_TRACKS)
     {
         switch (button)
         {
@@ -1310,7 +1310,7 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
             /* "El album gira de nuevo (vuelve a mostrar la caratula)"
              * (doc, coreografia de salida) -- cover_out, no un pop de
              * navegacion (nunca se empujo una pantalla nueva). */
-            s_state = CF_STATE_COVER_OUT;
+            s_state = MF_STATE_COVER_OUT;
             s_state_since = current_tick;
             break;
         default:
@@ -1319,7 +1319,7 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
         return;
     }
 
-    /* CF_STATE_IDLE */
+    /* MF_STATE_IDLE */
     switch (button)
     {
     case BUTTON_SCROLL_FWD:
@@ -1332,7 +1332,7 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
         /* Select solo cicla el carrusel a reposo exacto -- flipear a
          * mitad de un deslizamiento (target != posicion animada) se
          * veria mal, la tapa objetivo todavia no esta en su lugar.
-         * position_pending() (no aura_coverflow_pending()): el zoom de
+         * position_pending() (no aura_musicflow_pending()): el zoom de
          * D-245 no debe añadir latencia a SELECT, solo la posicion
          * importa aca -- ver comentario de position_pending(). */
         if (s_album_count > 0 && !position_pending())
@@ -1341,7 +1341,7 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
             s_track_count = aura_music_browse(AURA_SCREEN_MUSIC_SONGS_BY_ALBUM,
                                                s_tracks, AURA_MUSIC_MAX_ITEMS);
             s_track_sel = 0;
-            s_state = CF_STATE_COVER_IN;
+            s_state = MF_STATE_COVER_IN;
             s_state_since = current_tick;
         }
         break;
@@ -1349,10 +1349,10 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
         play_or_toggle_focused_album();
         break;
     case BUTTON_LEFT:
-        jump_albums(-CF_FAST_JUMP);
+        jump_albums(-MF_FAST_JUMP);
         break;
     case BUTTON_RIGHT:
-        jump_albums(CF_FAST_JUMP);
+        jump_albums(MF_FAST_JUMP);
         break;
     case BUTTON_MENU:
         aura_nav_pop(nav);
@@ -1362,13 +1362,13 @@ void aura_coverflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long
     }
 }
 
-/* -- Coreografia de vuelo (ver aura_coverflow.h) ------------------------ */
+/* -- Coreografia de vuelo (ver aura_musicflow.h) ------------------------ */
 
 /* Laterales con desplazamiento extra hacia su borde: reusa
  * draw_slide_perspective() aumentando |offset| -- mas offset = mas
  * lejos del centro Y mas inclinada, que es exactamente "salir hacia su
  * lado". 7 posiciones extra (~200px) las saca de pantalla. */
-#define CF_EXIT_UNITS (7 * 256)
+#define MF_EXIT_UNITS (7 * 256)
 
 static void draw_carousel_sides(int extra_out_x256)
 {
@@ -1380,13 +1380,13 @@ static void draw_carousel_sides(int extra_out_x256)
      * t+1 -- y t-2 sobre t-1: las caratulas del fondo se veian
      * brevemente encima de las de adelante durante el morph de
      * regreso). */
-    for (d = CF_VISIBLE_RADIUS; d >= 1; d--)
+    for (d = MF_VISIBLE_RADIUS; d >= 1; d--)
     {
         for (side = -1; side <= 1; side += 2)
         {
             int use = s_target_index + side * d;
             int offset;
-            cf_slot_t *slot;
+            mf_slot_t *slot;
 
             if (use < 0 || use >= s_album_count)
                 continue;
@@ -1404,21 +1404,21 @@ static void draw_carousel_sides(int extra_out_x256)
     }
 }
 
-void aura_coverflow_draw_exit_frame(int out_t256)
+void aura_musicflow_draw_exit_frame(int out_t256)
 {
     a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW));
-    draw_carousel_sides(out_t256 * CF_EXIT_UNITS / 256);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_FLOW));
+    draw_carousel_sides(out_t256 * MF_EXIT_UNITS / 256);
 }
 
-void aura_coverflow_draw_return_frame(int in_t256)
+void aura_musicflow_draw_return_frame(int in_t256)
 {
     a26_shell_clear_screen();
-    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_COVERFLOW));
-    draw_carousel_sides((256 - in_t256) * CF_EXIT_UNITS / 256);
+    aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH, aura_str(AURA_STR_MUSIC_FLOW));
+    draw_carousel_sides((256 - in_t256) * MF_EXIT_UNITS / 256);
 }
 
-void aura_coverflow_draw_return_texts(int in_t256)
+void aura_musicflow_draw_return_texts(int in_t256)
 {
     int w, h;
     const char *label;
@@ -1442,7 +1442,7 @@ void aura_coverflow_draw_return_texts(int in_t256)
     lcd_setfont(a26_font(A26_FONT_STYLE_DS_BOLD_12));
     lcd_set_foreground(a26_color(A26_TEXT_PRIMARY));
     lcd_getstringsize((const unsigned char *)label, &w, &h);
-    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_TITLE_Y + text_dy,
+    lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, MF_TITLE_Y + text_dy,
                (const unsigned char *)label);
 
     if (artist[0])
@@ -1450,21 +1450,21 @@ void aura_coverflow_draw_return_texts(int in_t256)
         lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
         lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
         lcd_getstringsize((const unsigned char *)artist, &w, &h);
-        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, CF_ARTIST_Y + text_dy,
+        lcd_putsxy((A26_SCREEN_WIDTH - w) / 2, MF_ARTIST_Y + text_dy,
                    (const unsigned char *)artist);
     }
 }
 
-int32_t aura_coverflow_current_album_seek(void)
+int32_t aura_musicflow_current_album_seek(void)
 {
     if (s_album_count <= 0)
         return -1;
     return s_albums[s_target_index].seek;
 }
 
-void aura_coverflow_settle_idle(void)
+void aura_musicflow_settle_idle(void)
 {
-    s_state = CF_STATE_IDLE;
+    s_state = MF_STATE_IDLE;
     s_anim_from_x256 = s_target_index * 256;
     s_anim_since = current_tick;
     zoom_settle_idle();

@@ -46,7 +46,7 @@ aura_category_t aura_category_for_screen(aura_screen_id_t screen)
     case AURA_SCREEN_MUSIC_AUDIOBOOKS:
     case AURA_SCREEN_MUSIC_SEARCH:
     case AURA_SCREEN_MUSIC_SEARCH_RESULTS:
-    case AURA_SCREEN_MUSIC_COVERFLOW:
+    case AURA_SCREEN_MUSIC_FLOW:
     case AURA_SCREEN_SHUFFLE_SONGS:
     case AURA_SCREEN_NOWPLAYING:
         return AURA_CATEGORY_MUSIC;
@@ -57,6 +57,7 @@ aura_category_t aura_category_for_screen(aura_screen_id_t screen)
     case AURA_SCREEN_VIDEOS_TVSHOWS:
     case AURA_SCREEN_VIDEOS_CLIPS:
     case AURA_SCREEN_VIDEOS_ALL:
+    case AURA_SCREEN_VIDEOS_MOVIEFLOW:
         return AURA_CATEGORY_VIDEO;
 
     /* -- Fotos -- */

@@ -45,7 +45,8 @@
 #include "aura_menu_list.h"
 #include "aura_selection_summary.h"
 #include "aura_coverdrift.h"
-#include "aura_coverflow.h"
+#include "aura_musicflow.h"
+#include "aura_movieflow.h"
 #include "aura_status_bar_v2.h"
 #include "aura_screenlock.h"
 #include "aura_shutdown_screen.h"
@@ -605,14 +606,21 @@ void aura_main(void)
             else if (aura_screens_right_panel_pending() && timeout_ticks < 0)
                 timeout_ticks = HZ / 4;
 
-            /* CoverFlow (T3.2(b)) -- idle/scrolling, mismo criterio de
+            /* MusicFlow (T3.2(b)) -- idle/scrolling, mismo criterio de
              * movimiento continuo que CoverDrift. pending() cubre las
              * ventanas de cadencia gruesa del reverso (tramo estatico
              * del marquee de cabecera, persistencia del
              * ScrollIndicator) igual que el resto de esta puerta. */
-            if (aura_coverflow_animating() && timeout_ticks < 0)
+            if (aura_musicflow_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
-            else if (aura_coverflow_pending() && timeout_ticks < 0)
+            else if (aura_musicflow_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
+
+            /* MovieFlow (D-318) -- misma puerta, mismo criterio exacto
+             * que MusicFlow arriba. */
+            if (aura_movieflow_animating() && timeout_ticks < 0)
+                timeout_ticks = HZ / 20;
+            else if (aura_movieflow_pending() && timeout_ticks < 0)
                 timeout_ticks = HZ / 4;
 
             /* ClockIndicator por atajo (B-01 en BLOCKED.md) --

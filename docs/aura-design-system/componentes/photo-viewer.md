@@ -42,7 +42,7 @@ hasta que esta pantalla se sumó:
 **Miniaturas**: las genera el firmware bajo demanda para la ventana
 visible (nunca toda la lista de una vez), cacheadas en disco
 (`.rockbox/aura/photocache/<nombre>-48.pfraw`) con el mismo formato
-`.pfraw` transpuesto+esquinas-horneadas que Cover Flow — pipeline
+`.pfraw` transpuesto+esquinas-horneadas que Music Flow — pipeline
 compartido vía `aura_art.c` (`aura_art_read_pfraw()`/`write_pfraw()`/
 `transpose()`/`mask_corners_transposed()`), no reimplementado. Llave del
 cache: nombre de archivo (único dentro de `/Photos`, plano) + `mtime` del
@@ -125,7 +125,7 @@ Matriz completa y justificación en `PLAN-image-viewer.md` §3. Resumen:
 ## Presupuesto de memoria
 
 El decoder (`read_jpeg_file()`/`read_bmp_file()` del core, los mismos que
-ya usan Cover Flow/Álbumes/CoverDrift/Ahora suena para carátulas) escala
+ya usan Music Flow/Álbumes/CoverDrift/Ahora suena para carátulas) escala
 en la IDCT y remuestrea por línea — **nunca materializa la imagen fuente
 completa**, así que el costo es constante en memoria sin importar el
 tamaño de la fuente. El tope de 12MP/4096px es por **tiempo de CPU**, no

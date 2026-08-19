@@ -57,7 +57,7 @@
 #include "aura_device.h"
 #include "aura_nowplaying.h"
 #include "aura_transitions.h"
-#include "aura_coverflow.h"
+#include "aura_musicflow.h"
 #include "aura_photos.h"
 #include "aura_albumart.h"
 #include "aura_art.h"
@@ -74,6 +74,7 @@
 #include "aura_alarms.h"
 #include "plugin.h"
 #include "aura_video.h"
+#include "aura_movieflow.h"
 #include "aura_manifest.h"
 #include "aura_main.h"
 #include "aura_wheel.h"
@@ -120,9 +121,9 @@ static nav_entry_t root_entries[sizeof(root_entries_all) / sizeof(root_entries_a
 static int root_entries_count;
 
 
-/* Orden de "Cover Flow" primero: unico orden que da un documento fuente
+/* Orden de "Music Flow" primero: unico orden que da un documento fuente
  * (componentes/left-panel.md, ejemplo de LeftPanel persistente) --
- * "Menu principal -> Musica -> (submenu con Cover Flow, Genius, Listas
+ * "Menu principal -> Musica -> (submenu con Music Flow, Genius, Listas
  * de reproduccion, Artista, Albumes...)". "Genius" no existe como
  * funcion real en Aura, se omite -- el resto de items conserva el orden
  * ya existente de este arreglo. Icono "square-on-square" (cuadrados
@@ -135,7 +136,7 @@ static int root_entries_count;
  * pantalla). Audiolibros es una fila presente e inerte, como en el
  * original cuando no hay material del tipo. */
 static const nav_entry_t music_entries[] = {
-    { AURA_STR_MUSIC_COVERFLOW,    "square-on-square", AURA_SCREEN_MUSIC_COVERFLOW },
+    { AURA_STR_MUSIC_FLOW,    "square-on-square", AURA_SCREEN_MUSIC_FLOW },
     { AURA_STR_MUSIC_PLAYLISTS,    "playlist",   AURA_SCREEN_MUSIC_PLAYLISTS },
     { AURA_STR_MUSIC_ARTISTS,      "artist",     AURA_SCREEN_MUSIC_ARTISTS },
     { AURA_STR_MUSIC_ALBUMS,       "album",      AURA_SCREEN_MUSIC_ALBUMS },
@@ -150,7 +151,7 @@ static const nav_entry_t music_entries[] = {
 /* Atajos de Musica que pueden vivir tambien en el menu de inicio: cada
  * uno con su bit en aura_settings.root_shortcuts. */
 static const aura_screen_id_t ROOT_SHORTCUTS[] = {
-    AURA_SCREEN_MUSIC_COVERFLOW, AURA_SCREEN_MUSIC_PLAYLISTS,
+    AURA_SCREEN_MUSIC_FLOW, AURA_SCREEN_MUSIC_PLAYLISTS,
     AURA_SCREEN_MUSIC_ARTISTS,   AURA_SCREEN_MUSIC_ALBUMS,
     AURA_SCREEN_MUSIC_SONGS,     AURA_SCREEN_MUSIC_GENRES,
 };
@@ -321,7 +322,11 @@ static int clamp_menu_count(int n)
  * 2026-08-18): Peliculas/Series/Videoclips dejan de ser inertes -- ya
  * filtran /Videos por categoria (aura_video.c), ver `dimmed` en
  * draw_nav_list(). */
+/* Movie Flow primero (D-318): mismo orden que "Music Flow" al tope de
+ * music_entries[] arriba -- unica puerta de carrusel de la seccion,
+ * hermana de las listas planas, no un disfraz de "Todos los videos". */
 static const nav_entry_t videos_entries[] = {
+    { AURA_STR_VIDEOS_MOVIEFLOW, "movie", AURA_SCREEN_VIDEOS_MOVIEFLOW },
     { AURA_STR_VIDEOS_ALL,     "video",  AURA_SCREEN_VIDEOS_ALL },
     { AURA_STR_VIDEOS_MOVIES,  "movie",  AURA_SCREEN_VIDEOS_MOVIES },
     { AURA_STR_VIDEOS_TVSHOWS, "tv",     AURA_SCREEN_VIDEOS_TVSHOWS },
@@ -400,6 +405,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_EXTRAS_GAMES:        return AURA_STR_EXTRAS_GAMES;
     case AURA_SCREEN_EXTRAS_NOTES:        return AURA_STR_EXTRAS_NOTES;
     case AURA_SCREEN_EXTRAS_STOPWATCH:    return AURA_STR_EXTRAS_STOPWATCH;
+    case AURA_SCREEN_VIDEOS_MOVIEFLOW:    return AURA_STR_VIDEOS_MOVIEFLOW;
     case AURA_SCREEN_VIDEOS_MOVIES:       return AURA_STR_VIDEOS_MOVIES;
     case AURA_SCREEN_VIDEOS_TVSHOWS:      return AURA_STR_VIDEOS_TVSHOWS;
     case AURA_SCREEN_VIDEOS_CLIPS:        return AURA_STR_VIDEOS_CLIPS;
@@ -421,7 +427,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:   return AURA_STR_MUSIC_SONGS;
     case AURA_SCREEN_MUSIC_GENRES:        return AURA_STR_MUSIC_GENRES;
     case AURA_SCREEN_MUSIC_PLAYLISTS:     return AURA_STR_MUSIC_PLAYLISTS;
-    case AURA_SCREEN_MUSIC_COVERFLOW:     return AURA_STR_MUSIC_COVERFLOW;
+    case AURA_SCREEN_MUSIC_FLOW:     return AURA_STR_MUSIC_FLOW;
     case AURA_SCREEN_VIDEOS:              return AURA_STR_VIDEOS;
     case AURA_SCREEN_PHOTOS:              return AURA_STR_PHOTOS;
     case AURA_SCREEN_NOWPLAYING:          return AURA_STR_NOWPLAYING;
@@ -797,7 +803,7 @@ static bool music_row_wants_coverdrift(aura_screen_id_t container, aura_screen_i
             || target == AURA_SCREEN_NOWPLAYING;
 
     if (container == AURA_SCREEN_MUSIC)
-        return target == AURA_SCREEN_MUSIC_COVERFLOW
+        return target == AURA_SCREEN_MUSIC_FLOW
             || target == AURA_SCREEN_MUSIC_PLAYLISTS
             || target == AURA_SCREEN_MUSIC_ARTISTS
             || target == AURA_SCREEN_MUSIC_ALBUMS
@@ -1114,7 +1120,7 @@ static void ensure_drift_album_pool(void)
  * (nunca el pool completo -- con hasta AURA_MUSIC_MAX_ITEMS=300 albumes
  * y ~168KB por imagen al tamano de CoverDrift D-254, decodificarlas
  * todas de una vez es inviable). aura_albumart_load_for_album() (mismo
- * cache .pfraw en disco que ya usa Cover Flow/la lista de Albumes, pide
+ * cache .pfraw en disco que ya usa Music Flow/la lista de Albumes, pide
  * el tamano nuevo directo -- genera su propio archivo de cache aparte,
  * sin invalidar el de 48px/130px que usan otras pantallas) da el
  * bitmap TRANSPUESTO (columna-mayor, mismo formato que
@@ -1152,7 +1158,7 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
     enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
     static unsigned char cover_buf[SZ * SZ * sizeof(fb_data)];
     static unsigned char refl_buf[SZ *
-        (SZ * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
+        (SZ * AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
         * sizeof(fb_data)];
     int col, row;
 
@@ -1238,7 +1244,7 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
          * contigua directo, formato que ya espera aura_coverdrift_draw()
          * (sin transponer: a diferencia del camino de Musica, esta
          * fuente nunca pasa por el cache .pfraw columna-contigua de
-         * Cover Flow). */
+         * Music Flow). */
         ox = (SZ - bm.width) / 2;
         oy = (SZ - bm.height) / 2;
         for (row = 0; row < SZ; row++)
@@ -2093,12 +2099,12 @@ static bool music_target_has_content(aura_screen_id_t target)
  * genuinamente vacia -- si tiene contenido, NULL (sin texto inferior
  * extra; el dueno no describio que mostrar en el caso "con contenido",
  * se deja igual que hoy en vez de inventar un conteo no pedido).
- * Cover Flow consulta Albumes (mismo contenido real que dibuja, D-254) --
+ * Music Flow consulta Albumes (mismo contenido real que dibuja, D-254) --
  * Busqueda no tiene un "vacio" natural antes de escribir nada, se deja
  * sin texto (juicio propio, el encargo no lo cubre). */
 static const char *music_row_empty_description(aura_screen_id_t target)
 {
-    aura_screen_id_t query = (target == AURA_SCREEN_MUSIC_COVERFLOW)
+    aura_screen_id_t query = (target == AURA_SCREEN_MUSIC_FLOW)
         ? AURA_SCREEN_MUSIC_ALBUMS : target;
     aura_str_id_t empty_id;
 
@@ -2106,7 +2112,7 @@ static const char *music_row_empty_description(aura_screen_id_t target)
     {
     case AURA_SCREEN_MUSIC_ARTISTS:    empty_id = AURA_STR_MUSIC_EMPTY_ARTISTS; break;
     case AURA_SCREEN_MUSIC_ALBUMS:
-    case AURA_SCREEN_MUSIC_COVERFLOW:  empty_id = AURA_STR_MUSIC_EMPTY_ALBUMS; break;
+    case AURA_SCREEN_MUSIC_FLOW:  empty_id = AURA_STR_MUSIC_EMPTY_ALBUMS; break;
     case AURA_SCREEN_MUSIC_SONGS:      empty_id = AURA_STR_MUSIC_EMPTY_SONGS; break;
     case AURA_SCREEN_MUSIC_PLAYLISTS:  empty_id = AURA_STR_MUSIC_EMPTY_PLAYLISTS; break;
     case AURA_SCREEN_MUSIC_GENRES:     empty_id = AURA_STR_MUSIC_EMPTY_GENRES; break;
@@ -2130,6 +2136,13 @@ static const char *video_row_empty_description(aura_screen_id_t target)
 {
     switch (target)
     {
+    case AURA_SCREEN_VIDEOS_MOVIEFLOW:
+        /* D-318: mismo pool combinado (Peliculas+Series) que dibuja el
+         * carrusel -- vacio solo si NINGUNA de las dos categorias tiene
+         * contenido. */
+        return (aura_video_count_filtered(AURA_VIDEO_CAT_MOVIE) > 0
+                || aura_video_count_filtered(AURA_VIDEO_CAT_SERIES) > 0)
+            ? NULL : aura_str(AURA_STR_EMPTY_VIDEOS);
     case AURA_SCREEN_VIDEOS_MOVIES:
         return (aura_video_count_filtered(AURA_VIDEO_CAT_MOVIE) > 0)
             ? NULL : aura_str(AURA_STR_VIDEOS_EMPTY_MOVIES);
@@ -3688,7 +3701,7 @@ typedef struct {
 
 static const mainmenu_row_t mainmenu_rows[] = {
     { AURA_STR_MUSIC,           "music",           0, AURA_SCREEN_MUSIC },
-    { AURA_STR_MUSIC_COVERFLOW, "square-on-square", 1, AURA_SCREEN_MUSIC_COVERFLOW },
+    { AURA_STR_MUSIC_FLOW, "square-on-square", 1, AURA_SCREEN_MUSIC_FLOW },
     { AURA_STR_MUSIC_PLAYLISTS, "playlist",        1, AURA_SCREEN_MUSIC_PLAYLISTS },
     { AURA_STR_MUSIC_ARTISTS,   "artist",          1, AURA_SCREEN_MUSIC_ARTISTS },
     { AURA_STR_MUSIC_ALBUMS,    "album",           1, AURA_SCREEN_MUSIC_ALBUMS },
@@ -4803,18 +4816,25 @@ static int is_music_browse_screen(aura_screen_id_t screen)
 }
 
 
-/* Cover Flow es su propia puerta del submenu Musica (AURA_SCREEN_MUSIC_COVERFLOW,
+/* Music Flow es su propia puerta del submenu Musica (AURA_SCREEN_MUSIC_FLOW,
  * music_entries[] arriba) -- YA NO una variante automatica de Albumes
  * segun aura_settings.graphics_mode (D-025 original). Ese diseno hacia
  * que entrar a "Albumes", o a "Albumes" de un artista especifico via
- * Artistas, disparara Cover Flow sin que el usuario lo hubiera elegido
+ * Artistas, disparara Music Flow sin que el usuario lo hubiera elegido
  * -- un bug real de navegacion, no una decision de UX (componentes/left-panel.md
- * documenta Cover Flow como hermano de Artista/Albumes, no como su
+ * documenta Music Flow como hermano de Artista/Albumes, no como su
  * disfraz). Albumes vuelve a ser SIEMPRE la lista plana
  * (is_music_browse_screen()), sin importar el modo grafico. */
-static int is_coverflow_screen(aura_screen_id_t screen)
+static int is_musicflow_screen(aura_screen_id_t screen)
 {
-    return screen == AURA_SCREEN_MUSIC_COVERFLOW;
+    return screen == AURA_SCREEN_MUSIC_FLOW;
+}
+
+/* Movie Flow (D-318): misma puerta, hermana de Music Flow -- ver
+ * aura_movieflow.h. */
+static int is_movieflow_screen(aura_screen_id_t screen)
+{
+    return screen == AURA_SCREEN_VIDEOS_MOVIEFLOW;
 }
 
 static aura_screen_id_t s_music_cache_screen = AURA_SCREEN_COUNT;
@@ -4918,10 +4938,10 @@ static bool is_album_list_screen(aura_screen_id_t screen)
         || screen == AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER;
 }
 
-/* La caratula real usa el MISMO cache/pipeline que CoverFlow
+/* La caratula real usa el MISMO cache/pipeline que MusicFlow
  * (aura_albumart_load_for_album -- cache .pfraw en disco, cero
  * decodificacion JPEG en redibujados posteriores). El bitmap resultante
- * queda TRANSPUESTO (columna contigua, formato de CoverFlow): se
+ * queda TRANSPUESTO (columna contigua, formato de MusicFlow): se
  * blitea columna por columna, mismo mecanismo que aura_nowplaying.c
  * usa para su propia caratula. La fila sintetica "Todos"/"Canciones"
  * (seek=-1) recibe la caratula Default, igual que un album sin arte
@@ -4930,7 +4950,7 @@ static void draw_album_thumb(int x, int y, int32_t seek)
 {
     static unsigned char cover_buf[ALBUM_ART_SIZE * ALBUM_ART_SIZE * sizeof(fb_data)];
     static unsigned char refl_buf[ALBUM_ART_SIZE *
-        (ALBUM_ART_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
+        (ALBUM_ART_SIZE * AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
         * sizeof(fb_data)];
     static fb_data col_buf[ALBUM_ART_SIZE];
     aura_albumart_t art;
@@ -5085,7 +5105,7 @@ static void draw_playlist_thumb(int x, int y, const char *raw_filename)
 {
     static unsigned char cover_buf[ALBUM_ART_SIZE * ALBUM_ART_SIZE * sizeof(fb_data)];
     static unsigned char refl_buf[ALBUM_ART_SIZE *
-        (ALBUM_ART_SIZE * AURA_DS_METRICS_COVER_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
+        (ALBUM_ART_SIZE * AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
         * sizeof(fb_data)];
     static fb_data col_buf[ALBUM_ART_SIZE];
     aura_albumart_t art;
@@ -5191,7 +5211,7 @@ static void draw_playlists(aura_nav_t *nav)
  * asumir una sola: los menus de navegacion y las listas de contenido son
  * divididos; las pantallas con maquetacion propia (sliders de Brillo y
  * Limite de volumen, filas booleanas, Acerca de, aviso de reset,
- * Coverflow, visor de fotos, Ahora suena) son de ancho completo y ni
+ * Music Flow, visor de fotos, Ahora suena) son de ancho completo y ni
  * siquiera pasan por aura_widgets_draw_list().
  *
  * La consumen dos lugares: aura_screens_draw() (para el dibujo) y
@@ -5348,8 +5368,8 @@ void aura_screens_draw(aura_nav_t *nav)
          * nunca una pantalla en blanco ni una fila que no responde. */
         draw_message_centered(AURA_STR_EMPTY_GENERIC);
     }
-    else if (is_coverflow_screen(screen))
-        aura_coverflow_draw(nav, screen);
+    else if (is_musicflow_screen(screen))
+        aura_musicflow_draw(nav, screen);
     else if (is_music_browse_screen(screen))
         draw_music_browse(nav, screen);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
@@ -5375,6 +5395,8 @@ void aura_screens_draw(aura_nav_t *nav)
         /* D-316: Peliculas/Series/Videoclips dejan de ser filas inertes
          * -- comparten aura_video_draw(), filtrado por `screen`. */
         aura_video_draw(nav, screen);
+    else if (is_movieflow_screen(screen))
+        aura_movieflow_draw(nav, screen);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_draw();
     else
@@ -5664,9 +5686,9 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
      *
      * Excepcion (encargo del dueno del diseno, 2026-08-12): en Cover
      * Flow, PLAY tiene semantica propia -- reproduce el album enfocado
-     * al instante sin salir del carrusel (aura_coverflow_handle_button)
+     * al instante sin salir del carrusel (aura_musicflow_handle_button)
      * -- asi que ahi NO se intercepta globalmente. */
-    if (button == BUTTON_PLAY && !is_coverflow_screen(screen))
+    if (button == BUTTON_PLAY && !is_musicflow_screen(screen))
     {
         int status = audio_status();
         if (status & AUDIO_STATUS_PAUSE)
@@ -5743,8 +5765,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_worldclock_cities_handle_button(nav, button);
     else if (screen == AURA_SCREEN_MUSIC_SEARCH_RESULTS)
         aura_search_results_handle_button(nav, button);
-    else if (is_coverflow_screen(screen))
-        aura_coverflow_handle_button(nav, screen, button);
+    else if (is_musicflow_screen(screen))
+        aura_musicflow_handle_button(nav, screen, button);
     else if (is_music_browse_screen(screen))
         handle_music_browse(nav, screen, button);
     else if (screen == AURA_SCREEN_MUSIC_PLAYLISTS)
@@ -5757,6 +5779,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     else if (screen == AURA_SCREEN_VIDEOS_ALL || screen == AURA_SCREEN_VIDEOS_MOVIES
              || screen == AURA_SCREEN_VIDEOS_TVSHOWS || screen == AURA_SCREEN_VIDEOS_CLIPS)
         aura_video_handle_button(nav, screen, button);
+    else if (is_movieflow_screen(screen))
+        aura_movieflow_handle_button(nav, screen, button);
     else if (screen == AURA_SCREEN_NOWPLAYING && aura_nowplaying_active())
         aura_nowplaying_handle_button(nav, button);
     else
@@ -5765,7 +5789,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
     /* Centralizado aca (no en cada handler) para no repetir la logica
      * en cada punto de push/pop: la profundidad de la pila es la unica
      * senal que hace falta para saber si hubo navegacion y en que
-     * sentido. Ver D-024. Entrar a Coverflow usa T4 (revelado desde
+     * sentido. Ver D-024. Entrar a Music Flow usa T4 (revelado desde
      * ambos bordes, D-058/Fase 16) en vez del wipe T1/T3 comun, para
      * que se sienta distinto de una navegacion de lista. */
     int depth_after = aura_nav_depth(nav);
@@ -5794,6 +5818,16 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             aura_photos_invalidate();
         if (depth_after > depth_before && to == AURA_SCREEN_VIDEOS_ALL)
             aura_video_invalidate();
+        /* D-318: mismo criterio -- re-escanea /Videos al entrar a Movie
+         * Flow (aura_video_invalidate() ya limpia el cache base que
+         * ensure_movieflow_entries() consume via aura_video_count_filtered(),
+         * pero su propio agrupamiento por temporada (s_entries[]) tiene
+         * cache aparte y necesita su propio invalidate). */
+        if (depth_after > depth_before && to == AURA_SCREEN_VIDEOS_MOVIEFLOW)
+        {
+            aura_video_invalidate();
+            aura_movieflow_invalidate();
+        }
 
         /* Una pulsacion = una navegacion, aunque el boton se sostenga
          * durante la transicion (los repeats acumulados/venideros de
@@ -5801,22 +5835,22 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
          * aura_main_swallow_repeats). */
         aura_main_swallow_repeats(button);
 
-        if (depth_after > depth_before && is_coverflow_screen(to))
+        if (depth_after > depth_before && is_musicflow_screen(to))
             /* D-259: prueba acotada -- coreografia distinta SOLO si
              * CoverDrift estaba realmente montado (comprometido, no
              * solo pendiente) para esta fila justo antes del push.
              * aura_screens_coverdrift_active_for() lee s_panel_committed
              * (D-262), que el ultimo draw() ya dejo listo -- nunca da
              * true salvo entrando desde el submenu de Musica con la
-             * fila Cover Flow resaltada (music_row_wants_coverdrift()
+             * fila Music Flow resaltada (music_row_wants_coverdrift()
              * no califica ningun otro origen para este destino, ver esa
              * funcion). */
-            aura_transition_coverflow_enter(nav, aura_screens_coverdrift_active_for(to));
+            aura_transition_musicflow_enter(nav, aura_screens_coverdrift_active_for(to));
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
                  && aura_nowplaying_take_fullscreen_exit())
         {
             /* Salida desde el Modo 4 (letras). Correccion 2026-08-12:
-             * si se ENTRO por coverflow, SI se regresa al coverflow --
+             * si se ENTRO por musicflow, SI se regresa al musicflow --
              * despliegue inverso del panel encadenado con el morph de
              * regreso al carrusel. A cualquier otro destino, la
              * pantalla se comporta como pantalla completa y se
@@ -5827,7 +5861,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
              * -- ambas pantallas ya son FULL (screen_uses_split_layout()
              * no las incluye), asi que aura_transition_slide() calcula
              * solo ese ancho sin necesitar ningun caso especial. */
-            if (is_coverflow_screen(to))
+            if (is_musicflow_screen(to))
             {
                 aura_nowplaying_unfold_from_lyrics(nav);
                 if (aura_settings.animation_mode == AURA_ANIM_ALL)
@@ -5839,9 +5873,9 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
                 aura_transition_slide(nav, -1, A26_SCREEN_WIDTH, false);
         }
         else if (screen == AURA_SCREEN_NOWPLAYING && depth_after < depth_before
-                 && is_coverflow_screen(to))
+                 && is_musicflow_screen(to))
         {
-            /* Regreso reproductor -> Cover Flow (encargo 2026-08-12):
+            /* Regreso reproductor -> Music Flow (encargo 2026-08-12):
              * morph de la caratula de frente + laterales/titulo
              * entrando desde los bordes -- nunca el slide generico.
              * PLAN-niveles-fx.md §8.1: en Minimas/Ninguna, el morph se
@@ -5851,7 +5885,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
             else
                 aura_transition_slide(nav, -1, A26_SCREEN_WIDTH, false);
         }
-        else if (is_coverflow_screen(screen) && to == AURA_SCREEN_NOWPLAYING)
+        else if (is_musicflow_screen(screen) && to == AURA_SCREEN_NOWPLAYING)
         {
             /* Con Animaciones=Todas, Flip-and-Flow + morph de entrada
              * (now-playing.md) ya corrieron DENTRO de
@@ -5860,7 +5894,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
              * reporto (2026-08-12): la transicion correcta es el morph,
              * no empujar la pantalla del reproductor desde la derecha.
              *
-             * PLAN-niveles-fx.md §8.1 (Minimas/Ninguna): aura_coverflow.c
+             * PLAN-niveles-fx.md §8.1 (Minimas/Ninguna): aura_musicflow.c
              * ya NO llama a aura_transition_flip_and_flow() en estos
              * niveles -- solo hizo un aura_nav_push() directo, sin
              * transicion propia -- asi que aca corre el mismo push
@@ -5884,7 +5918,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
              * no una fila intermedia a medio debounce); la salida no
              * tenia guarda antes (use_reveal jamas cubria este caso, caia
              * al push generico) -- ahora tambien es la inversa exacta,
-             * simetrica con como D-267 ya trato la salida de Cover Flow.
+             * simetrica con como D-267 ya trato la salida de Music Flow.
              * `carry` es el mismo rect en los dos sentidos (el tile en
              * split, el tile en full) -- aura_transition_shift_and_reveal()
              * decide sola hacia donde viaja segun el signo de `direction`. */
@@ -5938,19 +5972,19 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
                 aura_widgets_panel_force_next();
 
             /* D-261: infraestructura generica lista. D-264 conecta el
-             * primer destino real distinto de Cover Flow: Ajustes ->
+             * primer destino real distinto de Music Flow: Ajustes ->
              * Acerca de, encargo explicito del dueno ("morph al entrar,
              * reusa el revelado de CoverDrift"). Acotado a ESTE origen/
-             * destino exacto -- Musica mas alla de Cover Flow, Canciones
+             * destino exacto -- Musica mas alla de Music Flow, Canciones
              * aleatorias, Video, Fotos siguen sin conectar, trabajo
              * aparte.
              * D-267 (encargo del dueno: "la transicion... deberia ser
              * exactamente la misma pero invertida cuando retrocedamos,
-             * por ejemplo, al salir del coverflow"): el revelado ahora
-             * TAMBIEN se activa al SALIR de Cover Flow, si CoverDrift
+             * por ejemplo, al salir del musicflow"): el revelado ahora
+             * TAMBIEN se activa al SALIR de Music Flow, si CoverDrift
              * seguia genuinamente comprometido para la fila a la que se
              * vuelve -- s_panel_committed (D-262) no cambia mientras se
-             * esta DENTRO de Cover Flow (esa pantalla no pasa por
+             * esta DENTRO de Music Flow (esa pantalla no pasa por
              * render_panel_debounced(), es su propio camino de dibujo),
              * asi que aura_screens_coverdrift_active_for(to) sigue
              * leyendo el mismo estado valido que tenia al entrar --
@@ -5963,7 +5997,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
                                     && to == AURA_SCREEN_SETTINGS_ABOUT
                                     && aura_screens_about_reveal_active())
                             || (depth_after < depth_before
-                                    && is_coverflow_screen(screen)
+                                    && is_musicflow_screen(screen)
                                     && aura_screens_coverdrift_active_for(to));
             aura_transition_slide(nav, depth_after > depth_before ? 1 : -1,
                                   width, use_reveal);

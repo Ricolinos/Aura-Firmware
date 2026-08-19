@@ -157,7 +157,7 @@ typedef enum {
     AURA_STR_ACCENT_PURPLE,
     AURA_STR_SETTINGS_LEFT_PANEL_SHADOW,
 
-    AURA_STR_MUSIC_COVERFLOW,
+    AURA_STR_MUSIC_FLOW,
 
     /* Etiquetas para entradas sin tag en la base de datos -- tagcache
      * genera el literal "<Untagged>", jerga tecnica que la regla dura
@@ -233,6 +233,9 @@ typedef enum {
     AURA_STR_VIDEOS_TVSHOWS,
     AURA_STR_VIDEOS_CLIPS,
     AURA_STR_VIDEOS_ALL,
+    /* Movie Flow (D-318) -- mismo criterio que AURA_STR_MUSIC_FLOW: nombre
+     * propio, sin traducir en ninguno de los dos idiomas. */
+    AURA_STR_VIDEOS_MOVIEFLOW,
     AURA_STR_PHOTOS_ALL,
     AURA_STR_SETTINGS_COPYRIGHT,
 
@@ -280,7 +283,7 @@ typedef enum {
     AURA_STR_SETTINGS_DATE,
     AURA_STR_SETTINGS_TIME,
 
-    /* D-224: precarga de caratulas de Cover Flow en el primer arranque
+    /* D-224: precarga de caratulas de Music Flow en el primer arranque
      * tras cada escaneo de biblioteca -- plantilla combinada con
      * snprintf(..., "%s %d/%d", aura_str(...), hechos, total) en
      * aura_music.c, mismo patron que AURA_STR_ABOUT_MUSIC en

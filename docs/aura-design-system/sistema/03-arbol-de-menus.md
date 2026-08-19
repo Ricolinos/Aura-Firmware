@@ -38,7 +38,7 @@ del iPod Classic (referencia levantada por el dueño del diseño el
 
 | Fila | Estado |
 |---|---|
-| Cover Flow | ✅ |
+| Music Flow | ✅ |
 | Listas repr. | ✅ → canciones |
 | Artistas | ✅ → *Todos* + artistas → álbumes → canciones |
 | Álbumes | ✅ → *Canciones* + álbumes → canciones |
@@ -60,6 +60,7 @@ fila más.
 
 | Fila | Estado |
 |---|---|
+| Videos → Movie Flow | ✅ (D-318: carrusel de carteles 3:4, copia casi exacta de Music Flow — ver `componentes/movie-flow.md`) |
 | Videos → Todos los videos | ✅ (visor real) |
 | Videos → Películas · Programas de TV · Videoclips | ✅ (D-316: dejaron de ser inertes — filtran `/Videos` por la categoría del índice opcional de Aura Studio, `CONTRATO-firmware-studio.md` §D.2; vacías con mensaje propio si el índice no existe o esa categoría no tiene contenido) |
 | Videos → Ajustes (Salida TV, Señal TV…) | ⛔ sin hardware que los soporte |
@@ -161,7 +162,7 @@ nada: Rockbox no tiene backend para ellos.
   de inicio. Música y Extras son **fijos** (checkmark inerte, atenuado
   al 50%): no se pueden quitar del menú de inicio, igual que en el
   original.
-- Los **hijos de Música** (Cover Flow, Listas repr., Artistas, Álbumes,
+- Los **hijos de Música** (Music Flow, Listas repr., Artistas, Álbumes,
   Canciones, Géneros) se listan **debajo, con TODA la fila —
   icono y texto— desplazada 12px** respecto de su padre. (Desplazar
   solo el texto se probó primero y no se leía como jerarquía: con el
@@ -169,7 +170,7 @@ nada: Rockbox no tiene backend para ellos.
   distinguía nivel alguno.) Cada hijo se puede marcar por separado: un
   hijo marcado aparece **además** en el menú de inicio, **justo después
   de Música**, sin dejar de vivir dentro de su padre — verificado en
-  vivo (marcar "Cover Flow" lo agrega al raíz entre Música y Videos).
+  vivo (marcar "Music Flow" lo agrega al raíz entre Música y Videos).
 - El panel derecho muestra el símbolo del ítem enfocado.
 - La lista cierra con **Restaurar menú principal**: repone
   Videos/Fotos/Ahora suena visibles y limpia todos los atajos de
