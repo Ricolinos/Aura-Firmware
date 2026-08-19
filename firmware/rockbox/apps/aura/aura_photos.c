@@ -48,6 +48,7 @@
 #include "aura_art.h" /* cache .pfraw generico -- D-291, compartido con aura_albumart.c */
 #include "aura_transitions.h" /* Fade-Slide region entre fotos -- D-291 */
 #include "aura_media_categories.h" /* indice opcional Fotos/Imagenes/IA -- D-316 */
+#include "aura_screens.h" /* aura_wheel_advance() -- D-323, dinamica real de la rueda */
 
 #define PHOTOS_DIR      "/Photos"
 /* D-291: 200 -> 500 (limite del contrato Photos/ con Aura Studio,
@@ -81,18 +82,26 @@
  * <=640px) no hace falta avisar "Cargando...". */
 #define PHOTO_LOADING_INDICATOR_SIDE 640
 
-/* D-291: lista con miniaturas reales -- mismas medidas que la lista de
- * Álbumes (ALBUM_ROW_H/ALBUM_ART_SIZE en aura_screens.c, D-221): filas
- * de 54px (218px utiles / 4 = 54, deja 2px de sobra antes del riel de
- * scroll), miniatura de 48px. Reusar el mismo numero en vez de inventar
- * uno propio -- es el unico precedente de lista de contenido con
- * miniatura real en todo el sistema. */
-#define PHOTO_ART_SIZE   48
-#define PHOTO_ROW_H      54
-#define PHOTO_LIST_TOP   (A26_LAYOUT_STATUSBAR_HEIGHT + 2)
-#define PHOTO_ART_X      A26_LAYOUT_LIST_INSET
-#define PHOTO_TEXT_GAP   A26_SPACING_MD
-#define PHOTO_VISIBLE    4
+/* D-323 (encargo del dueño, 2026-08-19: "una interfaz a pantalla
+ * completa, cuadrícula sin nombres, para desplazarnos rápido -- muy
+ * similar a la del iPod Classic original, donde sí se vea la barra de
+ * estado"): reemplaza la lista con nombre de D-291 -- item "Pendiente
+ * de definir" de componentes/photo-viewer.md ("Rejilla de miniaturas
+ * (2D) en vez de lista -- el original la usa"). Miniatura: mismo
+ * PHOTO_ART_SIZE de siempre (reusa photo_thumb_decode_and_cache()/
+ * draw_photos_thumb() sin cambios, mismo cache .pfraw -- ninguna
+ * pantalla usa ambos tamaños a la vez, no hace falta una segunda
+ * llave). Celda CUADRADA de 55px: 5 columnas (275px, centradas --
+ * sobran ~22px de cada lado, de sobra para el riel de scroll de 4px) x
+ * 4 filas (220px, exacto el alto útil bajo la barra de estado, cero
+ * sobra) -- ambos numeros salen de A26_SCREEN_WIDTH/A26_SCREEN_HEIGHT-
+ * A26_LAYOUT_STATUSBAR_HEIGHT, no son arbitrarios. */
+#define PHOTO_ART_SIZE     48
+#define PHOTO_GRID_COLS    5
+#define PHOTO_GRID_ROWS    4
+#define PHOTO_GRID_CELL    55
+#define PHOTO_GRID_TOP     A26_LAYOUT_STATUSBAR_HEIGHT
+#define PHOTO_GRID_LEFT    ((A26_SCREEN_WIDTH - PHOTO_GRID_COLS * PHOTO_GRID_CELL) / 2)
 
 /* Mismo valor que aura_albumart.c/aura_settings.c/aura_manifest.c --
  * sin header compartido para esto en el proyecto, cada archivo lo
@@ -627,15 +636,21 @@ static void draw_photos_thumb(int x, int y, int idx)
     }
 }
 
-/* -- Lista "Todas las fotos" (D-291) ----------------------------------------
+/* -- Cuadrícula "Todas las fotos" (D-323, reemplaza la lista de D-291) -----
  *
- * Renderizador dedicado, mismo patron que draw_album_list()
- * (aura_screens.c, unica lista de CONTENIDO con miniatura real hasta
- * ahora) -- filas de PHOTO_ROW_H con PHOTO_ART_SIZE de miniatura,
- * pastilla de seleccion, riel de scroll. La fila final "...y N mas"
- * (has_more_row()) no tiene miniatura -- se distingue visualmente
- * (texto atenuado, sin thumb) ademas de ser inerte (aura_photos_
- * handle_button() ya la excluye de SELECT). */
+ * PHOTO_GRID_COLS x PHOTO_GRID_ROWS celdas visibles a la vez, en orden
+ * de lectura (izquierda a derecha, arriba a abajo) -- la selección
+ * sigue siendo el mismo índice LINEAL de siempre (`aura_nav`); solo el
+ * dibujado mapea índice -> (fila, columna) -- primer precedente de
+ * layout 2D en todo apps/aura (todo lo demás es lista de una columna).
+ * Sin nombre de archivo (el encargo lo pide explícito): cada celda es
+ * solo la miniatura, con un realce de acento detrás cuando está
+ * seleccionada -- mismo mecanismo que la pastilla de la lista de
+ * antes (`a26_shell_fill_rounded_rect` ANTES de blitear la miniatura
+ * encima, mismo orden de dibujo, ninguna primitiva nueva). La fila
+ * final "...y N mas" de la lista se comprime a una celda "+N" (mismo
+ * criterio: nunca trunca en silencio, SELECT no hace nada sobre ella,
+ * `aura_photos_handle_button()` ya la excluye). */
 static long s_photos_activity_since = 0;
 static int s_photos_last_selected = -1;
 
@@ -667,23 +682,23 @@ static aura_str_id_t photo_empty_message_id(aura_screen_id_t screen)
     }
 }
 
-static void draw_photos_list(aura_nav_t *nav, aura_screen_id_t screen, aura_photo_cat_t filter)
+static void draw_photos_grid(aura_nav_t *nav, aura_screen_id_t screen, aura_photo_cat_t filter)
 {
     int selected = aura_nav_get_selection(nav);
-    int count = display_row_count(filter);
-    int visible = PHOTO_VISIBLE;
-    int first = 0;
-    int i, w, h;
-    static char s_more_label[48];
+    int count = display_row_count(filter); /* incluye la celda final "+N" si aplica */
+    int total_rows = (count + PHOTO_GRID_COLS - 1) / PHOTO_GRID_COLS;
+    int sel_row = selected / PHOTO_GRID_COLS;
+    int first_row = 0;
+    int row, col;
 
     a26_shell_clear_screen();
     aura_widgets_draw_status_bar(aura_str(photo_screen_title_id(screen)));
 
-    if (count > visible)
+    if (total_rows > PHOTO_GRID_ROWS)
     {
-        first = selected - visible / 2;
-        if (first < 0) first = 0;
-        if (first > count - visible) first = count - visible;
+        first_row = sel_row - PHOTO_GRID_ROWS / 2;
+        if (first_row < 0) first_row = 0;
+        if (first_row > total_rows - PHOTO_GRID_ROWS) first_row = total_rows - PHOTO_GRID_ROWS;
     }
 
     if (selected != s_photos_last_selected)
@@ -692,48 +707,51 @@ static void draw_photos_list(aura_nav_t *nav, aura_screen_id_t screen, aura_phot
         s_photos_activity_since = current_tick;
     }
 
-    if (selected >= first && selected < first + visible)
+    for (row = 0; row < PHOTO_GRID_ROWS; row++)
     {
-        int sel_y = PHOTO_LIST_TOP + (selected - first) * PHOTO_ROW_H;
-        a26_shell_fill_rounded_rect(A26_LAYOUT_LIST_INSET, sel_y,
-                                     A26_SCREEN_WIDTH - 2 * A26_LAYOUT_LIST_INSET,
-                                     PHOTO_ROW_H, A26_LAYOUT_CORNER_RADIUS_PILL,
-                                     a26_color(A26_SELECTION_FILL),
-                                     a26_color(A26_SHELL_BG));
-    }
+        int abs_row = first_row + row;
+        int cell_y = PHOTO_GRID_TOP + row * PHOTO_GRID_CELL;
 
-    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_12));
-    for (i = first; i < count && i < first + visible; i++)
-    {
-        int row_y = PHOTO_LIST_TOP + (i - first) * PHOTO_ROW_H;
-        int text_x = PHOTO_ART_X + PHOTO_ART_SIZE + PHOTO_TEXT_GAP;
-        bool is_sel = (i == selected);
-        bool is_more = (i == s_filtered_count); /* fila inerte "...y N mas" */
-
-        lcd_getstringsize((const unsigned char *)"Ay", &w, &h);
-
-        if (is_more)
+        for (col = 0; col < PHOTO_GRID_COLS; col++)
         {
-            lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
-            snprintf(s_more_label, sizeof(s_more_label), aura_str(AURA_STR_LIST_MORE_FMT),
-                      s_photo_total_count - s_photo_count);
-            aura_widgets_puts_clipped(PHOTO_ART_X, row_y + (PHOTO_ROW_H - h) / 2,
-                                       A26_SCREEN_WIDTH - PHOTO_ART_X - A26_LAYOUT_LIST_INSET,
-                                       s_more_label);
-            continue;
+            int i = abs_row * PHOTO_GRID_COLS + col;
+            int cell_x = PHOTO_GRID_LEFT + col * PHOTO_GRID_CELL;
+            bool is_sel = (i == selected);
+            bool is_more = (i == s_filtered_count); /* celda inerte "+N" */
+
+            if (i >= count)
+                continue;
+
+            if (is_sel)
+                a26_shell_fill_rounded_rect(cell_x, cell_y, PHOTO_GRID_CELL, PHOTO_GRID_CELL,
+                                             A26_LAYOUT_CORNER_RADIUS_CARD,
+                                             a26_color(A26_SELECTION_FILL),
+                                             a26_color(A26_SHELL_BG));
+
+            if (is_more)
+            {
+                char label[16];
+                int w, h;
+
+                /* Numero solo, sin palabras -- no hace falta entrada
+                 * de aura_lang.c para esto (D-323). */
+                snprintf(label, sizeof(label), "+%d", s_photo_total_count - s_photo_count);
+                lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+                lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
+                lcd_getstringsize((const unsigned char *)label, &w, &h);
+                lcd_putsxy(cell_x + (PHOTO_GRID_CELL - w) / 2, cell_y + (PHOTO_GRID_CELL - h) / 2,
+                           (const unsigned char *)label);
+                continue;
+            }
+
+            draw_photos_thumb(cell_x + (PHOTO_GRID_CELL - PHOTO_ART_SIZE) / 2,
+                               cell_y + (PHOTO_GRID_CELL - PHOTO_ART_SIZE) / 2,
+                               s_filtered_idx[i]);
         }
-
-        draw_photos_thumb(PHOTO_ART_X, row_y + (PHOTO_ROW_H - PHOTO_ART_SIZE) / 2,
-                           s_filtered_idx[i]);
-
-        lcd_set_foreground(is_sel ? a26_color(A26_ACCENT) : a26_color(A26_TEXT_PRIMARY));
-        aura_widgets_puts_clipped(text_x, row_y + (PHOTO_ROW_H - h) / 2,
-                                   A26_SCREEN_WIDTH - text_x - A26_LAYOUT_LIST_INSET,
-                                   s_photos[s_filtered_idx[i]].display);
     }
 
-    aura_scroll_indicator_draw(A26_SCREEN_WIDTH, PHOTO_LIST_TOP,
-                                PHOTO_VISIBLE * PHOTO_ROW_H, selected, count,
+    aura_scroll_indicator_draw(A26_SCREEN_WIDTH, PHOTO_GRID_TOP,
+                                PHOTO_GRID_ROWS * PHOTO_GRID_CELL, selected, count,
                                 (current_tick - s_photos_activity_since) * 1000L / HZ,
                                 a26_color(A26_SHELL_BG), a26_color(A26_TEXT_TERTIARY));
 }
@@ -762,7 +780,7 @@ void aura_photos_draw(aura_nav_t *nav, aura_screen_id_t screen)
         return;
     }
 
-    draw_photos_list(nav, screen, filter);
+    draw_photos_grid(nav, screen, filter);
 }
 
 void aura_photos_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button)
@@ -776,13 +794,18 @@ void aura_photos_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long bu
 
     switch (button)
     {
+    /* D-323: dinamica real de la rueda (1-3 celdas por evento segun
+     * velocidad angular, aura_wheel_advance() -- mismo mecanismo de
+     * "desplazarnos rápido" que ya usan Álbumes/menú principal/etc) en
+     * vez del ±1 fijo de la lista de antes. La cuadrícula recorre las
+     * celdas en orden de lectura (indice lineal), asi que "rapido"
+     * simplemente salta varias celdas seguidas -- sin ejes fila/
+     * columna independientes, como el iPod Classic original. */
     case BUTTON_SCROLL_FWD:
-        if (sel < display_row_count(filter) - 1)
-            aura_nav_set_selection(nav, sel + 1);
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, display_row_count(filter), 1));
         break;
     case BUTTON_SCROLL_BACK:
-        if (sel > 0)
-            aura_nav_set_selection(nav, sel - 1);
+        aura_nav_set_selection(nav, aura_wheel_advance(sel, display_row_count(filter), -1));
         break;
     case BUTTON_SELECT:
         /* sel == count solo puede ser la fila inerte "...y N mas"

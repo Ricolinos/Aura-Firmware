@@ -1,11 +1,12 @@
 # PhotoViewer
 
-🟢 Definido (D-291, 2026-08-17). Pantalla "Fotos → Todas las fotos": lista
-con miniaturas reales (`LISTA-COMPLETA`) que abre un visor de fotos a
-pantalla completa (`FULL-COLD`). Nombre interno en código:
-`aura_photos_draw()`/`aura_photo_viewer_draw()` (`apps/aura/aura_photos.c`).
-Diagnóstico completo y contrato con Aura Studio en `PLAN-image-viewer.md`
-(raíz del repo).
+🟢 Definido (D-291, 2026-08-17; cuadrícula D-323, 2026-08-19). Pantalla
+"Fotos → Todas las fotos": cuadrícula de miniaturas (`LISTA-COMPLETA`) que
+abre un visor de fotos a pantalla completa (`FULL-COLD`). Nombre interno en
+código: `aura_photos_draw()`/`aura_photo_viewer_draw()`
+(`apps/aura/aura_photos.c`). Diagnóstico completo y contrato con Aura Studio
+en `PLAN-image-viewer.md` (raíz del repo, D-291 — la cuadrícula de D-323 no
+tiene plan propio, es un encargo directo).
 
 ## Dónde vive
 
@@ -28,39 +29,50 @@ vacío (ver abajo) en vez de abrir.
 
 ## `(list)` — anatomía
 
-Mismo patrón que la lista de Álbumes (`draw_album_list()`/
-`draw_album_thumb()`, D-221) — única lista de CONTENIDO con miniatura real
-hasta que esta pantalla se sumó:
+**D-323 (2026-08-19)**: cuadrícula de miniaturas, reemplaza la lista
+original de D-291 -- encargo directo del dueño ("muy similar a la del
+iPod Classic original"), cierra el "Pendiente de definir" que esta misma
+página dejaba abierto. Primer layout 2D de todo `apps/aura/`; la
+selección sigue siendo el índice LINEAL de siempre (`aura_nav`), el
+dibujado mapea índice → (fila, columna) en orden de lectura.
 
 | Elemento | Medida | Origen |
 |---|---|---|
-| Fila | 54px de alto | mismo `ALBUM_ROW_H` que Álbumes |
-| Miniatura | 48×48, esquinas `A26_LAYOUT_CORNER_RADIUS_CARD` | mismo `ALBUM_ART_SIZE` que Álbumes |
-| Filas visibles | 4 (218px útiles / 54) | — |
-| Nombre | sin extensión (Principio 7), `DS_REG_12`, clip a la derecha | `strip_ext_for_display()` |
+| Celda | 55×55px, cuadrada | `A26_SCREEN_HEIGHT - A26_LAYOUT_STATUSBAR_HEIGHT` / 4 filas = 220/4 = 55 exacto |
+| Columnas visibles | 5 (275px, centradas -- ~22px de margen c/lado) | `A26_SCREEN_WIDTH` / 55 |
+| Filas visibles | 4 | -- |
+| Miniatura | 48×48 centrada en la celda, esquinas `A26_LAYOUT_CORNER_RADIUS_CARD` | mismo `PHOTO_ART_SIZE` de D-291, sin cambio |
+| Nombre de archivo | **no se muestra** -- encargo explícito | -- |
+| Selección | relleno `A26_SELECTION_FILL` detrás de la celda completa (antes de blitear la miniatura encima) | mismo mecanismo que la pastilla de la lista de antes |
 
 **Miniaturas**: las genera el firmware bajo demanda para la ventana
-visible (nunca toda la lista de una vez), cacheadas en disco
+visible (nunca toda la cuadrícula de una vez), cacheadas en disco
 (`.rockbox/aura/photocache/<nombre>-48.pfraw`) con el mismo formato
-`.pfraw` transpuesto+esquinas-horneadas que Music Flow — pipeline
+`.pfraw` transpuesto+esquinas-horneadas que Music Flow -- pipeline
 compartido vía `aura_art.c` (`aura_art_read_pfraw()`/`write_pfraw()`/
-`transpose()`/`mask_corners_transposed()`), no reimplementado. Llave del
-cache: nombre de archivo (único dentro de `/Photos`, plano) + `mtime` del
-archivo fuente — un re-sync con el mismo nombre pero contenido distinto
-invalida la miniatura vieja. Fotos que exceden el tope de tamaño (ver
-"Presupuesto de memoria" abajo) o son JPEG progresivo componen un tile
-liso de fondo en vez de intentar decodificar — ese placeholder también se
-cachea, para no reprobar la misma foto en cada redibujado.
+`transpose()`/`mask_corners_transposed()`), no reimplementado; el cache
+que ya generó la lista de D-291 sigue sirviendo tal cual (mismo tamaño,
+misma llave). Llave del cache: nombre de archivo (único dentro de
+`/Photos`, plano) + `mtime` del archivo fuente -- un re-sync con el mismo
+nombre pero contenido distinto invalida la miniatura vieja. Fotos que
+exceden el tope de tamaño (ver "Presupuesto de memoria" abajo) o son JPEG
+progresivo componen un tile liso de fondo en vez de intentar
+decodificar -- ese placeholder también se cachea, para no reprobar la
+misma foto en cada redibujado (visualmente es una celda en blanco, misma
+apariencia que "no hay nada acá" -- confirmado como comportamiento
+correcto, no un bug, durante la verificación de D-323).
 
-**Orden**: natural, insensible a mayúsculas (`strnatcasecmp` —
-"Foto 2" antes que "Foto 10"), no el orden físico del disco.
+**Orden**: natural, insensible a mayúsculas (`strnatcasecmp` --
+"Foto 2" antes que "Foto 10"), no el orden físico del disco -- recorrido
+en orden de lectura por la cuadrícula (izquierda a derecha, arriba a
+abajo).
 
-**Límite**: hasta 500 imágenes. Si `/Photos` tiene más, la lista agrega
-una fila final **inerte** (atenuada, sin miniatura, SELECT no hace nada)
-con el texto "…y N más" — nunca trunca en silencio.
+**Límite**: hasta 500 imágenes. Si `/Photos` tiene más, la cuadrícula
+agrega una celda final **inerte** (atenuada, sin miniatura, SELECT no
+hace nada) con el texto "+N" -- nunca trunca en silencio.
 
 **Estado vacío**: `StatusBar` + "Sin fotos todavía" + una segunda línea de
-ayuda, más chica y atenuada: "Sincroniza fotos desde Aura Studio" — dice
+ayuda, más chica y atenuada: "Sincroniza fotos desde Aura Studio" -- dice
 dónde resolverlo, no solo que está vacío (relevante: este vacío era
 justo el síntoma reportado que motivó D-291).
 
@@ -93,8 +105,13 @@ justo el síntoma reportado que motivó D-291).
 - **MENU o SELECT**: vuelve a `(list)`, con la selección sincronizada a la
   foto que se estaba viendo (no la que tenía al entrar) —
   `aura_nav_set_selection()` después de `aura_nav_pop()`.
-- Dentro de `(list)`: rueda mueve la selección, SELECT sobre una fila real
-  abre `(viewer)`; sobre la fila "…y N más" no hace nada.
+- Dentro de `(list)`: rueda mueve la selección **en orden de lectura**
+  (izquierda a derecha, arriba a abajo) con `aura_wheel_advance()` — 1 a 3
+  celdas por evento según velocidad angular real de la rueda (D-323, mismo
+  mecanismo que Álbumes/menú principal), sin ejes fila/columna
+  independientes ni binding nuevo de LEFT/RIGHT dentro de la cuadrícula.
+  SELECT sobre una celda real abre `(viewer)`; sobre la celda "+N" no hace
+  nada.
 
 ## Transiciones
 
@@ -161,9 +178,8 @@ completo en `PLAN-image-viewer.md` §6.
 - [ ] Modo "pantalla completa recortada con paneo" del original (además
       del "ajustado al marco" actual) — requiere un buffer más grande
       (~512KB) y paneo con la rueda; fuera de alcance de D-291.
-- [ ] Rejilla de miniaturas (2D) en vez de lista — el original la usa;
-      esta pasada eligió lista por reutilizar el patrón ya aprobado de
-      Álbumes sin inventar un componente de selección 2D nuevo.
+- [x] Rejilla de miniaturas (2D) en vez de lista — hecho en D-323
+      (2026-08-19).
 - [ ] Modo presentación (tiempo por diapositiva, aleatorio, transiciones)
       del submenú Ajustes → Fotos del original — no construido.
 - [ ] PNG nativo (portar `LodePNG` del plugin al core) — descartado por
