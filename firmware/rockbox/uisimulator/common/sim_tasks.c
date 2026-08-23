@@ -22,6 +22,8 @@
  ****************************************************************************/
 
 #include "config.h"
+#include <stdbool.h>
+#include "sim_tasks.h" /* D-330: prototipo de sim_trigger_usb() para el token USB_INSERT */
 #include "kernel.h"
 #include "screendump.h"
 #include "thread.h"
@@ -75,6 +77,10 @@ static long autodump_settle_ticks = 0;
  * dejaba botones cayendo dentro de la animacion y drenados por
  * drain_button_queue_if_full() de forma aleatoria. */
 #define AURA_INJECT_WAIT_CODE  (-1L)
+/* Token "USB_INSERT" (D-330, portado del M-039 de Metro-Aura): simula
+ * conectar el cable llamando sim_trigger_usb(true) -- para verificar la
+ * pantalla USB sin hardware ni ventana interactiva. */
+#define AURA_INJECT_USB_CODE   (-2L)
 #define AURA_INJECT_WAIT_TICKS (HZ)
 
 static long inject_codes[AURA_MAX_INJECT_BUTTONS];
@@ -93,6 +99,7 @@ static long aura_button_name_to_code(const char *name)
     if (!strcmp(name, "LEFT"))        return BUTTON_LEFT;
     if (!strcmp(name, "RIGHT"))       return BUTTON_RIGHT;
     if (!strcmp(name, "WAIT"))        return AURA_INJECT_WAIT_CODE;
+    if (!strcmp(name, "USB_INSERT"))  return AURA_INJECT_USB_CODE;
     return BUTTON_NONE;
 }
 
@@ -148,6 +155,17 @@ void sim_thread(void)
         {
             if (inject_codes[inject_pos] == AURA_INJECT_WAIT_CODE)
             {
+                inject_pos++;
+                inject_next_tick = current_tick + AURA_INJECT_WAIT_TICKS;
+                if (inject_pos == inject_count && autodump_settle_ticks >= 0)
+                {
+                    autodump_pending = true;
+                    autodump_tick = current_tick + AURA_INJECT_WAIT_TICKS + autodump_settle_ticks;
+                }
+            }
+            else if (inject_codes[inject_pos] == AURA_INJECT_USB_CODE)
+            {
+                sim_trigger_usb(true);
                 inject_pos++;
                 inject_next_tick = current_tick + AURA_INJECT_WAIT_TICKS;
                 if (inject_pos == inject_count && autodump_settle_ticks >= 0)

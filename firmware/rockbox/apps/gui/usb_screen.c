@@ -257,23 +257,70 @@ static void usb_screens_draw(struct usb_screen_vps_t *usb_screen_vps_ar)
 
         last_vp = screen->set_viewport(parent);
 #ifdef IPOD_6G
-        /* D-225 (encargo del dueno, 2026-08-14: "aun aparece la pantalla
-         * negra con el texto usb rojo sobre un rectangulo aun mas negro
-         * que el fondo" -- el logo ya se arreglo en D-223, pero el color
-         * de FONDO seguia siendo el que Rockbox de fabrica deja para
-         * esta pantalla, no el del tema de Aura). A diferencia de las
-         * fuentes/iconos (font_disable_all() los descarga a proposito
-         * mientras el disco esta montado por USB, D-223), a26_color()
-         * es una funcion PURA sobre aura_settings.theme (ya en memoria,
-         * cargado de aura.cfg al arrancar) y constantes generadas en
-         * compilacion -- no lee nada del disco, asi que es seguro usarla
-         * aca. Respeta el tema claro/oscuro real del usuario, aunque el
-         * resto de la pantalla (tipografia, iconos SF) siga sin poder
-         * usar el sistema completo por la misma razon de D-223. */
+        /* D-225: fondo del tema real -- a26_color() es pura sobre
+         * memoria, segura aca aunque las fuentes esten descargadas. */
         screen->set_background(a26_color(A26_SHELL_BG));
 #endif
         screen->clear_viewport();
         screen->backlight_on();
+#ifdef IPOD_6G
+        /* D-330 (encargo del dueno: "un grafico como Apple lo hubiera
+         * disenado hoy", en vez del wordmark pelado de D-223). Todo con
+         * lo que hay en memoria: la superficie redondeada del shell
+         * (funciones puras), y los dos bitmaps embebidos usados como
+         * MASCARAS de luminancia -- bm_usblogo ya no es el logo "USB" de
+         * Rockbox sino el glifo de sincronizacion de Lucide (blanco
+         * sobre negro, AA horneado, regenerado en apps/bitmaps/native/),
+         * y bm_rockboxlogo es el wordmark "aura". Dibujarlos por mezcla
+         * en vez de screen->bmp() es lo que los hace correctos en tema
+         * claro Y oscuro (el bitmap opaco pintaba una losa negra en el
+         * claro). */
+        if (i == SCREEN_MAIN)
+        {
+            const int tile = 96, radius = 22; /* proporcion de icono de app */
+            int tx = (LCD_WIDTH - tile) / 2, ty = 46;
+            unsigned bg = a26_color(A26_SHELL_BG);
+            unsigned accent = a26_color(A26_ACCENT);
+            unsigned fg = a26_color(A26_TEXT_PRIMARY);
+            const fb_data *px;
+            int gx, gy, x, y;
+
+            screen->set_viewport(NULL);
+            a26_shell_fill_rounded_rect(tx, ty, tile, tile, radius, accent, bg);
+
+            /* glifo blanco centrado en el tile, por luminancia */
+            px = (const fb_data *)bm_usblogo.data;
+            gx = tx + (tile - BMPWIDTH_usblogo) / 2;
+            gy = ty + (tile - BMPHEIGHT_usblogo) / 2;
+            for (y = 0; y < BMPHEIGHT_usblogo; y++)
+                for (x = 0; x < BMPWIDTH_usblogo; x++)
+                {
+                    int lum = RGB_UNPACK_GREEN(px[y * BMPWIDTH_usblogo + x]);
+                    if (lum > 8)
+                    {
+                        lcd_set_foreground(a26_shell_blend(accent, LCD_RGBPACK(0xFF, 0xFF, 0xFF), lum * 256 / 255));
+                        lcd_drawpixel(gx + x, gy + y);
+                    }
+                }
+
+            /* wordmark "aura" debajo, en el color de texto del tema */
+            px = (const fb_data *)bm_rockboxlogo.data;
+            gx = (LCD_WIDTH - BMPWIDTH_rockboxlogo) / 2;
+            gy = ty + tile + 4;
+            for (y = 0; y < BMPHEIGHT_rockboxlogo && gy + y < LCD_HEIGHT; y++)
+                for (x = 0; x < BMPWIDTH_rockboxlogo; x++)
+                {
+                    int lum = RGB_UNPACK_GREEN(px[y * BMPWIDTH_rockboxlogo + x]);
+                    if (lum > 8)
+                    {
+                        lcd_set_foreground(a26_shell_blend(bg, fg, lum * 256 / 255));
+                        lcd_drawpixel(gx + x, gy + y);
+                    }
+                }
+            screen->set_viewport(last_vp);
+            continue;
+        }
+#endif
         screen->set_viewport(logo);
         screen->bmp(logos[i], 0, 0);
         screen->set_viewport(last_vp);

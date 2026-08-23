@@ -39,7 +39,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `apps/bitmaps/native/rockboxlogo.320x98x16.bmp`
 - `apps/bitmaps/native/usblogo.176x48x16.bmp`
 - `apps/gui/splash.c`
-- `apps/gui/usb_screen.c`
+- `apps/gui/usb_screen.c` (D-223/D-225/D-330: pantalla USB propia — v. DECISIONS)
 - `apps/main.c`
 - `apps/misc.c`
 - `apps/misc.h`
@@ -60,7 +60,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `firmware/export/font.h`
 - `firmware/target/hosted/filesystem-unix.c`
 - `lib/rbcodec/codecs/aiff.c`
-- `uisimulator/common/sim_tasks.c`
+- `uisimulator/common/sim_tasks.c (D-330: token USB_INSERT del inyector, portado del M-039 de Metro-Aura)`
 - `utils/mks5lboot/Makefile`
 
 (Rutas relativas a `firmware/rockbox/`.)

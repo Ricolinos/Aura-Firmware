@@ -646,3 +646,13 @@ Verificado en simulador con un árbol dormido de prueba: tras "Sí", `.rockbox` 
 **Causa: nosotros.** El cambio (v10) dejaba el marcador con `music: true` **siempre**. **Corrección (v12):** `/.aura/library-stamp` (solo cambia cuando un sync de Studio toca música) + `.rockbox/aura/db_stamp.txt` por árbol (qué sello tenía la biblioteca cuando ese firmware construyó su base; se anota en `finish_ok()` de `aura_sync.c`, que cubre la reconstrucción por marcador y la manual). Al cambiar (`aura_firmware_switch.c` y el resto de las partes): sellos iguales → **sin marcador, sin reconstrucción**; distintos o ausentes → como antes. Arranque en frío: si el sello compartido no existe, el saliente —cuya base está al día porque acaba de estar corriendo— lo crea y se lo anota, así el primer ciclo de ida y vuelta ya solo reconstruye una vez por árbol.
 
 Verificado en simulador: primer cambio sin sello → marcador + sello anotado al saliente; vuelta con sellos iguales → sin marcador. Studio hace lo mismo (ST-059) y renueva el sello en cada sync con música.
+
+## D-330 — Pantalla USB rediseñada: tile de app con glifo de sincronización (encargo del dueño)
+
+**Encargo:** *"al conectarlo aparece el texto 'aura', casi la misma pantalla que el splash. Me gustaría un gráfico como Apple lo hubiera diseñado en la actualidad para el iPod."*
+
+**Restricción (D-223, sigue igual):** durante la sesión USB las fuentes están descargadas y no se puede leer nada del disco. Lo disponible: funciones puras del shell (`a26_color`, `a26_shell_fill_rounded_rect`, `a26_shell_blend`) y los dos bitmaps embebidos.
+
+**Diseño.** Fondo del tema (D-225); al centro un **tile estilo icono de app**: superficie redondeada de 96 px en el acento (proporción de radio de icono de Apple) con el **glifo de sincronización de Lucide en blanco** (el bitmap `usblogo.176x48x16.bmp` se regeneró: ya no es el logo "USB" de Rockbox sino el glifo con antialiasing horneado, usado como **máscara de luminancia**); debajo, el wordmark "aura" también como máscara, **en el color de texto del tema** — de paso se corrige que el bitmap opaco habría pintado una losa negra en el tema claro. Sin texto de fuente alguna.
+
+De paso: el inyector del simulador gana el token `USB_INSERT` (portado del M-039 de Metro-Aura) — la pantalla se verificó en el simulador con él (`docs/screenshots/d330-usb-screen.png`).
