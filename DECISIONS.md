@@ -634,3 +634,7 @@ Cierra D-326 del lado del firmware; es el calco de M-090 de Metro-Aura (misma se
 **Fila** "Cambiar a Metro" (icono `ipod`, libre en esa lista — D-075) entre "Reconstruir biblioteca" y "Restablecer ajustes"; pantalla `AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE` (al final del enum): aviso Sí/No calcado del de reconstruir cuando hay árbol dormido, texto informativo (como Avisos legales) explicando cómo instalarlo desde Aura Studio cuando no. Tres cadenas nuevas al final de ambos catálogos.
 
 Verificado en simulador con un árbol dormido de prueba: tras "Sí", `.rockbox` es el de Metro (`firmware_family: metro`), `.firmware-aura/aura/aura.cfg` conserva los ajustes de Aura, `/rockbox.ipod` es el binario de Metro y el marcador trae `music: true`. (El `system_reboot()` del simulador no termina el proceso; en el iPod es un reinicio real.) De paso: el simulador estaba configurado contra `gcc-15`, ya retirado por Homebrew; `build_sim.sh --reconfigure` lo dejó en gcc-16.
+
+## D-328 — Contrato v11: actualizaciones selectivas por manifiesto (registro; sin trabajo en este repo)
+
+`install_manifest.cfg` en `.rockbox/aura/`, escrito y leído solo por Aura Studio (ST-058) para extraer únicamente lo que cambió entre releases (medido: ~5 archivos de 9 431). Este firmware lo ignora — la única regla nueva es no adoptar ese nombre de archivo para otra cosa.
