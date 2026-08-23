@@ -116,6 +116,16 @@ bool aura_sync_request_manual(void);
  * vive dentro de cada arbol). Misma escritura que usa el propio ciclo. */
 bool aura_sync_write_music_pending_marker(void);
 
+/* D-329 (contrato v12): sello de biblioteca. /.aura/library-stamp solo
+ * cambia cuando un sync de Studio toca la musica; cada arbol anota en
+ * .rockbox/aura/db_stamp.txt contra que sello construyo su base.
+ * record: al terminar BIEN una (re)construccion. switch_needs_rebuild:
+ * para el cambio de firmware, DESPUES de los renombres -- crea el sello
+ * si falta (anotandolo al saliente, cuya base esta al dia) y dice si el
+ * arbol entrante (ya en /.rockbox) necesita el marcador. */
+void aura_sync_record_db_stamp(void);
+bool aura_sync_switch_needs_rebuild(const char *outgoing_tree_root);
+
 /* Progreso estimado de la seccion Musica en [0, 256]; -1 si no aplica
  * (todavia sin empezar / indeterminado). Texto corto de detalle
  * ("32 carpetas", "indexando 4/9") en `detail`. */

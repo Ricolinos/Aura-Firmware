@@ -638,3 +638,11 @@ Verificado en simulador con un árbol dormido de prueba: tras "Sí", `.rockbox` 
 ## D-328 — Contrato v11: actualizaciones selectivas por manifiesto (registro; sin trabajo en este repo)
 
 `install_manifest.cfg` en `.rockbox/aura/`, escrito y leído solo por Aura Studio (ST-058) para extraer únicamente lo que cambió entre releases (medido: ~5 archivos de 9 431). Este firmware lo ignora — la única regla nueva es no adoptar ese nombre de archivo para otra cosa.
+
+## D-329 — El cambio de firmware deja de reconstruir la base sin motivo (contrato v12, sello de biblioteca)
+
+**Reporte del dueño:** *"cada que cambio de un firmware a otro… ambos firmwares crean nuevamente la base de datos: son 5 minutos en los que dejan inutilizable el iPod"*, sin que la biblioteca haya cambiado.
+
+**Causa: nosotros.** El cambio (v10) dejaba el marcador con `music: true` **siempre**. **Corrección (v12):** `/.aura/library-stamp` (solo cambia cuando un sync de Studio toca música) + `.rockbox/aura/db_stamp.txt` por árbol (qué sello tenía la biblioteca cuando ese firmware construyó su base; se anota en `finish_ok()` de `aura_sync.c`, que cubre la reconstrucción por marcador y la manual). Al cambiar (`aura_firmware_switch.c` y el resto de las partes): sellos iguales → **sin marcador, sin reconstrucción**; distintos o ausentes → como antes. Arranque en frío: si el sello compartido no existe, el saliente —cuya base está al día porque acaba de estar corriendo— lo crea y se lo anota, así el primer ciclo de ida y vuelta ya solo reconstruye una vez por árbol.
+
+Verificado en simulador: primer cambio sin sello → marcador + sello anotado al saliente; vuelta con sellos iguales → sin marcador. Studio hace lo mismo (ST-059) y renueva el sello en cada sync con música.

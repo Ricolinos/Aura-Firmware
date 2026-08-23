@@ -40,6 +40,9 @@
  * como "correo", separada de los ajustes/caches propios de Aura. */
 #define AURA_SYNC_DIR         "/.aura"
 #define AURA_SYNC_MARKER_PATH AURA_SYNC_DIR "/sync-pending.json"
+#define AURA_LIBRARY_STAMP_PATH AURA_SYNC_DIR "/library-stamp" /* D-329, v12 */
+#define AURA_DB_STAMP_SUBPATH   "/aura/db_stamp.txt"
+#define AURA_DB_STAMP_PATH      ROCKBOX_DIR AURA_DB_STAMP_SUBPATH
 
 /* Mismo criterio que aura_albumart.c: la cache de caratulas se indexa por
  * album_seek de tagcache, que cambia con cada commit que agrega/quita
@@ -86,6 +89,89 @@ static bool write_marker(const aura_sync_marker_t *m)
 static void remove_marker(void)
 {
     remove(AURA_SYNC_MARKER_PATH);
+}
+
+/* --- D-329 (contrato v12): sello de biblioteca ----------------------- */
+
+#define STAMP_BUF 64
+
+static int stamp_read(const char *path, char *buf, size_t bufsz)
+{
+    int fd = open(path, O_RDONLY);
+    ssize_t n;
+
+    if (fd < 0)
+        return -1;
+    n = read(fd, buf, bufsz - 1);
+    close(fd);
+    if (n <= 0)
+        return -1;
+    buf[n] = '\0';
+    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r'))
+        buf[--n] = '\0';
+    return (int)n;
+}
+
+static bool stamp_write(const char *path, const char *text)
+{
+    int fd = creat(path, 0666);
+
+    if (fd < 0)
+        return false;
+    write(fd, text, strlen(text));
+    write(fd, "\n", 1);
+    close(fd);
+    return true;
+}
+
+static void stamp_make(char *out, size_t outsz)
+{
+    struct tm *now = get_time();
+
+    if (now)
+        snprintf(out, outsz, "fw-%04d%02d%02dT%02d%02d%02d-%08lx",
+                 now->tm_year + 1900, now->tm_mon + 1, now->tm_mday,
+                 now->tm_hour, now->tm_min, now->tm_sec,
+                 (unsigned long)current_tick);
+    else
+        snprintf(out, outsz, "fw-%08lx", (unsigned long)current_tick);
+}
+
+static void stamp_ensure_shared(char *out, size_t outsz)
+{
+    if (stamp_read(AURA_LIBRARY_STAMP_PATH, out, outsz) > 0)
+        return;
+    stamp_make(out, outsz);
+    if (!dir_exists(AURA_SYNC_DIR))
+        mkdir(AURA_SYNC_DIR);
+    stamp_write(AURA_LIBRARY_STAMP_PATH, out);
+}
+
+void aura_sync_record_db_stamp(void)
+{
+    char stamp[STAMP_BUF];
+
+    stamp_ensure_shared(stamp, sizeof(stamp));
+    stamp_write(AURA_DB_STAMP_PATH, stamp);
+}
+
+bool aura_sync_switch_needs_rebuild(const char *outgoing_tree_root)
+{
+    char stamp[STAMP_BUF], recorded[STAMP_BUF], path[MAX_PATH];
+    bool had_stamp = stamp_read(AURA_LIBRARY_STAMP_PATH, stamp, sizeof(stamp)) > 0;
+
+    if (!had_stamp)
+    {
+        /* Arranque en frio: el saliente acaba de estar corriendo, su base
+         * SI esta al dia -- se sella y se anota. */
+        stamp_ensure_shared(stamp, sizeof(stamp));
+        snprintf(path, sizeof(path), "%s%s", outgoing_tree_root, AURA_DB_STAMP_SUBPATH);
+        stamp_write(path, stamp);
+    }
+
+    if (stamp_read(AURA_DB_STAMP_PATH, recorded, sizeof(recorded)) <= 0)
+        return true; /* el entrante nunca anoto: como antes de v12 */
+    return strcmp(recorded, stamp) != 0;
 }
 
 bool aura_sync_write_music_pending_marker(void)
@@ -225,6 +311,10 @@ int aura_sync_marker_version_seen(void)
  * (calificaciones de Studio + precache de caratulas) sobre la base nueva. */
 static void finish_ok(void)
 {
+    /* D-329 (v12): la base recien construida describe la biblioteca
+     * vigente -- anotar el sello evita reconstruir en el proximo cambio
+     * de firmware sin sync de por medio. */
+    aura_sync_record_db_stamp();
     remove_marker();
     if (s_section[AURA_SYNC_SECTION_MUSIC] != AURA_SYNC_SECTION_SKIPPED)
     {
