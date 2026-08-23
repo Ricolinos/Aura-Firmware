@@ -969,7 +969,11 @@ static const char *photo_coverdrift_filename(drift_pool_t pool, int index)
  * funciones static internas de tagcache.c). Mismo patron de cache por
  * generacion que ensure_music_cache() (arriba en este archivo); solo
  * conserva el seek de cada album, no el label. */
-static int32_t s_drift_album_pool_seeks[AURA_MUSIC_MAX_ITEMS];
+/* D-325: el pool de CoverDrift se queda en 300 A PROPOSITO (D-316: nadie
+ * necesita la rotacion entre mas de 300 imagenes para que la sensacion de
+ * variedad funcione) -- los topes de las listas crecieron, este no. */
+#define AURA_DRIFT_POOL_MAX 300
+static int32_t s_drift_album_pool_seeks[AURA_DRIFT_POOL_MAX];
 static int s_drift_album_pool_count = 0;
 static int s_drift_album_pool_generation = -1;
 static bool s_drift_album_pool_was_ready = false;
@@ -999,8 +1003,8 @@ static int drift_pool_count(drift_pool_t pool)
      * de 300 fotos de una misma categoria. Acotar aca en vez de crecer
      * ese arreglo: nadie necesita CoverDrift rotando entre mas de 300
      * imagenes distintas para que la sensacion de variedad funcione. */
-    if (count > AURA_MUSIC_MAX_ITEMS)
-        count = AURA_MUSIC_MAX_ITEMS;
+    if (count > AURA_DRIFT_POOL_MAX)
+        count = AURA_DRIFT_POOL_MAX;
     return count;
 }
 
@@ -1044,7 +1048,7 @@ static int ensure_drift_effective_pool(void)
      * stack de 8KB del hilo "main" sumado al resto de lo que ya vive ahi
      * en este punto de la pila. */
     {
-        static int s_shuffle_idx[AURA_MUSIC_MAX_ITEMS];
+        static int s_shuffle_idx[AURA_DRIFT_POOL_MAX];
         int i, n = s_drift_album_pool_count;
 
         for (i = 0; i < n; i++)
@@ -1109,8 +1113,10 @@ static void ensure_drift_album_pool(void)
     n = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_pool_scratch, AURA_MUSIC_MAX_ITEMS);
 
     s_drift_album_pool_count = 0;
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n && s_drift_album_pool_count < AURA_DRIFT_POOL_MAX; i++)
     {
+        /* D-325: la lista de albumes ya puede traer hasta 2,000; el
+         * pool se queda con los primeros 300 (cota de D-316). */
         if (s_pool_scratch[i].seek < 0) /* fila sintetica "Canciones", no es un album real */
             continue;
         s_drift_album_pool_seeks[s_drift_album_pool_count++] = s_pool_scratch[i].seek;
@@ -1128,7 +1134,7 @@ static void ensure_drift_album_pool(void)
  * draw_album_thumb() de mas abajo); se transpone a fila-mayor (lo que
  * espera aura_coverdrift_draw() via lcd_bitmap_part()) una sola vez por
  * cambio de indice activo, nunca por cuadro. */
-static aura_coverdrift_image_t s_drift_album_images[AURA_MUSIC_MAX_ITEMS];
+static aura_coverdrift_image_t s_drift_album_images[AURA_DRIFT_POOL_MAX];
 static int s_drift_album_buf_a_idx = -1;
 static int s_drift_album_buf_b_idx = -1;
 static struct bitmap s_drift_album_bmp_a;
@@ -4840,9 +4846,9 @@ static int is_movieflow_screen(aura_screen_id_t screen)
 
 static aura_screen_id_t s_music_cache_screen = AURA_SCREEN_COUNT;
 static int s_music_cache_generation = -1;
-static aura_music_item_t s_music_cache[AURA_MUSIC_MAX_ITEMS];
+static aura_music_item_t s_music_cache[AURA_MUSIC_MAX_SONGS]; /* D-325: es el navegador de Canciones tambien */
 static int s_music_cache_count = 0;
-static aura_list_item_t s_music_items_buf[AURA_MUSIC_MAX_ITEMS];
+static aura_list_item_t s_music_items_buf[AURA_MUSIC_MAX_SONGS];
 
 /* Fila sintetica al tope de ciertas listas del original (2026-08-13):
  * "Canciones" en Albumes, "Todos" en las listas que agrupan (Artistas,
@@ -4888,13 +4894,13 @@ static void ensure_music_cache(aura_screen_id_t screen)
     if (browse_all_row_target(screen) == AURA_SCREEN_COUNT)
     {
         s_music_cache_count = aura_music_browse(screen, s_music_cache,
-                                                 AURA_MUSIC_MAX_ITEMS);
+                                                 AURA_MUSIC_MAX_SONGS);
         return;
     }
 
     /* Con fila sintetica: se busca desde el indice 1 y la fila 0 se
      * rellena despues, para no mover memoria de mas. */
-    n = aura_music_browse(screen, s_music_cache + 1, AURA_MUSIC_MAX_ITEMS - 1);
+    n = aura_music_browse(screen, s_music_cache + 1, AURA_MUSIC_MAX_SONGS - 1);
     strlcpy(s_music_cache[0].label, aura_str(browse_all_row_label(screen)),
             AURA_MUSIC_ITEM_LEN);
     s_music_cache[0].seek = -1; /* marca de fila sintetica */
@@ -5165,7 +5171,7 @@ static void draw_artist_list(aura_nav_t *nav, aura_screen_id_t screen)
 
 static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
 {
-    int i;
+    int i, n;
 
     if (!aura_music_db_ready())
     {
@@ -5199,10 +5205,27 @@ static void draw_music_browse(aura_nav_t *nav, aura_screen_id_t screen)
         s_music_items_buf[i].icon_name = NULL;
         s_music_items_buf[i].checked = 0;
         s_music_items_buf[i].toggle = -1;
+        s_music_items_buf[i].dimmed = 0;
+    }
+
+    /* D-325: una lista que llego a su tope lo DICE -- fila final inerte
+     * (dimmed) en vez del silencio de antes, cuando 300 titulos se
+     * cortaban "en la E" sin pista alguna. El buffer tiene exactamente
+     * MAX_SONGS filas, asi que la fila extra solo cabe si el cache quedo
+     * una por debajo; se reserva esa ultima posicion para el aviso. */
+    n = s_music_cache_count;
+    if (n >= AURA_MUSIC_MAX_SONGS - 1)
+    {
+        n = AURA_MUSIC_MAX_SONGS;
+        s_music_items_buf[n - 1].label = aura_str(AURA_STR_LIST_TRUNCATED);
+        s_music_items_buf[n - 1].icon_name = NULL;
+        s_music_items_buf[n - 1].checked = 0;
+        s_music_items_buf[n - 1].toggle = -1;
+        s_music_items_buf[n - 1].dimmed = 1;
     }
 
     aura_widgets_draw_list(aura_str(screen_title_id(screen)), s_music_items_buf,
-                            s_music_cache_count, aura_nav_get_selection(nav));
+                            n, aura_nav_get_selection(nav));
 }
 
 static aura_screen_id_t s_playlist_cache_screen = AURA_SCREEN_COUNT;

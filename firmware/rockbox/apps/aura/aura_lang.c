@@ -293,6 +293,7 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_PHOTOS_EMPTY_PHOTO]       = "No hay fotos",
     [AURA_STR_PHOTOS_EMPTY_IMAGE]       = "No hay imágenes",
     [AURA_STR_PHOTOS_EMPTY_AI]          = "No hay imágenes de IA",
+    [AURA_STR_LIST_TRUNCATED]           = "…y más: la lista está llena",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -556,6 +557,7 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_PHOTOS_EMPTY_PHOTO]       = "No photos",
     [AURA_STR_PHOTOS_EMPTY_IMAGE]       = "No images",
     [AURA_STR_PHOTOS_EMPTY_AI]          = "No AI images",
+    [AURA_STR_LIST_TRUNCATED]           = "…and more: the list is full",
 };
 
 const char *aura_str(aura_str_id_t id)

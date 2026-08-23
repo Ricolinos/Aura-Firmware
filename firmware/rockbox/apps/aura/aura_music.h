@@ -35,7 +35,24 @@
 
 #include "aura_nav.h"
 
-#define AURA_MUSIC_MAX_ITEMS 300
+/* D-325: capacidad de las listas de biblioteca. Era un solo
+ * AURA_MUSIC_MAX_ITEMS = 300 para TODO, y como tagcache entrega los
+ * titulos ya ordenados, una biblioteca de 1,200 canciones mostraba
+ * exactamente las primeras 300 y "terminaba en la E" sin aviso (reporte
+ * del dueño; mismo defecto heredado en Metro-Aura, M-087). Un tope por
+ * clase de lista, dimensionado para una biblioteca real en 64 MB:
+ *   - canciones (navegador de Canciones / de un genero, la lista de
+ *     reproduccion que se arma al elegir una): 5,000 -- 68 B c/u.
+ *   - agrupadores (artistas, albumes, generos, listas, los albumes de un
+ *     artista, las canciones de un album): 2,000.
+ * Todo estatico (nunca en la pila de 8 KB, D-226). El pool de CoverDrift
+ * NO sigue estos topes: sigue acotado a 300 a proposito (D-316,
+ * AURA_DRIFT_POOL_MAX en aura_screens.c). */
+#define AURA_MUSIC_MAX_SONGS  5000
+#define AURA_MUSIC_MAX_GROUPS 2000
+/* Alias del tope de agrupadores para los llamadores que no distinguen
+ * que lista cargan (listas de reproduccion, precache de caratulas). */
+#define AURA_MUSIC_MAX_ITEMS  AURA_MUSIC_MAX_GROUPS
 #define AURA_MUSIC_ITEM_LEN  64
 
 typedef struct {

@@ -601,3 +601,20 @@ Celda **cuadrada** de 55px: 5 columnas (275px, centradas — sobran ~22px de cad
 - **v9** generaliza §A (el canal es el Release del repositorio de la familia: `Aura-Firmware` o `Metro-Aura`, mismos assets), §B (la pantalla de Licencias de Studio existe y lista cada familia embebida) y §E (`FIRMWARE_VERSION` con sección por familia). §D no cambia.
 
 Implicación para este repo: **ninguna regla nueva**, pero sí una a conservar — Aura no debe empezar a escribir `firmware_family` sin subir el contrato, porque hoy la ausencia significa "Aura".
+
+## D-325 — Las listas de Música se cortaban en 300 ("no hay canciones después de la E")
+
+**Reporte del dueño (2026-08-23):** con su biblioteca real sincronizada, Canciones muestra 300 y se detiene en la E — en Aura y en Metro-Aura por igual (M-087 allá, misma herencia).
+
+**Causa.** `AURA_MUSIC_MAX_ITEMS = 300`, un solo tope para todas las listas. Tagcache entrega los títulos **ya ordenados**, así que las primeras 300 que caben son de la A hasta donde alcance, y no había ningún aviso en pantalla. Las canciones están en el disco y en la base; la pantalla no tenía dónde ponerlas.
+
+**Decisión.** Un tope por clase de lista, estático (nunca en la pila de 8 KB, D-226):
+- `AURA_MUSIC_MAX_SONGS = 5000` — el navegador genérico (`s_music_cache`, que también es Canciones y las canciones de un género), `s_tracknums` y los scratch de `aura_music_play_*` que arman la lista de reproducción.
+- `AURA_MUSIC_MAX_GROUPS = 2000` — artistas, álbumes, géneros, listas, sublistas; `AURA_MUSIC_MAX_ITEMS` queda como alias de este para los llamadores que no distinguen.
+- **El pool de CoverDrift NO crece**: sigue en 300 a propósito (D-316 — nadie necesita rotar entre más de 300 imágenes para que la sensación de variedad funcione), ahora con constante propia `AURA_DRIFT_POOL_MAX`, y el bucle que lo llena desde la lista de álbumes **se acota** a esa cota — antes el scratch y el pool compartían tamaño; al crecer la lista de álbumes a 2 000 habría desbordado el pool.
+
+`.bss` pasa a 11.2 MB en ARM; el búfer de audio queda en ≈51 MB. Los recorridos de tagcache corren contra la copia en RAM (`tagcache_ram = 1` en `apps/main.c`).
+
+**El tope ya no es silencioso:** el navegador genérico agrega una fila final inerte (`dimmed`) "…y más: la lista está llena" (`AURA_STR_LIST_TRUNCATED`, añadida al final de ambos catálogos) cuando llega al tope; la rueda sigue acotada a las filas reales, así que no es seleccionable. Las vistas con carátula (álbumes, artistas) no la reciben: su índice es el de un elemento real.
+
+**Pendiente:** cronometrar en el iPod cuánto tarda entrar a Canciones con miles de pistas.

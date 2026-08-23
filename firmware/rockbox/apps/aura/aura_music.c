@@ -643,7 +643,7 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
     /* Numero de pista real por fila -- solo interesa para las listas
      * de canciones DE UN ALBUM (ordenarlas como el disco, D-118/nota);
      * en el resto de las busquedas se ignora. */
-    static long s_tracknums[AURA_MUSIC_MAX_ITEMS];
+    static long s_tracknums[AURA_MUSIC_MAX_SONGS]; /* D-325 */
 
     while (n < max && tagcache_get_next(&tcs, buf, sizeof(buf)))
     {
@@ -818,11 +818,11 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
          * primero se recolectan (idx_id, tracknumber), se ordenan, y
          * recien entonces se insertan -- el indice elegido en pantalla
          * y la cancion que arranca siempre son la misma. */
-        static int32_t s_ids[AURA_MUSIC_MAX_ITEMS];
-        static long s_nums[AURA_MUSIC_MAX_ITEMS];
+        static int32_t s_ids[AURA_MUSIC_MAX_SONGS]; /* D-325 */
+        static long s_nums[AURA_MUSIC_MAX_SONGS];
         int n = 0, a, b;
 
-        while (n < AURA_MUSIC_MAX_ITEMS && tagcache_get_next(&tcs, path, sizeof(path)))
+        while (n < AURA_MUSIC_MAX_SONGS && tagcache_get_next(&tcs, path, sizeof(path)))
         {
             s_ids[n] = tcs.idx_id;
             s_nums[n] = tagcache_get_numeric(&tcs, tag_tracknumber);
@@ -866,11 +866,11 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
      * recolecta (idx_id, titulo), se ordena y se inserta despues; la
      * busqueda sigue ABIERTA porque tagcache_retrieve() la necesita. */
     {
-        static int32_t s_ids[AURA_MUSIC_MAX_ITEMS];
-        static char s_titles[AURA_MUSIC_MAX_ITEMS][AURA_MUSIC_ITEM_LEN];
+        static int32_t s_ids[AURA_MUSIC_MAX_SONGS]; /* D-325 */
+        static char s_titles[AURA_MUSIC_MAX_SONGS][AURA_MUSIC_ITEM_LEN];
         int n = 0, a, b;
 
-        while (n < AURA_MUSIC_MAX_ITEMS && tagcache_get_next(&tcs, path, sizeof(path)))
+        while (n < AURA_MUSIC_MAX_SONGS && tagcache_get_next(&tcs, path, sizeof(path)))
         {
             s_ids[n] = tcs.idx_id;
             strlcpy(s_titles[n], path, AURA_MUSIC_ITEM_LEN);

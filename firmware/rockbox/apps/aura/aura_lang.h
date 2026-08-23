@@ -413,6 +413,8 @@ typedef enum {
     AURA_STR_PHOTOS_EMPTY_PHOTO,
     AURA_STR_PHOTOS_EMPTY_IMAGE,
     AURA_STR_PHOTOS_EMPTY_AI,
+    /* D-325: fila final cuando una lista de Musica llego a su tope */
+    AURA_STR_LIST_TRUNCATED,
 
     AURA_STR_COUNT,
 } aura_str_id_t;
