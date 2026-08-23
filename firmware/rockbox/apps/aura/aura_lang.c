@@ -294,6 +294,9 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_PHOTOS_EMPTY_IMAGE]       = "No hay imágenes",
     [AURA_STR_PHOTOS_EMPTY_AI]          = "No hay imágenes de IA",
     [AURA_STR_LIST_TRUNCATED]           = "…y más: la lista está llena",
+    [AURA_STR_SETTINGS_SWITCH_FIRMWARE]   = "Cambiar a Metro",
+    [AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY] = "Metro está instalado, dormido, con sus ajustes. Cambiar toma un segundo y reinicia el iPod. Aura se queda guardado: vuelve desde los ajustes de Metro o desde Aura Studio.",
+    [AURA_STR_SWITCH_FIRMWARE_MISSING_BODY] = "Metro no está instalado en este iPod. Instálalo desde Aura Studio (Extras › Firmware): Aura se conserva, con sus ajustes, y podrás cambiar entre los dos desde aquí.",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -558,6 +561,9 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_PHOTOS_EMPTY_IMAGE]       = "No images",
     [AURA_STR_PHOTOS_EMPTY_AI]          = "No AI images",
     [AURA_STR_LIST_TRUNCATED]           = "…and more: the list is full",
+    [AURA_STR_SETTINGS_SWITCH_FIRMWARE]   = "Switch to Metro",
+    [AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY] = "Metro is installed, dormant, with its settings. Switching takes a second and restarts the iPod. Aura stays saved: come back from Metro's settings or from Aura Studio.",
+    [AURA_STR_SWITCH_FIRMWARE_MISSING_BODY] = "Metro is not installed on this iPod. Install it from Aura Studio (Extras › Firmware): Aura is kept, with its settings, and you will be able to switch between the two from here.",
 };
 
 const char *aura_str(aura_str_id_t id)

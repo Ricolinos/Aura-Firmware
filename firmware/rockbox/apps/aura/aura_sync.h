@@ -110,6 +110,12 @@ void aura_sync_dismiss(void);
  * secciones y arranca de inmediato. false si no se pudo escribir. */
 bool aura_sync_request_manual(void);
 
+/* D-327 (contrato v10): deja /.aura/sync-pending.json con music=true y
+ * attempts=0 -- lo que el firmware que DESPIERTA tras un cambio de
+ * firmware necesita para reconstruir su propia base de datos (la base
+ * vive dentro de cada arbol). Misma escritura que usa el propio ciclo. */
+bool aura_sync_write_music_pending_marker(void);
+
 /* Progreso estimado de la seccion Musica en [0, 256]; -1 si no aplica
  * (todavia sin empezar / indeterminado). Texto corto de detalle
  * ("32 carpetas", "indexando 4/9") en `detail`. */

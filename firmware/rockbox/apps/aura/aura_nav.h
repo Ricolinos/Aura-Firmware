@@ -180,6 +180,9 @@ typedef enum {
     AURA_SCREEN_PHOTOS_PHOTO,
     AURA_SCREEN_PHOTOS_IMAGE,
     AURA_SCREEN_PHOTOS_AI,
+    /* D-327 (contrato v10): fila "Cambiar a Metro" de Ajustes -- aviso
+     * Si/No si el arbol dormido de Metro existe, texto informativo si no. */
+    AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
 

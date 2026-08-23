@@ -88,6 +88,16 @@ static void remove_marker(void)
     remove(AURA_SYNC_MARKER_PATH);
 }
 
+bool aura_sync_write_music_pending_marker(void)
+{
+    aura_sync_marker_t m;
+
+    aura_sync_marker_init(&m);
+    m.version = AURA_SYNC_MARKER_VERSION_SUPPORTED;
+    m.music = true;
+    return write_marker(&m);
+}
+
 static void set_all_sections(aura_sync_section_state_t st)
 {
     int i;

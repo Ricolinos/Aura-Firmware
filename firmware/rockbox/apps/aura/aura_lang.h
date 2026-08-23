@@ -415,6 +415,10 @@ typedef enum {
     AURA_STR_PHOTOS_EMPTY_AI,
     /* D-325: fila final cuando una lista de Musica llego a su tope */
     AURA_STR_LIST_TRUNCATED,
+    /* D-327: cambio de firmware (contrato v10) */
+    AURA_STR_SETTINGS_SWITCH_FIRMWARE,
+    AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY,
+    AURA_STR_SWITCH_FIRMWARE_MISSING_BODY,
 
     AURA_STR_COUNT,
 } aura_str_id_t;

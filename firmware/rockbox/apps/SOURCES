@@ -353,6 +353,7 @@ aura/aura_style.c
 aura/aura_style_manifest.c
 aura/aura_sync_marker.c
 aura/aura_sync.c
+aura/aura_firmware_switch.c
 aura/aura_fsutil.c
 aura/aura_device_name.c
 aura/aura_device.c

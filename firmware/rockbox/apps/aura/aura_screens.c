@@ -54,6 +54,7 @@
 #include "apple2026_tokens.h"
 #include "aura_music.h"
 #include "aura_sync.h"
+#include "aura_firmware_switch.h"
 #include "aura_device.h"
 #include "aura_nowplaying.h"
 #include "aura_transitions.h"
@@ -261,6 +262,9 @@ static const nav_entry_t settings_entries[] = {
      * no se repite dentro de ESTA lista (D-075); en Personalizacion lo
      * usa "Temas", que es otra lista. */
     { AURA_STR_SETTINGS_REBUILD_LIBRARY, "sync",         AURA_SCREEN_SETTINGS_REBUILD_LIBRARY },
+    /* D-327 (contrato v10): despertar el Metro dormido. "ipod" no se
+     * repite en esta lista (D-075). */
+    { AURA_STR_SETTINGS_SWITCH_FIRMWARE, "ipod",         AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE },
     { AURA_STR_SETTINGS_RESET,      "reset",             AURA_SCREEN_SETTINGS_RESET },
 };
 
@@ -460,6 +464,7 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_MAINMENU:     return AURA_STR_SETTINGS_MAINMENU;
     case AURA_SCREEN_SETTINGS_RESET:        return AURA_STR_SETTINGS_RESET;
     case AURA_SCREEN_SETTINGS_REBUILD_LIBRARY: return AURA_STR_SETTINGS_REBUILD_LIBRARY;
+    case AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE: return AURA_STR_SETTINGS_SWITCH_FIRMWARE;
     case AURA_SCREEN_LIBRARY_SYNC:          return AURA_STR_LIBRARY_UPDATING;
     default:                              return AURA_STR_SETTINGS;
     }
@@ -3881,6 +3886,58 @@ static void draw_rebuild_confirm(void)
                                s_rebuild_confirm_yes);
 }
 
+/* D-327 (contrato v10): Si/No cuando hay un Metro dormido que despertar;
+ * texto informativo (como Copyright) cuando no lo hay. */
+static void draw_long_text(aura_str_id_t title_id, aura_str_id_t body_id);
+static void handle_legal_text(aura_nav_t *nav, long button);
+static bool s_switch_fw_confirm_yes = false;
+
+static void draw_switch_firmware(void)
+{
+    if (aura_firmware_metro_installed())
+        aura_widgets_draw_confirm(aura_str(AURA_STR_SETTINGS_SWITCH_FIRMWARE),
+                                   aura_str(AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY),
+                                   s_switch_fw_confirm_yes);
+    else
+        draw_long_text(AURA_STR_SETTINGS_SWITCH_FIRMWARE,
+                       AURA_STR_SWITCH_FIRMWARE_MISSING_BODY);
+}
+
+static void handle_switch_firmware(aura_nav_t *nav, long button)
+{
+    if (!aura_firmware_metro_installed())
+    {
+        handle_legal_text(nav, button);
+        return;
+    }
+    switch (button)
+    {
+    case BUTTON_SCROLL_FWD:
+    case BUTTON_SCROLL_BACK:
+        s_switch_fw_confirm_yes = !s_switch_fw_confirm_yes;
+        break;
+    case BUTTON_SELECT:
+    {
+        bool go = s_switch_fw_confirm_yes;
+        s_switch_fw_confirm_yes = false;
+        if (go)
+        {
+            /* Solo vuelve si no pudo: el aparato sigue siendo Aura y se
+             * regresa a Ajustes como si se hubiera dicho que no. */
+            aura_firmware_switch_to_metro();
+        }
+        aura_nav_pop(nav);
+        break;
+    }
+    case BUTTON_MENU:
+        s_switch_fw_confirm_yes = false;
+        aura_nav_pop(nav);
+        break;
+    default:
+        break;
+    }
+}
+
 static void handle_rebuild_confirm(aura_nav_t *nav, long button)
 {
     switch (button)
@@ -5474,6 +5531,8 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_reset_confirm();
     else if (screen == AURA_SCREEN_SETTINGS_REBUILD_LIBRARY)
         draw_rebuild_confirm();
+    else if (screen == AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE)
+        draw_switch_firmware();
     else if (screen == AURA_SCREEN_LIBRARY_SYNC)
         draw_library_sync();
     else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
@@ -5877,6 +5936,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_reset_confirm(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_REBUILD_LIBRARY)
         handle_rebuild_confirm(nav, button);
+    else if (screen == AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE)
+        handle_switch_firmware(nav, button);
     else if (screen == AURA_SCREEN_LIBRARY_SYNC)
         handle_library_sync(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)
