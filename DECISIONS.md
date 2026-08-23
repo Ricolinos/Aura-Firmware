@@ -618,3 +618,9 @@ Implicación para este repo: **ninguna regla nueva**, pero sí una a conservar �
 **El tope ya no es silencioso:** el navegador genérico agrega una fila final inerte (`dimmed`) "…y más: la lista está llena" (`AURA_STR_LIST_TRUNCATED`, añadida al final de ambos catálogos) cuando llega al tope; la rueda sigue acotada a las filas reales, así que no es seleccionable. Las vistas con carátula (álbumes, artistas) no la reciben: su índice es el de un elemento real.
 
 **Pendiente:** cronometrar en el iPod cuánto tarda entrar a Canciones con miles de pistas.
+
+## D-326 — Contrato v10: dos firmwares instalados a la vez, conmutación por renombre (registro; implementación en D-327)
+
+`CONTRATO-firmware-studio.md` sube a **v10** (ST-056 en Aura Studio; copia canónica aquí). Define: el árbol activo sigue siendo `/.rockbox/` (lo único que el bootloader compartido sabe arrancar); los árboles dormidos se llaman `/.firmware-aura/` y `/.firmware-metro/` y conservan sus propios ajustes; cambiar de firmware es guardar → dos renombres (saliente primero) → copiar el `rockbox.ipod` de respaldo en la raíz → dejar `/.aura/sync-pending.json` con `music: true` → reinicio en seco. Lo puede hacer Studio o el propio firmware desde Ajustes. Studio escribe los archivos del contrato también en los árboles dormidos y repara un cambio a medias.
+
+**Para este repo** la implementación es la fila "Cambiar a Metro" en Ajustes (D-327, después de que Studio y Metro-Aura la tengan; orden acordado con el dueño: Studio → Metro → Aura). Hasta entonces, nada cambia en el firmware: un árbol dormido en el disco es inerte para Aura.
