@@ -432,7 +432,16 @@ static void mvf_generate_reflection(const fb_data *cover_transposed, fb_data *ou
 
 static void load_slot(mvf_slot_t *slot, int entry_index)
 {
-    static fb_data decode_buf[MVF_COVER_W * MVF_COVER_H]; /* scratch de decodificacion, fila-contigua */
+    /* D-331: read_jpeg_file() coloca DETRAS del bitmap final todo su
+     * estado de decodificacion (struct jpeg ~37 KB + buffer de MCUs +
+     * 3 lineas de resize -- JPEG_DECODE_OVERHEAD, recorder/jpeg_load.h).
+     * El buffer original media EXACTO el bitmap final (120x160), asi
+     * que la llamada devolvia -1 SIEMPRE y todo cartel real degradaba
+     * en silencio al placeholder solido -- el mismo modo de fallo ya
+     * documentado en aura_albumart.c (bug de D-254). 64 KB de margen
+     * sobre el bitmap final, mismo orden que el x2 que probo alla. */
+    static fb_data decode_buf[MVF_COVER_W * MVF_COVER_H
+                              + (64 * 1024) / sizeof(fb_data)];
     static fb_data flat[MVF_COVER_W * MVF_COVER_H];        /* lienzo final, fila-contigua, antes de transponer */
     char path[MAX_PATH];
     struct bitmap bm;

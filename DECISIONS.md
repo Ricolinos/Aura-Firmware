@@ -656,3 +656,15 @@ Verificado en simulador: primer cambio sin sello → marcador + sello anotado al
 **Diseño.** Fondo del tema (D-225); al centro un **tile estilo icono de app**: superficie redondeada de 96 px en el acento (proporción de radio de icono de Apple) con el **glifo de sincronización de Lucide en blanco** (el bitmap `usblogo.176x48x16.bmp` se regeneró: ya no es el logo "USB" de Rockbox sino el glifo con antialiasing horneado, usado como **máscara de luminancia**); debajo, el wordmark "aura" también como máscara, **en el color de texto del tema** — de paso se corrige que el bitmap opaco habría pintado una losa negra en el tema claro. Sin texto de fuente alguna.
 
 De paso: el inyector del simulador gana el token `USB_INSERT` (portado del M-039 de Metro-Aura) — la pantalla se verificó en el simulador con él (`docs/screenshots/d330-usb-screen.png`).
+
+## D-331 — Movie Flow nunca decodificó un cartel real: búfer de `read_jpeg_file()` del tamaño exacto del bitmap final (reporte del dueño, contrato v13 de paso)
+
+**Reporte del dueño (hardware real):** dos películas correctamente catalogadas desde Aura Studio, con su póster `.jpg` hermano en `/Videos`; una ni siquiera aparecía como película y la otra aparecía **sin cartel** en Movie Flow.
+
+**Dos causas independientes, una por síntoma.**
+
+**(1) El cartel (este repo).** `load_slot()` de `aura_movieflow.c` pasaba a `read_jpeg_file()` un búfer de `MVF_COVER_W×MVF_COVER_H` fb_data — 38 400 bytes, el tamaño EXACTO del bitmap final. Pero el decodificador coloca DETRÁS del bitmap final todo su estado (`struct jpeg` ~7 KB + búfer de MCUs + 3 líneas del reescalador — `JPEG_DECODE_OVERHEAD`, `recorder/jpeg_load.h`): con un póster real (427×640 baseline) la llamada devolvía `-1` **siempre** y todo cartel degradaba en silencio al placeholder sólido. Es el mismo modo de fallo silencioso ya documentado en `aura_albumart.c` (D-254); Movie Flow nunca se había verificado visualmente con un póster real (D-318 lo dejó "a cargo del dueño en hardware"). Corrección: +64 KB de margen sobre el bitmap final en el búfer estático. Auditados los demás llamadores de `read_jpeg_file()` del directorio: `aura_photos.c` (240 KB), `aura_albumart.c` (fórmula de D-254) y `aura_nowplaying.c` (64 KB para 135 px, le sobran ~20 KB) están bien dimensionados.
+
+**(2) La categoría (Aura Studio, ST-062 — contrato v13).** El driver `msdosfs` de macOS guarda los nombres largos de FAT32 **precompuestos (NFC)** pero se los reporta **descompuestos (NFD)** a las apps: Studio escribía `video_categories.cfg` en NFD y este firmware compara byte a byte contra el UTF-16 que lee del disco (NFC) — "Avatar Aang el **último** maestro del aire.mpg" no emparejaba jamás; su vecino 100 % ASCII sí. **Este firmware no cambia**: siempre comparó contra lo que hay en el disco, que es lo correcto. La regla nueva del contrato (v13, §D.2): todo nombre/ruta dentro de un archivo del contrato viaja en NFC.
+
+**Verificado**: simulador con los dos pósters reales del iPod del dueño y el cfg en NFC — Movie Flow muestra ambos carteles decodificados y "Avatar Aang el último maestro del aire" (con acento) categorizado como película. Build ARM limpio.
