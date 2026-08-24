@@ -668,3 +668,13 @@ De paso: el inyector del simulador gana el token `USB_INSERT` (portado del M-039
 **(2) La categoría (Aura Studio, ST-062 — contrato v13).** El driver `msdosfs` de macOS guarda los nombres largos de FAT32 **precompuestos (NFC)** pero se los reporta **descompuestos (NFD)** a las apps: Studio escribía `video_categories.cfg` en NFD y este firmware compara byte a byte contra el UTF-16 que lee del disco (NFC) — "Avatar Aang el **último** maestro del aire.mpg" no emparejaba jamás; su vecino 100 % ASCII sí. **Este firmware no cambia**: siempre comparó contra lo que hay en el disco, que es lo correcto. La regla nueva del contrato (v13, §D.2): todo nombre/ruta dentro de un archivo del contrato viaja en NFC.
 
 **Verificado**: simulador con los dos pósters reales del iPod del dueño y el cfg en NFC — Movie Flow muestra ambos carteles decodificados y "Avatar Aang el último maestro del aire" (con acento) categorizado como película. Build ARM limpio.
+
+## D-332 — Movie Flow: el cartel llena el lienzo y se recorta al centro (esquinas redondeadas de verdad)
+
+**Reporte del dueño (hardware, tras D-331):** los carteles ya se ven, "sin embargo no se ven con las esquinas redondeadas".
+
+**Causa.** Un póster real casi nunca es 3:4 exacto (cine ~2:3, 427×640). El decode con `FORMAT_KEEP_ASPECT` lo dejaba AJUSTADO POR DENTRO del lienzo de 120×160 (107×160 centrado, barras de fondo a los lados), y `mvf_mask_corners()` redondea las esquinas del LIENZO — que ahí son fondo, invisibles; las del cartel quedaban cuadradas.
+
+**Corrección** (regla del sistema, `componentes/music-flow.md`: la carátula LLENA su geometría y el radio de 8px aplica sobre la imagen): si el primer decode no llena el lienzo, se redecodifica al tamaño que sí lo cubre (mismo aspecto, lado corto = lado del lienzo) y el centrado existente recorta el excedente por igual en ambos extremos — el mismo bucle ya manejaba offsets negativos, no hubo lógica nueva de recorte. Con presupuesto: solo si el resultado cabe en `decode_buf` con el margen del estado del decodificador (D-331); una fuente absurdamente panorámica conserva el ajuste por dentro. `componentes/movie-flow.md` actualizado en la misma pasada.
+
+**Verificado**: simulador con los pósters reales del dueño — el cartel frontal llena los 120×160 y la esquina muestra el radio de 8px antialiasado sobre la imagen (`docs/screenshots/d332-movieflow-fill-crop.png`). Sin release nuevo a pedido del dueño: queda en `main` para el siguiente.

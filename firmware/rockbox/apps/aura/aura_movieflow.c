@@ -462,6 +462,52 @@ static void load_slot(mvf_slot_t *slot, int entry_index)
 #endif
     ret = read_jpeg_file(path, &bm, sizeof(decode_buf), format, NULL);
 
+    /* D-332: llenar y recortar al centro, nunca letterbox. Un poster
+     * real casi nunca es 3:4 exacto (los de cine son ~2:3): el primer
+     * decode con KEEP_ASPECT lo deja AJUSTADO POR DENTRO del lienzo
+     * (p. ej. 107x160 centrado), con barras de fondo a los lados -- y
+     * el radio de 8px de mvf_mask_corners() cae sobre las esquinas del
+     * LIENZO (fondo, invisible), no sobre las del cartel, que quedaban
+     * cuadradas (reporte del dueño). Regla del sistema
+     * (componentes/music-flow.md): la caratula LLENA su geometria y el
+     * redondeo aplica sobre la imagen. Si el primer decode no llena,
+     * se redecodifica al tamano que si cubre el lienzo (mismo factor de
+     * aspecto, lado corto = lado del lienzo) y el centrado de abajo
+     * recorta el excedente por igual en ambos extremos. Presupuesto:
+     * solo si el resultado cabe en decode_buf con el margen del estado
+     * del decodificador (D-331); si no cupiera (fuente absurdamente
+     * panoramica), se conserva el ajuste por dentro de siempre. */
+    if (ret > 0 && bm.width > 0 && bm.height > 0
+        && (bm.width < MVF_COVER_W || bm.height < MVF_COVER_H))
+    {
+        int fill_w, fill_h;
+        if (bm.width < MVF_COVER_W)
+        {
+            fill_w = MVF_COVER_W;
+            fill_h = bm.height * MVF_COVER_W / bm.width + 1;
+        }
+        else
+        {
+            fill_h = MVF_COVER_H;
+            fill_w = bm.width * MVF_COVER_H / bm.height + 1;
+        }
+        if ((size_t)fill_w * fill_h * sizeof(fb_data) + 24 * 1024
+            <= sizeof(decode_buf))
+        {
+            bm.width = fill_w;
+            bm.height = fill_h;
+            ret = read_jpeg_file(path, &bm, sizeof(decode_buf), format, NULL);
+            if (ret <= 0)
+            {
+                /* Raro (el archivo acaba de decodificar bien): se
+                 * reintenta el ajuste por dentro antes de degradar. */
+                bm.width = MVF_COVER_W;
+                bm.height = MVF_COVER_H;
+                ret = read_jpeg_file(path, &bm, sizeof(decode_buf), format, NULL);
+            }
+        }
+    }
+
     if (ret <= 0)
     {
         /* Sin cartel: placeholder solido -- mismo criterio que

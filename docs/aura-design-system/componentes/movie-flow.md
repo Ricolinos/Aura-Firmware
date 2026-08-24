@@ -17,7 +17,14 @@ zoom-on-scroll, energy gate) remite a `music-flow.md`.
 ### 1 — Formato rectangular 3:4, no cuadrado
 
 El cartel mide **120×160px** (exacto 3:4) en vez del cuadrado de Music
-Flow. `aura_flow.c` ya es agnóstico de ancho/alto — solo pide
+Flow. Un póster real casi nunca es 3:4 exacto (los de cine son ~2:3):
+la imagen **llena el lienzo y se recorta al centro** (D-332), nunca
+letterbox — misma regla que Music Flow ("la carátula llena su
+geometría") y única forma de que el radio de 8px caiga sobre las
+esquinas del cartel y no sobre fondo invisible. El recorte reparte el
+excedente por igual en ambos extremos; solo una fuente absurdamente
+panorámica que no quepa en el presupuesto de decodificación conserva el
+ajuste por dentro. `aura_flow.c` ya es agnóstico de ancho/alto — solo pide
 `slide_width_px`, el alto lo decide el llamador vía
 `aura_flow_vertical_scale()` por columna — así que generalizar de
 cuadrado a 3:4 no tocó el motor compartido, solo `aura_movieflow.c`.
