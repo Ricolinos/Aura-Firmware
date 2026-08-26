@@ -180,11 +180,23 @@ typedef enum {
     AURA_SCREEN_PHOTOS_PHOTO,
     AURA_SCREEN_PHOTOS_IMAGE,
     AURA_SCREEN_PHOTOS_AI,
-    /* D-327 (contrato v10): fila "Cambiar a Metro" de Ajustes -- aviso
-     * Si/No si el arbol dormido de Metro existe, texto informativo si no. */
+    /* D-327 (contrato v10): "Cambiar a Metro" -- aviso Si/No si el arbol
+     * dormido de Metro existe, texto informativo si no. Desde D-333 es la
+     * pantalla de confirmacion de Metro (indice 0 de la tabla de
+     * hermanas) bajo el submenu Cambiar sistema; conserva su id. */
     AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE,
+    /* D-333 (contrato v14, tres familias): submenu SPLIT "Cambiar
+     * sistema" de Ajustes -- una fila por familia hermana (tabla en
+     * aura_firmware_families.c) -- y la confirmacion de moonlit.aura
+     * (indice 1). Al final del enum, "solo-anadir-al-final". */
+    AURA_SCREEN_SETTINGS_SWITCH_SYSTEM,
+    AURA_SCREEN_SETTINGS_SWITCH_TO_MOONLIT,
     AURA_SCREEN_COUNT,
 } aura_screen_id_t;
+
+/* D-333: alias legible -- la confirmacion de Metro es la pantalla de
+ * D-327, que no cambia de id. */
+#define AURA_SCREEN_SETTINGS_SWITCH_TO_METRO AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE
 
 typedef struct {
     aura_screen_id_t screens[AURA_NAV_MAX_DEPTH];

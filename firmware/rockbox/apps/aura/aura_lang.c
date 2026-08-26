@@ -297,6 +297,13 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_SWITCH_FIRMWARE]   = "Cambiar a Metro",
     [AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY] = "Metro está instalado, dormido, con sus ajustes. Cambiar toma un segundo y reinicia el iPod. Aura se queda guardado: vuelve desde los ajustes de Metro o desde Aura Studio.",
     [AURA_STR_SWITCH_FIRMWARE_MISSING_BODY] = "Metro no está instalado en este iPod. Instálalo desde Aura Studio (Extras › Firmware): Aura se conserva, con sus ajustes, y podrás cambiar entre los dos desde aquí.",
+    [AURA_STR_SETTINGS_SWITCH_SYSTEM]     = "Cambiar sistema",
+    [AURA_STR_FAMILY_METRO]               = "Metro",
+    [AURA_STR_FAMILY_MOONLIT]             = "moonlit.aura",
+    [AURA_STR_SWITCH_TO_METRO_ROW]        = "Cambiar a Metro",
+    [AURA_STR_SWITCH_TO_MOONLIT_ROW]      = "Cambiar a moonlit.aura",
+    [AURA_STR_SWITCH_MOONLIT_CONFIRM_BODY] = "moonlit.aura está instalado, dormido, con sus ajustes. Cambiar toma un segundo y reinicia el iPod. Aura se queda guardado: vuelve desde los ajustes de moonlit.aura o desde Aura Studio.",
+    [AURA_STR_SWITCH_MOONLIT_MISSING_BODY] = "moonlit.aura no está instalado en este iPod. Instálalo desde Aura Studio (Extras › Firmware): Aura se conserva, con sus ajustes, y podrás cambiar entre ellos desde aquí.",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -564,6 +571,13 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SETTINGS_SWITCH_FIRMWARE]   = "Switch to Metro",
     [AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY] = "Metro is installed, dormant, with its settings. Switching takes a second and restarts the iPod. Aura stays saved: come back from Metro's settings or from Aura Studio.",
     [AURA_STR_SWITCH_FIRMWARE_MISSING_BODY] = "Metro is not installed on this iPod. Install it from Aura Studio (Extras › Firmware): Aura is kept, with its settings, and you will be able to switch between the two from here.",
+    [AURA_STR_SETTINGS_SWITCH_SYSTEM]     = "Switch system",
+    [AURA_STR_FAMILY_METRO]               = "Metro",
+    [AURA_STR_FAMILY_MOONLIT]             = "moonlit.aura",
+    [AURA_STR_SWITCH_TO_METRO_ROW]        = "Switch to Metro",
+    [AURA_STR_SWITCH_TO_MOONLIT_ROW]      = "Switch to moonlit.aura",
+    [AURA_STR_SWITCH_MOONLIT_CONFIRM_BODY] = "moonlit.aura is installed, dormant, with its settings. Switching takes a second and restarts the iPod. Aura stays saved: come back from moonlit.aura's settings or from Aura Studio.",
+    [AURA_STR_SWITCH_MOONLIT_MISSING_BODY] = "moonlit.aura is not installed on this iPod. Install it from Aura Studio (Extras › Firmware): Aura is kept, with its settings, and you will be able to switch between them from here.",
 };
 
 const char *aura_str(aura_str_id_t id)

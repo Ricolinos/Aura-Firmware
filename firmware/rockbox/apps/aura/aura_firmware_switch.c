@@ -37,14 +37,14 @@
 #include "aura_sync.h"
 
 #define FW_ACTIVE_DIR    ROCKBOX_DIR        /* "/.rockbox" */
-#define FW_DORMANT_AURA  "/.firmware-aura"
-#define FW_DORMANT_METRO "/.firmware-metro"
+#define FW_OWN_DORMANT   AURA_FIRMWARE_OWN_DORMANT
 #define FW_ROOT_BINARY   "/rockbox.ipod"
 #define FW_TREE_BINARY   ROCKBOX_DIR "/rockbox.ipod"
 
-bool aura_firmware_metro_installed(void)
+bool aura_firmware_sibling_installed(int i)
 {
-    return dir_exists(FW_DORMANT_METRO);
+    const char *dir = aura_firmware_sibling_dormant_dir(i);
+    return dir != NULL && dir_exists(dir);
 }
 
 /* /rockbox.ipod := /.rockbox/rockbox.ipod, a trozos, con buffer estatico
@@ -72,11 +72,13 @@ static void refresh_root_binary(void)
     close(in);
 }
 
-bool aura_firmware_switch_to_metro(void)
+bool aura_firmware_switch_to(int i)
 {
-    if (!aura_firmware_metro_installed())
+    const char *incoming = aura_firmware_sibling_dormant_dir(i);
+
+    if (incoming == NULL || !dir_exists(incoming))
         return false;
-    if (dir_exists(FW_DORMANT_AURA))
+    if (dir_exists(FW_OWN_DORMANT))
         return false; /* no adivinar: Studio garantiza que no pase */
 
     /* 1. todo lo de Aura al disco, AHORA */
@@ -86,21 +88,21 @@ bool aura_firmware_switch_to_metro(void)
     call_storage_idle_notifys(true);
 
     /* 2. saliente primero */
-    if (rename(FW_ACTIVE_DIR, FW_DORMANT_AURA) < 0)
+    if (rename(FW_ACTIVE_DIR, FW_OWN_DORMANT) < 0)
         return false;
 
     /* 3. entrante; si falla, seguimos siendo Aura */
-    if (rename(FW_DORMANT_METRO, FW_ACTIVE_DIR) < 0)
+    if (rename(incoming, FW_ACTIVE_DIR) < 0)
     {
-        rename(FW_DORMANT_AURA, FW_ACTIVE_DIR);
+        rename(FW_OWN_DORMANT, FW_ACTIVE_DIR);
         return false;
     }
 
-    /* 4 y 5 -- el marcador SOLO si la biblioteca cambio desde que Metro
-     * construyo su base (D-329, contrato v12): sin sync de por medio el
-     * cambio es instantaneo, sin reconstruccion. */
+    /* 4 y 5 -- el marcador SOLO si la biblioteca cambio desde que la
+     * entrante construyo su base (D-329, contrato v12): sin sync de por
+     * medio el cambio es instantaneo, sin reconstruccion. */
     refresh_root_binary();
-    if (aura_sync_switch_needs_rebuild(FW_DORMANT_AURA))
+    if (aura_sync_switch_needs_rebuild(FW_OWN_DORMANT))
         aura_sync_write_music_pending_marker();
 
     /* 6: en seco */

@@ -138,6 +138,11 @@ aura_category_t aura_category_for_screen(aura_screen_id_t screen)
      * sigue siendo "cosa del aparato", categoria Ajustes. */
     case AURA_SCREEN_SETTINGS_REBUILD_LIBRARY:
     case AURA_SCREEN_LIBRARY_SYNC:
+    /* D-327/D-333: Cambiar sistema (submenu) y sus confirmaciones por
+     * familia hermana -- cosa del aparato, categoria Ajustes. */
+    case AURA_SCREEN_SETTINGS_SWITCH_SYSTEM:
+    case AURA_SCREEN_SETTINGS_SWITCH_TO_METRO:
+    case AURA_SCREEN_SETTINGS_SWITCH_TO_MOONLIT:
         return AURA_CATEGORY_SETTINGS;
 
     /* Raiz del Menu principal (sin seccion propia -- la categoria de

@@ -262,9 +262,10 @@ static const nav_entry_t settings_entries[] = {
      * no se repite dentro de ESTA lista (D-075); en Personalizacion lo
      * usa "Temas", que es otra lista. */
     { AURA_STR_SETTINGS_REBUILD_LIBRARY, "sync",         AURA_SCREEN_SETTINGS_REBUILD_LIBRARY },
-    /* D-327 (contrato v10): despertar el Metro dormido. "ipod" no se
-     * repite en esta lista (D-075). */
-    { AURA_STR_SETTINGS_SWITCH_FIRMWARE, "ipod",         AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE },
+    /* D-327 (contrato v10) -> D-333 (v14): submenu "Cambiar sistema",
+     * una fila por familia hermana. "ipod" no se repite en esta lista
+     * (D-075). */
+    { AURA_STR_SETTINGS_SWITCH_SYSTEM, "ipod",           AURA_SCREEN_SETTINGS_SWITCH_SYSTEM },
     { AURA_STR_SETTINGS_RESET,      "reset",             AURA_SCREEN_SETTINGS_RESET },
 };
 
@@ -282,6 +283,18 @@ static const nav_entry_t personalization_entries[] = {
     { AURA_STR_SETTINGS_GRAPHICS,   "graphics",          AURA_SCREEN_SETTINGS_GRAPHICS },
     { AURA_STR_SETTINGS_LEFT_PANEL_SHADOW, "square-on-square", AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW },
     { AURA_STR_SETTINGS_SHOW_ICONS, "sliders-horizontal", AURA_SCREEN_SETTINGS_SHOW_ICONS },
+};
+
+/* D-333: submenu "Cambiar sistema" -- una fila por familia hermana, en
+ * el mismo orden que la tabla de aura_firmware_families.c (indice 0
+ * Metro, 1 moonlit.aura); la fila es inerte (texto informativo) si su
+ * arbol dormido no existe. Iconos libres dentro de ESTA lista (D-075):
+ * "ipod" (el mismo de la fila padre, lista distinta) para Metro y
+ * "theme-dark" (luna) para moonlit.aura. Mismo patron SPLIT que
+ * Personalizacion. */
+static const nav_entry_t switch_system_entries[] = {
+    { AURA_STR_SWITCH_TO_METRO_ROW,   "ipod",            AURA_SCREEN_SETTINGS_SWITCH_TO_METRO },
+    { AURA_STR_SWITCH_TO_MOONLIT_ROW, "theme-dark",      AURA_SCREEN_SETTINGS_SWITCH_TO_MOONLIT },
 };
 
 /* Extras del firmware original (2026-08-13), en su orden. */
@@ -379,6 +392,9 @@ static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
     case AURA_SCREEN_SETTINGS_PERSONALIZATION:
         *out = personalization_entries;
         return clamp_menu_count((int)(sizeof(personalization_entries) / sizeof(personalization_entries[0])));
+    case AURA_SCREEN_SETTINGS_SWITCH_SYSTEM:
+        *out = switch_system_entries;
+        return clamp_menu_count((int)(sizeof(switch_system_entries) / sizeof(switch_system_entries[0])));
     default:
         *out = NULL;
         return 0;
@@ -464,7 +480,9 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_MAINMENU:     return AURA_STR_SETTINGS_MAINMENU;
     case AURA_SCREEN_SETTINGS_RESET:        return AURA_STR_SETTINGS_RESET;
     case AURA_SCREEN_SETTINGS_REBUILD_LIBRARY: return AURA_STR_SETTINGS_REBUILD_LIBRARY;
-    case AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE: return AURA_STR_SETTINGS_SWITCH_FIRMWARE;
+    case AURA_SCREEN_SETTINGS_SWITCH_SYSTEM:     return AURA_STR_SETTINGS_SWITCH_SYSTEM;
+    case AURA_SCREEN_SETTINGS_SWITCH_TO_METRO:   return AURA_STR_SWITCH_TO_METRO_ROW;
+    case AURA_SCREEN_SETTINGS_SWITCH_TO_MOONLIT: return AURA_STR_SWITCH_TO_MOONLIT_ROW;
     case AURA_SCREEN_LIBRARY_SYNC:          return AURA_STR_LIBRARY_UPDATING;
     default:                              return AURA_STR_SETTINGS;
     }
@@ -1886,6 +1904,10 @@ static const char *parent_settings_icon(aura_screen_id_t screen)
     for (i = 0; i < sizeof(personalization_entries) / sizeof(personalization_entries[0]); i++)
         if (personalization_entries[i].target == screen)
             return personalization_entries[i].icon_name;
+    /* D-333: hijas de Cambiar sistema, mismo motivo. */
+    for (i = 0; i < sizeof(switch_system_entries) / sizeof(switch_system_entries[0]); i++)
+        if (switch_system_entries[i].target == screen)
+            return switch_system_entries[i].icon_name;
     return "settings";
 }
 
@@ -2482,7 +2504,8 @@ static void compute_panel_content(aura_screen_id_t screen, aura_screen_id_t targ
      * condicion en vez de duplicar sus dos casos (los demas targets de
      * este bloque, SHUFFLE/REPEAT/DATETIME/ABOUT, son exclusivos de
      * Ajustes y nunca coinciden con un hijo de Personalizacion). */
-    if (screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION)
+    if (screen == AURA_SCREEN_SETTINGS || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION
+        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM)
     {
         if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
         {
@@ -3892,20 +3915,55 @@ static void draw_long_text(aura_str_id_t title_id, aura_str_id_t body_id);
 static void handle_legal_text(aura_nav_t *nav, long button);
 static bool s_switch_fw_confirm_yes = false;
 
-static void draw_switch_firmware(void)
+/* D-333: textos por familia hermana, indexados como la tabla de
+ * aura_firmware_families.c (0 Metro, 1 moonlit.aura). */
+typedef struct {
+    aura_str_id_t title;   /* "Cambiar a <familia>" */
+    aura_str_id_t confirm; /* aviso Si/No cuando el dormido existe */
+    aura_str_id_t missing; /* texto informativo cuando no */
+} switch_fw_texts_t;
+
+static const switch_fw_texts_t *switch_fw_texts(int family)
 {
-    if (aura_firmware_metro_installed())
-        aura_widgets_draw_confirm(aura_str(AURA_STR_SETTINGS_SWITCH_FIRMWARE),
-                                   aura_str(AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY),
-                                   s_switch_fw_confirm_yes);
-    else
-        draw_long_text(AURA_STR_SETTINGS_SWITCH_FIRMWARE,
-                       AURA_STR_SWITCH_FIRMWARE_MISSING_BODY);
+    static const switch_fw_texts_t texts[] = {
+        { AURA_STR_SWITCH_TO_METRO_ROW,
+          AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY,
+          AURA_STR_SWITCH_FIRMWARE_MISSING_BODY },
+        { AURA_STR_SWITCH_TO_MOONLIT_ROW,
+          AURA_STR_SWITCH_MOONLIT_CONFIRM_BODY,
+          AURA_STR_SWITCH_MOONLIT_MISSING_BODY },
+    };
+    if (family < 0 || family >= (int)(sizeof(texts) / sizeof(texts[0])))
+        family = 0;
+    return &texts[family];
 }
 
-static void handle_switch_firmware(aura_nav_t *nav, long button)
+/* Indice de familia de una pantalla de confirmacion (-1 si no lo es). */
+static int switch_fw_family(aura_screen_id_t screen)
 {
-    if (!aura_firmware_metro_installed())
+    switch (screen)
+    {
+    case AURA_SCREEN_SETTINGS_SWITCH_TO_METRO:   return 0;
+    case AURA_SCREEN_SETTINGS_SWITCH_TO_MOONLIT: return 1;
+    default:                                     return -1;
+    }
+}
+
+static void draw_switch_firmware(int family)
+{
+    const switch_fw_texts_t *t = switch_fw_texts(family);
+
+    if (aura_firmware_sibling_installed(family))
+        aura_widgets_draw_confirm(aura_str(t->title),
+                                   aura_str(t->confirm),
+                                   s_switch_fw_confirm_yes);
+    else
+        draw_long_text(t->title, t->missing);
+}
+
+static void handle_switch_firmware(aura_nav_t *nav, int family, long button)
+{
+    if (!aura_firmware_sibling_installed(family))
     {
         handle_legal_text(nav, button);
         return;
@@ -3924,7 +3982,7 @@ static void handle_switch_firmware(aura_nav_t *nav, long button)
         {
             /* Solo vuelve si no pudo: el aparato sigue siendo Aura y se
              * regresa a Ajustes como si se hubiera dicho que no. */
-            aura_firmware_switch_to_metro();
+            aura_firmware_switch_to(family);
         }
         aura_nav_pop(nav);
         break;
@@ -5459,6 +5517,8 @@ static int screen_uses_split_layout(aura_screen_id_t screen)
          * quedan a nivel 3 siendo SPLIT (PLAN-personalizacion.md Q5,
          * sistema/03-arbol-de-menus.md). */
         || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION
+        /* D-333: Cambiar sistema, mismo criterio que Personalizacion. */
+        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM
         || is_choice_screen(screen)
         || screen == AURA_SCREEN_SETTINGS_STYLE
         || screen == AURA_SCREEN_SETTINGS_BACKLIGHT
@@ -5509,7 +5569,8 @@ void aura_screens_draw(aura_nav_t *nav)
         || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
         || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
         || screen == AURA_SCREEN_SETTINGS_DATETIME
-        || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION)
+        || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION
+        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM)
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -5531,8 +5592,8 @@ void aura_screens_draw(aura_nav_t *nav)
         draw_reset_confirm();
     else if (screen == AURA_SCREEN_SETTINGS_REBUILD_LIBRARY)
         draw_rebuild_confirm();
-    else if (screen == AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE)
-        draw_switch_firmware();
+    else if (switch_fw_family(screen) >= 0)
+        draw_switch_firmware(switch_fw_family(screen));
     else if (screen == AURA_SCREEN_LIBRARY_SYNC)
         draw_library_sync();
     else if (screen == AURA_SCREEN_SETTINGS_COPYRIGHT)
@@ -5916,7 +5977,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         || screen == AURA_SCREEN_MUSIC || screen == AURA_SCREEN_EXTRAS
         || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
         || screen == AURA_SCREEN_SETTINGS_DATETIME
-        || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION)
+        || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION
+        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM)
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
@@ -5936,8 +5998,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         handle_reset_confirm(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_REBUILD_LIBRARY)
         handle_rebuild_confirm(nav, button);
-    else if (screen == AURA_SCREEN_SETTINGS_SWITCH_FIRMWARE)
-        handle_switch_firmware(nav, button);
+    else if (switch_fw_family(screen) >= 0)
+        handle_switch_firmware(nav, switch_fw_family(screen), button);
     else if (screen == AURA_SCREEN_LIBRARY_SYNC)
         handle_library_sync(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_ABOUT)

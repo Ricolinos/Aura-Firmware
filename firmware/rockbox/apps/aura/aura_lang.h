@@ -419,6 +419,21 @@ typedef enum {
     AURA_STR_SETTINGS_SWITCH_FIRMWARE,
     AURA_STR_SWITCH_FIRMWARE_CONFIRM_BODY,
     AURA_STR_SWITCH_FIRMWARE_MISSING_BODY,
+    /* D-333 (contrato v14, tres familias): submenu "Cambiar sistema" con
+     * una fila por hermana; nombres de familia (tabla de
+     * aura_firmware_families.c) y textos de moonlit.aura. Las tres
+     * cadenas de Metro de arriba se conservan: CONFIRM/MISSING siguen en
+     * uso; AURA_STR_SETTINGS_SWITCH_FIRMWARE ("Cambiar a Metro") queda
+     * SIN USO desde D-333 (la fila y el titulo usan
+     * AURA_STR_SWITCH_TO_METRO_ROW) -- se deja por la regla de
+     * solo-anadir-al-final. */
+    AURA_STR_SETTINGS_SWITCH_SYSTEM,
+    AURA_STR_FAMILY_METRO,
+    AURA_STR_FAMILY_MOONLIT,
+    AURA_STR_SWITCH_TO_METRO_ROW,
+    AURA_STR_SWITCH_TO_MOONLIT_ROW,
+    AURA_STR_SWITCH_MOONLIT_CONFIRM_BODY,
+    AURA_STR_SWITCH_MOONLIT_MISSING_BODY,
 
     AURA_STR_COUNT,
 } aura_str_id_t;
