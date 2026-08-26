@@ -955,7 +955,8 @@ void Host_Name_f (void)
 void Host_Version_f (void)
 {
 	Con_Printf ("Version %4.2f\n", VERSION);
-	Con_Printf ("Exe: "__TIME__" "__DATE__"\n");
+	/* aura (D-334): no __TIME__/__DATE__ -- reproducible rockbox.zip */
+	Con_Printf ("Exe: rockbox build\n");
 }
 
 #ifdef IDGODS
