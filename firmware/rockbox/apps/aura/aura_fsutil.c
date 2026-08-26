@@ -28,7 +28,8 @@
 #include "dir.h"
 #include "rbpaths.h"
 
-static bool remove_children(const char *path, DIR *d)
+static bool remove_children_except(const char *path, DIR *d,
+                                   bool (*keep)(const char *name))
 {
     struct DIRENT *entry;
     bool ok = true;
@@ -49,10 +50,15 @@ static bool remove_children(const char *path, DIR *d)
         info = dir_get_info(d, entry);
         if (info.attribute & ATTR_DIRECTORY)
             ok = aura_fsutil_remove_tree(child) && ok;
-        else
+        else if (keep == NULL || !keep(entry->d_name))
             ok = (remove(child) >= 0) && ok;
     }
     return ok;
+}
+
+static bool remove_children(const char *path, DIR *d)
+{
+    return remove_children_except(path, d, NULL);
 }
 
 bool aura_fsutil_remove_tree(const char *path)
@@ -75,6 +81,18 @@ bool aura_fsutil_clear_dir(const char *path)
     if (!d)
         return false;
     ok = remove_children(path, d);
+    closedir(d);
+    return ok;
+}
+
+bool aura_fsutil_clear_dir_except(const char *path, bool (*keep)(const char *name))
+{
+    DIR *d = opendir(path);
+    bool ok;
+
+    if (!d)
+        return false;
+    ok = remove_children_except(path, d, keep);
     closedir(d);
     return ok;
 }

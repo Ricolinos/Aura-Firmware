@@ -52,10 +52,12 @@
 #define AURA_LEGACY_DB_DIR        ROCKBOX_DIR /* database_*.tcd antes de v15 */
 #define TAGCACHE_MASTER_NAME      "database_idx.tcd" /* apps/tagcache.c TAGCACHE_FILE_MASTER */
 
-/* Mismo criterio que aura_albumart.c: la cache de caratulas se indexa por
- * album_seek de tagcache, que cambia con cada commit que agrega/quita
- * albumes -- tras reconstruir la base hay que tirarla entera o Cover
- * Flow puede mostrar la portada de otro album (D-293). */
+/* D-338: las caratulas de album (a-*.pfraw) llevan clave estable (crc32
+ * de la ruta de la pista + mtime, aura_albumart.c) y SOBREVIVEN a la
+ * reconstruccion de la base; sus huerfanas las recoge el precache
+ * (aura_albumart_gc_orphans()). Lo demas que hay en cfcache -- fotos de
+ * artista (ar-*, cuyo jpg Studio puede haber cambiado en este mismo
+ * sync) y portadas de playlist (pl-*) -- sigue tirandose al terminar. */
 #define AURA_DIR      ROCKBOX_DIR "/aura"
 #define CF_CACHE_DIR  AURA_DIR "/cfcache"
 
@@ -404,7 +406,10 @@ static void finish_ok(void)
     remove_marker();
     if (s_section[AURA_SYNC_SECTION_MUSIC] != AURA_SYNC_SECTION_SKIPPED)
     {
-        aura_fsutil_clear_dir(CF_CACHE_DIR);
+        /* D-338: las a-*.pfraw (clave estable) se quedan -- el precache
+         * que se rearma abajo solo decodifica lo que de verdad cambio y
+         * recoge las huerfanas. Ver el comentario junto a CF_CACHE_DIR. */
+        aura_fsutil_clear_dir_except(CF_CACHE_DIR, aura_cache_keys_album_parse_name);
         aura_music_db_reset_triggers();
         /* D-322: artist_images.cfg vive junto a la musica -- mismo
          * momento que el resto de lo dependiente de la base nueva. */

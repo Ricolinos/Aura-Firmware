@@ -44,10 +44,12 @@
 #include "aura_art.h"
 #include "aura_music.h" /* AURA_MUSIC_ITEM_LEN, mismo tope que aura_music_list_playlists() */
 #include "aura_artist_images.h" /* D-322: lookup de la foto por tag de artista */
+#include "aura_cache_keys.h"     /* D-338: nombre a-<crc>-<mtime>-<lado>.pfraw */
+#include "crc32.h"
 
 /* D-291: pfraw_path()/is_cached() siguen siendo la llave PROPIA de este
- * archivo (album_seek+size, sin invalidacion extra -- ya es unica por
- * archivo); leer/escribir el formato y transponer/enmascarar esquinas
+ * archivo (D-338: crc32 de la ruta de la pista + mtime + size, sin
+ * invalidacion extra -- ya es unica por archivo); leer/escribir el formato y transponer/enmascarar esquinas
  * ahora vive en aura_art.c (aura_art_read_pfraw()/aura_art_write_pfraw()/
  * aura_art_transpose()/aura_art_mask_corners_transposed()), compartido
  * con aura_photos.c (miniaturas de /Photos). */
@@ -79,18 +81,89 @@ static unsigned char s_transpose_scratch[AURA_ALBUMART_DECODE_SCRATCH_SIZE];
 #define AURA_DIR     ROCKBOX_DIR "/aura"
 #define CF_CACHE_DIR AURA_DIR "/cfcache"
 
-static void pfraw_path(int32_t album_seek, int size, char *out, size_t outsz)
+static void pfraw_path(const aura_albumart_key_t *key, int size, char *out, size_t outsz)
 {
-    snprintf(out, outsz, "%s/%ld-%d.pfraw", CF_CACHE_DIR, (long)album_seek, size);
+    char name[48];
+
+    aura_cache_keys_album_name(name, sizeof(name), key->path_crc, key->mtime, size);
+    snprintf(out, outsz, "%s/%s", CF_CACHE_DIR, name);
+}
+
+static bool find_any_track_in_album(int32_t album_seek, char *path, size_t path_sz,
+                                     char *artist, size_t artist_sz,
+                                     char *album, size_t album_sz,
+                                     aura_albumart_key_t *key);
+
+/* D-338: ver aura_albumart.h. */
+bool aura_albumart_album_key(int32_t album_seek, aura_albumart_key_t *key)
+{
+    char path[MAX_PATH];
+
+    return find_any_track_in_album(album_seek, path, sizeof(path),
+                                   NULL, 0, NULL, 0, key);
+}
+
+bool aura_albumart_is_cached_key(const aura_albumart_key_t *key, int size, int radius)
+{
+    char path[MAX_PATH];
+
+    pfraw_path(key, size, path, sizeof(path));
+    return aura_art_pfraw_is_cached(path, size, radius, PFRAW_EXTRA_NONE);
 }
 
 /* D-224: ver comentario en aura_albumart.h. */
 bool aura_albumart_is_cached(int32_t album_seek, int size, int radius)
 {
-    char path[MAX_PATH];
+    aura_albumart_key_t key;
 
-    pfraw_path(album_seek, size, path, sizeof(path));
-    return aura_art_pfraw_is_cached(path, size, radius, PFRAW_EXTRA_NONE);
+    if (!aura_albumart_album_key(album_seek, &key))
+        return false;
+    return aura_albumart_is_cached_key(&key, size, radius);
+}
+
+static bool key_in_set(const aura_albumart_key_t *keys, int count,
+                       uint32_t path_crc, uint32_t mtime)
+{
+    int i;
+
+    for (i = 0; i < count; i++)
+        if (keys[i].path_crc == path_crc && keys[i].mtime == mtime)
+            return true;
+    return false;
+}
+
+void aura_albumart_gc_orphans(const aura_albumart_key_t *keys, int count)
+{
+    DIR *d = opendir(CF_CACHE_DIR);
+    struct DIRENT *entry;
+    int removed = 0;
+
+    if (!d)
+        return;
+    while (removed < AURA_ALBUMART_GC_BUDGET && (entry = readdir(d)) != NULL)
+    {
+        const char *name = entry->d_name;
+        uint32_t crc, mtime;
+        bool orphan;
+        char path[MAX_PATH * 2]; /* mismo motivo que aura_fsutil.c */
+
+        if (aura_cache_keys_album_parse(name, &crc, &mtime, NULL))
+            orphan = !key_in_set(keys, count, crc, mtime);
+        else
+        {
+            /* <seek>-<lado>.pfraw de antes de D-338: empieza por digito.
+             * Las pl- y ar- y todo lo demas no es de este GC. */
+            size_t n = strlen(name);
+            orphan = (name[0] >= '0' && name[0] <= '9')
+                  && n > 6 && !strcmp(name + n - 6, ".pfraw");
+        }
+        if (!orphan)
+            continue;
+        snprintf(path, sizeof(path), "%s/%s", CF_CACHE_DIR, name);
+        if (remove(path) >= 0)
+            removed++;
+    }
+    closedir(d);
 }
 
 static void write_pfraw(const char *path, int size, int radius, const fb_data *data)
@@ -230,9 +303,12 @@ void aura_albumart_load_default(aura_albumart_t *out)
     out->valid = true;
 }
 
+/* artist/album/key son opcionales (NULL). D-338: `key` sale de la misma
+ * busqueda -- crc32 de la ruta devuelta + tag_mtime de esa entrada. */
 static bool find_any_track_in_album(int32_t album_seek, char *path, size_t path_sz,
                                      char *artist, size_t artist_sz,
-                                     char *album, size_t album_sz)
+                                     char *album, size_t album_sz,
+                                     aura_albumart_key_t *key)
 {
     struct tagcache_search tcs;
     bool found = false;
@@ -246,8 +322,15 @@ static bool find_any_track_in_album(int32_t album_seek, char *path, size_t path_
 
     if (tagcache_get_next(&tcs, path, path_sz))
     {
-        tagcache_retrieve(&tcs, tcs.idx_id, tag_artist, artist, artist_sz);
-        tagcache_retrieve(&tcs, tcs.idx_id, tag_album, album, album_sz);
+        if (artist)
+            tagcache_retrieve(&tcs, tcs.idx_id, tag_artist, artist, artist_sz);
+        if (album)
+            tagcache_retrieve(&tcs, tcs.idx_id, tag_album, album, album_sz);
+        if (key)
+        {
+            key->path_crc = crc_32(path, strlen(path), 0xffffffff);
+            key->mtime = (uint32_t)tagcache_get_numeric(&tcs, tag_mtime);
+        }
         found = true;
     }
 
@@ -259,7 +342,7 @@ static bool find_any_track_in_album(int32_t album_seek, char *path, size_t path_
  * (fila-contigua, tamano out->size x out->size) -- mismo camino que
  * usaba la version anterior de este archivo antes del cache. Solo se
  * llama en un fallo de cache. */
-static bool decode_album_art(int32_t album_seek, int size)
+static bool decode_album_art(int32_t album_seek, int size, aura_albumart_key_t *key)
 {
     char path[MAX_PATH];
     char artist[128] = "";
@@ -272,7 +355,7 @@ static bool decode_album_art(int32_t album_seek, int size)
     struct bitmap bm;
 
     if (!find_any_track_in_album(album_seek, path, sizeof(path),
-                                  artist, sizeof(artist), album, sizeof(album)))
+                                  artist, sizeof(artist), album, sizeof(album), key))
         return false;
 
     memset(&fake_id3, 0, sizeof(fake_id3));
@@ -329,9 +412,12 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
 {
     char path[MAX_PATH];
     unsigned bg = a26_color(A26_SHELL_BG);
+    aura_albumart_key_t key;
 
     out->valid = false;
-    pfraw_path(album_seek, out->size, path, sizeof(path));
+    if (!aura_albumart_album_key(album_seek, &key))
+        return false; /* album sin pistas en la base: tampoco habria caratula */
+    pfraw_path(&key, out->size, path, sizeof(path));
 
     if (aura_art_read_pfraw(path, out->size, out->radius, PFRAW_EXTRA_NONE, (fb_data *)out->cover_data))
     {
@@ -346,8 +432,12 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
         return true;
     }
 
-    if (!decode_album_art(album_seek, out->size))
+    /* Fallo de cache: decode_album_art() repite la busqueda (barata, la
+     * base esta en RAM -- D-021) y devuelve la clave de la pista que de
+     * verdad uso, por si tagcache cambio entre una y otra. */
+    if (!decode_album_art(album_seek, out->size, &key))
         return false;
+    pfraw_path(&key, out->size, path, sizeof(path));
 
     aura_art_transpose((const fb_data *)s_decode_scratch, (fb_data *)s_transpose_scratch, out->size);
     aura_art_mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);

@@ -93,6 +93,39 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed);
  * cada uno cuando la precarga entera ya esta al dia. */
 bool aura_albumart_is_cached(int32_t album_seek, int size, int radius);
 
+/* D-338 (contrato v15, "Claves de cache de caratulas"): la clave del
+ * .pfraw de album ya NO es el album_seek de tagcache (cambia en cada
+ * reconstruccion de la base -- cada sync obligaba a tirar cfcache entero
+ * y re-decodificar todo, D-224) sino crc32 de la ruta de la pista
+ * representativa del album (la primera que devuelve tagcache para ese
+ * album, la misma que find_albumart() usa para buscar la caratula) +
+ * mtime de esa pista tal como tagcache lo guardo (tag_mtime,
+ * tagcache_get_numeric()): una reconstruccion no la cambia; un re-sync
+ * que reescriba la pista (Studio nunca preserva fechas al copiar) si.
+ * Nombre en disco: a-<crc 8hex>-<mtime>-<lado>.pfraw (aura_cache_keys.h). */
+typedef struct {
+    uint32_t path_crc;
+    uint32_t mtime;
+} aura_albumart_key_t;
+
+/* Clave estable del album (una busqueda de tagcache). false si el album
+ * no tiene ninguna pista en la base. */
+bool aura_albumart_album_key(int32_t album_seek, aura_albumart_key_t *key);
+
+/* Como aura_albumart_is_cached(), con la clave ya calculada (el precache
+ * la calcula una vez por album y la reutiliza para el GC). */
+bool aura_albumart_is_cached_key(const aura_albumart_key_t *key, int size, int radius);
+
+/* D-338: recoleccion de huerfanas de cfcache, con presupuesto. Borra las
+ * a-*.pfraw cuya clave no esta en `keys` (albumes que ya no existen, o
+ * pistas reescritas por un sync -- su clave nueva ya se genero) y los
+ * <seek>-<lado>.pfraw anteriores a D-338. Como maximo
+ * AURA_ALBUMART_GC_BUDGET borrados por llamada: el resto cae en el
+ * siguiente arranque. Reemplaza al vaciado total de cfcache que
+ * aura_sync.c hacia al terminar cada reconstruccion. */
+#define AURA_ALBUMART_GC_BUDGET 64
+void aura_albumart_gc_orphans(const aura_albumart_key_t *keys, int count);
+
 /* Portada de PLAYLIST (encargo del dueno, 2026-08-14: "quiero que las
  * playlists tengan una imagen... la lista deberia verse como la lista
  * de albumes"). A diferencia de aura_albumart_load_for_album(), no hay

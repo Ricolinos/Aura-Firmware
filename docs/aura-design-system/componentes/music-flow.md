@@ -31,7 +31,11 @@ reescribir desde cero.
 - **Cache `.pfraw`**: carátulas pre-escaladas y transpuestas se guardan en
   disco una sola vez; runtime solo carga de un cache. La clave incluye
   tamaño Y radio de esquina — cambiar cualquiera regenera el cache solo.
-  Cero decodificación JPEG durante la animación.
+  Cero decodificación JPEG durante la animación. Nombre en disco
+  (D-338, contrato v15): `cfcache/a-<crc32 ruta de la pista>-<mtime>-<lado>.pfraw`
+  — nunca el `seek` de tagcache, así una reconstrucción de la base
+  (cambio de familia, reinstalación) no invalida ninguna carátula; las
+  huérfanas las recoge el precache con presupuesto (64 por arranque).
 - **Reflejo**: la misma imagen invertida verticalmente + desvanecimiento.
 - **Máquina de estados**: `idle → scrolling → cover_in → show_tracks →
   cover_out` — compatible con nuestro modelo de estados+transiciones.

@@ -42,6 +42,11 @@ bool aura_fsutil_remove_tree(const char *path);
  * directorio no existe (no crea nada). */
 bool aura_fsutil_clear_dir(const char *path);
 
+/* D-338: como aura_fsutil_clear_dir(), pero conserva las entradas (solo
+ * archivos) para las que keep(nombre) devuelve true. Los subdirectorios
+ * se borran siempre. */
+bool aura_fsutil_clear_dir_except(const char *path, bool (*keep)(const char *name));
+
 /* Lee un archivo de texto completo en `buf` (NUL-terminado). Devuelve
  * los bytes leidos, -1 si no se pudo abrir, o -2 si no cabe (el
  * contenido se descarta: un archivo mas grande que el buffer no es el

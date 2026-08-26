@@ -341,18 +341,35 @@ bool aura_music_take_redraw_request(void)
 static void aura_music_precache_album_art(void)
 {
     static aura_music_item_t s_precache_albums[AURA_MUSIC_MAX_ITEMS];
+    /* D-338: clave estable de cada album, calculada UNA vez aqui (una
+     * busqueda de tagcache por album) y reutilizada por el GC de
+     * huerfanas al final. 16 KB estaticos, fuera del stack de UI. */
+    static aura_albumart_key_t s_precache_keys[AURA_MUSIC_MAX_ITEMS];
     aura_albumart_t art;
-    int count, i, pending, done;
+    int count, i, pending, done, nkeys;
 
     count = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_precache_albums, AURA_MUSIC_MAX_ITEMS);
     if (count <= 0)
         return;
 
     pending = 0;
+    nkeys = 0;
     for (i = 0; i < count; i++)
-        if (!aura_albumart_is_cached(s_precache_albums[i].seek,
-                                      AURA_PRECACHE_COVER_SIZE, AURA_PRECACHE_CORNER_RADIUS))
+    {
+        if (!aura_albumart_album_key(s_precache_albums[i].seek, &s_precache_keys[nkeys]))
+            continue;
+        if (!aura_albumart_is_cached_key(&s_precache_keys[nkeys],
+                                          AURA_PRECACHE_COVER_SIZE, AURA_PRECACHE_CORNER_RADIUS))
             pending++;
+        nkeys++;
+    }
+
+    /* D-338: las a-*.pfraw sobreviven a la reconstruccion de la base
+     * (aura_sync.c ya no vacia cfcache); lo que sobra -- albumes que se
+     * fueron, pistas reescritas por un sync -- se recoge aqui, con
+     * presupuesto, ANTES de decodificar lo nuevo (libera espacio primero
+     * y no compite con la capsula de progreso). */
+    aura_albumart_gc_orphans(s_precache_keys, nkeys);
 
     if (pending == 0)
         return; /* biblioteca sin cambios desde el ultimo arranque -- nada que hacer */

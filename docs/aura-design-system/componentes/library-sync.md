@@ -72,12 +72,16 @@ Sin colores RGB propios: todo sale de `a26_palette` (regla siempre-on).
   loop principal mientras la pantalla está arriba, **fuera** de la puerta
   `lcd_active()` a propósito, igual que el escaneo inicial de la base — el
   trabajo debe seguir con la pantalla dormida.
-- **Al terminar bien** (solo si se tocó Música): vacía
-  `/.rockbox/aura/cfcache/` (la caché de carátulas se indexa por
-  `album_seek`, que cambia con la base) y rearma la pasada de "primera vez"
-  de `aura_music_db_ready()` (calificaciones de Studio + precache de
-  carátulas), así que a continuación puede verse un instante "Preparando
-  carátulas N/M" — comportamiento del precache, no de esta pantalla.
+- **Al terminar bien** (solo si se tocó Música): sella la base compartida
+  (`/.aura/tagcache/db_stamp.txt`, D-337), tira de `/.rockbox/aura/cfcache/`
+  solo las fotos de artista y portadas de playlist (`ar-*`, `pl-*`) — las
+  carátulas de álbum `a-*` llevan clave estable (`crc32` de la ruta de la
+  pista + `mtime`, D-338) y sobreviven a la reconstrucción — y rearma la
+  pasada de "primera vez" de `aura_music_db_ready()` (calificaciones de
+  Studio + GC de carátulas huérfanas + precache), así que a continuación
+  puede verse un instante "Preparando carátulas N/M" **solo para los
+  álbumes cuya pista cambió** — comportamiento del precache, no de esta
+  pantalla. Una reconstrucción sin cambios en la música no muestra nada.
 
 ## Capturas
 
