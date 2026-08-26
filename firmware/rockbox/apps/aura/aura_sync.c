@@ -29,7 +29,10 @@
 #include "rbpaths.h"
 #include "timefuncs.h"
 #include "tagcache.h"
+#include "settings.h"      /* D-337: global_settings.tagcache_db_path */
+#include "string-extra.h"  /* strmemccpy */
 #include "aura_fsutil.h"
+#include "aura_cache_keys.h"
 #include "aura_music.h"
 #include "aura_video.h"
 #include "aura_photos.h"
@@ -41,8 +44,13 @@
 #define AURA_SYNC_DIR         "/.aura"
 #define AURA_SYNC_MARKER_PATH AURA_SYNC_DIR "/sync-pending.json"
 #define AURA_LIBRARY_STAMP_PATH AURA_SYNC_DIR "/library-stamp" /* D-329, v12 */
-#define AURA_DB_STAMP_SUBPATH   "/aura/db_stamp.txt"
-#define AURA_DB_STAMP_PATH      ROCKBOX_DIR AURA_DB_STAMP_SUBPATH
+/* D-337 (v15): el sello de la base vive junto a la base compartida
+ * (AURA_SHARED_DB_DIR, aura_sync.h). La ruta por arbol de v12 solo
+ * sobrevive como ORIGEN de la migracion de un firmware anterior. */
+#define AURA_DB_STAMP_PATH        AURA_SHARED_DB_DIR "/db_stamp.txt"
+#define AURA_LEGACY_DB_STAMP_PATH ROCKBOX_DIR "/aura/db_stamp.txt"
+#define AURA_LEGACY_DB_DIR        ROCKBOX_DIR /* database_*.tcd antes de v15 */
+#define TAGCACHE_MASTER_NAME      "database_idx.tcd" /* apps/tagcache.c TAGCACHE_FILE_MASTER */
 
 /* Mismo criterio que aura_albumart.c: la cache de caratulas se indexa por
  * album_seek de tagcache, que cambia con cada commit que agrega/quita
@@ -147,31 +155,109 @@ static void stamp_ensure_shared(char *out, size_t outsz)
     stamp_write(AURA_LIBRARY_STAMP_PATH, out);
 }
 
+static void ensure_shared_db_dir(void)
+{
+    if (!dir_exists(AURA_SYNC_DIR))
+        mkdir(AURA_SYNC_DIR);
+    if (!dir_exists(AURA_SHARED_DB_DIR))
+        mkdir(AURA_SHARED_DB_DIR);
+}
+
 void aura_sync_record_db_stamp(void)
 {
     char stamp[STAMP_BUF];
 
     stamp_ensure_shared(stamp, sizeof(stamp));
+    ensure_shared_db_dir();
     stamp_write(AURA_DB_STAMP_PATH, stamp);
 }
 
-bool aura_sync_switch_needs_rebuild(const char *outgoing_tree_root)
+void aura_sync_ensure_db_stamp(void)
 {
-    char stamp[STAMP_BUF], recorded[STAMP_BUF], path[MAX_PATH];
+    if (!file_exists(AURA_DB_STAMP_PATH))
+        aura_sync_record_db_stamp();
+}
+
+bool aura_sync_switch_needs_rebuild(void)
+{
+    char stamp[STAMP_BUF], recorded[STAMP_BUF];
     bool had_stamp = stamp_read(AURA_LIBRARY_STAMP_PATH, stamp, sizeof(stamp)) > 0;
 
     if (!had_stamp)
     {
-        /* Arranque en frio: el saliente acaba de estar corriendo, su base
-         * SI esta al dia -- se sella y se anota. */
+        /* Arranque en frio: el saliente acaba de estar corriendo con la
+         * base compartida, que SI esta al dia -- se sella y se anota. */
         stamp_ensure_shared(stamp, sizeof(stamp));
-        snprintf(path, sizeof(path), "%s%s", outgoing_tree_root, AURA_DB_STAMP_SUBPATH);
-        stamp_write(path, stamp);
+        ensure_shared_db_dir();
+        stamp_write(AURA_DB_STAMP_PATH, stamp);
     }
 
     if (stamp_read(AURA_DB_STAMP_PATH, recorded, sizeof(recorded)) <= 0)
-        return true; /* el entrante nunca anoto: como antes de v12 */
-    return strcmp(recorded, stamp) != 0;
+        recorded[0] = '\0'; /* la base compartida nunca se sello: como antes de v12 */
+    return aura_cache_keys_stamp_needs_rebuild(recorded, stamp);
+}
+
+/* D-337: mueve (move=true) o borra (move=false) todo database_*.tcd que
+ * haya directamente bajo `from`. rename() dentro del mismo volumen FAT
+ * reescribe la entrada de directorio: atomico por archivo, sin copiar
+ * datos -- una base real (decenas de MB) migra en milisegundos. */
+static void relocate_tagcache_files(const char *from, const char *to, bool move)
+{
+    DIR *d = opendir(from);
+    struct DIRENT *entry;
+    char src[MAX_PATH * 2], dst[MAX_PATH * 2]; /* 2x: ver aura_fsutil.c */
+
+    if (!d)
+        return;
+    while ((entry = readdir(d)) != NULL)
+    {
+        if (!aura_cache_keys_is_tagcache_file(entry->d_name))
+            continue;
+        snprintf(src, sizeof(src), "%s/%s", from, entry->d_name);
+        if (move)
+        {
+            snprintf(dst, sizeof(dst), "%s/%s", to, entry->d_name);
+            rename(src, dst);
+        }
+        else
+            remove(src);
+    }
+    closedir(d);
+}
+
+void aura_sync_force_shared_db_path(void)
+{
+    bool shared_has_db = file_exists(AURA_SHARED_DB_DIR "/" TAGCACHE_MASTER_NAME);
+    bool tree_has_db   = file_exists(AURA_LEGACY_DB_DIR "/" TAGCACHE_MASTER_NAME);
+
+    /* 1. El ajuste. tagcache_init() lo copia a tc_stat.db_path justo
+     * despues; open_db_fd() hace mkdir() del directorio en la primera
+     * escritura, asi que un disco recien instalado no necesita nada mas.
+     * Se fuerza en cada arranque (no se confia en config.cfg): un
+     * config.cfg de un firmware anterior trae "/.rockbox". */
+    strmemccpy(global_settings.tagcache_db_path, AURA_SHARED_DB_DIR,
+               sizeof(global_settings.tagcache_db_path));
+
+    /* 2. Migracion de una base anterior a v15. La compartida (construida
+     * por CUALQUIER familia) siempre gana sobre la del arbol: el sello
+     * decide si esta al dia, y una copia por arbol vieja solo seria peso
+     * muerto -- se borra. Sin base compartida, la del arbol se mueve
+     * entera (con su sello, que describe justamente esa base) y este
+     * arranque no reconstruye nada. */
+    if (!shared_has_db && tree_has_db)
+    {
+        ensure_shared_db_dir();
+        relocate_tagcache_files(AURA_LEGACY_DB_DIR, AURA_SHARED_DB_DIR, true);
+        if (!file_exists(AURA_DB_STAMP_PATH))
+            rename(AURA_LEGACY_DB_STAMP_PATH, AURA_DB_STAMP_PATH);
+    }
+    else
+        relocate_tagcache_files(AURA_LEGACY_DB_DIR, NULL, false);
+
+    /* El sello por arbol de v12 no describe la base compartida: fuera
+     * (si acaba de migrar con ella, ya no existe aqui). */
+    if (file_exists(AURA_LEGACY_DB_STAMP_PATH))
+        remove(AURA_LEGACY_DB_STAMP_PATH);
 }
 
 bool aura_sync_write_music_pending_marker(void)

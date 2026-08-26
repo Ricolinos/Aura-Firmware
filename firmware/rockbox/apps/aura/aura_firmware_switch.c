@@ -98,11 +98,12 @@ bool aura_firmware_switch_to(int i)
         return false;
     }
 
-    /* 4 y 5 -- el marcador SOLO si la biblioteca cambio desde que la
-     * entrante construyo su base (D-329, contrato v12): sin sync de por
-     * medio el cambio es instantaneo, sin reconstruccion. */
+    /* 4 y 5 -- el marcador SOLO si la biblioteca cambio desde que se
+     * construyo la base COMPARTIDA (D-329 v12 / D-337 v15: la base ya no
+     * viaja con el arbol, el sello vive en /.aura/tagcache): sin sync de
+     * por medio el cambio es instantaneo, sin reconstruccion. */
     refresh_root_binary();
-    if (aura_sync_switch_needs_rebuild(FW_OWN_DORMANT))
+    if (aura_sync_switch_needs_rebuild())
         aura_sync_write_music_pending_marker();
 
     /* 6: en seco */

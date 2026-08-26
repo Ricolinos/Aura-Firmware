@@ -465,6 +465,20 @@ bool aura_music_db_ready(void)
             add_event(PLAYBACK_EVENT_TRACK_BUFFER, aura_music_buffer_event);
             s_buffer_event_added = true;
         }
+        /* D-337 (contrato v15): si ESTE arranque disparo el rebuild de
+         * "sin base" de arriba, la base compartida recien construida
+         * describe la biblioteca vigente -- se sella aqui, la primera
+         * vez que tagcache la confirma usable, igual que finish_ok() de
+         * aura_sync.c tras una reconstruccion por marcador. Sin esto, el
+         * primer cambio de familia tras una instalacion limpia
+         * reconstruia otra vez sin motivo. Una base que llego sin sello
+         * (migrada de un arbol anterior a v15) se sella igual: usable y
+         * sin marcador pendiente (aura_sync_job_active() ya devolvio
+         * arriba), describe la biblioteca vigente. */
+        if (s_scan_triggered)
+            aura_sync_record_db_stamp();
+        else
+            aura_sync_ensure_db_stamp();
         /* D-224: misma puerta que lo de arriba, mismo motivo (tagcache
          * recien confirmado listo) -- ver el comentario grande junto a
          * la definicion. Una sola vez por arranque, igual que el resto

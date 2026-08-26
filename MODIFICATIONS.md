@@ -40,7 +40,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `apps/bitmaps/native/usblogo.176x48x16.bmp`
 - `apps/gui/splash.c`
 - `apps/gui/usb_screen.c` (D-223/D-225/D-330: pantalla USB propia — v. DECISIONS)
-- `apps/main.c`
+- `apps/main.c` (D-021: `tagcache_ram` forzado; D-337: `aura_sync_force_shared_db_path()` en ambas variantes de `init()`, tras `settings_load()` y antes de `tagcache_init()` — la base tagcache vive en `/.aura/tagcache`, compartida por las tres familias de firmware, contrato v15)
 - `apps/misc.c`
 - `apps/misc.h`
 - `apps/plugin.c` (D-298: `plugin_set_silent_open_errors()` — permite silenciar los dos `splash()` nativos que `plugin_load()` mostraba en sus ramas de error, antes de devolver `PLUGIN_ERROR`; opt-in por llamador, `false` por defecto, sin efecto en el resto de Rockbox)

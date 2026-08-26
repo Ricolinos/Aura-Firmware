@@ -37,6 +37,7 @@
 #include "panic.h"
 #include "menu.h"
 #include "aura/aura_main.h"
+#include "aura/aura_sync.h" /* aura (D-337): AURA_SHARED_DB_DIR */
 #include "aura/apple2026_tokens.h"
 #include "string-extra.h"
 #include "usb.h"
@@ -486,6 +487,11 @@ static void init(void)
      * al navegar la biblioteca -- alineado con el objetivo de
      * bateria del proyecto. */
     global_settings.tagcache_ram = 1;
+    /* aura (D-337, contrato v15): la base tagcache vive en
+     * /.aura/tagcache, compartida por las tres familias de firmware;
+     * tiene que fijarse (y migrarse desde /.rockbox si hace falta)
+     * ANTES de tagcache_init(), que copia la ruta a tc_stat.db_path. */
+    aura_sync_force_shared_db_path();
 #endif
     /* Aura siempre usa modo de almacenamiento masivo al conectar USB,
      * nunca HID (mouse/browser/presentacion/multimedia) -- Aura no
@@ -811,6 +817,9 @@ static void init(void)
      * objetivo de bateria del proyecto. Ver el comentario equivalente
      * en la otra variante de init() (PLATFORM_HOSTED) mas arriba. */
     global_settings.tagcache_ram = 1;
+    /* aura (D-337): base tagcache compartida -- ver el comentario
+     * equivalente en la otra variante de init() mas arriba. */
+    aura_sync_force_shared_db_path();
 #endif
     /* Ver el comentario equivalente en la otra variante de init()
      * (PLATFORM_HOSTED) mas arriba: Aura siempre usa modo de

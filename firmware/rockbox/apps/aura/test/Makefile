@@ -8,7 +8,7 @@ BUILD := build
 
 .PHONY: test clean
 
-test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow $(BUILD)/test_color $(BUILD)/test_patterns $(BUILD)/test_style $(BUILD)/test_sync_marker $(BUILD)/test_device_name $(BUILD)/test_artist_images $(BUILD)/test_firmware_families
+test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow $(BUILD)/test_color $(BUILD)/test_patterns $(BUILD)/test_style $(BUILD)/test_sync_marker $(BUILD)/test_device_name $(BUILD)/test_artist_images $(BUILD)/test_firmware_families $(BUILD)/test_cache_keys
 	@echo "== test_nav =="
 	@$(BUILD)/test_nav
 	@echo "== test_lrc =="
@@ -35,6 +35,8 @@ test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/tes
 	@$(BUILD)/test_artist_images
 	@echo "== test_firmware_families =="
 	@$(BUILD)/test_firmware_families
+	@echo "== test_cache_keys =="
+	@$(BUILD)/test_cache_keys
 
 $(BUILD)/test_nav: test_nav.c ../aura_nav.c ../aura_nav.h | $(BUILD)
 	$(CC) $(CFLAGS) test_nav.c ../aura_nav.c -o $@
@@ -74,6 +76,9 @@ $(BUILD)/test_artist_images: test_artist_images.c ../aura_artist_images_parse.c 
 
 $(BUILD)/test_firmware_families: test_firmware_families.c ../aura_firmware_families.c ../aura_firmware_families.h ../aura_lang.h | $(BUILD)
 	$(CC) $(CFLAGS) test_firmware_families.c ../aura_firmware_families.c -o $@
+
+$(BUILD)/test_cache_keys: test_cache_keys.c ../aura_cache_keys.c ../aura_cache_keys.h | $(BUILD)
+	$(CC) $(CFLAGS) test_cache_keys.c ../aura_cache_keys.c -o $@
 
 $(BUILD):
 	mkdir -p $(BUILD)

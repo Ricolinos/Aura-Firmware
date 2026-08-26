@@ -116,15 +116,43 @@ bool aura_sync_request_manual(void);
  * vive dentro de cada arbol). Misma escritura que usa el propio ciclo. */
 bool aura_sync_write_music_pending_marker(void);
 
-/* D-329 (contrato v12): sello de biblioteca. /.aura/library-stamp solo
- * cambia cuando un sync de Studio toca la musica; cada arbol anota en
- * .rockbox/aura/db_stamp.txt contra que sello construyo su base.
- * record: al terminar BIEN una (re)construccion. switch_needs_rebuild:
- * para el cambio de firmware, DESPUES de los renombres -- crea el sello
- * si falta (anotandolo al saliente, cuya base esta al dia) y dice si el
- * arbol entrante (ya en /.rockbox) necesita el marcador. */
+/* D-337 (contrato v15): la base tagcache (database_*.tcd) y su sello
+ * db_stamp.txt viven en un directorio COMPARTIDO por las tres familias
+ * (Aura, Metro-Aura, moonlit.aura -- apps/tagcache.c es byte-identico en
+ * los tres), en la raiz del disco junto al marcador y al sello de
+ * biblioteca, NUNCA dentro de un arbol /.rockbox: un cambio de firmware
+ * (dos renombres, v10) no se lleva la base consigo y una reinstalacion
+ * no la borra. Este header es el dueno de las rutas de /.aura del
+ * contrato (AURA_SYNC_DIR en aura_sync.c); nadie mas deletrea esta. */
+#define AURA_SHARED_DB_DIR "/.aura/tagcache"
+
+/* D-337: apunta global_settings.tagcache_db_path a AURA_SHARED_DB_DIR y
+ * migra por rename() (sin copiar) una base previa a v15 que siga en
+ * ROCKBOX_DIR (database_*.tcd + aura/db_stamp.txt) si el compartido no
+ * tiene base todavia; si ya la tiene, la del arbol es peso muerto y se
+ * borra. Se llama desde apps/main.c DESPUES de settings_load() y ANTES
+ * de tagcache_init(), que es quien copia la ruta a tc_stat.db_path. */
+void aura_sync_force_shared_db_path(void);
+
+/* D-329 (contrato v12) / D-337 (v15): sello de biblioteca.
+ * /.aura/library-stamp solo cambia cuando un sync de Studio toca la
+ * musica; el firmware anota en AURA_SHARED_DB_DIR/db_stamp.txt contra
+ * que sello se construyo la base compartida. record: al terminar BIEN
+ * una (re)construccion (marcador, manual de Ajustes, y el rebuild de
+ * primer arranque de aura_music_db_ready()). switch_needs_rebuild: para
+ * el cambio de firmware, DESPUES de los renombres -- crea el sello de
+ * biblioteca si falta (la base compartida esta al dia: el saliente
+ * acaba de correr con ella) y dice si el entrante necesita el marcador,
+ * comparando SOLO el sello compartido (el arbol entrante ya no lleva
+ * ninguno). */
 void aura_sync_record_db_stamp(void);
-bool aura_sync_switch_needs_rebuild(const char *outgoing_tree_root);
+/* Sella SOLO si la base compartida no tiene sello todavia (base migrada
+ * de un arbol anterior a v15, o construida por un firmware que aun no
+ * sella): una base usable al arrancar sin trabajo de sync pendiente
+ * describe la biblioteca vigente -- mismo razonamiento que el arranque
+ * en frio de switch_needs_rebuild(). */
+void aura_sync_ensure_db_stamp(void);
+bool aura_sync_switch_needs_rebuild(void);
 
 /* Progreso estimado de la seccion Musica en [0, 256]; -1 si no aplica
  * (todavia sin empezar / indeterminado). Texto corto de detalle
