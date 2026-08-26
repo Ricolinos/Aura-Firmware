@@ -244,18 +244,20 @@ static void aura_music_buffer_event(unsigned short id, void *ev_data)
  * sin leer pixeles) deja saltar rapido, en cualquier arranque
  * SIGUIENTE con la biblioteca sin cambios, los albumes que YA
  * escribieron su .pfraw -- para esos, esta pantalla no vuelve a
- * aparecer. Ojo: un album sin caratula resoluble (ni cover.jpg, ni arte
- * embebido) nunca escribe .pfraw (aura_albumart_load_for_album()
- * devuelve false, no hay nada que cachear -- mismo criterio que
- * get_slot_for(), ningun camino nuevo) y por lo tanto vuelve a figurar
- * "pendiente" en cada arranque; NO se agrega un cache negativo a
- * proposito (invalidarlo cuando Aura Studio sincroniza arte nuevo sobre
- * ese mismo album exigiria un enganche extra fuera de alcance de este
- * encargo, y el costo real de un reintento es chico: una busqueda en
- * tagcache + un chequeo de archivo, nunca una decodificacion JPEG de
- * verdad). En la practica esto es una pantalla breve en cada arranque
- * SOLO para bibliotecas con algun album realmente sin arte -- para el
- * resto, una unica vez.
+ * aparecer. D-339: un album sin caratula resoluble (ni cover.jpg, ni
+ * arte embebido, o JPEG rechazado) tampoco vuelve a contar: la primera
+ * vez que aura_albumart_load_for_album() concluye "no hay arte" deja
+ * un marcador a-<crc>-<mtime>.none en cfcache (cache negativa, misma
+ * clave estable de D-338, asi que una pista reescrita por un sync lo
+ * invalida sola via el GC), e is_cached_key() lo cuenta como resuelto.
+ * Antes de D-339 esos albumes figuraban "pendientes" en CADA arranque y
+ * la capsula "Preparando caratulas N/M" aparecia siempre en bibliotecas
+ * con algun album sin arte (reportado primero en moonlit).
+ *
+ * D-339, ademas: el resultado del pre-pase se memoriza por sesion y por
+ * sello de la base compartida (db_stamp.txt, D-337): si vuelve a
+ * llamarse con el mismo sello, no recorre tagcache. aura_music_db_reset_
+ * triggers() (finish_ok() de aura_sync.c) descarta la memoria.
  *
  * Deliberadamente SINCRONA, sin `create_thread()`: encargo explicito
  * del dueno ("full stop: NO implementes ningun hilo de fondo... todo
@@ -338,6 +340,12 @@ bool aura_music_take_redraw_request(void)
     return r;
 }
 
+/* D-339: memoria del pre-pase. Valida mientras el sello de la base
+ * compartida no cambie y nadie llame a aura_music_db_reset_triggers(). */
+#define AURA_PRECACHE_STAMP_BUF 64
+static char s_precache_memo_stamp[AURA_PRECACHE_STAMP_BUF];
+static bool s_precache_memo_valid = false;
+
 static void aura_music_precache_album_art(void)
 {
     static aura_music_item_t s_precache_albums[AURA_MUSIC_MAX_ITEMS];
@@ -345,8 +353,17 @@ static void aura_music_precache_album_art(void)
      * busqueda de tagcache por album) y reutilizada por el GC de
      * huerfanas al final. 16 KB estaticos, fuera del stack de UI. */
     static aura_albumart_key_t s_precache_keys[AURA_MUSIC_MAX_ITEMS];
+    static char s_stamp[AURA_PRECACHE_STAMP_BUF];
     aura_albumart_t art;
     int count, i, pending, done, nkeys;
+    bool have_stamp;
+
+    /* D-339: mismo sello que la ultima vez => la biblioteca que describe
+     * la base no cambio y el pre-pase ya dejo todo resuelto (.pfraw o
+     * .none): ni recorrer tagcache. */
+    have_stamp = aura_sync_read_db_stamp(s_stamp, sizeof(s_stamp)) > 0;
+    if (s_precache_memo_valid && have_stamp && !strcmp(s_stamp, s_precache_memo_stamp))
+        return;
 
     count = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_precache_albums, AURA_MUSIC_MAX_ITEMS);
     if (count <= 0)
@@ -370,6 +387,14 @@ static void aura_music_precache_album_art(void)
      * presupuesto, ANTES de decodificar lo nuevo (libera espacio primero
      * y no compite con la capsula de progreso). */
     aura_albumart_gc_orphans(s_precache_keys, nkeys);
+
+    /* D-339: lo que sigue deja cada album resuelto (.pfraw o .none), asi
+     * que con este sello ya no hay nada que volver a recorrer. */
+    if (have_stamp)
+    {
+        strlcpy(s_precache_memo_stamp, s_stamp, sizeof(s_precache_memo_stamp));
+        s_precache_memo_valid = true;
+    }
 
     if (pending == 0)
         return; /* biblioteca sin cambios desde el ultimo arranque -- nada que hacer */
@@ -511,6 +536,7 @@ void aura_music_db_reset_triggers(void)
 {
     s_scan_triggered = false;
     s_update_triggered = false;
+    s_precache_memo_valid = false; /* D-339 */
 }
 
 /* D-283 (PLAN-about-fixes.md E2): mismo tagcache_search()+set_uniqbuf()

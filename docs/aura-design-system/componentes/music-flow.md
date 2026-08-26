@@ -36,6 +36,19 @@ reescribir desde cero.
   — nunca el `seek` de tagcache, así una reconstrucción de la base
   (cambio de familia, reinstalación) no invalida ninguna carátula; las
   huérfanas las recoge el precache con presupuesto (64 por arranque).
+- **Caché negativa `.none`** (D-339): un álbum sin carátula resoluble (ni
+  archivo junto al álbum, ni JPEG embebido, o JPEG rechazado por el
+  decodificador) deja un marcador de 0 bytes `cfcache/a-<crc>-<mtime>.none`
+  (misma clave, sin lado) la primera vez que se le busca arte. Con el
+  marcador presente, Music Flow carga el tile por defecto sin buscar ni
+  decodificar, y el precache lo cuenta como resuelto — la cápsula
+  "Preparando carátulas N/M" ya no reaparece en cada arranque por esos
+  álbumes. Solo se escribe cuando la búsqueda y la decodificación
+  concluyen "no hay" — nunca por un fallo transitorio de disco. Lleva el
+  `mtime` de la pista: una pista reescrita por un sync lo deja huérfano
+  (GC) y se reintenta sola. Limitación: un `cover.jpg` nuevo sin tocar la
+  pista no cambia la clave y el marcador sobrevive (misma hipótesis
+  abierta que D-338).
 - **Reflejo**: la misma imagen invertida verticalmente + desvanecimiento.
 - **Máquina de estados**: `idle → scrolling → cover_in → show_tracks →
   cover_out` — compatible con nuestro modelo de estados+transiciones.

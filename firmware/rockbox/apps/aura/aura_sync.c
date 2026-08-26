@@ -174,6 +174,11 @@ void aura_sync_record_db_stamp(void)
     stamp_write(AURA_DB_STAMP_PATH, stamp);
 }
 
+int aura_sync_read_db_stamp(char *buf, size_t bufsz)
+{
+    return stamp_read(AURA_DB_STAMP_PATH, buf, bufsz);
+}
+
 void aura_sync_ensure_db_stamp(void)
 {
     if (!file_exists(AURA_DB_STAMP_PATH))

@@ -20,7 +20,7 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-/* D-337/D-338 (contrato v15): logica PURA de las claves de cache que
+/* D-337/D-338/D-339 (contrato v15): logica PURA de las claves de cache que
  * comparten los tres firmwares -- sin I/O, sin Rockbox, para el test
  * host test_cache_keys.c.
  *
@@ -29,7 +29,9 @@
  *  - El sello db_stamp.txt: cuando obliga a reconstruir.
  *  - La clave estable de caratula de album:
  *        a-<crc32 ruta pista>-<mtime pista>-<lado>.pfraw
- *    (nunca el seek de tagcache, que cambia en cada reconstruccion). */
+ *    (nunca el seek de tagcache, que cambia en cada reconstruccion).
+ *  - El marcador negativo a-<crc>-<mtime>.none (D-339) y la decision
+ *    del GC de huerfanas sobre ambos. */
 #ifndef AURA_CACHE_KEYS_H
 #define AURA_CACHE_KEYS_H
 
@@ -56,8 +58,47 @@ int aura_cache_keys_album_name(char *out, size_t outsz,
 bool aura_cache_keys_album_parse(const char *name, uint32_t *path_crc,
                                  uint32_t *mtime, int *size);
 
-/* Forma de un solo argumento del parse, para usar como filtro
- * (aura_fsutil_clear_dir_except()). */
+/* D-339: marcador NEGATIVO -- el album no tiene caratula resoluble (ni
+ * cover.jpg/folder.jpg, ni JPEG embebido, o el JPEG lo rechazo el
+ * decodificador). Archivo de 0 bytes a-<8hex>-<mtime>.none junto a los
+ * .pfraw, con la MISMA clave estable de D-338 pero SIN lado: "no hay
+ * arte" es un hecho del album, no de un tamano de tile. Mientras exista,
+ * ningun consumidor vuelve a buscar ni decodificar; como la clave lleva
+ * el mtime de la pista, una pista reescrita por un sync lo deja huerfano
+ * (GC) y se reintenta sola. Limitacion documentada (misma hipotesis
+ * abierta que D-338): un cover.jpg nuevo SIN tocar la pista no cambia
+ * la clave y el .none sobrevive. */
+int aura_cache_keys_album_none_name(char *out, size_t outsz,
+                                    uint32_t path_crc, uint32_t mtime);
+
+/* Reconoce cualquier entrada de album con clave estable: .pfraw
+ * (`negative`=false, `size`=lado) o .none (`negative`=true, `size`=0).
+ * Salidas opcionales. */
+bool aura_cache_keys_album_parse_any(const char *name, uint32_t *path_crc,
+                                     uint32_t *mtime, int *size, bool *negative);
+
+/* Forma de un solo argumento del parse (ambas extensiones), para usar
+ * como filtro (aura_fsutil_clear_dir_except()): lo que sobrevive a una
+ * reconstruccion es todo lo que lleva clave estable, .none incluido. */
 bool aura_cache_keys_album_parse_name(const char *name);
+
+/* Clave estable de un album (D-338). aura_albumart.h la reexporta como
+ * aura_albumart_key_t. */
+typedef struct {
+    uint32_t path_crc;
+    uint32_t mtime;
+} aura_cache_album_key_t;
+
+/* D-339: "resuelto" para el pre-pase del precache y para el chequeo
+ * liviano de cache: hay .pfraw valido O hay marcador .none. */
+bool aura_cache_keys_album_resolved(bool pfraw_valid, bool none_present);
+
+/* D-338/D-339: decision pura del GC de cfcache. true si `name` es una
+ * entrada de album que ya no corresponde a ninguna clave vigente:
+ *  - a-*.pfraw o a-*.none cuya (crc, mtime) no esta en `keys`, o
+ *  - <seek>-<lado>.pfraw de antes de D-338 (empieza por digito).
+ * pl-*, ar-* y cualquier otro nombre devuelven false: no son de este GC. */
+bool aura_cache_keys_album_is_orphan(const char *name,
+                                     const aura_cache_album_key_t *keys, int count);
 
 #endif /* AURA_CACHE_KEYS_H */

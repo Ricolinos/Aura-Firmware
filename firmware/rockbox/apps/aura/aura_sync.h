@@ -152,6 +152,10 @@ void aura_sync_record_db_stamp(void);
  * describe la biblioteca vigente -- mismo razonamiento que el arranque
  * en frio de switch_needs_rebuild(). */
 void aura_sync_ensure_db_stamp(void);
+/* D-339: lee el sello de la base compartida (sin salto de linea). Bytes
+ * copiados, o <0 si no existe. El precache de caratulas (aura_music.c)
+ * lo memoriza para no recorrer tagcache otra vez si nada cambio. */
+int aura_sync_read_db_stamp(char *buf, size_t bufsz);
 bool aura_sync_switch_needs_rebuild(void);
 
 /* Progreso estimado de la seccion Musica en [0, 256]; -1 si no aplica

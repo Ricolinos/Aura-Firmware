@@ -40,6 +40,7 @@
 #include <stdint.h>
 
 #include "lcd.h" /* fb_data */
+#include "aura_cache_keys.h" /* aura_cache_album_key_t (D-338/D-339) */
 
 typedef struct {
     int size;
@@ -62,7 +63,8 @@ typedef struct {
  * (doc) solo aplica una vez cada caratula ya paso por aqui.
  *
  * Devuelve false (out->valid queda en false) si no hay caratula o no
- * hay ninguna pista en ese album. El llamador es dueno de la memoria:
+ * hay ninguna pista en ese album; en el primer caso deja el marcador
+ * negativo .none (D-339, ver aura_albumart_is_cached_key()). El llamador es dueno de la memoria:
  * antes de llamar debe fijar out->size, out->radius y
  * out->cover_data/out->reflection_data apuntando a buffers de al menos
  * size*size*FB_DATA_SZ y size*aura_art_reflection_height(size,...)*FB_DATA_SZ
@@ -103,23 +105,38 @@ bool aura_albumart_is_cached(int32_t album_seek, int size, int radius);
  * tagcache_get_numeric()): una reconstruccion no la cambia; un re-sync
  * que reescriba la pista (Studio nunca preserva fechas al copiar) si.
  * Nombre en disco: a-<crc 8hex>-<mtime>-<lado>.pfraw (aura_cache_keys.h). */
-typedef struct {
-    uint32_t path_crc;
-    uint32_t mtime;
-} aura_albumart_key_t;
+typedef aura_cache_album_key_t aura_albumart_key_t;
 
 /* Clave estable del album (una busqueda de tagcache). false si el album
  * no tiene ninguna pista en la base. */
 bool aura_albumart_album_key(int32_t album_seek, aura_albumart_key_t *key);
 
-/* Como aura_albumart_is_cached(), con la clave ya calculada (el precache
- * la calcula una vez por album y la reutiliza para el GC). */
+/* D-339 (cache negativa): un album SIN caratula resoluble (ni archivo
+ * junto al album, ni JPEG embebido, o JPEG que el decodificador
+ * rechaza) nunca escribia .pfraw, asi que el precache lo contaba
+ * "pendiente" en cada arranque y volvia a buscar/decodificar. Ahora
+ * aura_albumart_load_for_album() deja un marcador de 0 bytes
+ * a-<crc>-<mtime>.none (aura_cache_keys_album_none_name()) cuando la
+ * busqueda y la decodificacion CONCLUYEN que no hay arte -- nunca por
+ * un fallo transitorio (open() de la pista en error: disco ausente u
+ * ocupado). Con el marcador presente, load_for_album() devuelve false
+ * sin tocar tagcache-arte ni el decodificador (el llamador cae al tile
+ * default como siempre), e is_cached()/is_cached_key() lo cuentan como
+ * resuelto. Lleva el mtime de la pista: una pista reescrita por un sync
+ * lo deja huerfano (GC) y el album se reintenta solo. Limitacion (misma
+ * hipotesis abierta que D-338): un cover.jpg nuevo sin tocar la pista
+ * no cambia la clave y el .none sobrevive hasta el proximo re-sync que
+ * reescriba la pista.
+ *
+ * Como aura_albumart_is_cached(), con la clave ya calculada (el precache
+ * la calcula una vez por album y la reutiliza para el GC). true si hay
+ * .pfraw valido a `size`/`radius` O marcador .none. */
 bool aura_albumart_is_cached_key(const aura_albumart_key_t *key, int size, int radius);
 
 /* D-338: recoleccion de huerfanas de cfcache, con presupuesto. Borra las
- * a-*.pfraw cuya clave no esta en `keys` (albumes que ya no existen, o
- * pistas reescritas por un sync -- su clave nueva ya se genero) y los
- * <seek>-<lado>.pfraw anteriores a D-338. Como maximo
+ * a-*.pfraw y a-*.none (D-339) cuya clave no esta en `keys` (albumes que
+ * ya no existen, o pistas reescritas por un sync -- su clave nueva ya se
+ * genero) y los <seek>-<lado>.pfraw anteriores a D-338. Como maximo
  * AURA_ALBUMART_GC_BUDGET borrados por llamada: el resto cae en el
  * siguiente arranque. Reemplaza al vaciado total de cfcache que
  * aura_sync.c hacia al terminar cada reconstruccion. */

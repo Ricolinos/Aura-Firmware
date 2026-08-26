@@ -20,7 +20,7 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
-/* Test host-side de la logica pura de claves de cache (D-337/D-338). */
+/* Test host-side de la logica pura de claves de cache (D-337/D-338/D-339). */
 #include <stdio.h>
 #include <string.h>
 #include "../aura_cache_keys.h"
@@ -93,12 +93,91 @@ static void test_album_key_rejects_other_entries(void)
     CHECK(!aura_cache_keys_album_parse(NULL, NULL, NULL, NULL));
 }
 
+/* D-339: marcador negativo a-<crc>-<mtime>.none */
+static void test_none_marker(void)
+{
+    char name[64];
+    uint32_t crc = 0, mt = 0;
+    int size = -1;
+    bool neg = false;
+
+    CHECK(aura_cache_keys_album_none_name(name, sizeof(name), 0xdeadbeefu, 1234567u) > 0);
+    CHECK(strcmp(name, "a-deadbeef-1234567.none") == 0);
+    CHECK(aura_cache_keys_album_none_name(name, 8, 0x1u, 0u) < 0);
+
+    /* parse_any reconoce ambos y distingue */
+    CHECK(aura_cache_keys_album_parse_any("a-deadbeef-1234567.none", &crc, &mt, &size, &neg));
+    CHECK(crc == 0xdeadbeefu && mt == 1234567u && size == 0 && neg);
+    CHECK(aura_cache_keys_album_parse_any("a-deadbeef-1234567-130.pfraw", &crc, &mt, &size, &neg));
+    CHECK(crc == 0xdeadbeefu && mt == 1234567u && size == 130 && !neg);
+    CHECK(aura_cache_keys_album_parse_any("a-deadbeef-1234567.none", NULL, NULL, NULL, NULL));
+
+    /* el parse de .pfraw NO acepta .none (el tamano no existe ahi) */
+    CHECK(!aura_cache_keys_album_parse("a-deadbeef-1234567.none", NULL, NULL, NULL));
+    /* pero el filtro de "sobrevive a la reconstruccion" conserva ambos */
+    CHECK(aura_cache_keys_album_parse_name("a-deadbeef-1234567.none"));
+    CHECK(aura_cache_keys_album_parse_name("a-deadbeef-1234567-130.pfraw"));
+    CHECK(!aura_cache_keys_album_parse_name("pl-Favoritas-130.pfraw"));
+
+    /* formas rotas */
+    CHECK(!aura_cache_keys_album_parse_any("a-deadbeef-1234567-130.none", NULL, NULL, NULL, NULL));
+    CHECK(!aura_cache_keys_album_parse_any("a-deadbeef-.none", NULL, NULL, NULL, NULL));
+    CHECK(!aura_cache_keys_album_parse_any("a-deadbeef-1.none.tmp", NULL, NULL, NULL, NULL));
+    CHECK(!aura_cache_keys_album_parse_any("a-DEADBEEF-1.none", NULL, NULL, NULL, NULL));
+    CHECK(!aura_cache_keys_album_parse_any("116-130.none", NULL, NULL, NULL, NULL));
+}
+
+/* D-339: "resuelto" = .pfraw valido o .none presente */
+static void test_resolved(void)
+{
+    CHECK(!aura_cache_keys_album_resolved(false, false));
+    CHECK(aura_cache_keys_album_resolved(true, false));
+    CHECK(aura_cache_keys_album_resolved(false, true));
+    CHECK(aura_cache_keys_album_resolved(true, true));
+}
+
+/* D-338/D-339: GC de huerfanas sobre .pfraw, .none y los nombres viejos */
+static void test_gc_orphans(void)
+{
+    const aura_cache_album_key_t keys[] = {
+        { 0xdeadbeefu, 1234567u },
+        { 0x00000001u, 0u },
+    };
+    const int n = 2;
+
+    /* vigentes: ni .pfraw ni .none son huerfanos */
+    CHECK(!aura_cache_keys_album_is_orphan("a-deadbeef-1234567-130.pfraw", keys, n));
+    CHECK(!aura_cache_keys_album_is_orphan("a-deadbeef-1234567-320.pfraw", keys, n));
+    CHECK(!aura_cache_keys_album_is_orphan("a-deadbeef-1234567.none", keys, n));
+    CHECK(!aura_cache_keys_album_is_orphan("a-00000001-0.none", keys, n));
+
+    /* misma pista, mtime distinto (pista reescrita por un sync): huerfano */
+    CHECK(aura_cache_keys_album_is_orphan("a-deadbeef-1234568.none", keys, n));
+    CHECK(aura_cache_keys_album_is_orphan("a-deadbeef-1234568-130.pfraw", keys, n));
+    /* album que ya no existe */
+    CHECK(aura_cache_keys_album_is_orphan("a-0badcafe-77.none", keys, n));
+    CHECK(aura_cache_keys_album_is_orphan("a-0badcafe-77-130.pfraw", keys, n));
+    /* <seek>-<lado>.pfraw de antes de D-338 */
+    CHECK(aura_cache_keys_album_is_orphan("116-130.pfraw", keys, n));
+    /* no son de este GC */
+    CHECK(!aura_cache_keys_album_is_orphan("pl-Favoritas-130.pfraw", keys, n));
+    CHECK(!aura_cache_keys_album_is_orphan("ar-0badcafe-130.pfraw", keys, n));
+    CHECK(!aura_cache_keys_album_is_orphan("116-130.none", keys, n));
+    CHECK(!aura_cache_keys_album_is_orphan("", keys, n));
+    CHECK(!aura_cache_keys_album_is_orphan(NULL, keys, n));
+    /* conjunto vacio: todo lo de album es huerfano */
+    CHECK(aura_cache_keys_album_is_orphan("a-deadbeef-1234567.none", keys, 0));
+}
+
 int main(void)
 {
     test_tagcache_files();
     test_stamp();
     test_album_key_roundtrip();
     test_album_key_rejects_other_entries();
+    test_none_marker();
+    test_resolved();
+    test_gc_orphans();
     if (failures)
     {
         printf("%d failure(s)\n", failures);
