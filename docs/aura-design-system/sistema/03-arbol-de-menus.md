@@ -118,7 +118,25 @@ agrupación, como en el original:
 | — | **Personalización** ✅ `[SPLIT]` (D-292, submenú nuevo — ver tabla abajo) |
 | Pantalla | Brillo ✅ · Temporiz. luz ✅ |
 | Sonido | Ecualizador ✅ (23 presets **con vista gráfica de la curva en vivo**) · Límite volumen ✅ · Ajuste volumen ✅ (replaygain real) · Audiolibros ✅ · Sonido de clic ✅ |
-| Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Reconstruir biblioteca ✅ (D-293: aviso Sí/No → pantalla `LibrarySync`; el mismo trabajo corre solo tras un sync de Aura Studio) · Restablecer ajustes ✅ |
+| Sistema | Temporiz. reposo ✅ · Fecha y hora ✅ (Zona horaria real, Reloj 24 h, Hora en el título) · Ordenar por ✅ · Idioma ✅ (catálogo completo, no traducidos inertes) · Avisos legales ✅ · Reconstruir biblioteca ✅ (D-293: aviso Sí/No → pantalla `LibrarySync`; el mismo trabajo corre solo tras un sync de Aura Studio) · **Cambiar sistema** ✅ `[SPLIT]` (D-327/D-333, submenú — ver tabla abajo) · Restablecer ajustes ✅ |
+
+### Ajustes → Cambiar sistema (D-327 / D-333, contrato v14)
+
+`[SPLIT]`, mismo tratamiento que "Personalización" (nivel 2, tabla propia,
+icono `ipod` en la fila padre). Una fila por **familia hermana** instalada
+o instalable — el orden es el de la tabla de `aura_firmware_families.c`
+y solo se añade al final:
+
+| Fila | Icono | Estado |
+|---|---|---|
+| Cambiar a Metro | `ipod` | ✅ Con `/.firmware-metro/` presente: aviso Sí/No (mismo componente que "Reconstruir biblioteca"); sin él: texto informativo (como Avisos legales) que explica cómo instalarlo desde Aura Studio › Extras › Firmware |
+| Cambiar a moonlit.aura | `theme-dark` (luna) | ✅ Ídem, contra `/.firmware-moonlit/` |
+
+Las dos pantallas hijas son la misma pantalla de confirmación
+parametrizada por familia (nivel 3, `[FULL]` de texto). "Sí" ejecuta la
+secuencia de renombres del contrato (§ v10) y reinicia en seco; "No" o
+Menú vuelven al submenú. Capturas: `docs/screenshots/v0.4.0-beta-cambiar-sistema-*.png`,
+`…-moonlit-no-instalado.png`, `…-moonlit-confirmar.png`.
 
 ### Ajustes → Personalización (D-292)
 
