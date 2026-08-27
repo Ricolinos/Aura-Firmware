@@ -40,6 +40,7 @@
 #include "aura_search.h"
 #include "aura_worldclock.h"
 #include "aura_music.h"
+#include "aura_master_art_builder.h" /* D-341 */
 #include "aura_widgets.h"
 #include "aura_statusbar.h"
 #include "aura_menu_list.h"
@@ -438,11 +439,13 @@ void aura_main(void)
                 s_usb_pending = false;
                 if (usb_inserted())
                 {
+                    aura_master_art_builder_suspend(); /* D-341 */
                     default_event_handler_deferred_usb(s_usb_pending_seqnum);
                     /* D-293: al volver de la pantalla USB el cable ya se
                      * desconecto -- unico momento en que el firmware se
                      * entera de que hubo (o no) una sincronizacion. */
                     aura_main_sync_after_disk_handoff(&nav);
+                    aura_master_art_builder_resume();
                 }
             }
             continue;
@@ -483,10 +486,6 @@ void aura_main(void)
          * real. */
         if (!aura_music_db_ready() && timeout_ticks < 0)
             timeout_ticks = HZ / 2;
-        /* D-293: el precache de caratulas dibuja su propia pantalla; si
-         * acaba de hacerlo, no esperar un boton encima de ese cuadro. */
-        if (aura_music_take_redraw_request())
-            timeout_ticks = 0;
         /* D-293: la maquina de estados de la reconstruccion avanza en
          * cada vuelta, con o sin su pantalla a la vista (pospuesta, el
          * trabajo de tagcache sigue en fondo y hay que cerrarlo bien).
@@ -630,6 +629,14 @@ void aura_main(void)
                 timeout_ticks = HZ / 4;
         }
 
+        /* D-341: el constructor de maestras en segundo plano se detiene
+         * mientras la UI anima (cadencia fina pedida por cualquiera de
+         * las puertas de arriba) -- un decode de 100-300 ms compite por
+         * disco y CPU con un carrusel a 20 fps. Con la pantalla en
+         * reposo (o dormida) sigue trabajando. Music Flow ademas lo
+         * pausa por su cuenta al empezar cada scroll. */
+        aura_master_art_builder_pause(timeout_ticks >= 0 && timeout_ticks <= HZ / 20);
+
         button = next_button(timeout_ticks);
 
         /* D-209 (encargo del dueno, 2026-08-14): pantalla propia de
@@ -651,13 +658,22 @@ void aura_main(void)
          * es la misma funcion que usa el resto de Rockbox (menu.c,
          * tree.c, etc.): monta el disco/apaga limpio y devuelve el
          * propio evento si lo manejo, o 0 para un boton normal. */
+        /* D-341: antes de ceder el disco al host (o apagar), el
+         * constructor de maestras termina el elemento en curso y se
+         * queda quieto -- ninguna escritura a medias en /.aura/art ni
+         * busqueda de tagcache abierta durante el handoff. */
+        if (button == SYS_USB_CONNECTED || button == SYS_POWEROFF || button == SYS_REBOOT)
+            aura_master_art_builder_suspend();
         if (default_event_handler(button) != 0)
         {
             /* D-293: default_event_handler() no devuelve hasta que la
              * pantalla USB termina, es decir hasta que el cable se
              * desconecto -- ver arriba. */
             if (button == SYS_USB_CONNECTED)
+            {
                 aura_main_sync_after_disk_handoff(&nav);
+                aura_master_art_builder_resume();
+            }
             continue;
         }
 

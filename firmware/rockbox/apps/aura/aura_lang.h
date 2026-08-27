@@ -283,13 +283,6 @@ typedef enum {
     AURA_STR_SETTINGS_DATE,
     AURA_STR_SETTINGS_TIME,
 
-    /* D-224: precarga de caratulas de Music Flow en el primer arranque
-     * tras cada escaneo de biblioteca -- plantilla combinada con
-     * snprintf(..., "%s %d/%d", aura_str(...), hechos, total) en
-     * aura_music.c, mismo patron que AURA_STR_ABOUT_MUSIC en
-     * aura_screens.c. */
-    AURA_STR_PRECACHE_ART,
-
     /* Apagado del iPod (Task A, encargo del dueno): eleccion del
      * temporizador de apagado por inactividad, envuelve
      * global_settings.poweroff. AURA_STR_TIMEOUT_OFF (ya existe) cubre

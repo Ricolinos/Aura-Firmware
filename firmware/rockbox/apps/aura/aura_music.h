@@ -64,13 +64,10 @@ typedef struct {
 bool aura_music_db_ready(void);
 
 /* D-293: rearma la pasada de "primera vez por arranque" de
- * aura_music_db_ready() (calificaciones de Studio + precache de caratulas)
- * -- la llama aura_sync.c al terminar una reconstruccion de la base. */
+ * aura_music_db_ready() (calificaciones de Studio + arranque del
+ * constructor de maestras, D-341) -- la llama aura_sync.c al terminar
+ * una reconstruccion de la base. */
 void aura_music_db_reset_triggers(void);
-
-/* D-293: true (una vez) si el precache de caratulas acaba de dibujar su
- * propia pantalla de progreso -- el loop principal debe redibujar. */
-bool aura_music_take_redraw_request(void);
 
 /* D-283 (PLAN-about-fixes.md E2): cuantos artistas UNICOS hay en la
  * base de datos -- mismo patron de tagcache_search()+set_uniqbuf() que

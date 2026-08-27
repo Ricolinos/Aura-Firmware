@@ -21,6 +21,7 @@
  *
  ****************************************************************************/
 #include "aura_firmware_switch.h"
+#include "aura_master_art_builder.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -81,7 +82,11 @@ bool aura_firmware_switch_to(int i)
     if (dir_exists(FW_OWN_DORMANT))
         return false; /* no adivinar: Studio garantiza que no pase */
 
-    /* 1. todo lo de Aura al disco, AHORA */
+    /* 1. todo lo de Aura al disco, AHORA. D-341: el constructor de
+     * maestras se detiene antes -- no puede quedar a mitad de una
+     * escritura en el arbol que esta por renombrarse ni dentro de una
+     * busqueda de tagcache mientras se apaga. */
+    aura_master_art_builder_suspend();
     aura_settings_save();
     settings_save();
     tagcache_shutdown();

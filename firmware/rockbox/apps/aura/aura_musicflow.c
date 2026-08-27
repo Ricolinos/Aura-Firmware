@@ -37,6 +37,7 @@
 #include "aura_widgets.h"
 #include "aura_wheel.h"
 #include "aura_scroll_indicator.h"
+#include "aura_master_art_builder.h" /* D-341 */
 #include "aura_marquee.h"
 #include "aura_main.h"
 #include "aura_transitions.h"
@@ -1256,6 +1257,9 @@ static void scroll_step(int dir)
     s_anim_from_x256 = anim_pos_x256();
     s_target_index = new_target;
     s_anim_since = current_tick;
+    /* D-341: el constructor de maestras no decodifica mientras el
+     * carrusel se desliza; el loop principal lo reanuda al asentarse. */
+    aura_master_art_builder_pause(true);
 }
 
 void aura_musicflow_handle_button(aura_nav_t *nav, aura_screen_id_t screen, long button)
