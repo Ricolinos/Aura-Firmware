@@ -40,6 +40,7 @@
 #define AURA_ARTIST_IMAGES_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stddef.h>
 
 /* Ruta completa (`.rockbox/aura/artists/<archivo>.jpg`) de la foto del
@@ -50,6 +51,19 @@
  * `false` si el indice no existe, `artist_tag` no aparece en ninguna
  * linea, o el indice esta vacio. */
 bool aura_artist_images_lookup(const char *artist_tag, char *path_out, size_t sz);
+
+/* D-341: como lookup(), y ademas el mtime del archivo de la foto (0 si
+ * el archivo no estaba en el directorio al cargar el indice) -- clave
+ * de la maestra compartida r-<crc ruta>.<mtime>. Se obtiene con UNA
+ * pasada de directorio al cargar el indice, nunca por fila. */
+bool aura_artist_images_lookup_mtime(const char *artist_tag, char *path_out, size_t sz,
+                                     uint32_t *mtime_out);
+
+/* D-341: enumeracion para el constructor en segundo plano. count() carga
+ * el indice si hace falta; entry(i) devuelve ruta completa y mtime de la
+ * entrada i (false fuera de rango). */
+int aura_artist_images_count(void);
+bool aura_artist_images_entry(int i, char *path_out, size_t sz, uint32_t *mtime_out);
 
 /* Fuerza un re-escaneo la proxima vez que se consulte -- mismos puntos
  * de llamada que aura_media_categories_invalidate() (fin de un sync de

@@ -30,6 +30,7 @@
 
 #include "aura_nav.h"
 #include "aura_media_categories.h"
+#include "aura_master_art.h" /* D-341 */
 
 /* D-316: `screen` decide el filtro de categoria -- AURA_SCREEN_PHOTOS_
  * PHOTO/IMAGE/AI filtran por la categoria correspondiente del indice
@@ -62,5 +63,18 @@ int aura_photos_count(void);
  * rango. */
 int aura_photos_count_filtered(aura_photo_cat_t cat);
 const char *aura_photos_filtered_filename(aura_photo_cat_t cat, int index);
+
+/* D-341 (contrato v16): maestra compartida de fotos, para el constructor
+ * en segundo plano (aura_master_art_builder.c), que recorre /Photos por
+ * su cuenta -- no toca la lista de la pantalla (s_photos) desde otro
+ * hilo. dir(): "/Photos"; is_listable_name(): mismo filtro que la
+ * cuadricula (jpg/bmp/png/gif menos sidecars AppleDouble, D-302);
+ * build_master(): deja p-<crc>.<mtime>.art (80 px) o .none para
+ * `filename` con ese mtime. `flat` es el buffer del llamador
+ * (80^2 fb_data). Siempre true (la foto existe: acaba de listarse). */
+const char *aura_photos_dir(void);
+bool aura_photos_is_listable_name(const char *name);
+bool aura_photos_build_master(const char *filename, uint32_t mtime,
+                              aura_master_art_key_t *key, fb_data *flat);
 
 #endif /* AURA_PHOTOS_H */

@@ -41,6 +41,7 @@
 
 #include "lcd.h" /* fb_data */
 #include "aura_cache_keys.h" /* aura_cache_album_key_t (D-338/D-339) */
+#include "aura_master_art.h" /* D-341: maestra compartida, aura_master_art_key_t */
 
 typedef struct {
     int size;
@@ -55,12 +56,14 @@ typedef struct {
  * ver aura_music.h) y le busca caratula con la misma logica que usa
  * Ahora Suena (find_albumart).
  *
- * Primero intenta el cache `.pfraw` en disco (clave: album_seek + size
- * + radius -- cambiar cualquiera de los dos invalida el cache de ese
- * album sin tocar los demas). Si no existe, decodifica el JPEG/BMP
- * real, transpone, hornea las esquinas y ESCRIBE el cache para la
- * proxima vez -- "cero decodificacion JPEG durante la animacion"
- * (doc) solo aplica una vez cada caratula ya paso por aqui.
+ * Orden (D-341, contrato v16): cache `.pfraw` privado (L2, clave
+ * estable + size + radius + tema) -> MAESTRA compartida
+ * (/.aura/art/albums, 130 px planos sin tema: se deriva -- reduccion
+ * por caja si el tile es menor, transposicion, esquinas, reflejo -- y
+ * se escribe el .pfraw) -> JPEG/BMP real solo si no hay maestra (y
+ * entonces se escribe la maestra primero). Los lados mayores que la
+ * maestra (Ahora suena 135, CoverDrift 320) siguen decodificando al
+ * lado pedido cuando falta su .pfraw.
  *
  * Devuelve false (out->valid queda en false) si no hay caratula o no
  * hay ninguna pista en ese album; en el primer caso deja el marcador
@@ -142,6 +145,22 @@ bool aura_albumart_is_cached_key(const aura_albumart_key_t *key, int size, int r
  * aura_sync.c hacia al terminar cada reconstruccion. */
 #define AURA_ALBUMART_GC_BUDGET 64
 void aura_albumart_gc_orphans(const aura_albumart_key_t *keys, int count);
+
+/* D-341 (contrato v16): deja RESUELTA la maestra compartida del album
+ * (/.aura/art/albums/a-<crc>.<mtime>.art, o .none si no hay arte) sin
+ * tocar el .pfraw privado ni la pantalla -- es el paso que corre el
+ * constructor en segundo plano (aura_master_art_builder.c) album por
+ * album. `flat` es el buffer de trabajo del LLAMADOR (130^2 fb_data;
+ * el constructor trae el suyo, nunca el del hilo de UI). Devuelve la
+ * clave en `key`; false solo si el album no tiene pistas en la base
+ * (sin clave -> no entra en la tabla del GC). */
+bool aura_albumart_build_master(int32_t album_seek, aura_albumart_key_t *key, fb_data *flat);
+
+/* Idem para una foto de artista, a partir de la ruta del archivo y su
+ * mtime (aura_artist_images.c). false si el archivo no existe (indice
+ * desactualizado: transitorio, sin .none). */
+bool aura_artist_art_build_master(const char *image_path, uint32_t mtime,
+                                  aura_master_art_key_t *key, fb_data *flat);
 
 /* Portada de PLAYLIST (encargo del dueno, 2026-08-14: "quiero que las
  * playlists tengan una imagen... la lista deberia verse como la lista

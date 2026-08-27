@@ -27,6 +27,7 @@
 
 #include "kernel.h" /* current_tick, riel de scroll (D-291) */
 #include "lcd.h"
+#include "debug.h"
 #include "font.h"
 #include "button.h"
 #include "file.h"
@@ -46,6 +47,7 @@
 #include "aura_status_bar_v2.h"
 #include "aura_scroll_indicator.h"
 #include "aura_art.h" /* cache .pfraw generico -- D-291, compartido con aura_albumart.c */
+#include "aura_master_art.h" /* D-341: maestra compartida /.aura/art/photos (80 px) */
 #include "aura_transitions.h" /* Fade-Slide region entre fotos -- D-291 */
 #include "aura_media_categories.h" /* indice opcional Fotos/Imagenes/IA -- D-316 */
 #include "aura_screens.h" /* aura_wheel_advance() -- D-323, dinamica real de la rueda */
@@ -511,102 +513,112 @@ static void ensure_photo_cache_dir(void)
         mkdir(PHOTO_CACHE_DIR);
 }
 
-/* Decodifica la foto `idx` a una miniatura PHOTO_ART_SIZE x
- * PHOTO_ART_SIZE, la compone centrada sobre un tile de fondo (sin
- * distorsionar aspecto -- el decoder no tiene un modo "llenar
- * recortando", asi que se deja letterbox/pillarbox como el visor de
- * pantalla completa, mismo criterio), la transpone+enmascara y la deja
- * en `out_transposed` (reservado por el llamador). Si la fuente supera
- * el tope de tamano (mismo PHOTO_MAX_SIDE/PIXELS que el visor) o es un
- * formato no soportado, compone solo el tile de fondo -- placeholder
- * honesto, nunca intenta decodificar algo que va a tardar segundos
- * solo para una miniatura de 48px.
+/* -- Maestra compartida (D-341, contrato v16) ----------------------------
  *
- * Usa s_view_scratch como espacio de trabajo del decoder -- el mismo
- * buffer que load_current_photo() usa para el visor de pantalla
- * completa. Lista y visor nunca estan activos a la vez (son pantallas
- * distintas en la navegacion), asi que compartirlo evita duplicar
- * 240KB estaticos; el precio es que hay que invalidar s_loaded_index
- * aca (si no, volver al visor sobre una foto ya "cargada" mostraria la
- * miniatura mas reciente en vez de redecodificar). */
-static void photo_thumb_decode_and_cache(int idx, fb_data *out_transposed)
+ * La fuente de cada miniatura es ahora la maestra p-<crc ruta>.<mtime>
+ * de 80 px planos en /.aura/art/photos (fill-and-center-crop, sin
+ * tema), compartida con Metro-Aura y moonlit.aura; el .pfraw de 48 px
+ * de photocache/ es L2 y se DERIVA de ella (reduccion por caja 80 -> 48,
+ * transposicion, esquinas). Solo se decodifica JPEG/BMP si no hay
+ * maestra -- normalmente la deja el constructor en segundo plano antes
+ * de que el usuario llegue a la cuadricula. Los mismos topes de D-291
+ * (PHOTO_MAX_SIDE/PIXELS, formatos no soportados) dejan .none: el
+ * placeholder honesto de siempre, sin volver a probar la fuente. */
+
+const char *aura_photos_dir(void)
 {
-    static fb_data flat[PHOTO_ART_SIZE * PHOTO_ART_SIZE];
+    return PHOTOS_DIR;
+}
+
+bool aura_photos_is_listable_name(const char *name)
+{
+    return is_listable_image(name);
+}
+
+bool aura_photos_build_master(const char *filename, uint32_t mtime,
+                              aura_master_art_key_t *key, fb_data *flat)
+{
     char src_path[MAX_PATH];
-    char cache_path[MAX_PATH];
-    unsigned bg = a26_color(A26_SHELL_BG);
-    struct bitmap bm;
-    bool ok = false;
-    int i;
+    bool decodable;
+    int w = 0, h = 0;
 
-    snprintf(src_path, sizeof(src_path), "%s/%s", PHOTOS_DIR, s_photos[idx].filename);
+    snprintf(src_path, sizeof(src_path), "%s/%s", PHOTOS_DIR, filename);
+    aura_master_art_key_from_path(src_path, mtime, key);
+    if (aura_master_art_resolved(AURA_MASTER_ART_PHOTO, key))
+        return true;
 
-    if (s_photos[idx].supported)
+    decodable = is_supported_image(filename);
+    if (decodable)
     {
-        bool skip = false;
-        int w = 0, h = 0;
-
         if (has_ext(src_path, ".bmp"))
         {
             if (probe_bmp_dimensions(src_path, &w, &h) && photo_dims_too_large(w, h))
-                skip = true;
+                decodable = false;
         }
         else
         {
             jpeg_probe_t r = probe_jpeg_dimensions(src_path, &w, &h);
             if (r == JPEG_PROBE_UNSUPPORTED)
-                skip = true;
+                decodable = false;
             else if (r == JPEG_PROBE_BASELINE && photo_dims_too_large(w, h))
-                skip = true;
-        }
-
-        if (!skip)
-        {
-            int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
-            int ret;
-
-            bm.width = PHOTO_ART_SIZE;
-            bm.height = PHOTO_ART_SIZE;
-            bm.data = (char *)s_view_scratch;
-#if (LCD_DEPTH > 1)
-            bm.maskdata = NULL;
-#endif
-            if (has_ext(src_path, ".bmp"))
-                ret = read_bmp_file(src_path, &bm, sizeof(s_view_scratch), format, NULL);
-            else
-                ret = read_jpeg_file(src_path, &bm, sizeof(s_view_scratch), format, NULL);
-            ok = ret > 0;
+                decodable = false;
         }
     }
 
-    /* Ver comentario grande arriba de la funcion -- s_view_scratch
-     * queda con la miniatura, no con lo que el visor pudiera tener
-     * cargado. */
-    s_loaded_index = -1;
+    if (decodable && aura_master_art_decode_fill(src_path, 0, 0, AURA_MASTER_ART_PHOTO_SIZE, flat))
+        aura_master_art_write(AURA_MASTER_ART_PHOTO, key, flat);
+    else
+        aura_master_art_write_none(AURA_MASTER_ART_PHOTO, key); /* placeholder, D-291 */
+    return true;
+}
 
-    for (i = 0; i < PHOTO_ART_SIZE * PHOTO_ART_SIZE; i++)
-        flat[i] = bg;
+/* Miniatura de la foto `idx` desde la maestra (construyendola aqui
+ * mismo si el constructor no llego): reduccion por caja 80 -> 48,
+ * composicion sobre el fondo del tema si no hay maestra (.none),
+ * transposicion + esquinas, y se deja en `out_transposed` (reservado por
+ * el llamador) ademas de escribir el .pfraw L2. Buffers propios: ya no
+ * toca s_view_scratch, asi que el visor conserva su foto cargada. */
+static void photo_thumb_from_master(int idx, fb_data *out_transposed)
+{
+    static fb_data master[AURA_MASTER_ART_PHOTO_SIZE * AURA_MASTER_ART_PHOTO_SIZE];
+    static fb_data flat[PHOTO_ART_SIZE * PHOTO_ART_SIZE];
+    char cache_path[MAX_PATH];
+    char src_path[MAX_PATH];
+    unsigned bg = a26_color(A26_SHELL_BG);
+    aura_master_art_key_t key;
+    bool have;
+    int i;
 
-    if (ok)
+    snprintf(src_path, sizeof(src_path), "%s/%s", PHOTOS_DIR, s_photos[idx].filename);
+    aura_master_art_key_from_path(src_path, (uint32_t)s_photos[idx].mtime, &key);
+
+    have = aura_master_art_read(AURA_MASTER_ART_PHOTO, &key, master);
+    if (!have && !aura_master_art_none_present(AURA_MASTER_ART_PHOTO, &key))
     {
-        const fb_data *decoded = (const fb_data *)s_view_scratch;
-        int ox = (PHOTO_ART_SIZE - bm.width) / 2;
-        int oy = (PHOTO_ART_SIZE - bm.height) / 2;
-        int row, col;
+        aura_photos_build_master(s_photos[idx].filename, (uint32_t)s_photos[idx].mtime,
+                                 &key, master);
+        have = aura_master_art_read(AURA_MASTER_ART_PHOTO, &key, master);
+    }
 
-        for (row = 0; row < bm.height; row++)
-            for (col = 0; col < bm.width; col++)
-                flat[(oy + row) * PHOTO_ART_SIZE + (ox + col)] =
-                    decoded[row * bm.width + col];
+    if (have)
+    {
+        DEBUGF("aura_master_art: derive photo %08lx at %d\n",
+               (unsigned long)key.path_crc, PHOTO_ART_SIZE);
+        aura_master_art_downscale_box((const uint16_t *)master, AURA_MASTER_ART_PHOTO_SIZE,
+                                      (uint16_t *)flat, PHOTO_ART_SIZE);
+    }
+    else
+    {
+        for (i = 0; i < PHOTO_ART_SIZE * PHOTO_ART_SIZE; i++)
+            flat[i] = bg;
     }
 
     aura_art_transpose(flat, out_transposed, PHOTO_ART_SIZE);
     aura_art_mask_corners_transposed(out_transposed, PHOTO_ART_SIZE,
                                       A26_LAYOUT_CORNER_RADIUS_CARD, bg);
 
-    /* Se cachea tambien el placeholder (ok==false) -- evita re-probar
-     * la misma foto demasiado-grande/no-soportada en cada redibujado
-     * mientras siga visible en la ventana de la lista. */
+    /* Se cachea tambien el placeholder (.none) -- evita releer la
+     * maestra/el marcador en cada redibujado mientras siga visible. */
     ensure_photo_cache_dir();
     photo_pfraw_path(s_photos[idx].filename, cache_path, sizeof(cache_path));
     aura_art_write_pfraw(cache_path, PHOTO_ART_SIZE, A26_LAYOUT_CORNER_RADIUS_CARD,
@@ -626,7 +638,7 @@ static void draw_photos_thumb(int x, int y, int idx)
 
     if (!aura_art_read_pfraw(cache_path, PHOTO_ART_SIZE, A26_LAYOUT_CORNER_RADIUS_CARD,
                               (int32_t)s_photos[idx].mtime, thumb))
-        photo_thumb_decode_and_cache(idx, thumb);
+        photo_thumb_from_master(idx, thumb);
 
     for (col = 0; col < PHOTO_ART_SIZE; col++)
     {

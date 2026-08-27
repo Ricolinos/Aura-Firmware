@@ -24,6 +24,8 @@
 #include <stdio.h>
 
 #include "file.h"
+#include "dir.h"
+#include "kernel.h"
 #include "misc.h"
 #include "rbpaths.h"
 #include "string-extra.h"
@@ -51,29 +53,69 @@
 typedef struct {
     char artist[ARTIST_NAME_LEN];
     char file[ARTIST_FILE_LEN];
+    uint32_t mtime; /* D-341: del archivo en ARTISTS_DIR, 0 si no estaba */
 } artist_entry_t;
 
 static artist_entry_t s_entries[MAX_ENTRIES];
 static int s_count = 0;
 static bool s_loaded = false;
+static bool s_loading = false; /* D-341: ver ensure_loaded() */
+
+/* D-341: una sola pasada de ARTISTS_DIR para anotar el mtime de cada
+ * archivo del indice (clave de la maestra compartida). O(n) una vez al
+ * cargar, en vez de un escaneo de directorio por fila visible. */
+static void annotate_mtimes(void)
+{
+    DIR *d = opendir(ARTISTS_DIR);
+    struct DIRENT *entry;
+
+    if (!d)
+        return;
+    while ((entry = readdir(d)) != NULL)
+    {
+        struct dirinfo info;
+        int i;
+
+        for (i = 0; i < s_count; i++)
+        {
+            if (!strcmp(s_entries[i].file, entry->d_name))
+            {
+                info = dir_get_info(d, entry);
+                s_entries[i].mtime = (uint32_t)info.mtime;
+            }
+        }
+    }
+    closedir(d);
+}
 
 /* Mismo patron que ensure_video_categories()/ensure_photo_categories()
  * (aura_media_categories.c): open()+read_line(), `s_loaded=true` ANTES
  * de intentar abrir para que un archivo ausente no reintente en cada
  * consulta -- se comporta identico a un indice vacio. */
+/* D-341: el constructor en segundo plano tambien consulta el indice
+ * desde su hilo. El planificador de Rockbox es cooperativo, pero
+ * open()/read_line() ceden en el I/O de disco: `s_loading` evita que
+ * un segundo llamador vea `s_loaded` y una lista a medias -- espera a
+ * que el primero termine. */
 static void ensure_loaded(void)
 {
     int fd;
     char line[ARTIST_NAME_LEN + ARTIST_FILE_LEN + 4];
 
+    while (s_loading)
+        sleep(1);
     if (s_loaded)
         return;
-    s_loaded = true;
+    s_loading = true;
     s_count = 0;
 
     fd = open(ARTIST_IMAGES_PATH, O_RDONLY);
     if (fd < 0)
+    {
+        s_loaded = true;
+        s_loading = false;
         return;
+    }
 
     while (s_count < MAX_ENTRIES && read_line(fd, line, sizeof(line)) > 0)
     {
@@ -84,12 +126,17 @@ static void ensure_loaded(void)
 
         strlcpy(s_entries[s_count].file, file, ARTIST_FILE_LEN);
         strlcpy(s_entries[s_count].artist, artist, ARTIST_NAME_LEN);
+        s_entries[s_count].mtime = 0;
         s_count++;
     }
     close(fd);
+    annotate_mtimes();
+    s_loaded = true;
+    s_loading = false;
 }
 
-bool aura_artist_images_lookup(const char *artist_tag, char *path_out, size_t sz)
+bool aura_artist_images_lookup_mtime(const char *artist_tag, char *path_out, size_t sz,
+                                     uint32_t *mtime_out)
 {
     int i;
 
@@ -105,10 +152,34 @@ bool aura_artist_images_lookup(const char *artist_tag, char *path_out, size_t sz
         if (!strcmp(s_entries[i].artist, artist_tag))
         {
             snprintf(path_out, sz, "%s/%s", ARTISTS_DIR, s_entries[i].file);
+            if (mtime_out)
+                *mtime_out = s_entries[i].mtime;
             return true;
         }
     }
     return false;
+}
+
+bool aura_artist_images_lookup(const char *artist_tag, char *path_out, size_t sz)
+{
+    return aura_artist_images_lookup_mtime(artist_tag, path_out, sz, NULL);
+}
+
+int aura_artist_images_count(void)
+{
+    ensure_loaded();
+    return s_count;
+}
+
+bool aura_artist_images_entry(int i, char *path_out, size_t sz, uint32_t *mtime_out)
+{
+    ensure_loaded();
+    if (i < 0 || i >= s_count)
+        return false;
+    snprintf(path_out, sz, "%s/%s", ARTISTS_DIR, s_entries[i].file);
+    if (mtime_out)
+        *mtime_out = s_entries[i].mtime;
+    return true;
 }
 
 void aura_artist_images_invalidate(void)
