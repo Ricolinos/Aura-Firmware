@@ -126,6 +126,16 @@ bool aura_sync_write_music_pending_marker(void);
  * contrato (AURA_SYNC_DIR en aura_sync.c); nadie mas deletrea esta. */
 #define AURA_SHARED_DB_DIR "/.aura/tagcache"
 
+/* D-340/D-341 (contrato v16): cache MAESTRA de imagenes compartida por
+ * las tres familias -- albumes, fotos de artista y fotos -- en la raiz
+ * del disco, propiedad del firmware activo, nunca borrada por Studio.
+ * Formato y claves en aura_master_art_format.h; I/O en aura_master_art.c.
+ * Mismo dueno de rutas que AURA_SHARED_DB_DIR: nadie mas deletrea esta. */
+#define AURA_SHARED_ART_DIR         "/.aura/art"
+#define AURA_SHARED_ART_ALBUMS_DIR  AURA_SHARED_ART_DIR "/albums"
+#define AURA_SHARED_ART_ARTISTS_DIR AURA_SHARED_ART_DIR "/artists"
+#define AURA_SHARED_ART_PHOTOS_DIR  AURA_SHARED_ART_DIR "/photos"
+
 /* D-337: apunta global_settings.tagcache_db_path a AURA_SHARED_DB_DIR y
  * migra por rename() (sin copiar) una base previa a v15 que siga en
  * ROCKBOX_DIR (database_*.tcd + aura/db_stamp.txt) si el compartido no

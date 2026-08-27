@@ -357,6 +357,8 @@ aura/aura_firmware_families.c
 aura/aura_firmware_switch.c
 aura/aura_fsutil.c
 aura/aura_cache_keys.c
+aura/aura_master_art_format.c
+aura/aura_master_art.c
 aura/aura_device_name.c
 aura/aura_device.c
 aura/aura_transitions.c
