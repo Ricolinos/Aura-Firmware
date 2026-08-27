@@ -22,6 +22,7 @@
  ****************************************************************************/
 #include "aura_firmware_switch.h"
 #include "aura_master_art_builder.h"
+#include "aura_switch_wait.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -30,6 +31,7 @@
 #include "dir.h"
 #include "rbpaths.h"
 #include "system.h"
+#include "kernel.h"
 #include "settings.h"
 #include "ata_idle_notify.h"
 #include "tagcache.h"
@@ -41,6 +43,10 @@
 #define FW_OWN_DORMANT   AURA_FIRMWARE_OWN_DORMANT
 #define FW_ROOT_BINARY   "/rockbox.ipod"
 #define FW_TREE_BINARY   ROCKBOX_DIR "/rockbox.ipod"
+
+/* Aura (D-342): tope de espera por un commit de tagcache en vuelo antes de
+ * reiniciar -- ver la llamada a aura_switch_wait_for_commit() mas abajo. */
+#define AURA_SWITCH_COMMIT_WAIT_TICKS (HZ * 8)
 
 bool aura_firmware_sibling_installed(int i)
 {
@@ -89,6 +95,22 @@ bool aura_firmware_switch_to(int i)
     aura_master_art_builder_suspend();
     aura_settings_save();
     settings_save();
+
+    /* Aura (D-342): no cortar un commit de tagcache a mitad de escritura --
+     * ver DECISIONS.md. Un reinicio con commit_step != 0 puede dejar el
+     * flag "dirty" del header maestro COMPARTIDO trabado, forzando a cada
+     * familia a reconstruir desde cero en su siguiente arranque aunque los
+     * datos estuvieran integros. Espera acotada; si el tope se agota de
+     * todas formas seguimos adelante -- el caso es raro y no queremos
+     * bloquear el switch indefinidamente. Sin pantalla de por medio hoy;
+     * un sleep silencioso es aceptable. */
+    {
+        long deadline = current_tick + AURA_SWITCH_COMMIT_WAIT_TICKS;
+        while (aura_switch_wait_for_commit(tagcache_get_commit_step(),
+                                            current_tick, deadline))
+            sleep(HZ / 10);
+    }
+
     tagcache_shutdown();
     call_storage_idle_notifys(true);
 
