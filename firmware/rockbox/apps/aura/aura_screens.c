@@ -267,7 +267,7 @@ static const nav_entry_t settings_entries[] = {
     /* Bloqueo de pantalla (Task B, encargo del dueno): reubicado de
      * Extras -- es un ajuste GLOBAL (se arma aca, se activa solo con el
      * aparato apagado/prendido), no una utilidad de Extras. */
-    { AURA_STR_SETTINGS_SCREENLOCK, "lock",              AURA_SCREEN_SETTINGS_SCREENLOCK },
+    { AURA_STR_LOCK_ROW,            "lock",              AURA_SCREEN_SETTINGS_SCREENLOCK }, /* D-351 */
     { AURA_STR_SETTINGS_DATETIME,   "calendar",          AURA_SCREEN_SETTINGS_DATETIME },
     { AURA_STR_SETTINGS_SORT_BY,    "sort",              AURA_SCREEN_SETTINGS_SORT_BY },
     { AURA_STR_SETTINGS_LANGUAGE,   "globe",             AURA_SCREEN_SETTINGS_LANGUAGE },
@@ -333,6 +333,36 @@ static const nav_entry_t datetime_entries[] = {
     { AURA_STR_SETTINGS_CLOCK_TITLE, NULL,    AURA_SCREEN_SETTINGS_CLOCK_TITLE },
 };
 
+/* D-351 (SS D.6 del plan maestro): submenu de Bloqueo. La primera fila
+ * cambia de sentido segun el estado -- "Activar" cuando no hay codigo,
+ * "Quitar bloqueo" cuando si -- porque son la misma accion vista desde
+ * los dos lados y ponerlas como dos filas dejaria siempre una inerte.
+ * Las otras dos solo tienen sentido con el bloqueo ya armado, y se
+ * dibujan atenuadas si no lo esta (draw_lock_list, mas abajo). */
+static const nav_entry_t lock_entries[] = {
+    { AURA_STR_LOCK_ACTIVATE,     "lock",  AURA_SCREEN_SETTINGS_LOCK_CODE },
+    { AURA_STR_LOCK_CHANGE_CODE,  NULL,    AURA_SCREEN_SETTINGS_LOCK_CODE },
+    { AURA_STR_LOCK_REQUIRE,      NULL,    AURA_SCREEN_SETTINGS_LOCK_REQUIRE },
+    { AURA_STR_LOCK_REMOVE,       NULL,    AURA_SCREEN_SETTINGS_LOCK_CODE },
+};
+#define LOCK_ROW_ACTIVATE 0
+#define LOCK_ROW_CHANGE   1
+#define LOCK_ROW_REQUIRE  2
+#define LOCK_ROW_REMOVE   3
+
+/* D-351: las cuatro filas existen siempre y NO se mueven -- sin bloqueo
+ * armado solo "Activar" es elegible; con el armado, las otras tres. Se
+ * eligio esto sobre una lista que cambia de largo porque una fila que
+ * aparece y desaparece hace que la seleccion salte bajo el dedo del
+ * usuario, y porque el arbol ya usa filas atenuadas para "presente pero
+ * no elegible" (Recopilaciones, Audiolibros). */
+static bool lock_row_dimmed(int row)
+{
+    if (row == LOCK_ROW_ACTIVATE)
+        return aura_settings.screen_lock_enabled;
+    return !aura_settings.screen_lock_enabled;
+}
+
 static const nav_entry_t extras_entries[] = {
     { AURA_STR_EXTRAS_CLOCKS,     "clock",      AURA_SCREEN_EXTRAS_CLOCKS },
     { AURA_STR_EXTRAS_CALENDAR,   "calendar",   AURA_SCREEN_EXTRAS_CALENDAR },
@@ -388,6 +418,9 @@ static int get_nav_table(aura_screen_id_t screen, const nav_entry_t **out)
     case AURA_SCREEN_PHOTOS:
         *out = photos_entries;
         return clamp_menu_count((int)(sizeof(photos_entries) / sizeof(photos_entries[0])));
+    case AURA_SCREEN_SETTINGS_SCREENLOCK:
+        *out = lock_entries;
+        return clamp_menu_count((int)(sizeof(lock_entries) / sizeof(lock_entries[0])));
     case AURA_SCREEN_SETTINGS_DATETIME:
         *out = datetime_entries;
         return clamp_menu_count((int)(sizeof(datetime_entries) / sizeof(datetime_entries[0])));
@@ -489,7 +522,9 @@ static aura_str_id_t screen_title_id(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_BACKLIGHT:    return AURA_STR_SETTINGS_BACKLIGHT;
     case AURA_SCREEN_SETTINGS_SLEEPTIMER:   return AURA_STR_SETTINGS_SLEEPTIMER;
     case AURA_SCREEN_SETTINGS_POWEROFF:     return AURA_STR_SETTINGS_POWEROFF;
-    case AURA_SCREEN_SETTINGS_SCREENLOCK:   return AURA_STR_SETTINGS_SCREENLOCK;
+    case AURA_SCREEN_SETTINGS_SCREENLOCK:   return AURA_STR_LOCK_ROW;
+    case AURA_SCREEN_SETTINGS_LOCK_CODE:    return AURA_STR_LOCK_ROW;
+    case AURA_SCREEN_SETTINGS_LOCK_REQUIRE: return AURA_STR_LOCK_REQUIRE;
     case AURA_SCREEN_SETTINGS_VOLUME_LIMIT: return AURA_STR_SETTINGS_VOLUME_LIMIT;
     case AURA_SCREEN_SETTINGS_CLICKER:      return AURA_STR_SETTINGS_CLICKER;
     case AURA_SCREEN_SETTINGS_MAINMENU:     return AURA_STR_SETTINGS_MAINMENU;
@@ -583,6 +618,13 @@ static const aura_str_id_t poweroff_choice_labels[] = {
 };
 static const int poweroff_choice_minutes[] = { 0, 10, 20, 60 };
 
+/* D-351: mismo orden que aura_lock_require_t (aura_settings.h) -- el
+ * indice de la fila ES el valor del ajuste, sin tabla de traduccion. */
+static const aura_str_id_t lock_require_choice_labels[] = {
+    AURA_STR_LOCK_REQUIRE_HOLD, AURA_STR_LOCK_REQUIRE_1MIN,
+    AURA_STR_LOCK_REQUIRE_5MIN, AURA_STR_LOCK_REQUIRE_BOOT,
+};
+
 /* Acento configurable (PLAN.md T0.3, fundamentos/01-color.md): la doc
  * confirma "configurable por el usuario" pero no dice COMO -- lista
  * provisional de 6 presets con nombre (// TODO(pendiente-doc): un
@@ -611,7 +653,8 @@ static const unsigned accent_choice_rgb24[] = AURA_DS_COLOR_ACCENT_PRESETS_HEX_R
  * para el texto del valor inline y del panel derecho. */
 static int is_choice_screen(aura_screen_id_t screen)
 {
-    return screen == AURA_SCREEN_SETTINGS_ANIMATIONS
+    return screen == AURA_SCREEN_SETTINGS_LOCK_REQUIRE /* D-351 */
+        || screen == AURA_SCREEN_SETTINGS_ANIMATIONS
         || screen == AURA_SCREEN_SETTINGS_GRAPHICS
         || screen == AURA_SCREEN_SETTINGS_EQ
         || screen == AURA_SCREEN_SETTINGS_LANGUAGE
@@ -645,6 +688,9 @@ static int get_choice_table(aura_screen_id_t screen, const aura_str_id_t **out)
     case AURA_SCREEN_SETTINGS_POWEROFF:
         *out = poweroff_choice_labels;
         return sizeof(poweroff_choice_labels) / sizeof(poweroff_choice_labels[0]);
+    case AURA_SCREEN_SETTINGS_LOCK_REQUIRE:
+        *out = lock_require_choice_labels;
+        return sizeof(lock_require_choice_labels) / sizeof(lock_require_choice_labels[0]);
     default:
         *out = NULL;
         return 0;
@@ -660,6 +706,7 @@ static int get_choice_current(aura_screen_id_t screen)
     case AURA_SCREEN_SETTINGS_EQ:       return (int)aura_settings.eq_preset;
     case AURA_SCREEN_SETTINGS_LANGUAGE: return (int)aura_settings.language;
     case AURA_SCREEN_SETTINGS_SORT_BY:  return aura_settings.sort_by_lastname;
+    case AURA_SCREEN_SETTINGS_LOCK_REQUIRE: return (int)aura_settings.screen_lock_require; /* D-351 */
     case AURA_SCREEN_SETTINGS_POWEROFF:
     {
         size_t i, n = sizeof(poweroff_choice_minutes) / sizeof(poweroff_choice_minutes[0]);
@@ -687,6 +734,16 @@ static int get_choice_current(aura_screen_id_t screen)
 
 static void apply_choice(aura_screen_id_t screen, int index)
 {
+    /* D-351: el indice de la fila ES el valor del enum (mismo orden en
+     * lock_require_choice_labels y aura_lock_require_t). */
+    if (screen == AURA_SCREEN_SETTINGS_LOCK_REQUIRE)
+    {
+        if (index < 0 || index >= AURA_LOCK_REQUIRE_COUNT)
+            index = AURA_LOCK_REQUIRE_HOLD;
+        aura_settings.screen_lock_require = (aura_lock_require_t)index;
+        aura_settings_save();
+        return;
+    }
 
     /* Apagado del iPod (Task A): igual que REPEAT arriba, un ajuste
      * REAL de Rockbox -- set_poweroff_timeout() (firmware/powermgmt.c)
@@ -700,7 +757,7 @@ static void apply_choice(aura_screen_id_t screen, int index)
             index = 0;
         global_settings.poweroff = poweroff_choice_minutes[index];
         set_poweroff_timeout(global_settings.poweroff);
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
         return;
     }
 
@@ -772,12 +829,12 @@ static void toggle_settings_row(aura_screen_id_t target)
     if (target == AURA_SCREEN_SETTINGS_SHUFFLE)
     {
         global_settings.playlist_shuffle = !global_settings.playlist_shuffle;
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
     }
     else if (target == AURA_SCREEN_SETTINGS_CLICKER)
     {
         global_settings.keyclick = global_settings.keyclick ? 0 : 2;
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
     }
     else if (target == AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW)
     {
@@ -792,7 +849,7 @@ static void toggle_settings_row(aura_screen_id_t target)
     else if (target == AURA_SCREEN_SETTINGS_CLOCK24)
     {
         global_settings.timeformat = global_settings.timeformat ? 0 : 1;
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
     }
     else if (target == AURA_SCREEN_SETTINGS_CLOCK_TITLE)
     {
@@ -804,7 +861,7 @@ static void toggle_settings_row(aura_screen_id_t target)
         bool on = global_settings.replaygain_settings.type != REPLAYGAIN_OFF;
         global_settings.replaygain_settings.type = on ? REPLAYGAIN_OFF
                                                        : REPLAYGAIN_TRACK;
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
     }
 }
 
@@ -2634,6 +2691,11 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
         items[i].dimmed = (entries[i].target == AURA_SCREEN_MUSIC_COMPILATIONS
                            || entries[i].target == AURA_SCREEN_MUSIC_AUDIOBOOKS
                            || entries[i].target == AURA_SCREEN_EXTRAS_CONTACTS);
+        /* D-351: el submenu de Bloqueo atenua por ESTADO, no por
+         * destino: cual de las cuatro filas es elegible depende de si
+         * ya hay un codigo configurado. */
+        if (screen == AURA_SCREEN_SETTINGS_SCREENLOCK)
+            items[i].dimmed = lock_row_dimmed(i);
     }
 
     {
@@ -3715,7 +3777,7 @@ static void handle_backlight(aura_nav_t *nav, long button)
         global_settings.backlight_timeout_plugged = backlight_values[sel];
         backlight_set_timeout(global_settings.backlight_timeout);
         backlight_set_timeout_plugged(global_settings.backlight_timeout_plugged);
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
         aura_nav_pop(nav);
         break;
     case BUTTON_MENU:
@@ -3772,7 +3834,7 @@ static void handle_sleeptimer(aura_nav_t *nav, long button)
     case BUTTON_SELECT:
         global_settings.sleeptimer_duration = sleeptimer_values[sel];
         set_sleeptimer_duration(sleeptimer_values[sel]);
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
         aura_nav_pop(nav);
         break;
     case BUTTON_MENU:
@@ -3819,7 +3881,7 @@ static void handle_volume_limit(aura_nav_t *nav, long button)
         break;
     case BUTTON_SELECT:
     case BUTTON_MENU:
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
         aura_nav_pop(nav);
         break;
     default:
@@ -3994,7 +4056,7 @@ static void handle_reset_confirm(aura_nav_t *nav, long button)
              * reinicio -- apps/main.c los reaplica en cada arranque de
              * cualquier forma, asi que se autocorrigen solos. */
             settings_reset();
-            settings_save();
+            aura_settings_core_touched(); /* D-351 */
             aura_settings_reset_to_defaults();
             aura_settings_apply_core_defaults();
         }
@@ -5709,7 +5771,8 @@ void aura_screens_draw(aura_nav_t *nav)
         || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
         || screen == AURA_SCREEN_SETTINGS_DATETIME
         || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION
-        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM)
+        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM
+        || screen == AURA_SCREEN_SETTINGS_SCREENLOCK) /* D-351: ahora submenu */
         draw_nav_list(nav, screen);
     else if (is_choice_screen(screen))
         draw_choice_list(nav, screen);
@@ -5753,7 +5816,7 @@ void aura_screens_draw(aura_nav_t *nav)
         aura_calendar_draw();
     else if (screen == AURA_SCREEN_EXTRAS_CALENDAR_DAY)
         aura_calendar_day_draw();
-    else if (screen == AURA_SCREEN_SETTINGS_SCREENLOCK)
+    else if (screen == AURA_SCREEN_SETTINGS_LOCK_CODE)
         aura_screenlock_draw();
     else if (screen == AURA_SCREEN_SETTINGS_DATE_EDIT)
         draw_date_edit();
@@ -5867,6 +5930,22 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
             || entries[sel].target == AURA_SCREEN_MUSIC_AUDIOBOOKS
             || entries[sel].target == AURA_SCREEN_EXTRAS_CONTACTS)
             break;
+        /* D-351: submenu de Bloqueo. La fila atenuada no navega (mismo
+         * criterio que las inertes de arriba), y la que si navega le
+         * dice a aura_screenlock.c QUE va a hacer -- antes lo inferia
+         * del estado y por eso "Cambiar codigo" no tenia forma de
+         * existir. */
+        if (screen == AURA_SCREEN_SETTINGS_SCREENLOCK)
+        {
+            if (lock_row_dimmed(sel))
+                break;
+            if (sel == LOCK_ROW_ACTIVATE)
+                aura_screenlock_begin(AURA_SCREENLOCK_MODE_SET);
+            else if (sel == LOCK_ROW_CHANGE)
+                aura_screenlock_begin(AURA_SCREENLOCK_MODE_CHANGE);
+            else if (sel == LOCK_ROW_REMOVE)
+                aura_screenlock_begin(AURA_SCREENLOCK_MODE_REMOVE);
+        }
         if (settings_row_toggle_value(entries[sel].target) >= 0)
         {
             toggle_settings_row(entries[sel].target);
@@ -5883,7 +5962,7 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
         if (entries[sel].target == AURA_SCREEN_SETTINGS_REPEAT)
         {
             global_settings.repeat_mode = (global_settings.repeat_mode + 1) % 3;
-            settings_save();
+            aura_settings_core_touched(); /* D-351 */
             break;
         }
         /* Modo (D-292, ex-"Tema"): fila InlineValue -- SELECT alterna
@@ -5972,7 +6051,7 @@ static void handle_brightness(aura_nav_t *nav, long button)
         break;
     case BUTTON_SELECT:
     case BUTTON_MENU:
-        settings_save();
+        aura_settings_core_touched(); /* D-351 */
         aura_nav_pop(nav);
         break;
     default:
@@ -6086,6 +6165,14 @@ static void handle_playlists(aura_nav_t *nav, long button)
 
 void aura_screens_handle_button(aura_nav_t *nav, long button)
 {
+    /* D-351: MENU es "salir de esta pantalla" en todo el arbol, y es el
+     * momento en que se fuerza al disco cualquier ajuste de Rockbox que
+     * se haya tocado (ver aura_settings.h). Solo escribe si de verdad
+     * cambio algo -- el flag lo pone aura_settings_core_touched() -- asi
+     * que navegar con MENU sin tocar nada no gira el disco. */
+    if (button == BUTTON_MENU)
+        aura_settings_core_flush();
+
     aura_screen_id_t screen = aura_nav_current(nav);
     int depth_before = aura_nav_depth(nav);
 
@@ -6117,7 +6204,8 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         || screen == AURA_SCREEN_VIDEOS || screen == AURA_SCREEN_PHOTOS
         || screen == AURA_SCREEN_SETTINGS_DATETIME
         || screen == AURA_SCREEN_SETTINGS_PERSONALIZATION
-        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM)
+        || screen == AURA_SCREEN_SETTINGS_SWITCH_SYSTEM
+        || screen == AURA_SCREEN_SETTINGS_SCREENLOCK) /* D-351: ahora submenu */
         handle_nav_list(nav, screen, button);
     else if (is_choice_screen(screen))
         handle_choice_list(nav, screen, button);
@@ -6160,7 +6248,7 @@ void aura_screens_handle_button(aura_nav_t *nav, long button)
         aura_calendar_handle_button(nav, button);
     else if (screen == AURA_SCREEN_EXTRAS_CALENDAR_DAY)
         aura_calendar_day_handle_button(nav, button);
-    else if (screen == AURA_SCREEN_SETTINGS_SCREENLOCK)
+    else if (screen == AURA_SCREEN_SETTINGS_LOCK_CODE)
         aura_screenlock_handle_button(nav, button);
     else if (screen == AURA_SCREEN_SETTINGS_DATE_EDIT)
         handle_date_edit(nav, button);

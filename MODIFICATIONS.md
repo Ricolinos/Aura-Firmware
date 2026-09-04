@@ -66,7 +66,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `firmware/target/arm/s5l8702/app.lds` (D-345: la pila del hilo `main` — el de la UI — pasa de 8 KB a 12 KB (`. += 0x2000` → `. += 0x3000`) tras un `*PANIC* stkov main` reproducido por el dueño en hardware; cabe en la IRAM de core de 48 KB: `_fiqstackend` queda en `0xb530`, ~2.7 KB por debajo del tope `0xC000`)
 - `firmware/target/hosted/filesystem-unix.c`
 - `lib/rbcodec/codecs/aiff.c`
-- `uisimulator/common/sim_tasks.c (D-330: token USB_INSERT del inyector, portado del M-039 de Metro-Aura)`
+- `uisimulator/common/sim_tasks.c (D-330: token USB_INSERT del inyector, portado del M-039 de Metro-Aura; D-351: token HOLD, que ALTERNA el interruptor Hold del simulador -- el Hold del 6G no es un boton sino un estado que se lee por sondeo, asi que sin este token la maquina de flancos del bloqueo solo se podria probar a mano)`
 - `utils/mks5lboot/Makefile`
 
 (Rutas relativas a `firmware/rockbox/`.)

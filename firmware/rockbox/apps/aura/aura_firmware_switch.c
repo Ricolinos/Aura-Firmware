@@ -94,7 +94,10 @@ bool aura_firmware_switch_to(int i)
      * busqueda de tagcache mientras se apaga. */
     aura_master_art_builder_suspend();
     aura_settings_save();
-    settings_save();
+    /* D-351: aqui NO alcanza con marcar pendiente -- lo que sigue es un
+     * reinicio, no una salida de pantalla. Se fuerza la escritura ya. */
+    aura_settings_core_touched();
+    aura_settings_core_flush();
 
     /* Aura (D-342): no cortar un commit de tagcache a mitad de escritura --
      * ver DECISIONS.md. Un reinicio con commit_step != 0 puede dejar el

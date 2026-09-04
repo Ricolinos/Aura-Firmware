@@ -92,6 +92,18 @@ typedef enum {
     AURA_LANG_COUNT,
 } aura_lang_t;
 
+/* D-351: cuando se vuelve a pedir el codigo de bloqueo. El orden es el
+ * de las opciones en Ajustes y el que se guarda en aura.cfg: agregar
+ * valores al FINAL, nunca en medio, o un aura.cfg viejo cambia de
+ * significado. */
+typedef enum {
+    AURA_LOCK_REQUIRE_HOLD = 0,   /* al quitar el Hold (por defecto) */
+    AURA_LOCK_REQUIRE_1MIN,       /* si el Hold estuvo >= 1 minuto */
+    AURA_LOCK_REQUIRE_5MIN,       /* si el Hold estuvo >= 5 minutos */
+    AURA_LOCK_REQUIRE_BOOT,       /* solo al encender (previo a D-351) */
+    AURA_LOCK_REQUIRE_COUNT,
+} aura_lock_require_t;
+
 typedef struct {
     aura_theme_id_t theme;
     aura_anim_mode_t animation_mode;
@@ -167,6 +179,23 @@ typedef struct {
      * clave nueva, nunca reusar la vieja en silencio. */
     bool screen_lock_enabled;
     bool screen_lock_active;
+    /* D-351 (SS D del plan maestro de la ronda): CUANDO se vuelve a
+     * pedir el codigo. Hasta ahora la respuesta era una sola -- "al
+     * encender" -- porque el interruptor Hold del 6G no genera eventos
+     * (pmu_holdswitch_locked() se lee por sondeo) y nadie lo sondeaba.
+     * Con el sondeo del bucle principal, poner Hold pasa a ser el gesto
+     * natural de bloquear, como en cualquier telefono:
+     *   HOLD  (por defecto) -- al quitar el Hold pide el codigo.
+     *   1MIN / 5MIN         -- solo si el Hold estuvo puesto ese tiempo
+     *                          (un Hold accidental en el bolsillo no
+     *                          obliga a teclear).
+     *   BOOT                -- el comportamiento anterior a D-351: el
+     *                          Hold no pide nada, solo el arranque.
+     * Persiste en aura.cfg como "screen_lock_require". */
+    aura_lock_require_t screen_lock_require;
+    /* D-351: tick en que se puso el Hold, para los umbrales de 1/5 min.
+     * NO persiste: un apagado ya pide codigo por su cuenta. */
+    long screen_lock_hold_since;
     /* D-289 (sistema de temas): id del paquete de tema activo, o
      * cadena vacia = el default compilado ("Aura"). 33 = 32 + NUL,
      * ver AURA_STYLE_ID_LEN en aura_style.h (CONTRATO-formato-tema.md
@@ -239,6 +268,23 @@ const int *aura_settings_eq_preset_gains(int preset);
  * y "Restablecer ajustes" -- para que un reset vuelva a los defaults
  * de Aura, no a los de fabrica de Rockbox (que settings_reset() por
  * si solo restauraria). */
+/* D-351 (hallazgo portado de Metro R7-5): `settings_save()` de Rockbox
+ * NO escribe nada. Solo registra flush_config_block_callback en
+ * DISK_EVENT_SPINUP (apps/settings.c:738), y `call_storage_idle_notifys()`
+ * se auto-bloquea 30 s entre corridas salvo con `force`
+ * (firmware/ata_idle_notify.c). La escritura real llega en el apagado
+ * limpio, por system_flush(). Consecuencia: un reinicio a mano o una
+ * bateria agotada pierde MINUTOS de ajustes -- brillo, retroiluminacion,
+ * limite de volumen, apagado automatico, repetir, clicker.
+ *
+ * aura_settings_core_touched() sustituye a `settings_save()` a secas en
+ * todo Aura: hace lo mismo y ademas anota que hay algo pendiente.
+ * aura_settings_core_flush() fuerza la escritura, y se llama al SALIR de
+ * una pantalla (MENU), no en cada clic: forzar un giro de disco por cada
+ * paso de la rueda del brillo seria peor que el problema. */
+void aura_settings_core_touched(void);
+void aura_settings_core_flush(void);
+
 void aura_settings_apply_core_defaults(void);
 
 #endif /* AURA_SETTINGS_H */

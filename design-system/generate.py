@@ -177,6 +177,26 @@ def generate_header(tokens):
             lines.append(f"#define {define} LCD_RGBPACK({r}, {g}, {b})")
         lines.append("")
 
+    lines.append("/* D-352: caja de tinta de las MAYUSCULAS por rol, leida del glifo")
+    lines.append(" * 'H' del .fnt ya rasterizado. Centrar un texto por font->height lo")
+    lines.append(" * hunde (esa altura incluye el descendente); centrar por estas dos")
+    lines.append(" * constantes lo deja alineado con iconos y numeros:")
+    lines.append(" *     y = (alto_caja - CAP_H) / 2 - CAP_TOP;")
+    lines.append(" * CAP_TOP es la distancia del borde superior de la celda de la")
+    lines.append(" * fuente a la primera fila con tinta. */")
+    for style_name, _face in tokens["font"]["styles_by_size"].items():
+        size = tokens["type_scale"][style_name]
+        fnt = OUT / "fonts" / font_filename(style_name, size)
+        box = fnt_cap_box(fnt) if fnt.exists() else None
+        if box is None:
+            die(f"no se pudo medir la caja de mayusculas de {fnt.name} "
+                "-- genera las fuentes antes que los tokens")
+        cap_top, cap_h = box
+        up = style_name.upper()
+        lines.append(f"#define A26_FONT_CAP_TOP_{up} {cap_top}")
+        lines.append(f"#define A26_FONT_CAP_H_{up} {cap_h}")
+    lines.append("")
+
     lines.append("/* Tamanos de icono (px). Los bitmaps viven en ICON_DIR \"/apple2026/<tema>/\". */")
     for size_name, size_px in tokens["icon"]["sizes"].items():
         lines.append(f"#define A26_ICON_SIZE_{size_name.upper()} {size_px}")
@@ -349,6 +369,79 @@ def resolve_font_file(tokens, filename):
         "Si es una cara de Apple (tema opcional, no el default de este repo):\n"
         "descargala de https://developer.apple.com/fonts/ e instalala."
     )
+
+
+
+# -- Altura de mayusculas por rol (D-352, SS H del plan maestro) ---------
+#
+# La barra de estado centraba su titulo por `font->height`, que incluye el
+# descendente: las mayusculas quedaban visiblemente hundidas respecto del
+# reloj y los iconos. Centrar por la CAJA DE TINTA de las mayusculas exige
+# saber donde empieza y cuanto mide esa tinta, y eso solo lo sabe el
+# .fnt ya rasterizado -- no la TTF.
+#
+# Formato del .fnt de Rockbox (tools/convttf.c, writer al final):
+#   "RB12" | maxwidth u16 | height u16 | ascent u16 | depth u16
+#          | firstchar u32 | defaultchar u32 | size u32
+#          | nbits u32 | noffset u32 | nwidth u32
+#   luego chars_data (nbits), relleno, tabla de offsets, tabla de anchos.
+# `depth` NO son bits por pixel: 0 = 1 bpp, 1 = 4 bpp (font.h). Todas las
+# fuentes de Aura salen con depth 1.
+# Los pixeles van FILA A FILA sin relleno entre filas, 4 bits cada uno,
+# NIBBLE BAJO PRIMERO, y con el valor INVERTIDO: 0 = tinta, 15 = fondo
+# (convttf hace `0xff - *tsrc` antes de empaquetar).
+#
+# UMBRAL DE TINTA: `< 8`, es decir "mas cerca de la tinta que del fondo".
+# Tiene que ser EL MISMO que usa firmware/tools/aura_spec_check.py al
+# medir una captura, o la comprobacion falla por medio pixel (aprendizaje
+# de moonlit D-068, cortesia de la sesion supervisora).
+FNT_INK_THRESHOLD = 8
+
+
+def fnt_cap_box(fnt_path, glyph="H"):
+    """-> (cap_top, cap_h) del glifo `glyph` en un .fnt, o None."""
+    import struct as _struct
+
+    data = fnt_path.read_bytes()
+    if data[:4] != b"RB12":
+        die(f"{fnt_path.name}: no es un .fnt de Rockbox (falta 'RB12')")
+    _maxw, height, _ascent, depth = _struct.unpack("<HHHH", data[4:12])
+    firstchar, _defch, _size, nbits, noffset, nwidth = _struct.unpack("<IIIIII", data[12:36])
+    if depth != 1:
+        die(f"{fnt_path.name}: depth {depth}; este lector solo entiende 4 bpp (depth 1)")
+
+    pos = 36
+    bits = data[pos:pos + nbits]
+    pos += nbits
+    long_off = nbits >= 0xFFDB
+    pos += (((nbits + 3) & ~3) - nbits) if long_off else (((nbits + 1) & ~1) - nbits)
+    if long_off:
+        offsets = _struct.unpack(f"<{noffset}I", data[pos:pos + 4 * noffset])
+        pos += 4 * noffset
+    else:
+        offsets = _struct.unpack(f"<{noffset}H", data[pos:pos + 2 * noffset])
+        pos += 2 * noffset
+    widths = data[pos:pos + nwidth]
+
+    idx = ord(glyph) - firstchar
+    if idx < 0 or idx >= noffset:
+        return None
+    w, base = widths[idx], offsets[idx]
+    if w == 0:
+        return None
+
+    rows = []
+    for row in range(height):
+        for col in range(w):
+            i = row * w + col
+            byte = bits[base + i // 2]
+            val = (byte & 0x0F) if (i % 2) == 0 else (byte >> 4)
+            if val < FNT_INK_THRESHOLD:
+                rows.append(row)
+                break
+    if not rows:
+        return None
+    return rows[0], rows[-1] - rows[0] + 1
 
 
 def generate_fonts(tokens):
@@ -750,11 +843,15 @@ def main():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
 
+    # D-352: las fuentes van PRIMERO. apple2026_tokens.h ahora incluye la
+    # apple2026_tokens.h ahora incluye la caja de tinta de las mayusculas
+    # de cada rol, que se mide sobre el .fnt ya rasterizado -- con el orden
+    # anterior, un arbol limpio fallaba porque los .fnt no existian aun.
+    generate_fonts(tokens)
     generate_header(tokens)
     generate_theme_format_json(tokens)
     if args.swift_out:
         generate_swift_palette(tokens, args.swift_out)
-    generate_fonts(tokens)
     generate_icons(tokens)
     generate_panel_backgrounds(tokens)
     generate_tile_icons(tokens)

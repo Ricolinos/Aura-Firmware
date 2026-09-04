@@ -1638,3 +1638,159 @@ mal encuadrado, así que el fallo se ve a simple vista.
   corregido (`decode_album_at`) con "Ahora suena", que sí quedó probado
   punta a punta; la confirmación visual de CoverDrift con una portada 4:3 va
   a la lista de hardware.
+
+## D-351 — El interruptor Hold pasa a ser el gesto de bloquear; "Bloqueo" gana su submenú; y los ajustes de Rockbox dejan de perderse
+
+**Punto de partida.** El bloqueo de Aura solo se pedía **al encender**. La
+razón no era de diseño: el interruptor Hold del 6G **no genera eventos** —
+`pmu_holdswitch_locked()` es un estado que hay que **leer** — y el bucle
+principal esperaba botones sin límite de tiempo, así que nadie lo leía. El
+único que lo consultaba era la barra de estado al dibujarse, de modo que en
+una pantalla quieta el candado podía tardar minutos en aparecer, o no
+aparecer nunca.
+
+**1. Sondeo en el bucle principal.** `next_button()` pasa a tener un tope de
+`HZ/2`, aplicado **después** de todas las puertas de animación y solo hacia
+abajo: una animación que pidió 20 fps sigue a 20 fps. No se gatea con
+`lcd_active()` — con la pantalla dormida no hay nada que dibujar, pero el
+flanco hay que verlo igual para saber **cuánto tiempo** estuvo puesto el Hold.
+
+Los flancos se resuelven en el bucle, entre leer el botón y repartirlo a las
+pantallas, **nunca dentro de una pantalla**: una pantalla no puede saber si
+otra ya atendió el mismo flanco, y el estado tiene que sobrevivir a cambiar de
+pantalla. La primera vuelta **adopta** el estado sin disparar flanco: arrancar
+con el Hold ya puesto no es "acabas de bloquear".
+
+**2. Pantalla de bloqueo en reposo.** Con Hold puesto y el bloqueo armado se
+dibuja **en lugar de** la pantalla actual, sin tocar la navegación: al quitar
+el Hold se vuelve exactamente a donde estaba. Candado grande en el **mismo
+sitio** que la pantalla de desbloqueo, para que quitar el Hold no mueva nada —
+solo aparecen las cajas de dígitos debajo. Sin entrada de código: con Hold
+puesto la rueda está muerta por hardware, no hay nada que teclear.
+
+**3. `screen_lock_require`** (`aura.cfg`): `hold` (por defecto), `1min`,
+`5min`, `boot`. Un Hold accidental en el bolsillo no obliga a teclear;
+`boot` conserva el comportamiento anterior a esta decisión.
+
+**4. "Bloqueo" es ahora un submenú** (§D.6): Activar · Cambiar código · Pedir
+código · Quitar bloqueo. Las cuatro filas **existen siempre y no se mueven**:
+sin bloqueo armado solo "Activar" es elegible, con él las otras tres. Se
+prefirió esto a una lista que cambia de largo porque una fila que aparece y
+desaparece hace saltar la selección bajo el dedo, y el árbol ya usa filas
+atenuadas para "presente pero no elegible" (Recopilaciones, Audiolibros).
+
+Eso destapó un hueco real: `aura_screenlock.c` **infería** qué iba a hacer a
+partir del estado (`enabled` sin `active` ⇒ desactivar), así que con el
+bloqueo armado la única pantalla alcanzable era la de desactivar — **"Cambiar
+código" no tenía forma de existir**. Ahora el submenú lo dice explícitamente
+(`aura_screenlock_begin(SET | CHANGE | REMOVE)`).
+
+De paso, el título de la pantalla de código pasa de "Bloqueo de pantalla" a
+**"Bloqueo"**: no cabía en la barra y salía truncado ("Bloqueo de p").
+
+**5. Los ajustes de Rockbox se perdían** (hallazgo portado de Metro R7-5, vía
+la supervisora; verificado aquí en el código). `settings_save()`
+(`apps/settings.c:738`) **no escribe nada**: solo registra
+`flush_config_block_callback` en `DISK_EVENT_SPINUP`, y
+`call_storage_idle_notifys()` se **auto-bloquea 30 s** entre corridas salvo
+con `force` (`firmware/ata_idle_notify.c`). La escritura real llega en el
+apagado limpio, por `system_flush()`. Consecuencia: un reinicio a mano o una
+batería agotada pierde **minutos** de ajustes — brillo, retroiluminación,
+límite de volumen, apagado automático, repetir, clicker.
+
+`aura_settings_core_touched()` sustituye a `settings_save()` a secas en los
+**14 sitios** de Aura que lo llamaban: hace lo mismo y además anota que hay
+algo pendiente. `aura_settings_core_flush()` fuerza la escritura y se llama
+**al salir de una pantalla** (MENU), no en cada clic: forzar un giro de disco
+por cada paso de la rueda del brillo sería peor que el problema. Solo escribe
+si de verdad cambió algo, así que navegar con MENU sin tocar nada no gira el
+disco. El cambio de familia (`aura_firmware_switch.c`) fuerza el flush **de
+inmediato**: lo que sigue es un reinicio, no una salida de pantalla.
+
+**6. El simulador gana un token `HOLD`** en su inyector
+(`uisimulator/common/sim_tasks.c`, registrado en `MODIFICATIONS.md`). Sin él
+toda esta máquina de estados solo se podría probar a mano: el Hold no es un
+botón que se pueda inyectar como pulsación. Es la diferencia entre "compila" y
+"está verificado".
+
+**Verificado.**
+- Target: **0 errores, 0 warnings**. `stack_report.py` **verde**, sin cambio.
+- `make -C firmware/rockbox/apps/aura/test test`: **16/16 suites verdes**.
+- Simulador, recorrido real con el token `HOLD` (capturas en
+  `docs/screenshots/ronda-estabilidad/`):
+  - `16`: **candado en la barra** del menú raíz al poner Hold, **sin tocar
+    ningún botón** — que es justo lo que antes no pasaba.
+  - `18`: **pantalla de bloqueo en reposo** ("Bloqueado", candado, reloj,
+    batería, sin cajas de dígitos).
+  - `19`: ciclo Hold ON→OFF con `require = hold` → **pide el código**.
+  - `20`: submenú de Bloqueo con las cuatro filas y "Activar" atenuada
+    (el bloqueo ya estaba armado). `21`: la fila renombrada en Ajustes.
+  - `22`: "Pedir código" con las cuatro opciones y "Al bloquear" marcada.
+- **Límite documentado**: los umbrales de 1 y 5 minutos no se probaron
+  esperando el tiempo real; lo que se verificó es la rama `hold` (umbral 0) y
+  que `boot` no pide nada por Hold. La aritmética es un solo `TIME_AFTER`
+  sobre `hold_since`. Va a la lista de hardware.
+
+## D-352 — La barra de estado centraba el título por la altura de la fuente, no por la de las mayúsculas
+
+**El defecto.** `text_y = (alto_barra − h) / 2`, con `h` de
+`lcd_getstringsize()`, que es `font->height` e **incluye el descendente**. El
+resto de la barra —reloj, iconos, batería— se centra por su **tinta real**.
+Resultado: el título quedaba **1 px más arriba** que todo lo demás. Un píxel
+es exactamente la clase de defecto que sobrevive a la revisión visual y
+delata que algo no está calculado.
+
+**La corrección.** `design-system/generate.py` mide la **caja de tinta de las
+mayúsculas** de cada rol leyendo el glifo `H` del `.fnt` **ya rasterizado**
+(no de la TTF: lo que importa es lo que el aparato va a dibujar) y emite
+`A26_FONT_CAP_TOP_<ROL>` / `A26_FONT_CAP_H_<ROL>` en `apple2026_tokens.h`.
+La barra centra con ellas:
+
+```c
+text_y = (alto_barra - A26_FONT_CAP_H_DS_BOLD_12) / 2 - A26_FONT_CAP_TOP_DS_BOLD_12;
+```
+
+Formato del `.fnt`, que hubo que deducir (documentado en el lector): tras la
+cabecera van los píxeles **fila a fila sin relleno entre filas**, 4 bits cada
+uno, **nibble bajo primero**, y con el valor **invertido** — `0` es tinta,
+`15` es fondo (`convttf.c` hace `0xff - *tsrc` antes de empaquetar). El campo
+`depth` de la cabecera **no** son bits por píxel: `1` significa 4 bpp
+(`font.h`). Las pistas del formato vinieron de moonlit (D-068) vía la
+supervisora; el `depth` y el umbral se verificaron aquí decodificando el
+glifo y mirándolo.
+
+De paso, `generate_fonts()` pasa a correr **antes** que `generate_header()`:
+con el orden anterior un árbol limpio fallaba, porque los `.fnt` que ahora se
+miden todavía no existían.
+
+**Verificación mecánica: `aura_spec_check.py statusbar`.** Agrupa la banda en
+columnas contiguas de tinta —cada glifo, icono y la batería caen en su propio
+grupo— y exige que el centro vertical de cada uno coincida con el de la barra
+±1 px. Tres criterios, los tres pagados con errores por moonlit (D-068):
+
+1. **"Tinta" no es "píxel claro"**, es "píxel que se aparta del **fondo**", y
+   el fondo se deduce de la propia captura. Un umbral absoluto de luminancia
+   se invierte al cambiar de tema.
+2. Cada elemento se mide por **su** caja de tinta, no por su celda: un símbolo
+   de 16 px dibuja entre 8 y 15 px de tinta según cuál sea.
+3. La tolerancia de 1 px **no es holgura para errores**: el firmware centra el
+   título por las **mayúsculas** mientras la herramienta mide la **tinta
+   real**, así que un título con acentos o con letras que bajan tiene su
+   centro medio píxel corrido. Eso es correcto y esperado.
+
+Se añadió un cuarto criterio propio: un grupo cuya tinta ocupa la **banda
+entera** no es un elemento de la barra sino el contenido de fondo (en
+`(split)`, la imagen del panel derecho llega hasta el borde superior). Medir
+su "centro" no dice nada — por construcción cae en el centro — y contarlo
+falsearía el resultado.
+
+**Verificado.**
+- `(full)`: 4 elementos, **peor desviación 0.0 px**.
+- `(split)`: 3 elementos + el panel descartado, **0.0 px**.
+- **Honestidad sobre el alcance de la herramienta**: la captura anterior al
+  arreglo (`16-antes-barra-titulo-1px-arriba.png`) mide el título en
+  `y 5..12` (centro 8.5) contra 9.5 de todo lo demás — es decir, la
+  herramienta lo habría dado por BUENO, justo en el borde de su tolerancia de
+  1 px. La herramienta prueba que ahora la alineación es exacta; no es la que
+  encontró el defecto. Se deja escrito para que nadie la use como si
+  detectara desviaciones de un píxel.

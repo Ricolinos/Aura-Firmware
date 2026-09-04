@@ -438,6 +438,20 @@ typedef enum {
      * mantenido en el aparato, siempre visible en el simulador. */
     AURA_STR_ABOUT_MAIN_STACK_FMT,      /* "Pila principal: %d / %d B (max.)" */
     AURA_STR_ABOUT_MAIN_STACK_NA,
+    /* D-351 (SS D del plan maestro): bloqueo por Hold. "Bloqueo" es el
+     * nombre nuevo de la fila de Ajustes en las tres familias;
+     * SETTINGS_SCREENLOCK ("Bloqueo de pantalla") queda SIN USO -- se
+     * conserva por la regla de solo-anadir-al-final. */
+    AURA_STR_LOCK_ROW,                  /* "Bloqueo" */
+    AURA_STR_LOCK_RESTING,              /* "Bloqueado" -- pantalla en reposo */
+    AURA_STR_LOCK_CHANGE_CODE,          /* "Cambiar codigo" */
+    AURA_STR_LOCK_REQUIRE,              /* "Pedir codigo" */
+    AURA_STR_LOCK_REQUIRE_HOLD,         /* "Al bloquear" */
+    AURA_STR_LOCK_REQUIRE_1MIN,         /* "Tras 1 minuto" */
+    AURA_STR_LOCK_REQUIRE_5MIN,         /* "Tras 5 minutos" */
+    AURA_STR_LOCK_REQUIRE_BOOT,         /* "Solo al encender" */
+    AURA_STR_LOCK_REMOVE,               /* "Quitar bloqueo" */
+    AURA_STR_LOCK_ACTIVATE,             /* "Activar" */
 
     AURA_STR_COUNT,
 } aura_str_id_t;

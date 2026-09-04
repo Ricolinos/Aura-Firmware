@@ -165,6 +165,36 @@ static void aura_main_play_keyclick(void)
 #endif
 }
 
+/* -- D-351: sondeo del interruptor Hold ---------------------------------
+ *
+ * El Hold del 6G NO genera eventos de boton: `pmu_holdswitch_locked()`
+ * es un estado que hay que LEER. Hasta D-351 nadie lo leia salvo la
+ * barra de estado al dibujarse, asi que en una pantalla quieta (el
+ * bucle esperaba botones sin limite de tiempo) el candado de la barra
+ * podia tardar minutos en aparecer -- o no aparecer nunca.
+ *
+ * Con el sondeo, poner Hold pasa a ser el gesto natural de bloquear.
+ * Los flancos se calculan aqui, en el bucle principal, NUNCA dentro de
+ * una pantalla: una pantalla no puede saber si otra ya atendio el
+ * mismo flanco. */
+static bool s_hold_state = false;      /* ultimo valor leido */
+static bool s_hold_state_valid = false;/* false hasta la primera lectura */
+static bool s_hold_resting = false;    /* pantalla de bloqueo en reposo */
+
+/* Umbral de `screen_lock_require` en ticks; -1 = el Hold nunca pide
+ * codigo (AURA_LOCK_REQUIRE_BOOT). */
+static long lock_require_threshold_ticks(void)
+{
+    switch (aura_settings.screen_lock_require)
+    {
+    case AURA_LOCK_REQUIRE_HOLD: return 0;
+    case AURA_LOCK_REQUIRE_1MIN: return 60L * HZ;
+    case AURA_LOCK_REQUIRE_5MIN: return 300L * HZ;
+    case AURA_LOCK_REQUIRE_BOOT:
+    default:                     return -1;
+    }
+}
+
 static long next_button(int timeout_ticks)
 {
     static long s_hold_tracking = BUTTON_NONE;
@@ -451,7 +481,18 @@ void aura_main(void)
             continue;
         }
 
-        aura_screens_draw(&nav);
+        /* D-351: con el Hold puesto y el bloqueo armado se dibuja la
+         * pantalla de reposo EN LUGAR de la pantalla actual, sin
+         * tocar la navegacion -- al quitar el Hold se vuelve exactamente
+         * a donde estaba (o al codigo, segun screen_lock_require). No
+         * es una intercepcion como la de screen_lock_active: el resto
+         * del bucle sigue corriendo normal, porque con Hold puesto el
+         * hardware ya no entrega botones y lo unico que hace falta es
+         * seguir viendo el flanco de quitarlo. */
+        if (s_hold_resting)
+            aura_screenlock_draw_resting();
+        else
+            aura_screens_draw(&nav);
         /* La hoja de vidrio del Modo 4 es CUADRADA: sobre ella no se
          * estampan las esquinas derechas de pantalla (se leian como
          * esquinas redondeadas de la hoja, correccion 2026-08-12).
@@ -629,6 +670,22 @@ void aura_main(void)
                 timeout_ticks = HZ / 4;
         }
 
+        /* D-351: el Hold se lee por SONDEO (pmu_holdswitch_locked() es
+         * un estado, no un evento), asi que el bucle no puede quedarse
+         * esperando botones sin limite. Medio segundo es el tope que
+         * fija SS D.2 del plan maestro: el candado de la barra aparece
+         * a los <= 0.5 s de poner Hold y el flanco de quitarlo se
+         * atiende igual de rapido.
+         *
+         * Va DESPUES de todas las puertas de animacion de arriba (que
+         * solo actuan con `timeout_ticks < 0`) y solo BAJA la cadencia
+         * pedida, nunca la sube: una animacion que pidio 20 fps sigue a
+         * 20 fps. Y no se gatea con lcd_active(): con la pantalla
+         * dormida no hay nada que dibujar, pero el flanco hay que verlo
+         * igual para saber cuanto tiempo estuvo puesto el Hold. */
+        if (timeout_ticks < 0 || timeout_ticks > HZ / 2)
+            timeout_ticks = HZ / 2;
+
         /* D-341: el constructor de maestras en segundo plano se detiene
          * mientras la UI anima (cadencia fina pedida por cualquiera de
          * las puertas de arriba) -- un decode de 100-300 ms compite por
@@ -638,6 +695,68 @@ void aura_main(void)
         aura_master_art_builder_pause(timeout_ticks >= 0 && timeout_ticks <= HZ / 20);
 
         button = next_button(timeout_ticks);
+
+        /* -- D-351: flancos del Hold ---------------------------------
+         *
+         * Se resuelven AQUI, entre la lectura de botones y el reparto a
+         * las pantallas: una pantalla no puede saber si otra ya atendio
+         * el mismo flanco, y el estado tiene que sobrevivir a cambiar
+         * de pantalla. `continue` tras cada flanco para redibujar de
+         * inmediato con el estado nuevo. */
+        {
+            bool hold_now = button_hold();
+
+            if (!s_hold_state_valid)
+            {
+                /* Primera vuelta: se adopta el estado sin disparar
+                 * flanco. Arrancar con el Hold ya puesto no debe
+                 * contar como "acaba de bloquear" -- el arranque ya
+                 * pide codigo por su cuenta si corresponde. */
+                s_hold_state = hold_now;
+                s_hold_state_valid = true;
+                s_hold_resting = hold_now && aura_settings.screen_lock_enabled
+                                 && !aura_settings.screen_lock_active;
+                if (hold_now)
+                    aura_settings.screen_lock_hold_since = current_tick;
+            }
+            else if (hold_now != s_hold_state)
+            {
+                s_hold_state = hold_now;
+
+                if (hold_now)
+                {
+                    /* OFF -> ON. Con el bloqueo armado se entra a la
+                     * pantalla de reposo; sin el, el unico efecto es
+                     * que la barra dibuje el candado -- que ya pasa
+                     * solo, porque se redibuja en cada vuelta. */
+                    aura_settings.screen_lock_hold_since = current_tick;
+                    if (aura_settings.screen_lock_enabled
+                        && !aura_settings.screen_lock_active)
+                        s_hold_resting = true;
+                    continue;
+                }
+
+                /* ON -> OFF: aqui se decide si hay que pedir codigo. */
+                s_hold_resting = false;
+                if (aura_settings.screen_lock_enabled
+                    && !aura_settings.screen_lock_active)
+                {
+                    long threshold = lock_require_threshold_ticks();
+
+                    if (threshold >= 0
+                        && TIME_AFTER(current_tick,
+                                      aura_settings.screen_lock_hold_since + threshold - 1))
+                    {
+                        aura_settings.screen_lock_active = true;
+                        /* Se guarda YA: si el usuario apaga en este
+                         * instante, debe arrancar bloqueado. Mismo
+                         * criterio que el desbloqueo correcto. */
+                        aura_settings_save();
+                    }
+                }
+                continue;
+            }
+        }
 
         /* D-209 (encargo del dueno, 2026-08-14): pantalla propia de
          * apagado -- se dibuja UNA vez, antes de dejar que

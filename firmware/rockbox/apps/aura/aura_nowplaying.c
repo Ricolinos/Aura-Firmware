@@ -179,7 +179,7 @@ static long s_seek_applied_ms = -1;
 static void np_toggle_shuffle(void)
 {
     global_settings.playlist_shuffle = !global_settings.playlist_shuffle;
-    settings_save();
+    aura_settings_core_touched(); /* D-351 */
     if (audio_status() & AUDIO_STATUS_PLAY)
     {
         if (global_settings.playlist_shuffle)
@@ -197,7 +197,7 @@ static void np_cycle_repeat(void)
         global_settings.repeat_mode = REPEAT_ONE;
     else
         global_settings.repeat_mode = REPEAT_OFF;
-    settings_save();
+    aura_settings_core_touched(); /* D-351 */
     if (audio_status() & AUDIO_STATUS_PLAY)
         audio_flush_and_reload_tracks();
 }

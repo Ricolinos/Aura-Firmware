@@ -79,6 +79,13 @@ typedef enum {
      * a disco, asi que reordenar seria seguro igual, pero renombrar en
      * el lugar deja un diff mas chico. */
     AURA_SCREEN_SETTINGS_SCREENLOCK,
+    /* D-351: "Bloqueo" pasa de ser UNA pantalla (la de teclear el
+     * codigo) a un submenu. AURA_SCREEN_SETTINGS_SCREENLOCK se queda
+     * con el submenu -- es el destino que ya conocen la fila de Ajustes,
+     * aura_category.c y el historial de navegacion -- y la entrada de
+     * codigo se muda a LOCK_CODE. */
+    AURA_SCREEN_SETTINGS_LOCK_CODE,
+    AURA_SCREEN_SETTINGS_LOCK_REQUIRE,
     AURA_SCREEN_EXTRAS_STOPWATCH,
     /* Submenus de Videos y Fotos del original (2026-08-13) */
     AURA_SCREEN_VIDEOS_MOVIES,

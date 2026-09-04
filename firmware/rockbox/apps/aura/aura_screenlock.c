@@ -53,12 +53,22 @@ static bool s_confirming = false;
  * defecto, nunca se desactiva sin querer). */
 static bool s_disable_confirm_yes = false;
 
+/* D-351: lo que el usuario eligio en el submenu de Bloqueo. */
+static aura_screenlock_mode_t s_mode = AURA_SCREENLOCK_MODE_SET;
+
 static void reset_all(void)
 {
     memset(s_digits, 0, sizeof(s_digits));
     memset(s_first, 0, sizeof(s_first));
     s_focus = 0;
     s_confirming = false;
+}
+
+void aura_screenlock_begin(aura_screenlock_mode_t mode)
+{
+    s_mode = mode;
+    s_disable_confirm_yes = false;
+    reset_all();
 }
 
 static void draw_pin_entry(void)
@@ -75,7 +85,9 @@ static void draw_pin_entry(void)
     int i, w, h;
 
     a26_shell_clear_screen();
-    aura_widgets_draw_status_bar(aura_str(AURA_STR_SETTINGS_SCREENLOCK));
+    /* D-351: "Bloqueo", el nombre nuevo -- "Bloqueo de pantalla" no cabia
+     * en la barra y salia truncado ("Bloqueo de p"). */
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_LOCK_ROW));
 
     /* Candado grande arriba, el mismo simbolo del sistema. */
     aura_widgets_draw_icon("lock", A26_ICON_SIZE_PREVIEW,
@@ -106,6 +118,22 @@ static void draw_pin_entry(void)
     }
 }
 
+void aura_screenlock_draw_resting(void)
+{
+    a26_shell_clear_screen();
+    /* La barra de estado ya trae reloj, bateria y el candado (lee
+     * button_hold() por su cuenta, aura_status_bar_v2.c) -- no hay que
+     * dibujar nada de eso a mano. */
+    aura_widgets_draw_status_bar(aura_str(AURA_STR_LOCK_RESTING));
+
+    /* El mismo candado, en el mismo sitio que la pantalla de
+     * desbloqueo, para que quitar el Hold no mueva nada: solo aparecen
+     * las cajas de digitos debajo. */
+    aura_widgets_draw_icon("lock", A26_ICON_SIZE_PREVIEW,
+                            (A26_SCREEN_WIDTH - A26_ICON_SIZE_PREVIEW) / 2,
+                            A26_LAYOUT_STATUSBAR_HEIGHT + A26_SPACING_LG);
+}
+
 void aura_screenlock_draw(void)
 {
     /* Tres estados posibles (Task B, encargo del dueno):
@@ -121,7 +149,13 @@ void aura_screenlock_draw(void)
      *     sentido "reconfigurar" una que ya funciona).
      *  3) ninguno de los dos: flujo de "Activar" -- configurar una
      *     clave nueva (dos pasadas). */
-    if (!aura_settings.screen_lock_active && aura_settings.screen_lock_enabled)
+    /* D-351: la confirmacion de quitar el bloqueo ya no se INFIERE del
+     * estado -- la pide el submenu por su nombre. Asi "Cambiar codigo"
+     * puede llegar aqui con el bloqueo armado y ver la entrada de
+     * digitos, que antes era inalcanzable. */
+    if (!aura_settings.screen_lock_active
+        && aura_settings.screen_lock_enabled
+        && s_mode == AURA_SCREENLOCK_MODE_REMOVE)
     {
         aura_widgets_draw_confirm(aura_str(AURA_STR_SCREENLOCK_DISABLE_TITLE),
                                    aura_str(AURA_STR_SCREENLOCK_DISABLE_BODY),

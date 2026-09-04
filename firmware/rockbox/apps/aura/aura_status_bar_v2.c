@@ -267,7 +267,15 @@ void aura_status_bar_v2_draw(int x, int width, const char *title,
                                AURA_DS_OPACITY_STATUSBAR_TITLE_PCT * 256 / 100);
         lcd_set_foreground(ink);
         lcd_getstringsize((const unsigned char *)title, &w, &h);
-        text_y = (AURA_DS_METRICS_STATUSBAR_HEIGHT - h) / 2;
+        /* D-352 (SS H del plan maestro): centrado por la caja de tinta de
+         * las MAYUSCULAS, no por font->height. `h` incluye el descendente,
+         * asi que centrar con el hundia visiblemente el titulo respecto
+         * del reloj, los iconos y la bateria -- que se centran por su
+         * tinta real. Las dos constantes las mide design-system/generate.py
+         * sobre el glifo 'H' del .fnt ya rasterizado (no sobre la TTF). */
+        text_y = (AURA_DS_METRICS_STATUSBAR_HEIGHT - A26_FONT_CAP_H_DS_BOLD_12) / 2
+                 - A26_FONT_CAP_TOP_DS_BOLD_12;
+        (void)h;
 
         /* (full): el titulo va CENTRADO de verdad (correccion
          * 2026-08-13 del dueno del diseno: "creo que si esta al centro

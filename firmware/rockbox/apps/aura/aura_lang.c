@@ -308,6 +308,16 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SWITCH_MOONLIT_MISSING_BODY] = "moonlit.aura no está instalado en este iPod. Instálalo desde Aura Studio (Extras › Firmware): Aura se conserva, con sus ajustes, y podrás cambiar entre ellos desde aquí.",
     [AURA_STR_ABOUT_MAIN_STACK_FMT]       = "Pila principal: %d / %d B (máx.)",
     [AURA_STR_ABOUT_MAIN_STACK_NA]        = "Pila principal: sin dato en el simulador",
+    [AURA_STR_LOCK_ROW]                   = "Bloqueo",
+    [AURA_STR_LOCK_RESTING]               = "Bloqueado",
+    [AURA_STR_LOCK_CHANGE_CODE]           = "Cambiar código",
+    [AURA_STR_LOCK_REQUIRE]               = "Pedir código",
+    [AURA_STR_LOCK_REQUIRE_HOLD]          = "Al bloquear",
+    [AURA_STR_LOCK_REQUIRE_1MIN]          = "Tras 1 minuto",
+    [AURA_STR_LOCK_REQUIRE_5MIN]          = "Tras 5 minutos",
+    [AURA_STR_LOCK_REQUIRE_BOOT]          = "Solo al encender",
+    [AURA_STR_LOCK_REMOVE]                = "Quitar bloqueo",
+    [AURA_STR_LOCK_ACTIVATE]              = "Activar",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -586,6 +596,16 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SWITCH_MOONLIT_MISSING_BODY] = "moonlit.aura is not installed on this iPod. Install it from Aura Studio (Extras › Firmware): Aura is kept, with its settings, and you will be able to switch between them from here.",
     [AURA_STR_ABOUT_MAIN_STACK_FMT]       = "Main stack: %d / %d B (peak)",
     [AURA_STR_ABOUT_MAIN_STACK_NA]        = "Main stack: no data in the simulator",
+    [AURA_STR_LOCK_ROW]                   = "Lock",
+    [AURA_STR_LOCK_RESTING]               = "Locked",
+    [AURA_STR_LOCK_CHANGE_CODE]           = "Change passcode",
+    [AURA_STR_LOCK_REQUIRE]               = "Ask for passcode",
+    [AURA_STR_LOCK_REQUIRE_HOLD]          = "When locking",
+    [AURA_STR_LOCK_REQUIRE_1MIN]          = "After 1 minute",
+    [AURA_STR_LOCK_REQUIRE_5MIN]          = "After 5 minutes",
+    [AURA_STR_LOCK_REQUIRE_BOOT]          = "Only at power on",
+    [AURA_STR_LOCK_REMOVE]                = "Remove lock",
+    [AURA_STR_LOCK_ACTIVATE]              = "Turn on",
 };
 
 const char *aura_str(aura_str_id_t id)

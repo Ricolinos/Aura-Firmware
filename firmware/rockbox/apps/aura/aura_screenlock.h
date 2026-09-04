@@ -48,7 +48,29 @@
 
 #include "aura_nav.h"
 
+/* D-351: que va a hacer la pantalla de codigo. Antes se INFERIA del
+ * estado (`enabled` sin `active` => desactivar), lo que dejaba sin
+ * lugar a "Cambiar codigo": con el bloqueo armado, la unica pantalla
+ * alcanzable era la de desactivar. El submenu de Bloqueo lo dice
+ * explicitamente al entrar. */
+typedef enum {
+    AURA_SCREENLOCK_MODE_SET = 0, /* activar: clave nueva, dos pasadas */
+    AURA_SCREENLOCK_MODE_CHANGE,  /* cambiar: igual, pero ya estaba armado */
+    AURA_SCREENLOCK_MODE_REMOVE,  /* quitar: confirmacion y borrado */
+} aura_screenlock_mode_t;
+
+void aura_screenlock_begin(aura_screenlock_mode_t mode);
+
 void aura_screenlock_draw(void);
+
+/* D-351: pantalla de bloqueo EN REPOSO -- la que se ve mientras el
+ * interruptor Hold esta puesto y el bloqueo esta armado. Mismo lenguaje
+ * que la de desbloqueo (candado grande, barra de estado con reloj,
+ * bateria y el propio candado) pero SIN cajas de digitos: con Hold
+ * puesto no hay nada que teclear, la rueda esta muerta por hardware.
+ * El codigo se pide al QUITAR el Hold, y solo segun
+ * aura_settings.screen_lock_require. */
+void aura_screenlock_draw_resting(void);
 void aura_screenlock_handle_button(aura_nav_t *nav, long button);
 
 #endif /* AURA_SCREENLOCK_H */

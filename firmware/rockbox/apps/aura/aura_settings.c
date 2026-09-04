@@ -28,6 +28,7 @@
 #include "misc.h"
 #include "rbpaths.h"
 #include "settings.h"
+#include "ata_idle_notify.h"
 #include "eq.h"
 #include "backlight.h"
 #include "string-extra.h"
@@ -70,6 +71,8 @@ static const aura_settings_t aura_settings_defaults = {
     .screen_lock_configured = false,
     .screen_lock_enabled = false,
     .screen_lock_active = false,
+    .screen_lock_require = AURA_LOCK_REQUIRE_HOLD, /* D-351 */
+    .screen_lock_hold_since = 0,
 };
 
 /* Ganancia (dB) por banda para cada preset; el resto de cada banda
@@ -182,6 +185,23 @@ void aura_settings_reset_to_defaults(void)
     aura_settings = aura_settings_defaults;
     aura_settings_apply_eq();
     aura_settings_save();
+}
+
+/* D-351: ver el comentario largo en aura_settings.h. */
+static bool s_core_settings_dirty = false;
+
+void aura_settings_core_touched(void)
+{
+    settings_save();
+    s_core_settings_dirty = true;
+}
+
+void aura_settings_core_flush(void)
+{
+    if (!s_core_settings_dirty)
+        return;
+    s_core_settings_dirty = false;
+    call_storage_idle_notifys(true);
 }
 
 void aura_settings_apply_core_defaults(void)
@@ -305,6 +325,13 @@ void aura_settings_load(void)
                 aura_settings.screen_lock_configured = (v != 0);
             else if (!strcmp(name, "screen_lock_enabled"))
                 aura_settings.screen_lock_enabled = (v != 0);
+            /* D-351: un valor fuera de rango (aura.cfg de una version
+             * futura, o corrupto) cae al default en vez de dejar el
+             * enum con basura -- mismo criterio que el resto. */
+            else if (!strcmp(name, "screen_lock_require"))
+                aura_settings.screen_lock_require =
+                    (v >= 0 && v < AURA_LOCK_REQUIRE_COUNT)
+                        ? (aura_lock_require_t)v : AURA_LOCK_REQUIRE_HOLD;
             else if (!strcmp(name, "screen_lock_active"))
                 aura_settings.screen_lock_active = (v != 0);
             else if (!strcmp(name, "theme_id"))
@@ -408,6 +435,7 @@ void aura_settings_save(void)
     fdprintf(fd, "screen_lock_pin: %d\n", (int)aura_settings.screen_lock_pin);
     fdprintf(fd, "screen_lock_configured: %d\n", (int)aura_settings.screen_lock_configured);
     fdprintf(fd, "screen_lock_enabled: %d\n", (int)aura_settings.screen_lock_enabled);
+    fdprintf(fd, "screen_lock_require: %d\n", (int)aura_settings.screen_lock_require);
     fdprintf(fd, "screen_lock_active: %d\n", (int)aura_settings.screen_lock_active);
     fdprintf(fd, "theme_id: %s\n", aura_settings.style_id);
     /* D-289: informativa para Aura Studio -- le permite saber, leyendo

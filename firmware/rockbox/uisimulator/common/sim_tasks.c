@@ -45,6 +45,9 @@
  *                                   AURA_SIM_BUTTONS esta presente)
  *   AURA_SIM_AUTODUMP_QUIT=1     -> sale del proceso tras el dump
  *   AURA_SIM_BUTTONS=SELECT,MENU,SCROLL_FWD,... -> inyecta esta secuencia
+ *                                   (tokens especiales: WAIT, USB_INSERT,
+ *                                   HOLD -- este ultimo ALTERNA el
+ *                                   interruptor Hold, D-351)
  *                                   de botones (uno de: SELECT, MENU,
  *                                   SCROLL_FWD, SCROLL_BACK, PLAY, LEFT,
  *                                   RIGHT) directamente en la cola de
@@ -81,6 +84,15 @@ static long autodump_settle_ticks = 0;
  * conectar el cable llamando sim_trigger_usb(true) -- para verificar la
  * pantalla USB sin hardware ni ventana interactiva. */
 #define AURA_INJECT_USB_CODE   (-2L)
+/* Token "HOLD" (D-351): ALTERNA el interruptor Hold del simulador (la
+ * misma variable que mueve la tecla `h` de rockboxui). Existe porque el
+ * Hold del 6G no es un boton sino un ESTADO que se lee por sondeo, asi
+ * que no hay forma de inyectarlo como una pulsacion -- y sin este token
+ * toda la maquina de flancos de D-351 (pantalla de bloqueo en reposo,
+ * "Pedir codigo" por tiempo, candado en la barra) solo se podria probar
+ * a mano. Tras alternarlo espera lo mismo que WAIT, para que el bucle
+ * principal alcance a sondearlo (<= 0.5 s) y redibujar. */
+#define AURA_INJECT_HOLD_CODE  (-3L)
 #define AURA_INJECT_WAIT_TICKS (HZ)
 
 static long inject_codes[AURA_MAX_INJECT_BUTTONS];
@@ -100,6 +112,7 @@ static long aura_button_name_to_code(const char *name)
     if (!strcmp(name, "RIGHT"))       return BUTTON_RIGHT;
     if (!strcmp(name, "WAIT"))        return AURA_INJECT_WAIT_CODE;
     if (!strcmp(name, "USB_INSERT"))  return AURA_INJECT_USB_CODE;
+    if (!strcmp(name, "HOLD"))        return AURA_INJECT_HOLD_CODE;
     return BUTTON_NONE;
 }
 
@@ -155,6 +168,20 @@ void sim_thread(void)
         {
             if (inject_codes[inject_pos] == AURA_INJECT_WAIT_CODE)
             {
+                inject_pos++;
+                inject_next_tick = current_tick + AURA_INJECT_WAIT_TICKS;
+                if (inject_pos == inject_count && autodump_settle_ticks >= 0)
+                {
+                    autodump_pending = true;
+                    autodump_tick = current_tick + AURA_INJECT_WAIT_TICKS + autodump_settle_ticks;
+                }
+            }
+            else if (inject_codes[inject_pos] == AURA_INJECT_HOLD_CODE)
+            {
+#ifdef HAS_BUTTON_HOLD
+                extern bool hold_button_state; /* button-sdl.c */
+                hold_button_state = !hold_button_state;
+#endif
                 inject_pos++;
                 inject_next_tick = current_tick + AURA_INJECT_WAIT_TICKS;
                 if (inject_pos == inject_count && autodump_settle_ticks >= 0)
