@@ -2183,3 +2183,64 @@ dura desde el incidente del 26-ago).
 **Pendiente, sin cambio**: la verificación en hardware (lista completa en
 D-353) sigue a cargo del dueño. El bootloader **no se flashea** hasta que
 Aura Studio tenga "Actualizar el arranque" (§B.5 del plan maestro).
+
+---
+
+## D-355 — Contrato v19: ajustes compartidos entre familias, y hora en cada sincronización (registro; implementación en D-356)
+
+**Nueva ronda, "ajustes 2"**, autorizada por el dueño (relayada por la sesión
+supervisora tras la verificación en hardware de v0.4.5-beta; protocolo de
+PARADAs igual que la ronda anterior — se reporta y se sigue sin esperar
+"continúa", salvo build en rojo, contrato fuera del texto del maestro,
+acción destructiva o contradicción con este archivo). Decisiones nuevas:
+D-355+. Plan hijo: `docs/plans/PLAN-aura-ajustes-2.md`; maestro:
+`docs/plans/PLAN-ronda-ajustes-2-maestro.md` (carpeta padre).
+
+**Registro, sin trabajo de firmware en esta decisión** (el código va en
+D-356). Fija el texto que las tres familias comparten para dos encargos
+independientes que salen en el mismo ciclo:
+
+**1. `/.aura/settings.cfg` (§D.6 del contrato).** Cambiar de firmware
+(Ajustes › Cambiar sistema, D-333) ya conserva biblioteca y caché de
+imágenes (D-337/D-340); no conservaba brillo, bloqueo, apagado automático,
+idioma — cambiar de familia significaba reconfigurar todo eso desde cero.
+Mismo patrón que `/.aura/art/format.txt`: fuera de `.rockbox/` (que se
+renombra al cambiar de familia), propiedad exclusiva de los firmwares,
+Studio nunca lo toca ni lo borra. 13 claves conocidas, `rev` +
+`updated_by` para desempatar "quién manda", claves desconocidas
+preservadas al reescribir, valores fuera de rango ignorados clave por
+clave (nunca abortan el archivo entero). El vector de prueba canónico
+(§A.3 del maestro) es **literal e idéntico** en los tests host de las tres
+familias — evita que cada una interprete el formato distinto.
+
+**2. Hora en cada sincronización (§D.4, precisión).** La supervisora
+verificó el hecho que cambia el encargo: `ClockSyncWriter` de Studio hoy
+solo escribe "al detectar firmware **Aura** corriendo" y "al
+instalar/actualizar" — deja sin hora automática cualquier sincronización
+que no toque archivos, y dos familias enteras (Metro-Aura y moonlit.aura,
+que ya leen las mismas siete claves desde antes de esta ronda pero nunca
+las recibían). El encargo original decía "cada que el iPod se conecte a
+Aura Studio" (D-321) — el alcance real siempre fue más amplio que la
+implementación. v19 corrige el texto del contrato para que diga lo que el
+encargo pedía: **cualquier** familia, **también** al terminar cada
+sincronización. El firmware no cambia — ya aplica `rtc_sync_*` en el mismo
+handoff de disco de siempre (D-293); el trabajo es enteramente del lado
+Studio.
+
+**3. Corrección de la tabla §A** (pendiente de la ronda anterior, ver D-354
+donde se documentó el hallazgo pero no se tocó el contrato para no mezclar
+decisiones): `THIRD-PARTY-NOTICES.txt` es un asset real de cada Release —
+`package_dist.sh` lo genera y lo publica desde antes de esta ronda, y §B ya
+lo citaba en la pantalla de Licencias — pero la tabla de §A nunca lo había
+listado. Fila agregada; no es un asset nuevo, es documentación puesta al
+día.
+
+**Verificado.** Solo texto — no hay build que correr en esta decisión.
+Releído el contrato completo tras editar (las tres inserciones: fila nueva
+de §D, precisión de §D.4, sección §D.6 completa, fila de §A) para
+confirmar que no rompió ninguna tabla ni referencia cruzada existente.
+
+**Aura Studio copiará este archivo entero** (con `diff` completo antes de
+reemplazar — regla de la ronda anterior, D-349) cuando le toque su fase.
+`CONTRATO-moonlit-studio.md` deberá referenciar v19 si menciona `/.aura/`
+— trabajo de la sesión de moonlit, no de esta.
