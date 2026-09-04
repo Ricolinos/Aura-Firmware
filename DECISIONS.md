@@ -1172,3 +1172,96 @@ más pesada (`read_bmp_fd`, 2 624 B) es de Rockbox base.
   comportamiento. La verificación real es en hardware, con la marca de agua
   (lista al final de la ronda). Tampoco se pudo ejercitar el gesto de SELECT
   mantenido: el inyector del simulador no tiene token de "hold".
+
+## D-346 — La búsqueda de tagcache deja de compartir memoria entre el hilo de UI y el del constructor de carátulas
+
+**El hallazgo.** Apareció midiendo marcos para D-345, no por un reporte:
+`aura_music_browse()` corre en **dos hilos** — la UI, y el constructor de la
+caché maestra (`aura_master_art_builder.c`, fase de álbumes, D-341) — y
+`run_search()` les daba a los dos **los mismos dos arreglos estáticos del
+módulo**, sin candado:
+
+- `s_uniqbuf[2048]` (8 KB), el buffer de valores únicos que consume
+  `tagcache_search_set_uniqbuf()`.
+- `s_tracknums[AURA_MUSIC_MAX_SONGS]` (20 KB), la tabla paralela de números de
+  pista, que `sort_items_by_label()` **permuta junto con las etiquetas**.
+
+Basta con entrar a Álbumes mientras el constructor está en su fase de álbumes:
+el constructor cede el CPU dentro de su recorrido (`breathe()`, `yield()`), así
+que las dos búsquedas se intercalan de verdad. La consecuencia no es un
+crash sino algo peor de diagnosticar: entradas únicas contadas de más o de
+menos, y números de pista intercambiados entre dos listas distintas — es
+decir, una lista de canciones cuyo orden no corresponde a lo que se
+reproduce, exactamente el bug que D-118/D-325 cerraron.
+
+Es **anterior a esta ronda**: nació cuando D-341 movió el constructor a su
+propio hilo. Nadie lo reportó porque en una biblioteca chica la fase de
+álbumes dura menos de un segundo.
+
+**Decisión: memoria de trabajo del llamador, no del módulo.** Sin candado
+nuevo, sin estado compartido que sincronizar — el hilo que busca trae su
+propia memoria. `aura_music.h` gana:
+
+```c
+typedef struct {
+    uint32_t uniqbuf[2048];
+    long    *tracknums;
+    int      tracknums_max;
+} aura_music_scratch_t;
+
+int aura_music_browse_scratch(aura_screen_id_t screen, aura_music_item_t *out,
+                              int max_items, aura_music_scratch_t *scratch);
+```
+
+`aura_music_browse()` sigue existiendo con la misma firma: es esa función con
+el scratch del hilo de UI, así que ninguno de sus ~10 llamadores cambia. El
+constructor usa `aura_music_browse_scratch()` con un `s_builder_scratch`
+propio.
+
+**Por qué `tracknums` es un puntero y no otro arreglo de 20 KB.** Los números
+de pista solo significan algo en búsquedas de **título** (ordenar las
+canciones de un álbum como el disco). El constructor solo lista **álbumes**,
+así que no los necesita: su scratch lo deja en `NULL` y se ahorra los 20 KB.
+De paso, `run_search()` ya no llama `tagcache_get_numeric()` por fila en las
+búsquedas de artista/álbum/género/autor, donde el valor se descartaba.
+
+Para que ese ahorro no se convierta en un bug silencioso, `run_search()`
+**rechaza en voz alta** una búsqueda de títulos sin tabla (`DEBUGF` + devuelve
+0) en vez de servir una lista mal ordenada. Hoy es inalcanzable — el único
+llamador sin tabla es el constructor, que solo lista álbumes — y si alguien
+agrega un camino nuevo se entera ahí y no en el orden de una lista. `max`
+también se acota a `tracknums_max`.
+
+**Detalle que costó 8 KB del binario descubrir**: `s_ui_scratch` se declaró
+primero con inicializador designado (`.tracknums = s_ui_tracknums`). Con un
+inicializador, los 8 KB del `uniqbuf` dejan de ser `.bss` y viajan como
+`.data` **dentro del binario** — 8 KB de ceros en cada `rockbox.zip` y un
+archivo más que cambia en cada actualización selectiva (contrato v11). Se
+declara sin inicializador y `aura_music_browse()` pone los dos punteros antes
+de usarlo.
+
+**Metro y moonlit deben revisar el mismo patrón**: las tres familias heredaron
+el constructor en segundo plano de la misma pasada (D-341/M-100/D-061). Si su
+navegador de música usa un `uniqbuf` estático del módulo y el constructor
+entra por la misma función, tienen la misma carrera. Lo avisa la supervisora.
+
+**Costo.** `RAM usage` 12 510 136 → 12 518 456 (**+8 320 B de BSS**: el
+`uniqbuf` del constructor). `Binary size` 1 299 736 → 1 299 872 (+136 B, el
+código del wrapper).
+
+**Verificado.**
+- `make -C firmware/build-ipod6g`: **0 errores, 0 warnings** (de paso, el
+  mismo `-Wtype-limits` de D-345 en `a26_font()`, que salió a la luz al
+  recompilar `aura_style.c`, recibió el mismo cast a `unsigned`).
+- `firmware/tools/stack_report.py`: **verde**, sin cambio — 6 608 B (53.8 %).
+- `make -C firmware/rockbox/apps/aura/test test`: **16/16 suites verdes**.
+- Simulador: se **vació** `/.aura/art/albums` para que el constructor tuviera
+  trabajo real (19 JPEG por decodificar) y se entró a Música › Álbumes
+  mientras corría. La lista sale completa, en orden alfabético, sin
+  duplicados ni etiquetas cruzadas, y las **19 maestras se escribieron**
+  durante esa misma corrida — las dos búsquedas se intercalaron de verdad.
+  Captura `docs/screenshots/ronda-estabilidad/09-albumes-durante-constructor.png`.
+- **Límite honesto de esa prueba**: una carrera no se demuestra ausente
+  ejecutándola una vez. Lo que la cierra es estructural — ya no hay memoria
+  compartida entre los dos hilos en este camino —; la corrida solo comprueba
+  que la separación no rompió nada.

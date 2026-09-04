@@ -28,6 +28,7 @@
  * tagcache.h fuera el primer header del archivo, HAVE_TAGCACHE aun no
  * existiria y todo su contenido desaparecería en silencio. Ver D-021. */
 #include "config.h"
+#include "debug.h"
 #include "tagcache.h"
 #include "playlist.h"
 #include "playlist_catalog.h"
@@ -80,10 +81,21 @@ static int32_t s_genre_seek = -1;
 static int32_t s_composer_seek = -1;
 static int s_filter_generation = 0;
 
-/* Suficiente para varios cientos de valores unicos (artista/album/genero);
- * tagcache_search_set_uniqbuf() ignora este buffer para tags no-unicos
- * (tag_title), ver D-021. */
-static uint32_t s_uniqbuf[2048];
+/* D-346: la memoria de trabajo de una busqueda ya NO es del modulo, es
+ * del llamador (aura_music_scratch_t, aura_music.h). Este es el scratch
+ * del hilo de UI; el constructor de caratulas trae el suyo. Antes los
+ * dos hilos escribian estos mismos dos arreglos a la vez, sin candado.
+ *
+ * s_ui_tracknums: numero de pista real por fila. Solo interesa para las
+ * listas de canciones DE UN ALBUM (ordenarlas como el disco,
+ * D-118/D-325); en el resto de las busquedas ni se recolecta. */
+static long s_ui_tracknums[AURA_MUSIC_MAX_SONGS];
+/* Sin inicializador a proposito: con uno, los 8 KB del uniqbuf dejan de
+ * ser .bss y viajan como .data DENTRO del binario (8 KB de ceros en
+ * cada rockbox.zip, y un archivo mas que cambia en cada actualizacion
+ * selectiva -- contrato v11). Los dos punteros los pone
+ * aura_music_browse() antes de usarlo; son dos asignaciones. */
+static aura_music_scratch_t s_ui_scratch;
 
 void aura_music_select_artist(int32_t seek) { s_artist_seek = seek; s_filter_generation++; }
 void aura_music_select_album(int32_t seek)  { s_album_seek = seek; s_filter_generation++; }
@@ -378,7 +390,9 @@ static int count_unique_tag(int tag)
         return 0;
     if (!tagcache_search(&tcs, tag))
         return 0;
-    tagcache_search_set_uniqbuf(&tcs, s_uniqbuf, sizeof(s_uniqbuf));
+    /* D-346: hilo de UI -- su propio scratch, nunca el del constructor. */
+    tagcache_search_set_uniqbuf(&tcs, s_ui_scratch.uniqbuf,
+                                sizeof(s_ui_scratch.uniqbuf));
 
     while (tagcache_get_next(&tcs, buf, sizeof(buf)))
         n++;
@@ -497,7 +511,8 @@ static void sort_items_by_label(aura_music_item_t *items, long *nums, int n)
 }
 
 static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
-                       bool use_composer, aura_music_item_t *out, int max)
+                       bool use_composer, aura_music_item_t *out, int max,
+                       aura_music_scratch_t *scratch)
 {
     struct tagcache_search tcs;
     /* D-345: la etiqueta acaba en out[n].label, de AURA_MUSIC_ITEM_LEN,
@@ -511,10 +526,29 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
 
     if (!tagcache_is_usable())
         return 0;
+
+    /* D-346: una busqueda de TITULOS sin tabla de numeros de pista
+     * devolveria las canciones de un album en orden de tagcache, y
+     * elegir la fila N reproduciria otra cancion -- el bug que D-118/
+     * D-325 cerraron. Se rechaza en voz alta en vez de servir una
+     * lista mal ordenada: hoy es inalcanzable (el unico llamador sin
+     * tabla es el constructor de caratulas, que solo lista albumes) y,
+     * si alguien agrega un camino nuevo, se entera aqui. */
+    if (tag == tag_title && !scratch->tracknums)
+    {
+        DEBUGF("aura_music: busqueda de titulos sin scratch->tracknums\n");
+        return 0;
+    }
+    if (tag == tag_title && max > scratch->tracknums_max)
+        max = scratch->tracknums_max;
+
     if (!tagcache_search(&tcs, tag))
         return 0;
 
-    tagcache_search_set_uniqbuf(&tcs, s_uniqbuf, sizeof(s_uniqbuf));
+    /* D-346: la memoria de trabajo la trae el llamador: este es el
+     * unico punto por el que dos hilos entran a la vez. */
+    tagcache_search_set_uniqbuf(&tcs, scratch->uniqbuf,
+                                sizeof(scratch->uniqbuf));
 
     if (use_composer && s_composer_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_composer, s_composer_seek);
@@ -527,10 +561,14 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
     if (use_composer && s_composer_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_composer, s_composer_seek);
 
-    /* Numero de pista real por fila -- solo interesa para las listas
-     * de canciones DE UN ALBUM (ordenarlas como el disco, D-118/nota);
-     * en el resto de las busquedas se ignora. */
-    static long s_tracknums[AURA_MUSIC_MAX_SONGS]; /* D-325 */
+    /* D-346: la tabla de numeros de pista viene del scratch del
+     * llamador, no de un estatico del modulo (dos hilos la escribian).
+     * Solo se recolecta para busquedas de TITULO: en el resto
+     * (artista/album/genero/autor) el numero de pista no significa
+     * nada, y no recolectarlo ahorra un tagcache_get_numeric() por
+     * fila -- por eso el constructor de caratulas, que solo lista
+     * albumes, no necesita los 20 KB de la tabla. */
+    long *tracknums = (tag == tag_title) ? scratch->tracknums : NULL;
 
     while (n < max && tagcache_get_next(&tcs, buf, sizeof(buf)))
     {
@@ -560,7 +598,8 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
         else
             strlcpy(out[n].label, buf, AURA_MUSIC_ITEM_LEN);
         out[n].seek = (tag == tag_title) ? tcs.idx_id : tcs.result_seek;
-        s_tracknums[n] = tagcache_get_numeric(&tcs, tag_tracknumber);
+        if (tracknums)
+            tracknums[n] = tagcache_get_numeric(&tcs, tag_tracknumber);
         n++;
     }
 
@@ -575,7 +614,7 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
      * para que el indice elegido en pantalla y la cancion que arranca
      * sean siempre la misma. */
     if (!(tag == tag_title && use_album))
-        sort_items_by_label(out, s_tracknums, n);
+        sort_items_by_label(out, tracknums, n);
 
     /* Canciones de un album: orden del DISCO, no del indice de tagcache
      * (encargo del dueno del diseno 2026-08-12, cierra la nota de
@@ -589,19 +628,19 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
         for (a = 1; a < n; a++)
         {
             aura_music_item_t key = out[a];
-            long key_num = s_tracknums[a] > 0 ? s_tracknums[a] : 0x7FFFFFFF;
+            long key_num = tracknums[a] > 0 ? tracknums[a] : 0x7FFFFFFF;
             b = a - 1;
             while (b >= 0)
             {
-                long b_num = s_tracknums[b] > 0 ? s_tracknums[b] : 0x7FFFFFFF;
+                long b_num = tracknums[b] > 0 ? tracknums[b] : 0x7FFFFFFF;
                 if (b_num <= key_num)
                     break;
                 out[b + 1] = out[b];
-                s_tracknums[b + 1] = s_tracknums[b];
+                tracknums[b + 1] = tracknums[b];
                 b--;
             }
             out[b + 1] = key;
-            s_tracknums[b + 1] = key_num == 0x7FFFFFFF ? 0 : key_num;
+            tracknums[b + 1] = key_num == 0x7FFFFFFF ? 0 : key_num;
         }
     }
     return n;
@@ -609,36 +648,46 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
 
 int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_items)
 {
+    /* Hilo de UI. El constructor de caratulas entra por
+     * aura_music_browse_scratch() con el suyo (D-346). */
+    s_ui_scratch.tracknums = s_ui_tracknums;
+    s_ui_scratch.tracknums_max = AURA_MUSIC_MAX_SONGS;
+    return aura_music_browse_scratch(screen, out, max_items, &s_ui_scratch);
+}
+
+int aura_music_browse_scratch(aura_screen_id_t screen, aura_music_item_t *out,
+                              int max_items, aura_music_scratch_t *scratch)
+{
     switch (screen)
     {
     case AURA_SCREEN_MUSIC_ARTISTS:
-        return run_search(tag_artist, false, false, false, false, out, max_items);
+        return run_search(tag_artist, false, false, false, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_ALBUMS:
     case AURA_SCREEN_MUSIC_FLOW:
-        return run_search(tag_album, false, false, false, false, out, max_items);
+        return run_search(tag_album, false, false, false, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_ALBUMS_BY_ARTIST:
-        return run_search(tag_album, true, false, false, false, out, max_items);
+        return run_search(tag_album, true, false, false, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_SONGS:
-        return run_search(tag_title, false, false, false, false, out, max_items);
+        return run_search(tag_title, false, false, false, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_SONGS_BY_ALBUM:
-        return run_search(tag_title, true, true, false, false, out, max_items);
+        return run_search(tag_title, true, true, false, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_SONGS_BY_ARTIST:
-        return run_search(tag_title, true, false, false, false, out, max_items);
+        return run_search(tag_title, true, false, false, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_SONGS_BY_GENRE:
-        return run_search(tag_title, false, false, true, false, out, max_items);
+        return run_search(tag_title, false, false, true, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_GENRES:
-        return run_search(tag_genre, false, false, false, false, out, max_items);
+        return run_search(tag_genre, false, false, false, false, out, max_items, scratch);
     /* Arbol del original (2026-08-13): Autores es la misma jerarquia
      * que Artistas pero sobre tag_composer; Artistas por genero y
      * Recopilaciones reusan los mismos filtros. */
     case AURA_SCREEN_MUSIC_COMPOSERS:
-        return run_search(tag_composer, false, false, false, false, out, max_items);
+        return run_search(tag_composer, false, false, false, false, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_ALBUMS_BY_COMPOSER:
-        return run_search(tag_album, false, false, false, true, out, max_items);
+        return run_search(tag_album, false, false, false, true, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_SONGS_BY_COMPOSER:
-        return run_search(tag_title, false, false, false, true, out, max_items);
+        return run_search(tag_title, false, false, false, true, out, max_items, scratch);
     case AURA_SCREEN_MUSIC_ARTISTS_BY_GENRE:
-        return run_search(tag_artist, false, false, true, false, out, max_items);
+        return run_search(tag_artist, false, false, true, false, out, max_items, scratch);
     default:
         return 0;
     }
@@ -693,7 +742,9 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
     if (!tagcache_search(&tcs, tag))
         return false;
 
-    tagcache_search_set_uniqbuf(&tcs, s_uniqbuf, sizeof(s_uniqbuf));
+    /* D-346: hilo de UI -- su propio scratch. */
+    tagcache_search_set_uniqbuf(&tcs, s_ui_scratch.uniqbuf,
+                                sizeof(s_ui_scratch.uniqbuf));
     if (use_artist && s_artist_seek >= 0)
         tagcache_search_add_filter(&tcs, tag_artist, s_artist_seek);
     if (use_album && s_album_seek >= 0)

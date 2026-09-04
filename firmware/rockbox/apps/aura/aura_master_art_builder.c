@@ -77,6 +77,21 @@ static aura_master_art_key_t s_live_keys[BUILDER_MAX_KEYS];
  * sizeof(aura_music_item_t) es demasiado para cualquier pila. */
 static aura_music_item_t s_album_items[BUILDER_MAX_KEYS];
 
+/* D-346: memoria de trabajo propia de ESTE hilo para la busqueda de
+ * tagcache. Hasta D-346, aura_music_browse() usaba arreglos estaticos
+ * del modulo aura_music.c que el hilo de UI escribia al mismo tiempo --
+ * dos busquedas simultaneas se pisaban el buffer de valores unicos sin
+ * candado alguno (entrar a Albumes mientras esta fase corre era
+ * suficiente). Ahora cada hilo trae el suyo y no hay nada que
+ * sincronizar.
+ *
+ * `tracknums` queda en NULL a proposito: esta fase solo lista ALBUMES y
+ * el numero de pista no significa nada ahi, asi que se ahorran los
+ * 20 KB de la tabla. aura_music_browse_scratch() rechaza en voz alta
+ * una busqueda de titulos con este scratch, en vez de devolver una
+ * lista mal ordenada. */
+static aura_music_scratch_t s_builder_scratch; /* tracknums = NULL */
+
 /* D-344: la espera entre elementos. En segundo plano es HZ/20 (deja el
  * disco y la CPU al usuario); en primer plano solo se cede el turno --
  * el usuario esta esperando esta pasada, no compitiendo con ella. */
@@ -139,7 +154,8 @@ static void run_albums_phase(void)
 
     if (!wait_if_blocked())
         return;
-    count = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_album_items, BUILDER_MAX_KEYS);
+    count = aura_music_browse_scratch(AURA_SCREEN_MUSIC_ALBUMS, s_album_items,
+                                      BUILDER_MAX_KEYS, &s_builder_scratch);
     s_phase_total = count > 0 ? count : 0;
     if (count <= 0)
         return;

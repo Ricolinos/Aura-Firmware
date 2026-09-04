@@ -83,6 +83,35 @@ int aura_music_count_albums(void);
  * aura_music_select_*). Devuelve la cantidad de items. */
 int aura_music_browse(aura_screen_id_t screen, aura_music_item_t *out, int max_items);
 
+/* D-346: memoria de trabajo de UNA busqueda de tagcache, propiedad del
+ * LLAMADOR -- no del modulo. Existe porque aura_music_browse() corre en
+ * dos hilos (la UI y el constructor de caratulas, aura_master_art_builder.c)
+ * y hasta D-346 los dos escribian los mismos dos arreglos estaticos:
+ * el buffer de valores unicos y la tabla de numeros de pista. Cada hilo
+ * trae el suyo; no hay candado ni estado compartido que sincronizar.
+ *
+ *  - `uniqbuf`: lo consume tagcache_search_set_uniqbuf(). 2 048 words
+ *    alcanzan para varios cientos de valores unicos (artista/album/
+ *    genero); tagcache lo ignora para tags no-unicos (tag_title, D-021).
+ *  - `tracknums`: tabla paralela de numeros de pista, SOLO necesaria
+ *    para busquedas de tag_title (ordenar las canciones de un album como
+ *    el disco, D-118/D-325). Un llamador que nunca busque titulos la
+ *    deja en NULL y se ahorra los 20 KB: aura_music_browse_scratch()
+ *    rechaza una busqueda de titulos sin ella en vez de devolver una
+ *    lista mal ordenada en silencio. `tracknums_max` es cuantas caben.
+ */
+typedef struct {
+    uint32_t uniqbuf[2048];
+    long    *tracknums;
+    int      tracknums_max;
+} aura_music_scratch_t;
+
+/* Igual que aura_music_browse(), pero con la memoria de trabajo que
+ * trae el llamador. aura_music_browse() es esta misma funcion con el
+ * scratch del hilo de UI. */
+int aura_music_browse_scratch(aura_screen_id_t screen, aura_music_item_t *out,
+                              int max_items, aura_music_scratch_t *scratch);
+
 /* Fija el contexto de filtro antes de empujar la pantalla hija
  * correspondiente (p.ej. tras elegir un artista, antes de mostrar sus
  * albumes). `seek` es el aura_music_item_t.seek del item elegido. */

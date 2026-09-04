@@ -99,7 +99,11 @@ static unsigned s_category_extras_yellow_rgb24;
 
 int a26_font(a26_font_style_t style)
 {
-    if (style < 0 || style >= A26_FONT_STYLE_COUNT)
+    /* D-345: cast a unsigned -- a26_font_style_t no tiene valores
+     * negativos, asi que `style < 0` avisaba -Wtype-limits en cada
+     * compilacion; el cast atrapa igual cualquier negativo si el enum
+     * llegara a ser con signo. */
+    if ((unsigned)style >= (unsigned)A26_FONT_STYLE_COUNT)
         return FONT_SYSFIXED;
     return font_ids[style];
 }
