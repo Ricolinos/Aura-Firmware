@@ -1821,3 +1821,97 @@ ambigüedad.
 Lo que hace concluyente la tabla es el cruce: con ~4 s "Tras 1 minuto" **sí**
 pide y con ~5 s "Tras 5 minutos" **no** — los dos umbrales son de verdad
 distintos, no "cualquier espera lo dispara".
+
+## D-353 — Cierre de la ronda "estabilidad e imágenes": qué queda probado, qué queda por probar en el iPod
+
+**Estado del árbol al cerrar.** `package_dist.sh` **sin** `--release-tag`
+corre entero, con la puerta de pila dentro, sobre un árbol limpio.
+`Version: 3fb975eecaM-260904`. No se creó ningún tag ni Release: eso lo
+dispara el dueño después de probar en el iPod.
+
+**Reproducibilidad, medida y no supuesta** (contrato v11, de la que dependen
+las actualizaciones selectivas): dos corridas consecutivas de
+`package_dist.sh` producen un `rockbox.ipod` **byte a byte idéntico** y un
+`rockbox.zip` con **9 463 entradas y CERO CRC32 distintos**. Es la prueba de
+que D-348 (`make dep` + build limpio en release) cerró de verdad el desvío de
+7 bytes que tenía el directorio viejo.
+
+**Puertas automáticas que quedan corriendo solas:**
+- `firmware/tools/stack_report.py` en `package_dist.sh`: **6 608 B, 53.8 %**
+  de la pila; ninguna función de `apps/aura/` sobre 1 024 B.
+- `make -C firmware/rockbox/apps/aura/test test`: **16/16 suites**.
+- `firmware/tools/aura_spec_check.py statusbar`: **0.0 px** de desviación.
+- `design-system/scripts/gen_boot_logo.py --check`: los dos bitmaps del árbol
+  coinciden con lo que genera el script.
+
+---
+
+### Lista de verificación en hardware — ronda estabilidad
+
+Lo que el simulador **no puede** probar, ordenado por lo que más importa.
+
+**1. El PANIC (lo que motivó la ronda).** El simulador usa la pila del host:
+nada de esta ronda prueba la aritmética de pila. La confirmación es la marca
+de agua nueva.
+- [ ] Recorrer **10 minutos** los tres caminos sospechosos de D-345:
+      Ajustes › Personalización › **Temas** (listar, activar el default y
+      otro); **Fotos** (cuadrícula y visor); **conectar y desconectar USB**;
+      Music Flow; "Ahora suena" con letras.
+- [ ] Leer la marca de agua: **Ajustes › Acerca de › página 3 (Créditos)**,
+      **SELECT mantenido** sobre esa página. Debe decir `Pila principal: N /
+      12 288 B (máx.)` con **N < 9 216** (el 75 %). Si N se acerca al tope,
+      reportarlo con el número: es el dato que el firmware no puede sacar solo.
+- [ ] El gesto de SELECT mantenido en sí: el inyector del simulador no tiene
+      "hold de botón", así que esa fila solo se ha visto en su forma siempre
+      visible del simulador.
+
+**2. El motor de skins apagado (D-345, punto 4).** Es el cambio de esta ronda
+con más superficie de Rockbox base. Lo que hay que mirar es que la pantalla de
+**retorno** se pinte bien:
+- [ ] Abrir y **salir del visor de imágenes** (imageviewer).
+- [ ] Abrir y **salir de un video** (mpegplayer).
+      Los dos restauran viewports por `viewportmanager`, que toca `sb_*`; con
+      `skins_initialised` en false esas llamadas salen temprano y la pantalla
+      de retorno debe quedar intacta.
+- [ ] **Pantalla USB con el cable real**: conectar, montar, desconectar.
+
+**3. Carátulas (D-350).** El simulador cubrió "Ahora suena" con 1:1, 4:3,
+16:9 y 1:4.
+- [ ] **CoverDrift con una portada 4:3 o 16:9**: el carrusel baraja con un
+      orden determinista y en 60 s solo llega a cuatro álbumes, así que en el
+      simulador no salió ninguna de esas dos. Es la rama de **relleno** a
+      320 px (la de respaldo sí quedó probada con la 1:4).
+- [ ] Con la biblioteca real del dueño: lista, cuadrícula, Music Flow,
+      "Ahora suena" — sin imágenes rotas.
+- [ ] **Primer arranque tras instalar**: `/.aura/art/format.txt` no existe, así
+      que la purga corre sobre la caché real. Medir que no se sienta: en el
+      simulador fueron 3 569 entradas en 0.13 s, pero sobre un SSD de Mac.
+
+**4. Bloqueo (D-351).**
+- [ ] Activar, poner Hold → **pantalla de bloqueo en reposo**; quitar Hold →
+      pide el código.
+- [ ] **"Tras 1 minuto"**: soltar antes del minuto (no pide) y después (pide).
+      En el simulador se probó con la unidad escalada a 2 s; en el aparato la
+      unidad es un minuto de verdad.
+- [ ] **"Solo al encender"**: el Hold no pide nada.
+- [ ] Apagar y encender → pide el código.
+- [ ] **Ícono de candado** en la barra con Hold puesto ≥ 2 s, en: menú raíz,
+      lista de álbumes, "Ahora suena" y Ajustes (el sondeo es ≤ 0.5 s).
+- [ ] **Consumo**: el bucle principal ya no espera botones sin límite — ahora
+      despierta 2 veces por segundo. Con la pantalla dormida no dibuja nada,
+      pero conviene comparar la autonomía en reposo contra la versión
+      anterior. Es el único costo conocido de D-351.
+
+**5. Ajustes que se perdían (D-351, punto 5).**
+- [ ] Cambiar **brillo**, salir de la pantalla con MENU, y **quitar la batería
+      / forzar el reinicio** sin apagar limpio. El brillo debe sobrevivir.
+      Antes de esta ronda se perdía si el reinicio caía dentro de la ventana
+      de 30 s de `call_storage_idle_notifys()`.
+
+**6. Bootloader (D-347).** **Solo después** de que Aura Studio tenga
+"Actualizar el arranque" (§B.5 del plan maestro): el bootloader se flashea en
+NOR y no hay vuelta atrás desde el propio aparato.
+- [ ] La marca aparece en el **mismo sitio** antes y después del handoff
+      bootloader → firmware; solo desaparecen las dos leyendas.
+- [ ] Leyendas legibles, sin parpadeo, sin retardo añadido.
+- [ ] Modo USB del bootloader: el texto cae **debajo** de la marca.
