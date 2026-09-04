@@ -2516,3 +2516,82 @@ nombre de carpeta -- ver arriba.
 **Pendiente, fuera de alcance de esta fase:** moonlit y Metro hacen su
 propio trabajo de fuentes/cobertura en sus propias sesiones (SS D.3
 del maestro), no es trabajo de este repo.
+
+---
+
+## Cierre de la ronda "ajustes 2" (Fase 4)
+
+Build de desarrollo (`firmware/tools/package_dist.sh`, sin
+`--release-tag`) tras las tres fases anteriores. `stack_report.py` OK
+(6608 B peor caso, 53.8 % de 12 KB, sin ninguna función de `apps/aura/`
+sobre 1024 B). Reproducibilidad verificada con dos corridas
+consecutivas: `rockbox.ipod` **byte-idéntico** (mismo SHA-256 en las
+dos); `rockbox.zip` cambia de SHA-256 externo (esperado -- `zip` graba
+timestamps de cada entrada) pero **todas** las entradas del directorio
+central tienen el mismo CRC32 en las dos corridas (`unzip -v` comparado
+línea por línea, sin diferencias fuera de la ruta del propio archivo
+que imprime la herramienta) -- mismo criterio de verificación que la
+ronda anterior. Ningún archivo de Aura Studio (`AuraPalette.swift`,
+`MODIFICATIONS.md`, `THIRD-PARTY-NOTICES.txt`, `theme-format-v1.json`)
+quedó fuera del paquete. No se creó tag ni Release -- **etiqueta
+sugerida `v0.4.6-beta`**, a la espera de autorización explícita del
+dueño (nunca de un mensaje relayado entre sesiones, mismo criterio que
+cerró la ronda anterior).
+
+### Lista de verificación en hardware — ajustes 2
+
+Lo que el simulador no puede probar por completo, o que solo tiene
+sentido con las tres familias instaladas.
+
+**1. Ajustes compartidos, ida y vuelta con Cambiar sistema (D-355/D-356).**
+El simulador probó el vector A.3 escrito a mano y el ciclo de
+aplicar/reescribir, pero no un Cambiar sistema real de ida y vuelta.
+- [ ] En Aura: cambiar brillo, activar bloqueo con una clave, elegir
+      "Pedir código: Tras 1 minuto" → Ajustes › Cambiar sistema › Metro
+      (o moonlit.aura, la que esté instalada) → confirmar que Metro
+      arranca con el mismo brillo y el mismo bloqueo (aunque Metro
+      todavía no traduzca su UI a los seis idiomas -- esa es harina de
+      su propia fase).
+      **Sin release de Metro/moonlit con su Fase 2 propia ya integrada,
+      este punto no se puede completar** -- queda para cuando las tres
+      familias tengan su release de esta ronda (nota del relevo
+      2026-09-04).
+- [ ] Volver a Aura desde Metro/moonlit: los mismos valores se
+      mantuvieron (no se perdió el brillo/bloqueo al volver).
+- [ ] `Restablecer ajustes` en Aura reescribe `/.aura/settings.cfg` con
+      los valores por defecto (`rev+1`) -- confirmar que Metro/moonlit
+      lo reciben en su próximo arranque, cuando tengan esa fase.
+
+**2. Hora en cada sincronización (D-355, precisión de contrato).**
+Firmware sin cambios de código en esta ronda (ya aplicaba `rtc_sync_*`
+desde D-293) -- el trabajo fue de Aura Studio.
+- [ ] Sincronizar desde Aura Studio con Aura corriendo: la hora del
+      iPod queda igual a la del Mac sin reiniciar (comportamiento ya
+      existente, confirmar que no regresó).
+
+**3. Idiomas (D-357) -- lo único que de verdad necesita hardware.**
+Fuentes Inter, `check_fonts.py --coverage` y la matriz de 36 capturas
+ya confirmaron cobertura de glifos y ausencia de cortes en el
+simulador; falta la lectura humana en la pantalla real y con las
+proporciones/contraste reales del LCD.
+- [ ] Ajustes › Idioma: elegir cada uno de los seis y recorrer Ajustes,
+      Bloqueo y "Acerca de" en **ruso** y **alemán** (los dos ~30 % más
+      largos) -- sin cortes de texto, sin `?` ni `·` en ningún glifo.
+- [ ] Un álbum con título **cirílico** real (no sintético): aparece
+      bien en la lista de Álbumes, en Music Flow y en "Ahora suena".
+      El simulador ya lo verificó con fixtures de prueba
+      (`gen_test_media.sh --lang-fixtures`, ver D-357) -- este punto es
+      para confirmar con música real del dueño, no repetir la prueba
+      sintética.
+- [ ] Cambiar idioma en Ajustes › Idioma escribe `/.aura/settings.cfg`
+      con el código de dos letras correcto (confirmable leyendo el
+      archivo por USB) -- y, cuando Metro/moonlit tengan su Fase 3
+      propia, que las otras familias arranquen ya en ese idioma sin
+      configurarlo de nuevo (nota del relevo 2026-09-04: se prueba
+      cuando las tres tengan release).
+
+**4. Regresión de la ronda anterior.** Nada de esta ronda tocó los tres
+caminos sospechosos de D-345 ni el motor de skins de D-345 punto 4, pero
+vale confirmar que siguen sanos tras el build limpio de esta ronda (10
+minutos por Personalización › Temas, Fotos, USB, Music Flow, "Ahora
+suena" con letras -- mismo criterio que la lista de la ronda anterior).
