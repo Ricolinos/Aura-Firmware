@@ -62,6 +62,15 @@
 
 #include <stdbool.h>
 
+/* D-344: fase de la pasada, para la pantalla "Actualizando biblioteca".
+ * El orden es el del recorrido (albumes -> artistas -> fotos). */
+typedef enum {
+    AURA_MASTER_ART_PHASE_IDLE = 0,
+    AURA_MASTER_ART_PHASE_ALBUMS,
+    AURA_MASTER_ART_PHASE_ARTISTS,
+    AURA_MASTER_ART_PHASE_PHOTOS,
+} aura_master_art_phase_t;
+
 /* Arranca el hilo la primera vez que se llama (aura_music_db_ready(),
  * la misma puerta de "base recien confirmada usable" que antes disparaba
  * el precache retirado). Llamadas repetidas son un no-op silencioso. */
@@ -100,5 +109,46 @@ void aura_master_art_builder_suspend(void);
  * donde suspend() lo dejo. No-op si nunca arranco o si ya esta
  * corriendo. */
 void aura_master_art_builder_resume(void);
+
+/* D-344 (encargo del dueno: "Actualizar Biblioteca"). Una PREPARACION
+ * explicita -- la manual de Ajustes, el marcador de un sync de Studio y
+ * el primer arranque tras actualizar el firmware -- termina la pasada de
+ * imagenes ANTES de devolverle el control al usuario, con su progreso en
+ * la misma pantalla de "Actualizando biblioteca". Es exactamente lo que
+ * D-341 quito del camino normal (y con razon: ahi bloqueaba sin que
+ * nadie lo pidiera); aca el usuario lo pidio y se le advirtio cuanto
+ * tarda, que es la diferencia entre las dos situaciones.
+ *
+ * `aura_sync.c` es el unico llamador de estas cuatro. */
+
+/* Progreso de la pasada en curso. `total` en 0 = todavia no se sabe
+ * (la fase de fotos recorre el directorio en streaming, sin conteo
+ * previo): la pantalla muestra solo el hecho. Devuelve false si no hay
+ * pasada corriendo. */
+bool aura_master_art_builder_progress(aura_master_art_phase_t *phase,
+                                       int *done, int *total);
+
+/* true en cuanto una pasada COMPLETA (las tres fases, sin cortes)
+ * termino desde el ultimo restart(). Lo que espera la pantalla de
+ * preparacion para cerrarse. */
+bool aura_master_art_builder_pass_done(void);
+
+/* true si el hilo existe ahora mismo. La pantalla de preparacion lo usa
+ * para no quedarse esperando una pasada que nunca va a llegar (el hilo
+ * no se pudo crear, o un suspend() lo bajo): sin hilo no hay progreso
+ * posible y devolver el control es mejor que un progreso congelado. */
+bool aura_master_art_builder_is_running(void);
+
+/* Primer plano: sin la espera de HZ/20 entre elementos y sin ceder ante
+ * la pausa de animacion -- el usuario esta mirando una pantalla de
+ * progreso y no hay carrusel con el que competir. Sigue cediendo la CPU
+ * (yield) para que la pantalla se redibuje, y sigue respetando
+ * suspend() y el audio. */
+void aura_master_art_builder_set_foreground(bool foreground);
+
+/* Arranca el hilo si hacia falta Y reinicia la pasada desde el
+ * principio, para que la preparacion recorra TODO y no continue una
+ * pasada a medias que ya paso por los albumes. */
+void aura_master_art_builder_begin_full_pass(void);
 
 #endif /* AURA_MASTER_ART_BUILDER_H */

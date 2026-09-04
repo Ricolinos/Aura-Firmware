@@ -52,6 +52,16 @@ static bool s_running = false;              /* el hilo esta vivo ahora mismo */
 static volatile bool s_paused = false;      /* pausa rapida (animacion/scroll) */
 static volatile bool s_stop_requested = false;    /* suspend(): salir YA */
 static volatile bool s_restart_requested = false; /* restart(): reiniciar */
+/* D-344: progreso de la pasada. Lo ESCRIBE solo el hilo del constructor
+ * y lo LEE solo el de UI; son enteros de palabra y Rockbox planifica de
+ * forma cooperativa (el cambio de contexto solo ocurre en yield/sleep/
+ * bloqueo), asi que no hace falta candado -- misma disciplina que
+ * s_paused. */
+static volatile aura_master_art_phase_t s_phase = AURA_MASTER_ART_PHASE_IDLE;
+static volatile int s_phase_done = 0;
+static volatile int s_phase_total = 0;   /* 0 = desconocido (fotos) */
+static volatile bool s_pass_done = false;
+static volatile bool s_foreground = false;
 
 /* Buffer de trabajo propio del constructor -- 130x130 alcanza para
  * album/artista (130) y fotos (80, cabe con margen). Nunca el scratch
@@ -66,6 +76,17 @@ static aura_master_art_key_t s_live_keys[BUILDER_MAX_KEYS];
 /* Snapshot de albumes de esta pasada -- static: BUILDER_MAX_KEYS *
  * sizeof(aura_music_item_t) es demasiado para cualquier pila. */
 static aura_music_item_t s_album_items[BUILDER_MAX_KEYS];
+
+/* D-344: la espera entre elementos. En segundo plano es HZ/20 (deja el
+ * disco y la CPU al usuario); en primer plano solo se cede el turno --
+ * el usuario esta esperando esta pasada, no compitiendo con ella. */
+static void breathe(void)
+{
+    if (s_foreground)
+        yield();
+    else
+        sleep(HZ / 20);
+}
 
 static bool should_stop(void)
 {
@@ -97,7 +118,11 @@ static bool audio_wants_disk(void)
  * fase (una pasada incompleta no debe borrar nada). */
 static bool wait_if_blocked(void)
 {
-    while (s_paused || audio_wants_disk())
+    /* D-344: en primer plano la pausa de animacion no aplica -- la que
+     * la levanta es la cadencia de Music Flow, y durante la preparacion
+     * lo que hay en pantalla es el progreso, no un carrusel. El audio
+     * SI se sigue respetando: si suena musica, el disco es suyo. */
+    while ((s_paused && !s_foreground) || audio_wants_disk())
     {
         if (should_stop())
             return false;
@@ -115,21 +140,24 @@ static void run_albums_phase(void)
     if (!wait_if_blocked())
         return;
     count = aura_music_browse(AURA_SCREEN_MUSIC_ALBUMS, s_album_items, BUILDER_MAX_KEYS);
+    s_phase_total = count > 0 ? count : 0;
     if (count <= 0)
         return;
 
     for (i = 0; i < count; i++)
     {
+        s_phase_done = i;
         if (!wait_if_blocked())
             return; /* pasada incompleta: sin GC, se retoma en la proxima vuelta */
         if (aura_albumart_build_master(s_album_items[i].seek, &s_live_keys[nkeys], s_flat)
             && nkeys < BUILDER_MAX_KEYS)
             nkeys++;
-        sleep(HZ / 20);
+        breathe();
     }
     /* GC de cfcache/a-* Y /.aura/art/albums con la misma tabla (D-338,
      * ahora tambien aura_master_art_gc() por dentro de esta funcion) --
      * unico lugar donde corre desde que se retiro el precache. */
+    s_phase_done = count;
     aura_albumart_gc_orphans(s_live_keys, nkeys);
     DEBUGF("aura_master_art_builder: albumes %d, claves vivas %d\n", count, nkeys);
 }
@@ -141,6 +169,7 @@ static void run_artists_phase(void)
     int i, nkeys = 0;
     bool overflow = false;
 
+    s_phase_total = count > 0 ? count : 0;
     if (count <= 0)
         return;
     for (i = 0; i < count; i++)
@@ -149,6 +178,7 @@ static void run_artists_phase(void)
         uint32_t mtime = 0;
         aura_master_art_key_t key;
 
+        s_phase_done = i;
         if (!wait_if_blocked())
             return; /* pasada incompleta: sin GC */
         if (!aura_artist_images_entry(i, path, sizeof(path), &mtime))
@@ -159,7 +189,7 @@ static void run_artists_phase(void)
             s_live_keys[nkeys++] = key;
         else
             overflow = true;
-        sleep(HZ / 20);
+        breathe();
     }
     if (overflow)
         DEBUGF("aura_master_art_builder: %d fotos de artista > cupo GC %d, "
@@ -176,6 +206,7 @@ static void run_photos_phase(void)
     int nkeys = 0;
     bool overflow = false;
 
+    s_phase_total = 0; /* streaming del directorio: no hay conteo previo */
     if (!wait_if_blocked())
         return;
     d = opendir(aura_photos_dir());
@@ -197,11 +228,12 @@ static void run_photos_phase(void)
         info = dir_get_info(d, entry);
         if (!aura_photos_build_master(entry->d_name, (uint32_t)info.mtime, &key, s_flat))
             continue;
+        s_phase_done++;
         if (nkeys < BUILDER_MAX_KEYS)
             s_live_keys[nkeys++] = key;
         else
             overflow = true;
-        sleep(HZ / 20);
+        breathe();
     }
     closedir(d);
 
@@ -227,23 +259,39 @@ static void builder_thread(void)
             break;
         s_restart_requested = false;
 
+        s_phase = AURA_MASTER_ART_PHASE_ALBUMS;
+        s_phase_done = 0;
+        s_phase_total = 0;
         run_albums_phase();
         if (s_stop_requested)
             break;
         if (s_restart_requested)
             continue;
 
+        s_phase = AURA_MASTER_ART_PHASE_ARTISTS;
+        s_phase_done = 0;
+        s_phase_total = 0;
         run_artists_phase();
         if (s_stop_requested)
             break;
         if (s_restart_requested)
             continue;
 
+        s_phase = AURA_MASTER_ART_PHASE_PHOTOS;
+        s_phase_done = 0;
+        s_phase_total = 0;
         run_photos_phase();
         if (s_stop_requested)
             break;
         if (s_restart_requested)
             continue;
+
+        /* D-344: las tres fases completas y sin cortes -- lo unico que
+         * autoriza a la pantalla de preparacion a cerrarse. Se pone
+         * DESPUES de las guardas de stop/restart de arriba: una pasada
+         * abortada nunca cuenta como terminada. */
+        s_phase = AURA_MASTER_ART_PHASE_IDLE;
+        s_pass_done = true;
 
         while (!s_stop_requested && !s_restart_requested)
             idle_wait();
@@ -276,6 +324,7 @@ void aura_master_art_builder_restart(void)
 {
     if (!s_started)
         return; /* nunca arranco: start() lo hara desde albumes de todos modos */
+    s_pass_done = false;
     s_restart_requested = true;
     /* Si esta suspendido (p.ej. a mitad de un handoff), no hay hilo que
      * despertar -- resume() lo va a recrear y el bucle de arriba
@@ -304,4 +353,45 @@ void aura_master_art_builder_resume(void)
     if (!s_started || s_running)
         return;
     start_thread_if_needed();
+}
+
+/* -- D-344: preparacion explicita (Ajustes > Actualizar biblioteca,
+ * marcador de sync, primer arranque tras actualizar) -------------------- */
+
+bool aura_master_art_builder_progress(aura_master_art_phase_t *phase,
+                                       int *done, int *total)
+{
+    if (phase)
+        *phase = s_phase;
+    if (done)
+        *done = s_phase_done;
+    if (total)
+        *total = s_phase_total;
+    return s_running && s_phase != AURA_MASTER_ART_PHASE_IDLE;
+}
+
+bool aura_master_art_builder_pass_done(void)
+{
+    return s_pass_done;
+}
+
+bool aura_master_art_builder_is_running(void)
+{
+    return s_running;
+}
+
+void aura_master_art_builder_set_foreground(bool foreground)
+{
+    s_foreground = foreground;
+}
+
+void aura_master_art_builder_begin_full_pass(void)
+{
+    s_pass_done = false;
+    /* start() es no-op si el hilo ya existe; restart() lo devuelve al
+     * principio de albumes. Juntos: "recorre TODO desde cero", que es lo
+     * que una preparacion explicita promete -- continuar una pasada a
+     * medias dejaria los albumes sin revisar. */
+    aura_master_art_builder_start();
+    aura_master_art_builder_restart();
 }

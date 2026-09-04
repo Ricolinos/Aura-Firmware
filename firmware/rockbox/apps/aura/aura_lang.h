@@ -382,6 +382,12 @@ typedef enum {
     AURA_STR_LIBRARY_STATE_SKIPPED,
     AURA_STR_LIBRARY_SCAN_FOLDERS_FMT,      /* "%s elementos leidos" (entradas de disco recorridas) */
     AURA_STR_LIBRARY_INDEXING_FMT,          /* "Indexando %s" */
+    /* D-344: fase de imagenes de la preparacion (cache maestra
+     * compartida /.aura/art). Fotos no lleva total: su recorrido es en
+     * streaming sobre el directorio, sin conteo previo. */
+    AURA_STR_LIBRARY_ART_ALBUMS_FMT,        /* "Preparando caratulas %d/%d" */
+    AURA_STR_LIBRARY_ART_ARTISTS_FMT,       /* "Preparando fotos de artistas %d/%d" */
+    AURA_STR_LIBRARY_ART_PHOTOS_FMT,        /* "Preparando imagenes %d" */
     AURA_STR_LIBRARY_POSTPONE_HINT,         /* "Menu: continuar en el proximo arranque" */
     AURA_STR_LIBRARY_ERROR_VERSION_FMT,     /* "%d" version del marcador */
     AURA_STR_LIBRARY_ERROR_ATTEMPTS,

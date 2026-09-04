@@ -967,9 +967,32 @@ void aura_widgets_draw_digits(const char *title, const int *digits,
 
 #define CONFIRM_MAX_LINES 4
 
+/* D-344: largo en bytes de la secuencia UTF-8 que empieza en `c`.
+ * Devuelve 1 para cualquier byte invalido -- avanzar de a uno es lo peor
+ * que puede pasar y nunca se pasa del terminador, que es lo unico que
+ * importa aqui. */
+static int utf8_seq_len(unsigned char c)
+{
+    if (c < 0x80) return 1;
+    if ((c & 0xE0) == 0xC0) return 2;
+    if ((c & 0xF0) == 0xE0) return 3;
+    if ((c & 0xF8) == 0xF0) return 4;
+    return 1;
+}
+
 /* Word-wrap simple y propio: no hace falta la generalidad de
  * apps/gui/splash.c (tabs, multi-pantalla, memoria de tamano maximo)
- * para un cuerpo corto de 2-3 lineas fijas. */
+ * para un cuerpo corto de 2-3 lineas fijas.
+ *
+ * D-344: avanza por CARACTERES UTF-8, no por bytes. Antes medía
+ * `lcd_getstringsize()` sobre un prefijo de bytes, asi que al llegar al
+ * primer byte de una letra acentuada el buffer terminaba a mitad de
+ * secuencia; el ancho de esa secuencia rota se dispara y el envoltorio
+ * cortaba la linea ANTES de tiempo. Visible en cualquier texto largo en
+ * español: "Actualizar biblioteca" partia en "…y prepara las" / 
+ * "carátulas…" con media linea vacia, y el cuerpo se pasaba de
+ * CONFIRM_MAX_LINES y se truncaba. Afectaba a todo cuerpo de aviso y a
+ * Avisos legales, no solo a esta pantalla. */
 int aura_widgets_wrap_text(const char *text, int max_width, const char **lines, int *lens, int max_lines)
 {
     int n = 0;
@@ -997,8 +1020,21 @@ int aura_widgets_wrap_text(const char *text, int max_width, const char **lines, 
 
         while (*cursor && *cursor != '\n')
         {
-            int len = (int)(cursor - line_start) + 1;
+            int step = utf8_seq_len((unsigned char)*cursor);
+            int len;
             int w, h;
+
+            /* Secuencia truncada al final del texto: no leer mas alla
+             * del terminador. */
+            for (int k = 1; k < step; k++)
+            {
+                if (cursor[k] == '\0')
+                {
+                    step = k;
+                    break;
+                }
+            }
+            len = (int)(cursor - line_start) + step;
             if (len >= (int)sizeof(buf))
                 break;
             memcpy(buf, line_start, len);
@@ -1008,7 +1044,7 @@ int aura_widgets_wrap_text(const char *text, int max_width, const char **lines, 
                 break;
             if (*cursor == ' ')
                 last_space = cursor;
-            cursor++;
+            cursor += step;
         }
 
         if (*cursor == '\n')

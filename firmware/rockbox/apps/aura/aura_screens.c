@@ -4130,10 +4130,22 @@ static void draw_library_sync(void)
      * real que el slider (D-277), tokens PROGRESS_TRACK/PROGRESS_FILL. */
     {
         char detail[24];
-        int fraction = aura_sync_music_progress_256(detail, sizeof(detail));
+        /* D-344: terminada la base, la misma barra sigue con la fase de
+         * imagenes (cache maestra compartida /.aura/art) -- es parte de
+         * "preparar la biblioteca", no una pantalla nueva. */
+        aura_master_art_phase_t art_phase = AURA_MASTER_ART_PHASE_IDLE;
+        int art_done = 0, art_total = 0;
+        bool art = aura_sync_art_progress(&art_phase, &art_done, &art_total);
+        int fraction;
         int bar_y = y + A26_SPACING_MD;
         int bar_h = A26_SPACING_MD;
         int fill_w;
+
+        detail[0] = '\0';
+        /* La fase de fotos no tiene total (recorrido en streaming): su
+         * barra se queda vacia y el texto dice solo cuantas van. */
+        fraction = art ? (art_total > 0 ? (art_done * 256) / art_total : 0)
+                       : aura_sync_music_progress_256(detail, sizeof(detail));
 
         if (aura_sync_section_state(AURA_SYNC_SECTION_MUSIC) != AURA_SYNC_SECTION_SKIPPED)
         {
@@ -4153,7 +4165,22 @@ static void draw_library_sync(void)
             a26_shell_capsule_ends_over_content(box_x, bar_y, box_w, bar_h,
                                                 a26_color(A26_SHELL_BG));
 
-            if (detail[0])
+            if (art)
+            {
+                lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
+                lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));
+                if (art_phase == AURA_MASTER_ART_PHASE_PHOTOS)
+                    snprintf(buf, sizeof(buf),
+                             aura_str(AURA_STR_LIBRARY_ART_PHOTOS_FMT), art_done);
+                else
+                    snprintf(buf, sizeof(buf),
+                             aura_str(art_phase == AURA_MASTER_ART_PHASE_ARTISTS
+                                      ? AURA_STR_LIBRARY_ART_ARTISTS_FMT
+                                      : AURA_STR_LIBRARY_ART_ALBUMS_FMT),
+                             art_done, art_total);
+                lcd_putsxy(box_x, bar_y + bar_h + A26_SPACING_SM, (const unsigned char *)buf);
+            }
+            else if (detail[0])
             {
                 lcd_setfont(a26_font(A26_FONT_STYLE_CAPTION));
                 lcd_set_foreground(a26_color(A26_TEXT_SECONDARY));

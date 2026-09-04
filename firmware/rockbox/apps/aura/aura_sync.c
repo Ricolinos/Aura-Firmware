@@ -21,6 +21,7 @@
  *
  ****************************************************************************/
 #include "aura_sync.h"
+#include "aura_master_art_builder.h" /* D-344 */
 
 #include <string.h>
 #include <stdio.h>
@@ -67,6 +68,19 @@
 typedef enum { JOB_NONE = 0, JOB_UPDATE, JOB_REBUILD } job_kind_t;
 
 static aura_sync_state_t s_state = AURA_SYNC_IDLE;
+/* D-344: la pasada de imagenes NO arranca en cuanto termina el trabajo de
+ * tagcache. Medido en el simulador con trazas: en ese instante
+ * aura_music_browse() todavia devuelve 0 albumes -- la base acaba de
+ * comitirse y aun no es consultable --, asi que la fase de albumes no
+ * hacia nada, la de artistas tampoco, y la pasada se daba por "completa"
+ * en el primer tick sin haber preparado UNA sola caratula. El sintoma
+ * era invisible (la pantalla se cerraba enseguida, como si hubiera
+ * terminado) y dejaba justo la espera que esta decision viene a quitar. */
+static bool s_art_started = false;
+static int  s_art_wait_ticks = 0;
+/* Tope de la espera: pasado esto se arranca igual. Nunca dejar al usuario
+ * atrapado en la pantalla por una base que no termina de anunciarse. */
+#define AURA_ART_DB_WAIT_MAX_TICKS (HZ * 10)
 static aura_sync_marker_t s_marker;
 static aura_sync_section_state_t s_section[AURA_SYNC_SECTION_COUNT];
 static job_kind_t s_job = JOB_NONE;
@@ -364,6 +378,7 @@ bool aura_sync_needs_screen(void)
 {
     return s_state == AURA_SYNC_WAIT_TAGCACHE
         || s_state == AURA_SYNC_RUNNING
+        || s_state == AURA_SYNC_BUILDING_ART
         || s_state == AURA_SYNC_ERROR_VERSION
         || s_state == AURA_SYNC_ERROR_ATTEMPTS
         || s_state == AURA_SYNC_NEEDS_REBOOT;
@@ -373,7 +388,16 @@ bool aura_sync_job_active(void)
 {
     return s_state == AURA_SYNC_WAIT_TAGCACHE
         || s_state == AURA_SYNC_RUNNING
-        || s_state == AURA_SYNC_POSTPONED;
+        || s_state == AURA_SYNC_POSTPONED
+        /* D-344: la fase de imagenes tambien es "trabajo en curso" --
+         * aura_main.c solo llama aura_sync_tick() cuando esto es true, y
+         * sin ella la pantalla de preparacion no avanzaba ni se cerraba
+         * nunca (visto en el simulador). Los otros tres llamadores lo
+         * quieren igual: no releer el marcador debajo del trabajo
+         * (check_pending), no disparar un rebuild encima
+         * (aura_music_db_ready) y no encolar otro manual mientras este
+         * se muestra. */
+        || s_state == AURA_SYNC_BUILDING_ART;
 }
 
 aura_sync_state_t aura_sync_state(void)
@@ -421,7 +445,42 @@ static void finish_ok(void)
         aura_artist_images_invalidate();
     }
     set_all_sections(AURA_SYNC_SECTION_DONE);
+
+    /* D-344: la base esta lista, pero "biblioteca preparada" incluye las
+     * imagenes -- si se devuelve el control aca, Music Flow y las
+     * rejillas vuelven a mostrar marcadores de posicion mientras el
+     * constructor camina en segundo plano, que es justo lo que el dueno
+     * reporto como espera (2026-08-27). Se termina la pasada COMPLETA
+     * antes de cerrar la pantalla, en primer plano (sin la espera de
+     * HZ/20). Posponible con Menu como el resto de esta pantalla.
+     *
+     * Solo cuando la musica estuvo en juego: un marcador de solo
+     * Videos/Fotos no toca albumes ni fotos de artista, y esperar una
+     * pasada entera por eso seria gratis para el usuario. */
+    if (s_section[AURA_SYNC_SECTION_MUSIC] != AURA_SYNC_SECTION_SKIPPED)
+    {
+        aura_master_art_builder_set_foreground(true);
+        s_art_started = false;
+        s_art_wait_ticks = 0;
+        s_state = AURA_SYNC_BUILDING_ART;
+        return;
+    }
     go_idle();
+}
+
+/* D-344: sale de la fase de imagenes -- el constructor vuelve a su
+ * cadencia de segundo plano pase lo que pase (terminada, pospuesta o
+ * interrumpida). */
+static void leave_art_phase(void)
+{
+    aura_master_art_builder_set_foreground(false);
+}
+
+bool aura_sync_art_progress(aura_master_art_phase_t *phase, int *done, int *total)
+{
+    if (s_state != AURA_SYNC_BUILDING_ART)
+        return false;
+    return aura_master_art_builder_progress(phase, done, total);
 }
 
 static void start_job(void)
@@ -571,6 +630,40 @@ bool aura_sync_tick(void)
         job_ended();
         return true;
 
+    case AURA_SYNC_BUILDING_ART:
+        if (!s_art_started)
+        {
+            /* La base tiene que ser consultable ANTES de recorrerla: si
+             * no, la fase de albumes se salta entera en silencio. */
+            if (!tagcache_is_usable() && s_art_wait_ticks < AURA_ART_DB_WAIT_MAX_TICKS)
+            {
+                s_art_wait_ticks++;
+                return true;
+            }
+            s_art_started = true;
+            aura_master_art_builder_begin_full_pass();
+            return true;
+        }
+
+        /* D-344: la pantalla se cierra cuando la pasada COMPLETA termino
+         * (las tres fases, sin cortes). Si el constructor se murio o
+         * nunca arranco, pass_done() no llega -- por eso tambien se sale
+         * si dejo de correr: mejor devolver el control que dejar al
+         * usuario mirando un progreso congelado. */
+        if (aura_master_art_builder_pass_done())
+        {
+            leave_art_phase();
+            go_idle();
+            return true;
+        }
+        if (!aura_master_art_builder_is_running())
+        {
+            leave_art_phase();
+            go_idle();
+            return true;
+        }
+        return true; /* progreso: redibujar */
+
     default:
         return false;
     }
@@ -586,6 +679,13 @@ void aura_sync_postpone(void)
         s_force_full = false;
         go_idle();
         break;
+    case AURA_SYNC_BUILDING_ART:
+        /* D-344: Menu cierra la pantalla; el constructor NO se cancela,
+         * vuelve a su cadencia de segundo plano y termina solo. */
+        leave_art_phase();
+        s_state = AURA_SYNC_IDLE;
+        break;
+
     case AURA_SYNC_RUNNING:
         tagcache_stop_scan();
         s_state = AURA_SYNC_POSTPONED;

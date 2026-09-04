@@ -52,6 +52,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "aura_sync_marker.h"
+#include "aura_master_art_builder.h" /* D-344: aura_master_art_phase_t */
 
 typedef enum {
     AURA_SYNC_IDLE = 0,       /* nada pendiente, ninguna pantalla */
@@ -65,6 +66,10 @@ typedef enum {
     AURA_SYNC_NEEDS_REBOOT,   /* tagcache pospuso el commit "hasta el proximo
                                  arranque" (sin buffer temporal suficiente):
                                  no es un fallo, se termina solo al encender */
+    AURA_SYNC_BUILDING_ART,   /* D-344: base lista; terminando la cache
+                                 maestra de imagenes (/.aura/art) antes de
+                                 devolver el control. Posponible con Menu:
+                                 el constructor sigue en segundo plano. */
 } aura_sync_state_t;
 
 typedef enum {
@@ -106,9 +111,17 @@ void aura_sync_postpone(void);
  * la proxima desconexion USB (el marcador se queda). */
 void aura_sync_dismiss(void);
 
-/* Ajustes > Reconstruir biblioteca: escribe el marcador con las tres
- * secciones y arranca de inmediato. false si no se pudo escribir. */
+/* Ajustes > Actualizar biblioteca: escribe el marcador con las tres
+ * secciones y arranca de inmediato. false si no se pudo escribir.
+ * D-344: al terminar la base sigue la cache maestra de imagenes
+ * (AURA_SYNC_BUILDING_ART) -- "preparar la biblioteca" incluye dejar las
+ * caratulas listas, que es lo que hace que Music Flow y las rejillas no
+ * esperen despues. */
 bool aura_sync_request_manual(void);
+
+/* D-344: progreso de la fase de imagenes, para la pantalla. Devuelve
+ * false si no estamos en esa fase. `total` en 0 = desconocido. */
+bool aura_sync_art_progress(aura_master_art_phase_t *phase, int *done, int *total);
 
 /* D-327 (contrato v10): deja /.aura/sync-pending.json con music=true y
  * attempts=0 -- lo que el firmware que DESPIERTA tras un cambio de
