@@ -407,6 +407,25 @@ static void finish_with_reflection(aura_albumart_t *out, unsigned bg)
 
 /* -- Decodificacion (solo sin maestra) ----------------------------------- */
 
+/* D-343: buffers de sondeo de caratula, FUERA de la pila y compartidos
+ * por decode_album_master() y decode_album_at().
+ *
+ * `struct mp3entry` son ~2.7 KB en este target (ID3V2_BUF_SIZE 1800 +
+ * path[MAX_PATH] + id3v1buf[4][92]) y la pila del hilo de UI mide 8 KB
+ * (D-226). Con dos de ellos en la pila, el marco de cada una de estas
+ * funciones pasaba de 3.5 KB y el peor camino de la UI
+ * (draw_choice_list -> ... -> aqui -> read_bmp_fd -> FAT -> ATA) sumaba
+ * ~10 200 bytes: el *PANIC* "stkov main" reportado sobre e554e31cff.
+ *
+ * Las dos funciones nunca estan vivas a la vez (la segunda se llama
+ * despues de que la primera regreso) y las dos tocan esto SOLO con
+ * aura_master_art_decode_lock() tomado -- el constructor en segundo
+ * plano entra por aura_albumart_build_master(), asi que sin candado
+ * serian una carrera entre dos hilos. */
+static struct mp3entry s_probe_id3;
+static struct mp3entry s_fake_id3;
+static char s_art_path[MAX_PATH];
+
 /* Localiza la fuente de la caratula del album -- archivo junto al album
  * (find_albumart(), misma logica que Ahora suena) o JPEG embebido en la
  * pista representativa -- y la decodifica con fill-crop al lado de la
@@ -424,13 +443,10 @@ static void finish_with_reflection(aura_albumart_t *out, unsigned bg)
 static bool decode_album_master(int32_t album_seek, aura_albumart_key_t *key,
                                 fb_data *flat, bool *definitive)
 {
-    static struct mp3entry s_probe_id3; /* ~1KB, fuera del stack; bajo candado */
     char path[MAX_PATH];
     char artist[128] = "";
     char album[128] = "";
-    struct mp3entry fake_id3;
     struct dim dim = { AURA_MASTER_ART_ALBUM_SIZE, AURA_MASTER_ART_ALBUM_SIZE };
-    char art_path[MAX_PATH];
     bool ok = false;
 
     *definitive = false;
@@ -438,16 +454,19 @@ static bool decode_album_master(int32_t album_seek, aura_albumart_key_t *key,
                                   artist, sizeof(artist), album, sizeof(album), key))
         return false;
 
-    memset(&fake_id3, 0, sizeof(fake_id3));
-    strlcpy(fake_id3.path, path, sizeof(fake_id3.path));
-    fake_id3.artist = artist;
-    fake_id3.album = album;
-
     aura_master_art_decode_lock();
 
-    if (find_albumart(&fake_id3, art_path, sizeof(art_path), &dim))
+    /* artist/album siguen en la pila (128 B cada uno): s_fake_id3 solo
+     * apunta a ellos mientras dura esta llamada, y solo se lee aqui
+     * dentro, con el candado tomado. */
+    memset(&s_fake_id3, 0, sizeof(s_fake_id3));
+    strlcpy(s_fake_id3.path, path, sizeof(s_fake_id3.path));
+    s_fake_id3.artist = artist;
+    s_fake_id3.album = album;
+
+    if (find_albumart(&s_fake_id3, s_art_path, sizeof(s_art_path), &dim))
     {
-        ok = aura_master_art_decode_fill(art_path, 0, 0, AURA_MASTER_ART_ALBUM_SIZE, flat);
+        ok = aura_master_art_decode_fill(s_art_path, 0, 0, AURA_MASTER_ART_ALBUM_SIZE, flat);
         /* El archivo existe (find_albumart lo acaba de ver): un rechazo
          * del decodificador es un veredicto sobre ESE archivo, no un
          * fallo transitorio. */
@@ -497,27 +516,30 @@ static bool decode_album_master(int32_t album_seek, aura_albumart_key_t *key,
  * que el LLAMADOR ya tiene) o NULL. */
 static const fb_data *decode_album_at(int32_t album_seek, int size, aura_albumart_key_t *key)
 {
-    static struct mp3entry s_probe_id3; /* bajo candado */
-    char path[MAX_PATH];
-    char artist[128] = "";
-    char album[128] = "";
-    struct mp3entry fake_id3;
+    /* D-343: aqui TODO puede salir de la pila sin mover nada de sitio --
+     * el unico llamador (aura_albumart_load_for_album(), lado mayor que
+     * la maestra) ya toma aura_master_art_decode_lock() antes de entrar,
+     * asi que la busqueda de pista tambien corre protegida. */
+    static char s_path[MAX_PATH];
+    static char s_artist[128];
+    static char s_album[128];
     struct dim dim = { size, size };
-    char art_path[MAX_PATH];
     int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
     size_t scratch_sz;
     unsigned char *scratch = aura_master_art_scratch(&scratch_sz);
     struct bitmap bm;
     int len, ret;
 
-    if (!find_any_track_in_album(album_seek, path, sizeof(path),
-                                  artist, sizeof(artist), album, sizeof(album), key))
+    s_artist[0] = '\0';
+    s_album[0] = '\0';
+    if (!find_any_track_in_album(album_seek, s_path, sizeof(s_path),
+                                  s_artist, sizeof(s_artist), s_album, sizeof(s_album), key))
         return NULL;
 
-    memset(&fake_id3, 0, sizeof(fake_id3));
-    strlcpy(fake_id3.path, path, sizeof(fake_id3.path));
-    fake_id3.artist = artist;
-    fake_id3.album = album;
+    memset(&s_fake_id3, 0, sizeof(s_fake_id3));
+    strlcpy(s_fake_id3.path, s_path, sizeof(s_fake_id3.path));
+    s_fake_id3.artist = s_artist;
+    s_fake_id3.album = s_album;
 
     bm.width = size;
     bm.height = size;
@@ -526,23 +548,23 @@ static const fb_data *decode_album_at(int32_t album_seek, int size, aura_albumar
     bm.maskdata = NULL;
 #endif
 
-    if (find_albumart(&fake_id3, art_path, sizeof(art_path), &dim))
+    if (find_albumart(&s_fake_id3, s_art_path, sizeof(s_art_path), &dim))
     {
-        len = (int)strlen(art_path);
-        if (len > 4 && !strcasecmp(art_path + len - 4, ".bmp"))
-            ret = read_bmp_file(art_path, &bm, scratch_sz, format, NULL);
+        len = (int)strlen(s_art_path);
+        if (len > 4 && !strcasecmp(s_art_path + len - 4, ".bmp"))
+            ret = read_bmp_file(s_art_path, &bm, scratch_sz, format, NULL);
         else
-            ret = read_jpeg_file(art_path, &bm, scratch_sz, format, NULL);
-        DEBUGF("aura_master_art: decode %s at %d -> %d\n", art_path, size, ret);
+            ret = read_jpeg_file(s_art_path, &bm, scratch_sz, format, NULL);
+        DEBUGF("aura_master_art: decode %s at %d -> %d\n", s_art_path, size, ret);
         return ret > 0 ? (const fb_data *)scratch : NULL;
     }
 
     {
-        int fd = open(path, O_RDONLY);
+        int fd = open(s_path, O_RDONLY);
 
         if (fd < 0)
             return NULL;
-        if (!get_metadata(&s_probe_id3, fd, path)
+        if (!get_metadata(&s_probe_id3, fd, s_path)
             || !s_probe_id3.has_embedded_albumart
             || (s_probe_id3.albumart.type & AA_CLEAR_FLAGS_MASK) != AA_TYPE_JPG)
         {
@@ -551,10 +573,10 @@ static const fb_data *decode_album_at(int32_t album_seek, int size, aura_albumar
         }
         close(fd);
 
-        ret = clip_jpeg_file(path, s_probe_id3.albumart.pos,
+        ret = clip_jpeg_file(s_path, s_probe_id3.albumart.pos,
                               s_probe_id3.albumart.size, &bm,
                               scratch_sz, format, NULL);
-        DEBUGF("aura_master_art: decode %s (embedded) at %d -> %d\n", path, size, ret);
+        DEBUGF("aura_master_art: decode %s (embedded) at %d -> %d\n", s_path, size, ret);
         return ret > 0 ? (const fb_data *)scratch : NULL;
     }
 }

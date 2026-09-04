@@ -809,3 +809,49 @@ Lo que v16 **no** cambia: §A bis, `/.aura/tagcache/`, `/.aura/thumbs/` (queda u
 - Simulador (`build-sim`, `make -j4` limpio sin warnings nuevos; `make install`): arranque normal verificado con `apple2026_sim_shot.sh` (menú raíz renderiza igual que antes, sin regresión) y además con `rockboxui` lanzado **interactivo** (proceso real en primer plano, confirmado vía System Events — no solo el modo headless con auto-dump) para cumplir la verificación de fase habitual con simulador interactivo, no solo capturas.
 - **Límite documentado de esta verificación**: no se reprodujo en vivo el caso "reinicio justo a mitad de un commit" navegando la UI real del switch de familia. Ese camino (`AURA_SCREEN_SETTINGS_SWITCH_TO_METRO`/`_MOONLIT` en `aura_screens.c:3952-3997`) exige `aura_firmware_sibling_installed()` — un `/.firmware-<familia>` real instalado en el disco — y este checkout/simulador no tiene una segunda familia instalada; forzarlo habría significado fabricar un árbol hermano falso y arriesgar el estado de `simdisk/` (el propio switch renombra `/.rockbox`) sin ganar certeza adicional sobre la lógica en sí, ya cubierta exhaustivamente por `test_switch_wait` (incluida la frontera exacta `commit_step != 0` + tope cumplido). Reproducción end-to-end en hardware con dos familias instaladas queda a cargo del dueño, mismo criterio que otras decisiones (D-307/D-309, D-320) para lo que exige un montaje que este entorno no tiene.
 - `git status --short` limpio tras el commit de esta pasada.
+
+## D-343 — `*PANIC* stkov main`: los dos `struct mp3entry` del sondeo de carátula salen de la pila de UI
+
+**Diagnóstico.** Reporte del dueño en hardware, build `e554e31cffM-260826` (D-339): `*PANIC* stkov main`, `pc: 080a8ce4`, `sp: 00007fd8`. `stkov` lo lanza `thread_stkov()` (`firmware/kernel/thread.c:200`) cuando `thread->stack[0] != DEADBEEF` en `switch_thread()` (`:1029`) — el canario del fondo de la pila pisado. El hilo es `main`, el de la UI, cuya pila mide exactamente **8 KB** en este target (`rockbox.map`: `stackbegin = 0x7d30`, `stackend = 0x9d30`). El `sp` reportado da 0x9d30 − 0x7fd8 = **7 512 de 8 192 bytes ya consumidos** en el punto de cesión.
+
+La causa está en `apps/aura/aura_albumart.c`. `decode_album_master()` y `decode_album_at()` declaraban cada una **`struct mp3entry fake_id3` en la pila**, más `path[MAX_PATH]` + `artist[128]` + `album[128]` + `art_path[MAX_PATH]`. `struct mp3entry` mide ~2.7 KB en este target (`ID3V2_BUF_SIZE` 1800 para `MEMORYSIZE >= 64`, más `path[MAX_PATH]` y `id3v1buf[4][92]`, `lib/rbcodec/metadata/metadata.h:181-287`). Marcos resultantes medidos sobre `rockbox.elf`: **3 592** y **3 616 bytes**.
+
+Medición del peor camino de la UI (desensamblado de `rockbox.elf` con `arm-none-eabi-objdump -d`, gasto por prólogo `push`/`sub sp` propagado por el grafo de llamadas desde `aura_main`):
+
+```
+   1272  draw_choice_list        →  568  decode_album_drift_tile
+    304  aura_albumart_load_for_album
+   3592  decode_album_master      ←  el marco culpable
+     88  aura_master_art_decode_fill  →  read_bmp_file
+   2624  read_bmp_fd             ←  Rockbox base, inevitable sin tocar el core
+    ...  read → fat_readwrite → ata_read_sectors → yield
+  ------
+ ~10 200 bytes contra una pila de 8 192
+```
+
+El subárbol desde `aura_albumart_load_for_album()` solo daba ya **7 616 bytes**, que es prácticamente el 7 512 observado: en `e554e31cff` ese camino corría en el hilo de UI a través del precache de D-224, con la pantalla "Preparando carátulas" delante.
+
+**El bug sobrevivió a D-341.** Mover el constructor a su propio hilo con pila propia (`s_builder_stack`, `DEFAULT_STACK_SIZE + 0x4000`) quitó *una* de las dos formas de llegar, no el marco. `aura_albumart_load_for_album()` sigue diciendo "Sin maestra todavía (el constructor no llegó), se construye aquí mismo" (`aura_albumart.c`, rama `out->size <= AURA_MASTER_ART_ALBUM_SIZE`) y sigue entrando desde la UI. Metro y moonlit **no** tienen este defecto: su `metro_albumart.c` ya trae el comentario "`struct mp3entry` is ~1.5-2KB … putting on the stack" y usa `static` desde siempre — Aura era la única que quedó con la versión en pila.
+
+**Corrección.** Un solo bloque de archivo en `aura_albumart.c`, compartido por las dos funciones (nunca están vivas a la vez: la segunda se llama después de que la primera regresó):
+
+```c
+static struct mp3entry s_probe_id3;
+static struct mp3entry s_fake_id3;
+static char s_art_path[MAX_PATH];
+```
+
+Sustituye a los dos `s_probe_id3` locales que ya existían, a los dos `fake_id3` de pila y a los dos `art_path`. La disciplina de candado es la parte delicada y se resolvió distinto en cada función:
+
+- `decode_album_master()` entra desde **dos hilos** (la UI por `aura_albumart_load_for_album()`, el constructor por `aura_albumart_build_master()`). Tomaba `aura_master_art_decode_lock()` *después* de llenar `fake_id3`, así que la inicialización **baja debajo del candado**: llenarla fuera sería una carrera entre los dos hilos. `path`/`artist`/`album` se quedan en la pila (516 B en total) porque los llena `find_any_track_in_album()` antes del candado, y ensancharlo sobre esa búsqueda de tagcache habría serializado UI y constructor sin necesidad.
+- `decode_album_at()` tiene un solo llamador (`aura_albumart_load_for_album()`, rama de lado mayor que la maestra) que **ya toma el candado antes de entrar**, así que ahí todo sale de la pila sin mover nada de sitio, `path`/`artist`/`album` incluidos.
+
+Costo: **+736 bytes de BSS** (`RAM usage` 12 501 272 → 12 502 008); se recuperó más de lo que se gastó al fusionar los duplicados.
+
+**Verificado.**
+- Marcos tras el cambio, misma medición sobre el `rockbox.elf` nuevo: `decode_album_master` **3 592 → 568 bytes**; `decode_album_at` desaparece del binario (el compilador lo integra al quedarse sin marco propio). El subárbol completo desde `aura_albumart_load_for_album()` baja de **7 616 → 4 960 bytes**, y el camino de carátulas deja de ser el peor del hilo de UI.
+- `make -C firmware/rockbox/apps/aura/test test` — **16/16 suites verdes**, 0 fallos.
+- Build ARM (`firmware/build-ipod6g`, `make -j$(sysctl -n hw.ncpu)`): **0 errores, sin warnings nuevos**; solo recompiló `aura_albumart.o`.
+- Simulador (`build-sim`, build limpio + `make install`): se **vació** `/.aura/art/albums` y `artists` y el `cfcache` L2 para obligar al camino modificado a decodificar los JPEG de cero. Las **19 maestras de álbum se reconstruyeron y son idénticas byte a byte** a las que había antes del cambio (`diff -rq`) — misma entrada, misma salida, sin crash. Music Flow renderiza las carátulas reales con su reflejo (captura). Además se dejó `rockboxui` corriendo **interactivo** (proceso real en primer plano, confirmado vía System Events), no solo el modo headless con auto-dump. La única maestra de artista del respaldo no se regeneró por una razón ajena: `make install` rehace `.rockbox/` desde el build y `/.rockbox/aura/artists/` solo lo puebla un sync de Studio, así que el simdisk se quedó sin el archivo fuente.
+- **Límite documentado de esta verificación**: no se reprodujo el `stkov` original en hardware antes y después — habría que volver a `e554e31cff`, flashear y navegar hasta reventarlo. La evidencia es la aritmética de pila sobre el binario real (marco medido, camino medido, `sp` reportado que cuadra con el cálculo) más la prueba de equivalencia de salida en el simulador. Confirmación en el iPod queda a cargo del dueño, mismo criterio que D-342.
+- **Hallazgo colateral, fuera de alcance**: con el camino de carátulas ya corregido, la misma medición reporta otro camino de ~9 568 bytes desde `aura_main`, todo él en Rockbox base (`catalog_insert_into` → `gui_syncyesno_run` → `default_event_handler` → `gui_usb_screen_run` → `settings_apply` → motor de skins → `skin_data_load`). No se tocó: es código heredado, algunas de sus aristas pueden ser falsas (el análisis sobreaproxima, no resuelve llamadas indirectas) y no corresponde al panic reportado. Queda anotado para revisarlo por separado.
