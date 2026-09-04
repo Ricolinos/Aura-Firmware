@@ -94,6 +94,26 @@ FAULT_HANDLERS = (
 # motivo, para que la exclusion sea auditable y no un numero que baja
 # sin explicacion. Si alguna deja de ser cierta, el numero del reporte
 # se vuelve optimista: revisar al tocar cualquiera de los dos extremos.
+# Marcos de apps/aura/ que superan --max-frame por un idioma de Rockbox
+# que no se puede quitar sin empeorar otra cosa: `struct tagcache_search`
+# en la pila (guarda descriptores de una busqueda y la funcion corre en
+# mas de un hilo, asi que no puede ser static -- D-346), varios
+# `char[MAX_PATH]` que la API de Rockbox exige por valor, etc.
+#
+# Cada entrada dice POR QUE, y se imprime en el reporte: la excepcion es
+# visible, no un numero que baja solo. Si una entrada deja de ser
+# necesaria (la funcion ya no supera el tope) el reporte lo AVISA para
+# que se borre. Cualquier funcion NUEVA sobre el tope sigue fallando.
+#
+# En Aura esta lista esta VACIA: D-345 y D-346 bajaron las tres funciones
+# que la habrian necesitado (run_search, count_unique_tag,
+# build_playlist_from_songs) reduciendo el buffer de texto de tagcache y
+# sacando la ruta de la pila. Se conserva la maquinaria porque Metro y
+# moonlit comparten esta herramienta y ahi si hay casos.
+BIG_FRAMES = {
+    # "nombre_de_funcion": "motivo, con la decision que lo respalda",
+}
+
 GUARDED_EDGES = {
     ("skin_get_gwps", "skin_load"):
         "D-345: settings_apply_skins() ya no carga skins, asi que "
@@ -399,12 +419,30 @@ def main():
 
     over = sorted(((v, k) for k, v in frames.items()
                    if k in aura and v > args.max_frame), reverse=True)
+    allowed = [(v, k) for v, k in over if base_name(k) in BIG_FRAMES]
+    offenders = [(v, k) for v, k in over if base_name(k) not in BIG_FRAMES]
+
+    if allowed and not args.quiet:
+        print("== Marcos grandes permitidos (BIG_FRAMES) ==")
+        for v, k in allowed:
+            print("  %7d  %s" % (v, base_name(k)))
+            print("    %s" % BIG_FRAMES[base_name(k)])
+        print()
+
+    over_names = {base_name(k) for _v, k in over}
+    stale = sorted(n for n in BIG_FRAMES if n not in over_names)
+    if stale:
+        print("AVISO: %d entrada(s) de BIG_FRAMES ya no hacen falta "
+              "(la funcion no supera %d B): %s"
+              % (len(stale), args.max_frame, ", ".join(stale)))
+        print("  Borralas de firmware/tools/stack_report.py.")
+
     failed = False
-    if over:
+    if offenders:
         failed = True
         print("FALLA (a): %d funcion(es) de apps/aura/ superan %d B:"
-              % (len(over), args.max_frame))
-        for v, k in over:
+              % (len(offenders), args.max_frame))
+        for v, k in offenders:
             print("  %7d  %s" % (v, base_name(k)))
     if pct > args.max_usage:
         failed = True

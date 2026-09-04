@@ -1376,3 +1376,82 @@ que nadie flashee nada.
 - **No se flasheó nada desde esta sesión** y no se puede: el simulador no
   ejecuta el bootloader y flashear NOR es del dueño, con Studio, y solo
   después de que Studio tenga "Actualizar el arranque" (§B.5).
+
+## D-348 — Un directorio de compilación viejo produce un binario distinto al de uno limpio: `make.dep` de Rockbox se congela
+
+**Cómo apareció.** Aviso de la sesión de Metro (R7-3): allá un build limpio del
+target llevaba semanas sin compilar y nadie lo vio porque `build-ipod6g/`
+arrastraba un `make.dep` viejo. Se comprobó aquí el mismo patrón — y aunque la
+causa concreta de Metro (un `-I` que solo estaba en `MPEGCFLAGS` y no llegaba
+a `mkdepfile`) **no existe en Aura** (aquí nada fuera de `apps/aura/` necesita
+un `-I` propio: `apps/main.c` y `apps/gui/usb_screen.c` incluyen
+`"aura/aura_main.h"`, con el prefijo, y `apps/` ya está en el camino de
+inclusión), el problema de fondo sí está, y es peor de lo que parecía.
+
+**El defecto real, en Rockbox base.** `tools/root.make:209`:
+
+```make
+$(DEPFILE) dep:
+	$(call mkdepfile,...)
+```
+
+La regla **no tiene prerrequisitos**. `make.dep` se genera la primera vez que
+se compila un directorio y **nunca se vuelve a generar**. Cualquier `#include`
+agregado después es invisible para `make`: el objeto que lo usa no se
+recompila cuando esa cabecera cambia, para siempre.
+
+**Medido en este árbol.** `firmware/build-ipod6g/make.dep` no sabía que
+`aura_master_art.o` y `aura_movieflow.o` dependen de `apple2026_tokens.h` (la
+cabecera **generada** por `design-system/generate.py`, que cambia cada vez que
+se toca `tokens.json`). Resultado: el `rockbox.bin` de ese directorio difería
+en **7 bytes** del que produce un directorio limpio **con el mismo commit** —
+objetos compilados contra una versión anterior de la paleta, conviviendo con
+el resto. Tras `make dep` + recompilar, los dos binarios son **byte a byte
+idénticos**.
+
+Siete bytes no suenan a nada, y esa es exactamente la razón por la que
+importa: nadie lo habría notado nunca, y el contrato v11 (actualizaciones
+selectivas por CRC32) descansa sobre que dos builds del mismo código den lo
+mismo.
+
+**Decisión.** `firmware/tools/package_dist.sh`:
+
+- **Siempre**: `make dep` antes de `make`, para que la base de dependencias
+  refleje los `#include` de hoy. Cuesta segundos.
+- **Con `--release-tag`**: además, borra y reconfigura el directorio de
+  compilación. Un release tiene que ser reproducible byte a byte y no se
+  arriesga a ningún otro estado viejo que `make dep` no cubra. Cuesta un build
+  completo, que para un release es el precio correcto.
+
+No se toca `tools/root.make`: cambiar la regla de Rockbox afectaría a todos los
+targets del fork por un problema que se resuelve entero desde el script propio
+de Aura, y `MODIFICATIONS.md` no crece por algo que no hace falta.
+
+**Metro y moonlit tienen el mismo `root.make`.** Lo suyo es más grave (allá el
+build limpio directamente falla), pero la regla congelada es común a las tres
+familias y su `package_dist.sh` merece el mismo par de líneas.
+
+**De paso: `stack_report.py` gana `BIG_FRAMES`** (propuesta de moonlit,
+aprobada por la supervisora, para que las tres familias compartan la misma
+herramienta): una lista de funciones de `apps/<familia>/` que pueden superar el
+tope de 1 024 B **con su motivo escrito**, porque el marco viene de un idioma
+de Rockbox que no se puede quitar sin empeorar otra cosa (`struct
+tagcache_search` en la pila cuando la función corre en más de un hilo — D-346
+—, un `char[MAX_PATH]` que la API exige por valor). Cada entrada permitida se
+imprime con su razón; una entrada que dejó de hacer falta genera un **aviso**
+para borrarla; y cualquier función nueva sobre el tope **sigue fallando**.
+
+**En Aura la lista queda vacía**: D-345 y D-346 bajaron las tres candidatas
+(`run_search`, `count_unique_tag`, `build_playlist_from_songs`) por otros
+medios. Se conserva la maquinaria porque la herramienta es compartida.
+
+**Verificado.**
+- Build limpio en `firmware/build-ipod6g-clean` (configurado desde cero,
+  `--target=ipod6g --type=N`): **0 errores**. Aura no tiene el fallo de Metro.
+- `cmp` de los dos `rockbox.bin` con el mismo commit: **7 bytes distintos**
+  antes; **idénticos** después de `make dep` + recompilar en el directorio
+  viejo.
+- `BIG_FRAMES` probado con una entrada falsa y una obsoleta y el tope bajado a
+  900 B: imprime el motivo de la permitida, avisa de la obsoleta, y **falla**
+  con la función nueva que se pasa. El archivo se restauró tras la prueba.
+- `firmware/tools/stack_report.py`: verde con la lista vacía.

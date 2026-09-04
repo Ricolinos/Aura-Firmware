@@ -84,6 +84,26 @@ if [[ ! -f Makefile ]]; then
   PATH="$TOOLCHAIN:$PATH" "$SRC_DIR/tools/configure" --target=ipod6g --type=N
 fi
 
+# D-348: `make.dep` de Rockbox se genera UNA vez (regla `$(DEPFILE) dep:`
+# en tools/root.make, sin prerrequisitos) y despues nunca se refresca. Un
+# directorio de compilacion viejo se queda con una base de dependencias
+# congelada: cualquier `#include` agregado desde entonces es invisible, y
+# el objeto que lo usa NO se recompila cuando su cabecera cambia. Medido
+# en este arbol: `build-ipod6g` producia un `rockbox.bin` que difiere en
+# 7 bytes del que sale de un directorio limpio con el mismo commit.
+# `make dep` lo regenera; con --release-tag ademas se compila desde cero,
+# porque un release tiene que ser reproducible byte a byte.
+if [[ -n "$RELEASE_TAG" ]]; then
+  echo "==> Release: recompilando desde cero (reproducibilidad, D-348)"
+  rm -rf "$BUILD_DIR"
+  mkdir -p "$BUILD_DIR"
+  cd "$BUILD_DIR"
+  PATH="$TOOLCHAIN:$PATH" "$SRC_DIR/tools/configure" --target=ipod6g --type=N
+else
+  echo "==> Regenerando la base de dependencias (make dep, D-348)"
+  PATH="$TOOLCHAIN:$PATH" make dep
+fi
+
 echo "==> Compilando el firmware ARM (rockbox.ipod)"
 PATH="$TOOLCHAIN:$PATH" make -j"$(sysctl -n hw.ncpu)"
 
