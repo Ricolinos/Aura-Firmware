@@ -1265,3 +1265,114 @@ código del wrapper).
   ejecutándola una vez. Lo que la cierra es estructural — ya no hay memoria
   compartida entre los dos hilos en este camino —; la corrida solo comprueba
   que la separación no rompió nada.
+
+## D-347 — Pantalla de arranque del bootloader: la marca de Aura y la frontera GPL, antes de que exista sistema de archivos
+
+**Por qué.** Desde D-064 el bootloader arranca en silencio absoluto
+(`verbose = false`): pantalla negra hasta que el firmware toma el control y
+`show_logo_boot()` pinta la marca. Son ~1 s de nada, y —más importante— el
+bootloader es la pieza que se flashea en NOR, la única que corre antes de que
+haya sistema de archivos, y no decía en ninguna parte de dónde viene el
+código. La GPL v2 §1 pide que el aviso de copyright y de garantía viaje con el
+programa; una pantalla negra no lo hace.
+
+Diseño canónico del plan maestro §B, cerrado **una vez** en esta ronda: Metro
+y moonlit lo portan tomando este diff como referencia. Cambiar el bootloader
+implica que Aura Studio ofrezca reflashearlo (§B.5, trabajo del repo hermano),
+así que no se retoca por gusto después.
+
+**Qué se ve.** Lienzo 320×240, fondo negro (el mismo con el que el bootloader
+ya limpia la pantalla, `lcd_set_background(LCD_BLACK)`):
+
+1. El wordmark **aura**, centrado.
+2. Dos leyendas en `FONT_SYSFIXED` (6×8, la única fuente que el bootloader
+   tiene), centradas, en `#8E8E93`; la última a 14 px del borde inferior,
+   interlineado 12:
+   ```
+   aura · arranque <rbversion>
+   Basado en Rockbox · GPL v2 · rockbox.org
+   ```
+   La versión es la del **bootloader**: es lo único que él conoce. El firmware
+   se actualiza aparte y muestra la suya en "Acerca de".
+
+Sin retardo artificial: la pantalla dura lo que tarde `load_firmware()`.
+`verbose` sigue en `false`.
+
+**La parte que importa: la marca no se mueve en el handoff.** El bitmap del
+bootloader es el **mismo wordmark** del `rockboxlogo.320x98x16.bmp` que pinta
+el firmware, recortado a su caja de tinta — meter el lienzo de 320×98 entero
+en la IRAM del bootloader habría costado 62 720 B. Que el recorte caiga en el
+píxel exacto no se logró copiando un offset al C (una constante más que se
+puede desincronizar), sino por construcción:
+
+- `gen_boot_logo.py` centra la **caja de tinta** del wordmark en los dos ejes
+  del lienzo de 320×98.
+- `show_logo_boot()` centra ese lienzo en los dos ejes de la pantalla. Luego
+  el centro de la tinta cae en el centro de la pantalla.
+- El recorte lleva la tinta más 4 px de margen, así que su centro es el mismo.
+- Centrar el recorte en la pantalla lo pone, por construcción, en el mismo
+  lugar.
+
+Con una salvedad real: el bootloader centra con **división entera**, y con un
+margen simétrico de 4 px la marca quedaba corrida **1 px en X** (el ancho de
+tinta, 132, y el de pantalla, 320, no tienen la misma paridad). En vez de
+pasarle un offset al C, el generador ensancha el margen **lejano** en 1 px
+hasta que el centrado entero da el píxel exacto: cambia cuánto fondo negro
+lleva de un lado, no dónde queda la marca. El recorte resultante mide
+**141×45** y el bootloader lo pinta en **(89, 97)**.
+
+El generador **comprueba esa igualdad antes de escribir nada** y aborta si no
+se cumple: si alguien cambia el lienzo o el centrado de `show_logo_boot()`,
+falla ahí en vez de producir una marca que salta al arrancar.
+
+**Modo USB y errores.** `draw_boot_screen()` deja `line` justo debajo de la
+marca (derivado de `BMPHEIGHT_bootwordmark`, no una constante), así que el
+texto posterior del bootloader cae **debajo** y no encima. El encabezado
+"Bootloader USB mode" pasa al gris de leyenda; "Plug USB cable" y las demás
+líneas de acción **se quedan en blanco** a propósito: son instrucciones de
+recuperación y el blanco sobre negro es lo más legible. `error()` /
+`fatal_error()` limpian la pantalla por su cuenta y no cambian.
+
+**El gris es un literal RGB, y es una excepción documentada.** El bootloader no
+enlaza la paleta de Aura (`apps/aura/` no existe en ese build), así que
+`#8E8E93` viaja como `LCD_RGBPACK(0x8e, 0x8e, 0x93)` en el C. Es el mismo
+valor que `aura_ds.color.category.settings_gray_hex` de `tokens.json`, de
+donde lo toma también la maqueta — así los dos no pueden divergir en silencio.
+
+**Bug latente corregido de paso.** `gen_boot_logo.py` leía
+`tokens["color"]["dark"]["background"]`, una clave que **ya no existe**
+(se renombró a `shell_bg` en algún momento posterior): el script reventaba con
+`KeyError` desde entonces y nadie lo notó porque el BMP ya estaba versionado.
+El fondo pasa a ser negro literal con su razón escrita — `shell_bg` es
+`#1C1C1E`, que no es lo que este bitmap necesita: se pinta antes de que exista
+tema (D-051). Regenerado, el `rockboxlogo.320x98x16.bmp` sale **byte a byte
+idéntico** al del árbol, así que la reproducibilidad del `rockbox.zip`
+(contrato v11) no se toca. El script gana `--check` para poder comprobar eso
+sin escribir.
+
+**Cómo se verifica algo que el simulador no ejecuta.** El simulador **no**
+corre el bootloader. Por eso el generador produce también
+`docs/screenshots/ronda-estabilidad/bootloader-maqueta.png`: la pantalla
+completa de 320×240 con la marca en su posición real y las leyendas dibujadas
+con los **glifos reales** de `FONT_SYSFIXED`, leídos del mismo
+`fonts/08-Schumacher-Clean.bdf` del que Rockbox genera su `sysfont.c` — no una
+fuente monoespaciada parecida. Es la maqueta que el dueño aprueba **antes** de
+que nadie flashee nada.
+
+**Verificado.**
+- Bootloader (`firmware/build-ipod6g-boot`, `--type=B`): **0 errores, 0
+  warnings**. `bootloader-ipod6g.ipod` **95 592 → 108 648 B** (el bitmap de
+  141×45×16 son 12 690 B), muy por debajo del tope de 150 KB.
+- **IRAM medida**: `IRAM1_SIZE` = `0x20000` (131 072 B) en el S5L8702;
+  `MOVE_AREA` = `IRAM1_SIZE − IM3HDR_SZ` = `0x1F800` (129 024 B). Ocupado
+  108 640 B (`.text` 83 012 + `.rodata` 17 608 + `.data` 8 000) = **84.2 %**,
+  quedan **20 384 B** libres.
+- Target (`firmware/build-ipod6g`): **0 errores**; no recompiló nada — la
+  entrada nueva de `apps/bitmaps/native/SOURCES` está bajo
+  `#if defined(BOOTLOADER)`, así que el bitmap **no** entra al firmware.
+- `gen_boot_logo.py --check` y `--bootloader-crop --check`: los dos bitmaps
+  del árbol coinciden con lo que genera el script.
+- `firmware/tools/stack_report.py`: verde, sin cambio.
+- **No se flasheó nada desde esta sesión** y no se puede: el simulador no
+  ejecuta el bootloader y flashear NOR es del dueño, con Studio, y solo
+  después de que Studio tenga "Actualizar el arranque" (§B.5).

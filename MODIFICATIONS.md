@@ -28,7 +28,7 @@ cabecera de copyright GPL v2 (ver más abajo). Es el reemplazo de la UI
 de Rockbox (menús, WPS) por la capa "Aura UI", conectado al resto del
 árbol mediante los 20 archivos listados abajo.
 
-## Los 31 archivos de Rockbox modificados fuera de `apps/aura/`
+## Los 32 archivos de Rockbox modificados fuera de `apps/aura/`
 
 Todos conservan su cabecera de copyright original de Rockbox intacta.
 Los cambios de Aura están marcados inline en el propio código con
@@ -36,6 +36,8 @@ comentarios `Aura` / `D-xxx` (referencia a la entrada correspondiente
 de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 
 - `apps/SOURCES`
+- `apps/bitmaps/native/SOURCES` (D-347: entrada nueva para `bootwordmark.141x45x16.bmp`, el recorte del wordmark de la pantalla de arranque del bootloader, bajo `#if defined(BOOTLOADER)` + `#if defined(IPOD_6G)`)
+- `apps/bitmaps/native/bootwordmark.141x45x16.bmp` (D-347: **archivo nuevo**, no una modificación — el recorte a la caja de tinta del mismo wordmark de `rockboxlogo.320x98x16.bmp`, generado por `design-system/scripts/gen_boot_logo.py --bootloader-crop`)
 - `apps/bitmaps/native/rockboxlogo.320x98x16.bmp`
 - `apps/bitmaps/native/usblogo.176x48x16.bmp`
 - `apps/gui/splash.c`
@@ -58,7 +60,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `apps/settings.h`
 - `apps/tagcache.c` (D-021/D-244, y D-293: contador de trabajos de (re)construcción procesados + consulta/descarte del temporal `database_tmp.tcd` para `apps/aura/aura_sync.c`; confirmación silenciosa del temporal al arrancar en vez del diálogo sí/no de Rockbox; `load_ramcache()` redimensiona la copia en RAM cuando la base creció tras un commit y distingue "no cabe" de "corrupta" en vez de deshabilitar la base en ambos casos, y ya no deja `ramcache_allocated > 0` con el handle liberado — pánico de buflib al siguiente commit; `commit()` prefiere un buffer temporal general al de RAM cuando este es claramente chico para el commit pendiente)
 - `apps/tagcache.h` (D-293: `tagcache_get_build_jobs_done()`, `tagcache_has_pending_temp()`, `tagcache_discard_pending_temp()`)
-- `bootloader/ipod-s5l87xx.c`
+- `bootloader/ipod-s5l87xx.c` (D-064: arranque silencioso, `verbose = false` bajo `IPOD_6G`; D-347: `draw_boot_screen()` — la marca de Aura y las dos leyendas (`aura · arranque <rbversion>` y `Basado en Rockbox · GPL v2 · rockbox.org`) en `FONT_SYSFIXED`, más el encabezado del modo USB en el gris de leyenda y `line` reposicionado para que el texto posterior caiga debajo de la marca)
 - `firmware/export/config/ipod6g.h`
 - `firmware/export/font.h`
 - `firmware/target/arm/s5l8702/app.lds` (D-345: la pila del hilo `main` — el de la UI — pasa de 8 KB a 12 KB (`. += 0x2000` → `. += 0x3000`) tras un `*PANIC* stkov main` reproducido por el dueño en hardware; cabe en la IRAM de core de 48 KB: `_fiqstackend` queda en `0xb530`, ~2.7 KB por debajo del tope `0xC000`)
@@ -69,7 +71,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 
 (Rutas relativas a `firmware/rockbox/`.)
 
-De estos 31 (`firmware/target/arm/s5l8702/app.lds` se sumó con D-345; `apps/tagcache.h` se sumó con D-293; los tres de `apps/plugins/sdl/progs/` con D-334; `apps/plugin.c`/`apps/plugin.h` con D-298; `apps/plugins/mpegplayer/mpeg_settings.h`, `stream_mgr.c`, `video_out.h` y `video_out_rockbox.c` con D-304), dos no tenían ningún comentario que mencionara a Aura:
+De estos 32 (`apps/bitmaps/native/SOURCES` y `apps/bitmaps/native/bootwordmark.141x45x16.bmp` se sumaron con D-347; `firmware/target/arm/s5l8702/app.lds` se sumó con D-345; `apps/tagcache.h` se sumó con D-293; los tres de `apps/plugins/sdl/progs/` con D-334; `apps/plugin.c`/`apps/plugin.h` con D-298; `apps/plugins/mpegplayer/mpeg_settings.h`, `stream_mgr.c`, `video_out.h` y `video_out_rockbox.c` con D-304), dos no tenían ningún comentario que mencionara a Aura:
 
 - **`utils/mks5lboot/Makefile`**: sí tiene una modificación real vigente
   (backend libusb opcional en macOS, D-050, 2026-08-10) — recibió un

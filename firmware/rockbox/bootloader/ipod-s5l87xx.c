@@ -81,6 +81,80 @@ extern uint32_t start_loc;
 
 extern int line;
 
+#ifdef IPOD_6G
+/* Aura (D-347): pantalla de arranque del bootloader.
+ *
+ * Hasta D-064 el bootloader arrancaba en negro absoluto (verbose = false)
+ * y la marca solo aparecia cuando el firmware ya tenia el control
+ * (show_logo_boot(), apps/main.c). Eso deja ~1 s de pantalla vacia y,
+ * peor, no dice nada de la frontera GPL: el bootloader es la parte que
+ * se flashea en NOR y la unica que puede citar el origen del codigo
+ * antes de que exista sistema de archivos.
+ *
+ * El bitmap es el MISMO wordmark del rockboxlogo del firmware, recortado
+ * a su caja de tinta (design-system/scripts/gen_boot_logo.py
+ * --bootloader-crop) para no meter un lienzo de 320x98 en la IRAM del
+ * bootloader. Centrarlo en los dos ejes lo pone en el pixel EXACTO donde
+ * lo pinta show_logo_boot(): el generador comprueba esa igualdad antes de
+ * escribir el archivo. Por eso el paso bootloader -> firmware no tiene
+ * salto -- solo desaparecen las leyendas de abajo. */
+#include "bitmaps/bootwordmark.h"
+
+/* Gris terciario de la familia. Literal RGB a proposito, excepcion
+ * documentada: el bootloader no enlaza la paleta de Aura (apps/aura/ no
+ * existe en este build). Es el mismo valor que
+ * aura_ds.color.category.settings_gray_hex de design-system/tokens.json,
+ * de donde tambien lo toma la maqueta de aprobacion. */
+#define AURA_BOOT_LEGEND_COLOR    LCD_RGBPACK(0x8e, 0x8e, 0x93)
+#define AURA_BOOT_LEGEND_BOTTOM   14   /* ultima linea, al borde inferior */
+#define AURA_BOOT_LEGEND_SPACING  12   /* interlineado entre las dos */
+
+static void draw_boot_legend(int y, const char *text)
+{
+    int w, h;
+
+    lcd_getstringsize((const unsigned char *)text, &w, &h);
+    lcd_putsxy((LCD_WIDTH - w) / 2, y, (const unsigned char *)text);
+}
+
+static void draw_boot_screen(void)
+{
+    char buf[64];
+    int line_h, dummy;
+
+    /* Limpia lo que hayan dejado los printf() de arriba (invisibles con
+     * verbose = false, pero presentes en el framebuffer) y deja line = 0. */
+    reset_screen();
+
+    lcd_bmp(&bm_bootwordmark,
+            (LCD_WIDTH - BMPWIDTH_bootwordmark) / 2,
+            (LCD_HEIGHT - BMPHEIGHT_bootwordmark) / 2);
+
+    lcd_getstringsize((const unsigned char *)"A", &dummy, &line_h);
+
+    /* "\xc2\xb7" es U+00B7 (el punto medio) en UTF-8, escrito con
+     * escapes para que este archivo -- de Rockbox, no de apps/aura/ --
+     * siga siendo ASCII puro. FONT_SYSFIXED lo tiene: su BDF
+     * (fonts/08-Schumacher-Clean.bdf) cubre ISO 10646-1 0..255. */
+    lcd_set_foreground(AURA_BOOT_LEGEND_COLOR);
+    /* La version es la del BOOTLOADER: es lo unico que el conoce. El
+     * firmware se actualiza aparte y muestra la suya en "Acerca de". */
+    snprintf(buf, sizeof(buf), "aura \xc2\xb7 arranque %s", rbversion);
+    draw_boot_legend(LCD_HEIGHT - AURA_BOOT_LEGEND_BOTTOM - line_h
+                                - AURA_BOOT_LEGEND_SPACING, buf);
+    draw_boot_legend(LCD_HEIGHT - AURA_BOOT_LEGEND_BOTTOM - line_h,
+                     "Basado en Rockbox \xc2\xb7 GPL v2 \xc2\xb7 rockbox.org");
+    lcd_set_foreground(LCD_WHITE);
+
+    /* Cualquier texto posterior del bootloader (modo USB, D-347 SS B.4)
+     * cae DEBAJO de la marca, no encima. error()/fatal_error() limpian
+     * la pantalla por su cuenta, asi que no les afecta. */
+    line = ((LCD_HEIGHT + BMPHEIGHT_bootwordmark) / 2 + line_h) / line_h;
+
+    lcd_update();
+}
+#endif /* IPOD_6G */
+
 #ifndef S5L87XX_DEVELOPMENT_BOOTLOADER
 #ifdef HAVE_BOOTLOADER_USB_MODE
 static void usb_mode(void)
@@ -125,7 +199,18 @@ static void usb_mode(void)
     if (button == SYS_USB_CONNECTED)
     {
         /* Got the message - wait for disconnect */
+        /* Aura (D-347): el ENCABEZADO del modo USB va en el gris de
+         * leyenda, como el resto de la pantalla de arranque; las lineas
+         * de accion de arriba ("Plug USB cable", "USB: Connecting...")
+         * se quedan en blanco a proposito -- son instrucciones de
+         * recuperacion y el blanco sobre negro es lo mas legible. */
+#ifdef IPOD_6G
+        lcd_set_foreground(AURA_BOOT_LEGEND_COLOR);
+#endif
         printf("Bootloader USB mode");
+#ifdef IPOD_6G
+        lcd_set_foreground(LCD_WHITE);
+#endif
 
         /* Ack the SYS_USB_CONNECTED polled from the button queue */
         usb_acknowledge(SYS_USB_CONNECTED_ACK, button_get_data());
@@ -862,6 +947,14 @@ void main(void)
 
     printf("Rockbox boot loader");
     printf("Version: %s", rbversion);
+
+#ifdef IPOD_6G
+    /* Aura (D-347): la pantalla de arranque va aqui -- despues de
+     * lcd_setfont(FONT_SYSFIXED) (la necesita para medir las leyendas) y
+     * antes de backlight_init(), para que la luz encienda con la marca ya
+     * dibujada y no con un cuadro negro. */
+    draw_boot_screen();
+#endif
 
     backlight_init(); /* Turns on the backlight */
 
