@@ -22,10 +22,25 @@ gitversion() {
     if head=`git -C "$1" rev-parse --verify --short=10 HEAD 2>/dev/null`; then
 
 	# Are there uncommitted changes?
-	export GIT_WORK_TREE="$1"
-	if git -C "$1" diff --name-only HEAD | read dummy; then
+	#
+	# Aura (D-354): the upstream `export GIT_WORK_TREE="$1"` assumes "$1"
+	# (the rockbox source root) IS the git repository root. In this
+	# fork it is a SUBDIRECTORY of a larger repo (firmware/rockbox/
+	# inside Aura-Firmware, see MODIFICATIONS.md/D-002) with no .git of
+	# its own. Forcing GIT_WORK_TREE to that subdirectory while GIT_DIR
+	# is discovered by walking up to the outer repo's .git makes git
+	# compare every tracked path (relative to the OUTER root) against
+	# files that would have to exist relative to the subdirectory --
+	# none of them do, so `git diff` reports the entire outer repo as
+	# "changed", and every build gets a false "M" regardless of actual
+	# dirtiness (measured: even a freshly-committed, clean tree). A
+	# pathspec restricting the diff to "$1" gives the same "does the
+	# rockbox source under here differ from HEAD" answer without
+	# needing GIT_WORK_TREE at all -- it works whether "$1" is the repo
+	# root (upstream's case) or a subdirectory of one (this fork's).
+	if git -C "$1" diff --name-only HEAD -- . | read dummy; then
 	    mod="M"
-	elif git -C "$1" diff --name-only --cached HEAD | read dummy; then
+	elif git -C "$1" diff --name-only --cached HEAD -- . | read dummy; then
 	    mod="M"
 	fi
 

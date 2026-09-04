@@ -2052,3 +2052,86 @@ procesos activos no es evidencia de nada, en ningún sentido.
 byte-idéntico), `docs/contracts/library-layout-v1.md` **v1.5** (que copie el de
 este repo, no al revés — ver D-349) y el `AuraPalette.swift` nuevo, que trae
 `tilePlaceholder`.
+
+---
+
+## D-354 — Cada build de este repo, siempre, cargaba una `M` falsa: `tools/version.sh` no sabe que `firmware/rockbox` es una subcarpeta, no una raíz de repo
+
+**Cómo apareció.** Al preparar el release `v0.4.5-beta` (dueño autorizado
+directamente, ver más abajo), el build de release salió con
+`Version: fe00d619f3M-260904` — la **M** que Rockbox usa para marcar "árbol
+modificado". El árbol estaba **verificablemente limpio** (`git status
+--porcelain` vacío, comprobado antes y después). El propio script de empaquetado
+ya tenía un guardia contra esto — "un release real construido sobre un árbol
+sucio... no es bit-provable contra el commit del tag" — pero ese guardia
+revisa el repo **entero** al inicio del script, mientras que la `M` la decide
+un chequeo **interno y separado** dentro de `tools/version.sh`, que resultó
+estar roto.
+
+**La causa.** `tools/version.sh` (código stock de Rockbox, no tocado hasta
+hoy) hace:
+```sh
+export GIT_WORK_TREE="$1"
+git -C "$1" diff --name-only HEAD
+```
+Asume que `"$1"` (la raíz de fuentes de Rockbox que le pasa el Makefile,
+siempre **absoluta**: `$(ROOTDIR)`) **es** la raíz del repositorio git. En
+este fork no lo es: `firmware/rockbox/` es una subcarpeta de un repo más
+grande (`Aura-Firmware`, sin `.git` propio — D-002). Con `GIT_WORK_TREE`
+forzado a esa subcarpeta pero `GIT_DIR` descubierto hacia arriba (el `.git`
+real, en la raíz de `Aura-Firmware`), git queda con una mezcla incoherente:
+compara el índice del repo completo contra un "árbol de trabajo" que es solo
+la subcarpeta. Resultado medido, reproducido a mano: `git diff --name-only
+HEAD` con esa combinación imprime **el repositorio Aura-Firmware entero** —
+`CLAUDE.md`, `DECISIONS.md`, `.gitignore`, todo — como si estuviera
+"modificado", porque ningún archivo del índice (con ruta relativa a la raíz
+real) existe en la ruta que resultaría de interpretarlo relativo a la
+subcarpeta forzada.
+
+**Alcance real: no es nuevo de esta ronda.** El chequeo se ejecuta en
+**cada** build, para **cualquier** commit, desde que este árbol tiene la
+forma "subcarpeta dentro de un repo mayor" — que es como se organizó desde
+el principio (D-002). Se confirmó retroactivamente: el binario del panic
+original del dueño (`fdf5be4e8fM-260827`, citado en D-345) ya traía la `M`, y
+mi propia línea base de Fase 0 de esta ronda (`66e461c334M-260904`, árbol
+recién commiteado) también. **Ningún build de este repo tuvo nunca una
+versión confiable**: la `M` no significaba nada, ni cuando decía que sí ni
+—lo que hubiera sido peor, si algún día el chequeo hubiera fallado al
+revés— cuando dijera que no.
+
+**Corrección.** Se quita `export GIT_WORK_TREE`; en su lugar, un pathspec que
+acota el `diff` a la subcarpeta:
+```sh
+git -C "$1" diff --name-only HEAD -- .
+```
+`-C "$1"` ya reposiciona el `cwd`; sin forzar el árbol de trabajo, git
+**descubre correctamente** el `.git` real (de `firmware/rockbox` o de un
+repo mayor que lo contenga, cualquiera de los dos casos) y el pathspec `.`
+limita el resultado a lo que hay bajo `"$1"` — la misma pregunta que el
+chequeo siempre quiso hacer ("¿el código de Rockbox que se va a compilar
+difiere de HEAD?"), sin importar si `"$1"` es la raíz del repo o una
+subcarpeta de uno mayor.
+
+**Verificado, con las tres pruebas que separan un fix real de uno que
+parece funcionar:**
+- **Antes del fix**, con el árbol limpio: `M` (falso positivo, reproducido a
+  mano y dentro del build real de release).
+- **Después del fix**, con el árbol limpio: sin `M`.
+- **Después del fix**, ensuciando a mano un archivo **dentro** de
+  `firmware/rockbox/` (`apps/main.c`): `M` — sigue detectando lo que debe
+  detectar.
+- **Después del fix**, ensuciando a mano un archivo **fuera** de
+  `firmware/rockbox/` (`DECISIONS.md`, en la raíz de `Aura-Firmware`): sin
+  `M` — correcto, y una mejora real sobre el comportamiento roto anterior
+  (antes, CUALQUIER cambio en cualquier parte del repo —incluida esta misma
+  ronda de documentación— también habría disparado la `M`, aunque
+  `rockbox.ipod` fuera bit a bit idéntico).
+
+**No se toca `tools/root.make` ni ningún otro sitio**: es un único archivo,
+un único chequeo, y el arreglo no depende de nada específico de este fork
+más que la ruta que ya se le pasaba.
+
+**Para Metro y moonlit**: mismo `tools/version.sh` stock, mismo
+`firmware/rockbox` como subcarpeta — casi seguro el mismo defecto, y sus
+releases anteriores probablemente también cargan la `M` falsa sin que nadie
+lo haya notado.

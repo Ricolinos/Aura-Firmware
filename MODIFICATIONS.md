@@ -28,7 +28,7 @@ cabecera de copyright GPL v2 (ver más abajo). Es el reemplazo de la UI
 de Rockbox (menús, WPS) por la capa "Aura UI", conectado al resto del
 árbol mediante los 20 archivos listados abajo.
 
-## Los 32 archivos de Rockbox modificados fuera de `apps/aura/`
+## Los 33 archivos de Rockbox modificados fuera de `apps/aura/`
 
 Todos conservan su cabecera de copyright original de Rockbox intacta.
 Los cambios de Aura están marcados inline en el propio código con
@@ -66,12 +66,13 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `firmware/target/arm/s5l8702/app.lds` (D-345: la pila del hilo `main` — el de la UI — pasa de 8 KB a 12 KB (`. += 0x2000` → `. += 0x3000`) tras un `*PANIC* stkov main` reproducido por el dueño en hardware; cabe en la IRAM de core de 48 KB: `_fiqstackend` queda en `0xb530`, ~2.7 KB por debajo del tope `0xC000`)
 - `firmware/target/hosted/filesystem-unix.c`
 - `lib/rbcodec/codecs/aiff.c`
+- `tools/version.sh` (D-354: la deteccion de arbol sucio del sufijo `M` de la version — `export GIT_WORK_TREE="$1"` asumia que la raiz de fuentes de Rockbox ES la raiz del repositorio git; en este fork es una subcarpeta de un repo mas grande, y esa mezcla de `GIT_WORK_TREE` forzado con el `GIT_DIR` real descubierto hacia arriba hacia que `git diff` reportara TODO el repo externo como "cambiado" — cada build, incluso con el arbol recien commiteado, salia con `M`. Reemplazado por un pathspec (`-- .`) que acota el diff a la subcarpeta sin forzar el work tree; no depende de si la raiz pasada es la raiz real del repo o una subcarpeta de uno mayor)
 - `uisimulator/common/sim_tasks.c (D-330: token USB_INSERT del inyector, portado del M-039 de Metro-Aura; D-351: token HOLD, que ALTERNA el interruptor Hold del simulador -- el Hold del 6G no es un boton sino un estado que se lee por sondeo, asi que sin este token la maquina de flancos del bloqueo solo se podria probar a mano)`
 - `utils/mks5lboot/Makefile`
 
 (Rutas relativas a `firmware/rockbox/`.)
 
-De estos 32 (`apps/bitmaps/native/SOURCES` y `apps/bitmaps/native/bootwordmark.141x45x16.bmp` se sumaron con D-347; `firmware/target/arm/s5l8702/app.lds` se sumó con D-345; `apps/tagcache.h` se sumó con D-293; los tres de `apps/plugins/sdl/progs/` con D-334; `apps/plugin.c`/`apps/plugin.h` con D-298; `apps/plugins/mpegplayer/mpeg_settings.h`, `stream_mgr.c`, `video_out.h` y `video_out_rockbox.c` con D-304), dos no tenían ningún comentario que mencionara a Aura:
+De estos 33 (`tools/version.sh` se sumó con D-354; `apps/bitmaps/native/SOURCES` y `apps/bitmaps/native/bootwordmark.141x45x16.bmp` se sumaron con D-347; `firmware/target/arm/s5l8702/app.lds` se sumó con D-345; `apps/tagcache.h` se sumó con D-293; los tres de `apps/plugins/sdl/progs/` con D-334; `apps/plugin.c`/`apps/plugin.h` con D-298; `apps/plugins/mpegplayer/mpeg_settings.h`, `stream_mgr.c`, `video_out.h` y `video_out_rockbox.c` con D-304), dos no tenían ningún comentario que mencionara a Aura:
 
 - **`utils/mks5lboot/Makefile`**: sí tiene una modificación real vigente
   (backend libusb opcional en macOS, D-050, 2026-08-10) — recibió un
