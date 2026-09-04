@@ -2135,3 +2135,47 @@ más que la ruta que ya se le pasaba.
 `firmware/rockbox` como subcarpeta — casi seguro el mismo defecto, y sus
 releases anteriores probablemente también cargan la `M` falsa sin que nadie
 lo haya notado.
+
+---
+
+## Release v0.4.5-beta publicado (2026-09-04)
+
+Autorizado directamente por el dueño (confirmación explícita en esta sesión,
+no relayada). Tag `v0.4.5-beta` sobre `19d7753edb` (incluye D-354, encontrada
+al preparar este mismo release — el tag se movió una vez, antes de que
+existiera ningún Release público, para no publicar una versión que ya se
+sabía incorrecta).
+
+**`Version: 19d7753edb-260904`** — sin `M`, bit-provable contra el tag
+(`git rev-parse --short=10 v0.4.5-beta` = `git rev-parse --short=10 HEAD`
+= `19d7753edb`). Primer build de este repo con una versión verificablemente
+correcta (ver D-354).
+
+10 assets, exactamente los del precedente `v0.4.4-beta` (el propio release
+via `gh release view --json assets`, no solo la tabla §A del contrato, que
+no menciona `THIRD-PARTY-NOTICES.txt` aunque todo release anterior lo
+incluyó): `rockbox.ipod`, `rockbox.zip`, `bootloader-ipod6g.ipod`,
+`mks5lboot`, `checksums.txt`, `AuraPalette.swift`, `MODIFICATIONS.md`,
+`THIRD-PARTY-NOTICES.txt`, `theme-format-v1.json`, `aura-theme-default.zip`.
+`README.md` — nunca se publica — verificado ausente.
+
+**Checksums (SHA-256):**
+```
+929c30b5ec21c489b8730c1a2b733e0a459ea34b4c2ff7d80aa26ece82df57ea  rockbox.zip
+7cd4248e4a27d966f0fca1f90be23f6b6de94bf4b972ef947d4efe21ac411acf  rockbox.ipod
+4cf5403c65f511a396d4c317abf63f1759c5e6336a620e89c8f6f22266d05ede  mks5lboot
+e4b8b9227d340cc7854b084c5b574d04b2977d10850eaa8afe3e24d1842b0433  bootloader-ipod6g.ipod
+```
+
+**URL**: https://github.com/Ricolinos/Aura-Firmware/releases/tag/v0.4.5-beta
+
+**Verificado tras publicar**: `rockbox.zip` descargado del Release es
+**byte a byte idéntico** al que produjo `package_dist.sh --release-tag`
+localmente; `.rockbox/aura/version.txt` = `v0.4.5-beta`, una sola entrada,
+sin fantasmas de D-348 addendum. Repo confirmado `Ricolinos/Aura-Firmware`
+(`--repo` explícito y `cd` absoluto a `firmware/dist` en todo el flujo, regla
+dura desde el incidente del 26-ago).
+
+**Pendiente, sin cambio**: la verificación en hardware (lista completa en
+D-353) sigue a cargo del dueño. El bootloader **no se flashea** hasta que
+Aura Studio tenga "Actualizar el arranque" (§B.5 del plan maestro).
