@@ -1955,26 +1955,50 @@ medir solo uno no dice nada del otro.
 
 ---
 
-## REANUDAR (2026-09-04 05:40)
+## REANUDADO (2026-09-04) — la anomalía de la pantalla USB, cerrada sin cambio de código
 
-Pausa por cuota, no por bloqueo técnico. **Árbol limpio, todo commiteado, sin
-tag ni Release.** La ronda D-345…D-353 está cerrada y aprobada; lo de abajo es
-lo único pendiente.
+**Diagnóstico del único pendiente que dejó la pausa.** La captura del
+despertar (`29-candado-al-despertar.png`, byte a byte idéntica a
+`06-usb.png`) no era lo que parecía. Dos hechos la explican sin tocar
+firmware:
 
-**1. Verificar el addendum 2 de D-351 en el estado que optimiza** (único
-pendiente de código de esta sesión):
-   - Reproducir: pantalla dormida (>10 s sin tocar nada), poner Hold,
-     despertar con un botón, comprobar que el candado está en la barra.
-   - **Antes**, entender por qué la captura de ese escenario salió mostrando
-     la pantalla USB (`/tmp/29-sin-explicar.png` si sigue ahí; si no,
-     reproducir con `apple2026_sim_shot.sh <png> 90 "<12 WAIT>,HOLD,SCROLL_FWD"`).
-     Puede ser un artefacto del volcado con la pantalla dormida, o algo real
-     en el camino de despertar. No se dio por bueno ninguno de los dos.
-   - Si resulta ser algo real, es un bug nuevo y va con su propia decisión.
+1. **La secuencia que la produjo no dormía la pantalla.** El comando real fue
+   `"WAIT,WAIT,HOLD,SCROLL_FWD"` — **2 segundos** de espera, no los 12 que
+   anotó la nota de pausa. El temporizador de luz son 10 s, así que
+   `lcd_active()` seguía en `true` todo el tiempo y la puerta del addendum 2
+   (`if (lcd_active() || screen_lock_enabled)`) se comporta **idéntica** a
+   como se comportaba antes de ese addendum. El código que el addendum 2
+   cambia **nunca se ejecutó** en la corrida que produjo la anomalía — no
+   puede ser su causa.
+2. **No se reprodujo ni una vez.** 11 intentos aislados (sin ningún otro
+   `rockboxui` corriendo, verificado con `pgrep`), 6 con la secuencia EXACTA
+   que falló (2 s) y 5 con la secuencia de 12 s que sí ejercita el addendum 2:
+   **0/11 mostraron la pantalla USB.** Los 11 registros (`/tmp/exact*.log`,
+   `/tmp/run*.log`) no mencionan ningún evento USB real — solo el nombre de
+   un micrófono USB del host en la enumeración de audio de SDL, sin relación.
+   Las 5 corridas de 12 s muestran además el candado correcto en la barra al
+   despertar, que es el comportamiento que el addendum 2 se propuso preservar.
 
-**2. Nada más.** Todo lo demás de la ronda espera al **hardware del dueño**
-(lista en D-353). El release (`v0.4.5-beta` sugerido) lo dispara él después de
-probar.
+**Conclusión**: artefacto del arnés, no un bug de firmware. La hipótesis más
+plausible (no verificable a esta distancia) es una colisión de proceso: un
+simulador interactivo había quedado corriendo en segundo plano minutos antes
+en esa misma sesión, compartiendo el mismo `simdisk/` — incluida la ruta
+`dump*.bmp` que usa `apple2026_sim_shot.sh`. No se abre una decisión nueva
+porque no hay bug que cerrar; queda documentado aquí para que quien lo lea
+después no vuelva a perseguirlo.
+
+**Regla que deja esta investigación, para el resto de la ronda y las
+hermanas**: antes de tomar una captura de verificación con
+`apple2026_sim_shot.sh`, confirmar con `pgrep -fl rockboxui` que no hay otro
+simulador corriendo contra el mismo `simdisk/`. Una captura tomada con dos
+procesos activos no es evidencia de nada, en ningún sentido.
+
+---
+
+**Estado final de la ronda.** D-345…D-353 más los dos addenda de D-351,
+**cerrados y aprobados**. Árbol limpio, sin tag ni Release — el release
+(`v0.4.5-beta` sugerido) lo dispara el dueño después de probar en hardware
+(lista completa en D-353).
 
 **Lo que Aura Studio necesita cuando se retome**: contrato v18 (ya
 byte-idéntico), `docs/contracts/library-layout-v1.md` **v1.5** (que copie el de
