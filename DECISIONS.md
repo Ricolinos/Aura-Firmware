@@ -1456,6 +1456,54 @@ medios. Se conserva la maquinaria porque la herramienta es compartida.
   con la función nueva que se pasa. El archivo se restauró tras la prueba.
 - `firmware/tools/stack_report.py`: verde con la lista vacía.
 
+### D-348, addendum — `zip -r` sobre un archivo existente no lo reemplaza: una versión mentirosa sobrevivía dentro de `rockbox.zip`
+
+**El hallazgo, de moonlit (D-075).** `zip -r destino.zip carpeta` **no
+reemplaza** `destino.zip` si ya existe: lo **abre** y agrega o actualiza
+entradas. Una entrada que estaba en un zip viejo y no forma parte del árbol de
+la corrida actual **sobrevive para siempre**, porque `zip` nunca la borra.
+
+**Confirmado en este repo, y no era teórico.** `firmware/dist/rockbox.zip`
+traía `.rockbox/aura/version.txt` con **`v0.4.4-beta`** — de un release real
+del 27 de agosto — sobreviviendo intacto en **cada corrida de desarrollo** de
+toda esta ronda (`package_dist.sh` sin `--release-tag`, que es justo cuando el
+script **no** escribe ese archivo, `firmware/tools/package_dist.sh:185`).
+`firmware/dist/` no es un directorio temporal: persiste entre corridas, y
+`(cd "$STAGE" && zip -qr "$DIST_DIR/rockbox.zip" .rockbox)` nunca borraba el
+zip anterior antes de escribir. `version.txt` es, según la cabecera del propio
+script, **"la única forma en que Aura Studio puede saber qué versión tiene
+instalada un dispositivo"** — cualquiera que hubiera descomprimido el
+`rockbox.zip` "de desarrollo" que salió de esta ronda habría encontrado una
+versión falsa.
+
+**Corrección**: `rm -f "$DIST_DIR/rockbox.zip"` antes de armarlo. Mismo
+tratamiento en `aura-theme-default.zip` (`package_dist.sh:333`) por
+prevención: hoy su contenido (fuentes/íconos) es siempre el mismo conjunto de
+archivos en cada corrida, así que no se encontró ninguna entrada huérfana real
+al inspeccionar `firmware/dist/aura-theme-default.zip` — pero nada garantiza
+que eso siga siendo cierto si el pipeline de diseño alguna vez deja de escribir
+algo que antes escribía.
+
+**Verificado.**
+- `unzip -l firmware/dist/rockbox.zip | grep -i version`: **vacío** tras el
+  fix (antes: `.rockbox/aura/version.txt`, 08-27-2026). Correcto — sin
+  `--release-tag` ese archivo no debe existir.
+- Reproducibilidad, reconfirmada con el fix aplicado: dos corridas
+  consecutivas de `package_dist.sh` (sin `--release-tag`) dan `rockbox.ipod`
+  **byte a byte idéntico** y `rockbox.zip` con **9 462 entradas** (una menos
+  que antes: exactamente la entrada fantasma que desapareció) y **cero CRC32
+  distintos**.
+- `stack_report.py` y `make dep` corriendo dentro de las dos corridas, igual
+  que en D-348.
+- No se probó el camino `--release-tag` con una etiqueta real (esta sesión no
+  crea tags ni Releases); la lógica que escribe `version.txt` con el flag no
+  se tocó, solo se le quitó el `zip -r` silencioso que la dejaba sobrevivir
+  fuera de su corrida.
+
+**Para Metro y moonlit**: si su `package_dist.sh` arma su zip final con
+`zip -r` sobre una ruta persistente (no un temporal), tienen el mismo defecto
+— gracias por el aviso.
+
 ## D-349 — Contrato v18: imágenes cuadradas de punta a punta; y una copia del contrato de biblioteca que había quedado atrás
 
 **Registro, sin trabajo de firmware en esta decisión** (el trabajo va en D-350).

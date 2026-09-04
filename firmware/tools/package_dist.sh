@@ -211,6 +211,20 @@ for sentinel in "${SENTINELS[@]}"; do
 done
 echo "==> Centinelas verificados: $(find "$STAGE/.rockbox" -type f | wc -l | tr -d ' ') archivos en el arbol"
 
+# D-348 addendum (hallazgo de moonlit D-075): `zip -r` sobre un archivo
+# que YA EXISTE no lo reemplaza -- ABRE ese zip y agrega/actualiza
+# entradas. Una entrada que existia en un zip viejo y no forma parte del
+# arbol de ESTA corrida sobrevive para siempre. Medido en este repo:
+# firmware/dist/rockbox.zip traia ".rockbox/aura/version.txt" con
+# "v0.4.4-beta" -- de un release real del 27 de agosto -- sobreviviendo
+# intacto en cada corrida de desarrollo posterior (SIN --release-tag,
+# que es cuando el script NO escribe ese archivo). Cualquiera que
+# descomprimiera un rockbox.zip "de desarrollo" de esta ronda encontraba
+# una version mentirosa -- justo el archivo del que depende Aura Studio
+# para saber que version tiene instalada (ver cabecera de este script).
+# `rm -f` antes de armar deja cada zip como si `STAGE`/`THEME_STAGE`
+# fueran su unico contenido posible, sin importar que corrio antes.
+rm -f "$DIST_DIR/rockbox.zip"
 (cd "$STAGE" && zip -qr "$DIST_DIR/rockbox.zip" .rockbox)
 
 echo "==> Generando AuraPalette.swift (asset del Release para Aura Studio, ver CONTRATO-firmware-studio.md)"
@@ -330,6 +344,12 @@ lines.append(f"accent_default: {tokens['aura_ds']['color']['accent_default_hex']
 lines.append("accent_presets: " + ",".join(tokens["aura_ds"]["color"]["accent_presets_hex"]))
 open(sys.argv[2], "w").write("\n".join(lines) + "\n")
 PYEOF
+# Mismo defecto que arriba, aplicado por si acaso: hoy el contenido de
+# THEME_STAGE es siempre el mismo conjunto de archivos (no depende de
+# --release-tag), asi que no se encontro ninguna entrada huerfana real
+# -- pero nada garantiza que eso siga siendo cierto si el pipeline de
+# fuentes/iconos alguna vez deja de escribir algo que antes escribia.
+rm -f "$DIST_DIR/aura-theme-default.zip"
 (cd "$THEME_STAGE" && zip -qr "$DIST_DIR/aura-theme-default.zip" aura)
 rm -rf "$THEME_STAGE"
 
