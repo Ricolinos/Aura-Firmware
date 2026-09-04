@@ -1896,6 +1896,10 @@ que D-348 (`make dep` + build limpio en release) cerró de verdad el desvío de
 
 ### Lista de verificación en hardware — ronda estabilidad
 
+**Verificado en hardware por el dueño el 2026-09-04 (v0.4.5-beta)**: sin
+panic, arranque, bloqueo, carátulas y ajustes correctos; ajustes menores
+pendientes para la siguiente ronda.
+
 Lo que el simulador **no puede** probar, ordenado por lo que más importa.
 
 **1. El PANIC (lo que motivó la ronda).** El simulador usa la pila del host:
