@@ -882,3 +882,107 @@ Esto **no** reabre lo que D-341 cerró. Lo que ahí bloqueaba era una cápsula q
 - Simulador (build limpio + `make install`), recorrido real con inyección de botones: Ajustes muestra la fila **"Actualizar biblioteca"**; el aviso Sí/No se lee **completo en tres líneas** (captura); al aceptar corre la base ("Leyendo… 9 668 elementos leídos"), sigue la fase de imágenes con **"Preparando carátulas 2/19"** y la barra llenándose (captura), y la pantalla **se cierra sola** devolviendo a Ajustes. Con la caché maestra vaciada a mano antes de cada corrida, quedaron **19 maestras de álbum y 16 de foto** escritas.
 - **Nota sobre esa captura del progreso**: la biblioteca QA del simulador tiene 19 álbumes y la fase se resuelve en menos de un segundo, así que el texto es imposible de atrapar con el volcado automático. La captura con "2/19" se tomó en una corrida con la espera entre elementos subida a `HZ/3` **solo para poder observarla**; se revirtió enseguida y la verificación final corrió con el código tal como queda. El dibujo es el mismo en ambos casos.
 - **Límite documentado**: no se probó en hardware con una biblioteca real de miles de pistas, que es donde la fase de imágenes de verdad tarda minutos y donde el aviso cobra sentido. Tampoco se verificó el disparo por marcador de un sync de Studio real (exige una Mac con Studio y un iPod), solo el manual de Ajustes — los dos entran por el mismo `finish_ok()`, que es el punto que se modificó.
+
+## D-345 — Línea base de la ronda "estabilidad e imágenes": simbolización del `*PANIC* stkov main` del dueño y medición de marcos sobre el binario real
+
+**Qué es esta decisión.** No cambia código. Fija la línea base contra la que se
+mide toda la ronda (plan maestro `PLAN-ronda-3-firmwares-maestro.md` §0 y §E):
+qué reportó el dueño, contra qué binario está simbolizado, cuánto mide de
+verdad cada marco del hilo de UI hoy, y cuál de las hipótesis heredadas no
+sobrevivió a la medición.
+
+**Punto de partida del árbol.** El trabajo sin commitear de la sesión anterior
+compila en 0 errores (target y simulador) y las 16 suites de host quedan
+verdes, así que entra al historial antes de tocar nada: `b9f0c4e2` (D-343),
+`948043a7` (D-344) y `6d0cf6a8` (contrato v17 / ST-077, que estaba en el mismo
+árbol y no pertenece a ninguna de las dos). La cadena de versión de la ronda
+nace de ahí.
+
+**El panic del dueño.** `*PANIC* stkov main`, `pc 0x080aa56c`, `sp 0x00007b20`,
+binario `fdf5be4e8fM-260827`. Simbolizado por la sesión supervisora y
+reverificado aquí contra `firmware/build-ipod6g/rockbox.elf`:
+
+- `0x080aa56c` cae dentro de `queue_empty` (`0x080aa568`..`0x080aa580`,
+  `addr2line` lo confirma). **No es el culpable**: `stkov` lo lanza
+  `thread_stkov()` desde `switch_thread()` cuando encuentra el canario del
+  fondo de la pila pisado, así que el `pc` es simplemente dónde el hilo cedió,
+  no dónde se desbordó.
+- La pila del hilo `main` sigue midiendo **8 KB en IRAM**: `rockbox.map` da
+  `stackbegin = 0x7d30`, `stackend = 0x9d30`, `_fiqstackend = 0xa530`.
+- `sp = 0x7b20` está `0x7d30 − 0x7b20 = 0x210` = **528 bytes por debajo de
+  `stackbegin`**. Desbordamiento real y más profundo que el de D-343 (que
+  reportaba 7 512 de 8 192 usados, todavía dentro).
+
+**Marcos medidos (bytes, `objdump -d` sobre el binario de esta línea base,
+prólogo `push` + `sub sp`).** Las 30 mayores del binario, con las de
+`apps/aura/` marcadas:
+
+| Bytes | Función | Origen |
+|---|---|---|
+| 6 424 | `build_index` | tagcache |
+| 4 408 | `aura_style_scan` | **aura** |
+| 4 120 | `ata_get_phys_sector_mult` | Rockbox |
+| 4 112 | `dbg_bootflash_dump` | Rockbox (menú de depuración) |
+| 3 824 | `try_activate` | **aura** |
+| 3 328 | `iap_handlepkt_mode4` | Rockbox |
+| 3 320 | `iap_platform_get_indexed_track_info` | Rockbox |
+| 3 216 | `add_tagcache` | tagcache |
+| 3 056 | `iap_handlepkt_mode3` | Rockbox |
+| 2 624 | `read_bmp_fd` | Rockbox |
+| 2 120 | `tagcache_import_changelog` | tagcache |
+| 2 088 | `glyph_cache_load` | Rockbox (fuentes) |
+| 1 864 | `parse_list_chunk` | Rockbox |
+| 1 648 | `retrieve_entries` | tagcache |
+| 1 392 | `run_search` | **aura** |
+| 1 336 | `fix_huff_tbl` | Rockbox (JPEG) |
+| 1 280 | `search_playlist` | Rockbox |
+| 1 272 | `count_unique_tag` | tagcache |
+| 1 272 | `draw_choice_list` | **aura** |
+| 1 160 | `skin_render_viewport` | Rockbox (skins) |
+| 1 152 | `skin_render_playlistviewer` | Rockbox (skins) |
+| 1 112 | `draw_nav_list` | **aura** |
+| 1 104 | `build_playlist_from_songs` | Rockbox |
+| 1 104 | `draw_style_list` | **aura** |
+| 1 080 | `relocate_tagcache_files` | tagcache |
+| 1 064 | `catalog_insert_into` | Rockbox |
+| 1 064 | `insert_all_playlist` | Rockbox |
+| 1 048 | `parse_menu` | Rockbox |
+| 1 032 | `write_marker` | **aura** |
+| 1 016 | `import_ratings_from_studio` | **aura** |
+
+Otras que interesan al análisis, fuera del top 30: `aura_music_play_track` 992,
+`skin_data_load` 848, `load_manifest` 424, `aura_style_read_icon_bmp` 296,
+`settings_apply` 280, `gui_usb_screen_run` 200, `aura_main` 56.
+
+**Desviación respecto al plan maestro: `style_fonts_exist` no existe como marco
+propio.** El maestro la lista con 3 640 B y arma con ella el camino sospechoso
+#1 (`draw_style_list` → `aura_style_scan` → `style_fonts_exist` ≈ 9.2 KB). En
+este binario gcc la **integra** en su único llamador, `aura_style_scan`: sus
+`paths[14][MAX_PATH]` (3 640 B) son la mayor parte de los 4 408 B de
+`aura_style_scan`, y no hay símbolo `style_fonts_exist` en el `.elf`. Sumar
+ambas cifras cuenta la misma memoria dos veces. El camino #1 real es
+`draw_style_list` (1 104) + `aura_style_scan` (4 408) + `load_manifest` (424,
+este sí es un símbolo aparte) ≈ **5.9 KB**, no 9.2 KB. Sigue siendo el peor
+camino de UI que sale de `apps/aura/` y sigue justificando el trabajo de la
+Fase 1; lo que cambia es que la cuenta de "antes/después" de esa fase parte de
+5.9 KB.
+
+Los otros dos caminos sospechosos se conservan tal como los describe el
+maestro y se miden en la Fase 1 con la herramienta de §E.3, que resuelve el
+grafo de llamadas en vez de sumar a mano:
+
+- **#2, activar un tema**: `try_activate` (3 824) + `font_load` →
+  `glyph_cache_load` (2 088) + `read_bmp_fd` (2 624) por cada ícono del tema.
+- **#3, el hallazgo colateral de D-343**, todo en Rockbox base:
+  `default_event_handler` → `gui_usb_screen_run` (200) → `settings_apply` (280)
+  → motor de skins → `skin_data_load` (848), que en la medición de D-343 sumaba
+  ~9 568 B con sus hojas.
+
+**Verificado.**
+- `make -C firmware/build-ipod6g`: **0 errores**. `Version: fdf5be4e8fM-260904`,
+  `Binary size: 1299688`, `RAM usage: 12503096`.
+- `firmware/tools/build_sim.sh` (compila + `make install` al simdisk):
+  **0 errores**.
+- `make -C firmware/rockbox/apps/aura/test test`: **16/16 suites verdes**.
+- `git status --short` limpio tras los tres commits (salvo `.serena/`, sin
+  seguimiento, herramienta local ajena al repo).
