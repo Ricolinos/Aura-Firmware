@@ -2371,6 +2371,21 @@ sí).
 **Pendiente, fuera de alcance de esta fase:** aplicar `language`
 fr/de/ru/it (D-357, Fase 3).
 
+**Addendum D-358 (2026-09-04, hallazgo de moonlit, D-079): orden de
+arranque corregido -- ver D-358 más abajo.** `aura_main()` armaba
+`screen_lock_active` (línea `if (aura_settings.screen_lock_enabled)
+aura_settings.screen_lock_active = true;`) **antes** de
+`aura_main_sync_after_disk_handoff()`, que es donde
+`aura_shared_settings_apply_if_newer()` (esta misma decisión) puede
+cambiar `screen_lock_enabled` si otra familia armó o quitó el candado.
+El resultado: un candado recién armado por otra familia no se pedía
+hasta el segundo arranque, y uno recién quitado se seguía pidiendo un
+arranque de más. No se detectó en esta decisión porque la verificación
+del vector A.3 no cruzó el candado con un `rev` más nuevo que
+`shared_rev_applied` en un arranque limpio -- moonlit lo encontró
+leyendo el código, D-358 lo confirma con dos arranques reales y lo
+corrige.
+
 ---
 
 ## D-357 — Idiomas: francés, alemán, ruso e italiano
@@ -2595,3 +2610,66 @@ caminos sospechosos de D-345 ni el motor de skins de D-345 punto 4, pero
 vale confirmar que siguen sanos tras el build limpio de esta ronda (10
 minutos por Personalización › Temas, Fotos, USB, Music Flow, "Ahora
 suena" con letras -- mismo criterio que la lista de la ronda anterior).
+
+---
+
+## D-358 — Orden de arranque: candado compartido tras aplicar `/.aura/settings.cfg`
+
+Corrección de un hallazgo de la sesión de moonlit (D-079 en su propio
+`DECISIONS.md`) sobre D-355/D-356, encontrado y confirmado después del
+cierre de "ajustes 2" (Fase 4 ya registrada arriba) -- registro
+puntual, sin reabrir fase.
+
+**El bug.** `aura_main()` (`aura_main.c`) armaba
+`aura_settings.screen_lock_active` desde `aura_settings.screen_lock_enabled`
+**antes** de llamar a `aura_main_sync_after_disk_handoff()`, que es el
+único punto donde `aura_shared_settings_apply_if_newer()` lee
+`/.aura/settings.cfg` y puede cambiar ese mismo `screen_lock_enabled`
+si otra familia (o una salida de emergencia por USB) lo tocó desde su
+propia sesión. El bucle principal sí relee `screen_lock_active` en
+vivo en cada vuelta (D-197), así que el problema no era que el candado
+quedara mal para siempre -- era que se evaluaba con el valor VIEJO
+justo en el arranque donde más importa: un candado recién armado por
+otra familia no se pedía hasta el **segundo** arranque (ventana real
+de acceso sin código), y uno recién quitado se seguía pidiendo un
+arranque de más (molestia, no riesgo).
+
+**Verificado con dos arranques reales del simulador (proceso nuevo
+cada vez, mismo criterio que D-356), antes y después:**
+- Antes: vector compartido con `screen_lock_enabled: 1` y `rev` más
+  nuevo que `shared_rev_applied` en `aura.cfg` → primer arranque
+  mostró el menú raíz **sin pedir clave** (bug confirmado, capturado);
+  `aura.cfg` quedó con `screen_lock_enabled: 1` tras ese arranque (la
+  sincronización sí corrió) pero `screen_lock_active` nunca se armó;
+  el **segundo** arranque (mismo `aura.cfg` ya actualizado) sí pidió
+  la clave.
+- Después de mover el bloque de armado a después de
+  `aura_main_sync_after_disk_handoff()`: mismo escenario, la clave se
+  pide desde el **primer** arranque. Escenario inverso (candado
+  activo localmente, `/.aura/settings.cfg` con `screen_lock_enabled:
+  0` y `rev` más nuevo) también verificado: el primer arranque ya
+  entra directo al menú raíz, sin candado de más.
+
+**Por qué no se detectó en D-356.** La verificación de esa decisión
+usó el vector A.3 tal cual (con el candado ya reflejado en el archivo
+desde antes de arrancar el simulador por primera vez esa sesión) y el
+ciclo de "cambiar brillo → `rev+1`" -- ningún caso cruzó
+específicamente un candado que cambia de estado con un arranque en
+frío. Ninguna otra clave compartida (brillo, apagado, idioma, etc.)
+tiene el mismo problema en la práctica porque no hay ningún otro
+"armado" que dependa de leer `aura_settings.*` antes del handoff de
+disco -- el bloqueo era el único caso con esa forma.
+
+**Fix.** Un solo cambio de orden en `aura_main()`
+(`firmware/rockbox/apps/aura/aura_main.c`): el bloque que arma
+`screen_lock_active` se mueve de antes de
+`aura_main_sync_after_disk_handoff()` a después, sin tocar ninguna
+otra línea de ese bloque ni de la función de sync. Ningún otro paso
+entre las dos posiciones originales (`aura_main_ensure_media_dirs()`,
+`a26_shell_init()`, `aura_nav_init()`) lee `screen_lock_active`, así
+que el reordenamiento no tiene efectos secundarios.
+
+**Verificado:** 17/17 suites host, build ARM 0 errores/0 advertencias,
+`stack_report.py` OK (6608 B peor caso, sin cambio -- reordenar dos
+líneas no cambia el marco de ninguna función), los dos escenarios de
+arriba confirmados en el simulador antes y después del fix.

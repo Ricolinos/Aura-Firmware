@@ -368,6 +368,15 @@ void aura_main(void)
          * visito el usuario. */
         aura_settings_save();
 
+    aura_main_ensure_media_dirs();
+    a26_shell_init();
+    aura_nav_init(&nav, AURA_SCREEN_ROOT);
+    /* D-293: si Aura Studio dejo /.aura/sync-pending.json, la primera
+     * pantalla es la de "Actualizando biblioteca..." (salvo candado
+     * activo: la pantalla de bloqueo va primero y esto se empuja debajo,
+     * asi que aparece al desbloquear). */
+    aura_main_sync_after_disk_handoff(&nav);
+
     /* Bloqueo de pantalla GLOBAL (Task B, encargo del dueno): arma el
      * candado EN VIVO (screen_lock_active) en CADA arranque si el
      * usuario lo dejo armado (screen_lock_enabled) -- este es el UNICO
@@ -385,18 +394,27 @@ void aura_main(void)
      * Forzar la condicion ACA, incondicionalmente, cierra todo camino de
      * apagado de una vez -- no hace falta enumerar ni interceptar cada
      * uno por separado (y no hay riesgo de que un camino nuevo se
-     * olvide de rearmar el candado). */
+     * olvide de rearmar el candado).
+     *
+     * D-358 (hallazgo de moonlit, D-079): esto va DESPUES de
+     * aura_main_sync_after_disk_handoff() -- ahi, no antes, es donde
+     * aura_shared_settings_apply_if_newer() (D-355/D-356) puede
+     * cambiar screen_lock_enabled si otra familia armo o quito el
+     * candado desde su propia sesion. Armar el candado ANTES de leer
+     * ese archivo (como hacia esta funcion hasta D-358) evaluaba
+     * screen_lock_enabled con el valor VIEJO: un candado recien armado
+     * por otra familia no se pedia hasta el SEGUNDO arranque, y un
+     * candado recien quitado por otra familia (o por la salida de
+     * emergencia por USB) se seguia pidiendo un arranque de mas.
+     * Verificado con dos arranques reales del simulador (proceso
+     * nuevo cada vez): vector compartido con `screen_lock_enabled: 1`
+     * y `rev` mas nuevo que `shared_rev_applied` -- antes del cambio,
+     * el primer arranque mostraba el menu raiz sin pedir clave (bug
+     * confirmado); el segundo arranque (con el valor ya persistido en
+     * aura.cfg del primero) si la pedia. Con el candado armado aca, el
+     * mismo escenario pide la clave desde el primer arranque. */
     if (aura_settings.screen_lock_enabled)
         aura_settings.screen_lock_active = true;
-
-    aura_main_ensure_media_dirs();
-    a26_shell_init();
-    aura_nav_init(&nav, AURA_SCREEN_ROOT);
-    /* D-293: si Aura Studio dejo /.aura/sync-pending.json, la primera
-     * pantalla es la de "Actualizando biblioteca..." (salvo candado
-     * activo: la pantalla de bloqueo va primero y esto se empuja debajo,
-     * asi que aparece al desbloquear). */
-    aura_main_sync_after_disk_handoff(&nav);
 
 #ifdef USB_ENABLE_HID
     /* Fase 12 (PLAN-UX.md) / D-051: global_settings.usb_hid=false (en
