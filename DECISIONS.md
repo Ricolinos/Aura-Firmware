@@ -2441,26 +2441,43 @@ ningún límite artificial que corregir. No hizo falta tocar
 **`gen_test_media.sh --lang-fixtures`** (nuevo, mismo patrón que
 `--aspect-fixtures` de D-350): dos álbumes de prueba, uno con
 título/artista/álbum en cirílico ("Тестовый альбом" / "Тестовый
-исполнитель") y uno en alemán con ß/ü/ö ("Größe & Übermaß" /
-"Königsgrößen"), instalados bajo `Music/Aura QA/` del simdisk. Sirven
-para verificar a simple vista que METADATOS reales de archivo (no las
-cadenas de `aura_lang.c`, que ya tienen su propio host test) se leen y
-dibujan bien -- distinto de (a)/(b) arriba, que solo cubren la UI
-propia. **No verificado interactivamente en esta sesión**: la
-reconstrucción de la base tagcache del simulador, corrida dentro de la
-misma sesión de captura, no llegó a indexar estos dos álbumes nuevos a
-tiempo para la captura (se investigó parcialmente -- no es la misma
-causa que D-342, que es sobre el firmware real; aquí probablemente el
-harness de automatización corta el proceso antes de que el commit de
-tagcache -- que ya es async por diseño -- termine de escribirse a
-disco, similar en espíritu al hallazgo de D-341 sobre USB, pero no se
-investigó a fondo por no ser bloqueante). Como los dos álbumes de
-prueba usan las MISMAS fuentes Inter que ya se verificaron con
-`check_fonts.py --coverage` (100% de cobertura cirílica), y Aura no
-tiene un camino de dibujo distinto para metadatos vs. cadenas de UI,
-la cobertura mecánica ya es evidencia suficientemente fuerte -- pero
-la confirmación visual queda pendiente como seguimiento, no como
-bloqueo de esta fase.
+исполнитель") y uno en alemán con ß/ü/ö ("Straße der Überraschung" /
+"Königsgrößen" / "Größe & Übermaß"), instalados bajo `Music/Aura QA/`
+del simdisk. Sirven para verificar a simple vista que METADATOS reales
+de archivo (no las cadenas de `aura_lang.c`, que ya tienen su propio
+host test) se leen y dibujan bien -- distinto de (a)/(b) arriba, que
+solo cubren la UI propia.
+
+**Hallazgo real, no de tagcache sino de nombre de carpeta.** La
+primera versión del script creaba la carpeta de cada álbum con el
+título real como nombre (`Music/Aura QA/Тестовый альбом/`,
+`Music/Aura QA/Größe & Übermaß/`) -- tagcache nunca los indexaba, ni
+con una reconstrucción completa desde cero (`.aura/tagcache/` borrado
+a mano). La sospecha inicial (commit async cortado por el harness,
+en la línea de D-341/D-342) resultó equivocada: `./rockboxui` corrido
+DIRECTO (sin el wrapper de automatización) mostró
+`aura_master_art_builder: albumes 25, claves vivas 25` -- el proceso
+sí terminaba limpio y sí veía los 25 álbumes (23 + 2) en memoria, pero
+la lista de Álbumes en pantalla seguía sin mostrar los dos nuevos. La
+causa real: APFS normaliza a NFD (Unicode descompuesto) los nombres de
+archivo no-ASCII al crearlos desde una herramienta de línea de
+comandos en macOS, y algo en la cadena de lectura de directorio del
+simulador (no aplica al dispositivo real, que usa FAT32/exFAT vía
+Aura Studio en Swift, con su propia normalización) no reconciliaba esa
+forma con la cadena esperada. Solución: la CARPETA usa un nombre
+ASCII fijo (`LangFixtureRU`/`LangFixtureDE`) -- el título/artista/álbum
+Unicode real, que es lo único que la UI en verdad lee y dibuja, viaja
+en las etiquetas ID3 (`-metadata title=...`), nunca en el nombre de
+archivo. Con ese cambio, indexó y se verificó interactivamente sin
+ningún paso extra: capturas en `docs/screenshots/ajustes-2/`
+(`lang-fixtures-cirilico-albumes.png`, `-musicflow.png`,
+`-ahora-suena.png`, `-aleman-albumes.png`) -- "Größe & Übermaß" en la
+lista de Álbumes, "Тестовый альбом"/"Тестовый исполнитель" en
+Álbumes, Music Flow y Ahora suena, todos con el cirílico y el
+ß/ü completos, sin `?` ni huecos. Confirma con evidencia real lo que
+ya indicaba `check_fonts.py --coverage`: Aura no tiene un camino de
+dibujo distinto para metadatos vs. cadenas de UI, así que la cobertura
+mecánica y la visual coinciden.
 
 **Matriz de capturas (`docs/screenshots/ajustes-2/matrix/`, 36
 capturas)**: hub/raíz, Ajustes, Acerca de, Bloqueo, Álbumes y Ahora
@@ -2486,11 +2503,10 @@ tabla de 6 idiomas), build completo 0 errores/0 advertencias,
 `stack_report.py` OK (6608 B peor caso, sin cambio -- las tablas de
 cadenas nuevas son `static const` en Flash/rodata, no pila),
 `check_fonts.py --coverage` limpio, matriz de 36 capturas en los seis
-idiomas.
+idiomas, y verificación interactiva de los dos álbumes de prueba
+cirílico/alemán (Álbumes, Music Flow, Ahora suena) tras corregir el
+nombre de carpeta -- ver arriba.
 
-**Pendiente, fuera de alcance de esta fase:** confirmación visual
-interactiva de los fixtures cirílico/alemán de `gen_test_media.sh`
-(bloqueada por el hallazgo de persistencia de tagcache de arriba, no
-por nada del código de idiomas); moonlit y Metro hacen su propio
-trabajo de fuentes/cobertura en sus propias sesiones (SS D.3 del
-maestro), no es trabajo de este repo.
+**Pendiente, fuera de alcance de esta fase:** moonlit y Metro hacen su
+propio trabajo de fuentes/cobertura en sus propias sesiones (SS D.3
+del maestro), no es trabajo de este repo.

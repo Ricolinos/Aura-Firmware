@@ -176,7 +176,14 @@ if [[ "${LANG_FIXTURES:-0}" == "1" ]]; then
   fi
   echo "==> Generando albumes de prueba cirilico y aleman"
 
-  dir_ru="$SIMDISK/Music/Aura QA/Тестовый альбом"
+  # Carpeta ASCII a proposito (LangFixtureRU/DE, no el titulo real): un
+  # nombre de CARPETA no-ASCII creado desde este script en macOS (APFS
+  # normaliza a NFD al crear el directorio) impidio que tagcache lo
+  # indexara en la verificacion de esta fase -- el titulo/artista/album
+  # UNICODE real, que es donde la UI realmente lee el texto que se
+  # muestra, va en las etiquetas ID3 de abajo, no en el nombre de
+  # archivo/carpeta (D-357).
+  dir_ru="$SIMDISK/Music/Aura QA/LangFixtureRU"
   mkdir -p "$dir_ru"
   ffmpeg -y -loglevel error \
     -f lavfi -i "sine=frequency=${FREQ}:duration=${DURATION}" \
@@ -185,7 +192,7 @@ if [[ "${LANG_FIXTURES:-0}" == "1" ]]; then
     -c:a libmp3lame -b:a 128k "$dir_ru/pista.mp3"
   echo "   ru: Тестовый альбом / Тестовый исполнитель"
 
-  dir_de="$SIMDISK/Music/Aura QA/Größe & Übermaß"
+  dir_de="$SIMDISK/Music/Aura QA/LangFixtureDE"
   mkdir -p "$dir_de"
   ffmpeg -y -loglevel error \
     -f lavfi -i "sine=frequency=${FREQ}:duration=${DURATION}" \
