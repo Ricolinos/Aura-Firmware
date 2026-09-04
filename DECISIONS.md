@@ -1455,3 +1455,56 @@ medios. Se conserva la maquinaria porque la herramienta es compartida.
   900 B: imprime el motivo de la permitida, avisa de la obsoleta, y **falla**
   con la función nueva que se pasa. El archivo se restauró tras la prueba.
 - `firmware/tools/stack_report.py`: verde con la lista vacía.
+
+## D-349 — Contrato v18: imágenes cuadradas de punta a punta; y una copia del contrato de biblioteca que había quedado atrás
+
+**Registro, sin trabajo de firmware en esta decisión** (el trabajo va en D-350).
+Fija el texto que las dos mitades de la ronda comparten: **Studio** garantiza
+que lo que escribe es cuadrado (`cover.jpg` 320×320, foto de artista 128×128,
+las dos recortadas al centro desde su copia local) y **los tres firmwares**
+dejan de suponerlo sin verificarlo.
+
+**`CONTRATO-firmware-studio.md` → v18.** Se **copió desde `../Aura-Studio`**
+(solo lectura) y quedó **byte a byte idéntico** a la copia de allá — que es el
+objetivo de que exista una sola versión del texto. Verificado contra el plan
+maestro §A.2: cabecera "Versión 18 — 2026-09-03", párrafo de encabezado v18, la
+nota de §D.3 (recorte cuadrado de la foto de artista), el bloque "Versión de
+formato y purga" de §D.5 (`/.aura/art/format.txt`), la clave de álbum de §D.5
+con el `mtime` de `cover.jpg`, la fila nueva de la tabla de §D, y
+`--family moonlit` fuera de Pendientes. Única diferencia de forma con el
+maestro: el bloque de formato/purga se escribió como viñeta dentro de la lista
+de §D.5 (y el GC salió a párrafo aparte) en vez de un párrafo nuevo; el texto
+literal se conserva entero.
+
+**`docs/contracts/library-layout-v1.md` → v1.5, y por qué NO se copió.** La
+copia de Aura Studio traía el párrafo nuevo correcto, pero sobre una **base
+anterior a D-341**: revertía tres cosas que ya no son ciertas desde hace dos
+semanas, y las publicaba con un número de versión que aquí ya estaba usado con
+otro contenido ("v1.4"). Lo que se habría perdido al copiarla:
+
+1. **§2, nota de `cfcache/`.** Su copia decía que se indexa por `album_seek` de
+   tagcache y que *"el firmware la vacía él mismo al terminar una
+   reconstrucción"*. Falso desde **D-338**: la clave es estable
+   (`crc32(ruta) + mtime`) y el firmware conserva las entradas de álbum,
+   recogiendo huérfanas con presupuesto.
+2. **§4.2, fila `music`.** Volvía a "vacía `/.rockbox/aura/cfcache/`".
+3. **§5.** Faltaba la referencia a la caché maestra compartida
+   (`/.aura/art/{albums,artists,photos}/`, D-340/D-341).
+4. **§6.** Faltaba la entrada de v1.4 del 2026-08-26.
+
+No es que su texto contradiga al maestro: es que la base era vieja. Como
+`Aura-Firmware` es la fuente canónica de **este** documento (lo dice su propia
+cabecera), se resolvió al revés de la regla general de esta ronda: aquí se
+escribe **v1.5 — 2026-09-04** = la v1.4 íntegra **más** el párrafo literal del
+maestro (autodescrito "v1.5:"), y Aura Studio copia este archivo. Reconciliado
+con la supervisora antes de escribir nada; la copia de Studio **no se tocó**.
+
+La lección, que vale para las tres familias: cuando dos repos mantienen "copias
+idénticas", copiar en la dirección equivocada no produce un conflicto — produce
+una **reversión silenciosa**. Lo único que la delató fue hacer `diff` de los dos
+archivos enteros en vez de solo mirar el bloque nuevo.
+
+**Renumeración respecto al plan hijo.** El plan asignaba D-347 al contrato v18;
+quedó en **D-349** porque en el camino entraron D-346 (la carrera de tagcache,
+encargo de la supervisora) y D-348 (la reproducibilidad del build). El
+bootloader es D-347.
