@@ -1794,3 +1794,30 @@ falsearía el resultado.
   1 px. La herramienta prueba que ahora la alineación es exacta; no es la que
   encontró el defecto. Se deja escrito para que nadie la use como si
   detectara desviaciones de un píxel.
+
+### D-351, addendum — los umbrales de 1 y 5 minutos, ejercitados de verdad
+
+El límite que quedó anotado al cerrar D-351 ("no se probaron esperando el
+tiempo real") se cierra sin esperar catorce minutos: bajo `#ifdef SIMULATOR`
+la **unidad** de los umbrales pasa de un minuto a **2 segundos**. La
+aritmética de hardware no cambia — es el mismo `TIME_AFTER` sobre el mismo
+`hold_since`, solo con otra constante.
+
+**Dos segundos y no uno**: el inyector separa tokens consecutivos por ~1 s
+(`AURA_INJECT_WAIT_TICKS`), así que con la unidad en 1 s "soltar **antes** del
+umbral" sería inexpresable — el mínimo escribible ya empataría con el umbral.
+Con 2 s, `HOLD,HOLD` cae dentro y `HOLD,WAIT,WAIT,HOLD` cae fuera, sin
+ambigüedad.
+
+**Las cuatro ramas, verificadas** (capturas `25`…`28`):
+
+| Ajuste | Hold puesto | Umbral | Resultado |
+|---|---|---|---|
+| Tras 1 minuto | ~1 s | 2 s | **vuelve al menú, sin código** ✓ |
+| Tras 1 minuto | ~4 s | 2 s | **pide el código** ✓ |
+| Tras 5 minutos | ~5 s | 10 s | **vuelve al menú, sin código** ✓ |
+| Tras 5 minutos | ~14 s | 10 s | **pide el código** ✓ |
+
+Lo que hace concluyente la tabla es el cruce: con ~4 s "Tras 1 minuto" **sí**
+pide y con ~5 s "Tras 5 minutos" **no** — los dos umbrales son de verdad
+distintos, no "cualquier espera lo dispara".

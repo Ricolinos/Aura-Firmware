@@ -181,6 +181,26 @@ static bool s_hold_state = false;      /* ultimo valor leido */
 static bool s_hold_state_valid = false;/* false hasta la primera lectura */
 static bool s_hold_resting = false;    /* pantalla de bloqueo en reposo */
 
+/* D-351 (addendum): la UNIDAD de los umbrales de "Tras 1 minuto" / "Tras
+ * 5 minutos". En el aparato es un minuto de verdad; en el SIMULADOR son
+ * 2 segundos, para que las cuatro ramas (soltar antes / despues, en cada
+ * uno de los dos umbrales) se puedan ejercitar con el inyector en vez de
+ * quedarse sin probar.
+ *
+ * Dos segundos y no uno: el inyector separa tokens consecutivos por ~1 s
+ * (AURA_INJECT_WAIT_TICKS), asi que con la unidad en 1 s "soltar ANTES
+ * del umbral" seria inexpresable -- el minimo que se puede escribir ya
+ * empataria con el umbral. Con 2 s, `HOLD,HOLD` cae dentro y
+ * `HOLD,WAIT,WAIT,HOLD` cae fuera, sin ambiguedad.
+ *
+ * La aritmetica de hardware NO cambia: es el mismo TIME_AFTER sobre el
+ * mismo hold_since, solo con otra constante. */
+#ifdef SIMULATOR
+#define AURA_LOCK_REQUIRE_UNIT (2L * HZ)
+#else
+#define AURA_LOCK_REQUIRE_UNIT (60L * HZ)
+#endif
+
 /* Umbral de `screen_lock_require` en ticks; -1 = el Hold nunca pide
  * codigo (AURA_LOCK_REQUIRE_BOOT). */
 static long lock_require_threshold_ticks(void)
@@ -188,8 +208,8 @@ static long lock_require_threshold_ticks(void)
     switch (aura_settings.screen_lock_require)
     {
     case AURA_LOCK_REQUIRE_HOLD: return 0;
-    case AURA_LOCK_REQUIRE_1MIN: return 60L * HZ;
-    case AURA_LOCK_REQUIRE_5MIN: return 300L * HZ;
+    case AURA_LOCK_REQUIRE_1MIN: return 1L * AURA_LOCK_REQUIRE_UNIT;
+    case AURA_LOCK_REQUIRE_5MIN: return 5L * AURA_LOCK_REQUIRE_UNIT;
     case AURA_LOCK_REQUIRE_BOOT:
     default:                     return -1;
     }
