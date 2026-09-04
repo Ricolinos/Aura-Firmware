@@ -2370,3 +2370,127 @@ sí).
 
 **Pendiente, fuera de alcance de esta fase:** aplicar `language`
 fr/de/ru/it (D-357, Fase 3).
+
+---
+
+## D-357 — Idiomas: francés, alemán, ruso e italiano
+
+Fase 3 de "ajustes 2". `aura_lang_t` pasa de 2 a 6 valores
+(`ES=0, EN=1, FR=2, DE=3, RU=4, IT=5` — nuevos SIEMPRE al final, mismo
+criterio que `aura_lock_require_t`: un `aura.cfg` viejo con
+`language: 0`/`1` no cambia de significado). `aura_lang.c` gana
+`strings_fr[]`/`strings_de[]`/`strings_ru[]`/`strings_it[]`, las 189
+claves que ya tenían es/en traducidas a las cuatro columnas nuevas
+(EQ_TREBLE_BOOST se deja igual de vacío que en es/en -- hueco
+preexistente sin consumidor de UI, no algo que esta fase debía llenar).
+`aura_str()` pasa de una rama ternaria ES/EN a una tabla
+`strings_by_lang[AURA_LANG_COUNT]` indexada por idioma.
+
+**Nombres de idioma del selector, siempre nativos.** El maestro pide
+"Español · English · Français · Deutsch · Русский · Italiano" sin
+traducir según el idioma activo. Antes de esta ronda `strings_es[]` y
+`strings_en[]` SÍ traducían `AURA_STR_LANG_ES`/`_EN` entre sí (la tabla
+ES decía "Inglés", la EN decía "Spanish") -- se corrigieron esas dos
+entradas a la forma nativa fija ("English"/"Español" en las dos), y las
+cuatro tablas nuevas repiten los mismos seis valores literales. Los
+otros nueve idiomas del catálogo inerte (da/nl/no/pt/fi/sv/ja/zh/ko,
+`LANGUAGE_AVAILABLE_N` en `aura_screens.c`) no se tocan -- siguen
+atenuados, sin traducción, mismo criterio de "el catálogo completo se
+ve, el firmware no finge soportar lo que no tiene" que ya regía para
+es/en antes de esta ronda. `language_choice_labels[]` se reordena para
+que sus primeros seis coincidan 1:1 con el orden de `aura_lang_t` (el
+índice de selección se usa directo como `(aura_lang_t)index`).
+
+**`aura_splash_lang.c`** (intercepta 8 cadenas de arranque que vienen
+del núcleo de Rockbox en inglés -- D-013, Aura no usa el sistema de
+`.lang`): pasó de `{es, en}` a `by_lang[AURA_LANG_COUNT]` por regla,
+mismo criterio de tabla que `aura_lang.c`. Los `.lang` de Rockbox
+(`apps/lang/english.lang`/`espanol.lang`) no llevan ningún texto propio
+de Aura añadido al final (se revisó antes de tocar nada): la regla del
+CLAUDE.md de la carpeta padre sobre "añadir al final de ambos .lang"
+es para el día que haga falta, no describe el estado actual -- no había
+nada que extender ahí.
+
+**`aura_shared_settings_io.c` se simplifica, no se amplía.** Con
+`aura_lang_t` ya en 6 valores en el MISMO orden que `aura_shared_lang_t`
+del contrato (ambos ES/EN/FR/DE/RU/IT desde D-355), `apply_language()`
+y `shared_lang_of()` -- que hasta D-356 tenían un switch con FR/DE/RU/IT
+cayendo en el caso por-defecto ("todavía no aplica") -- pasan a un cast
+directo con límite (mismo patrón `(unsigned)v < COUNT` de D-345). Cierra
+la nota pendiente que había quedado documentada en D-356.
+
+**Cobertura de glifos: `firmware/tools/check_fonts.py` (nuevo,
+portado de moonlit-aura/firmware/tools/check_fonts.py, solo lectura,
+adaptado).** A diferencia de moonlit (que resuelve huecos por
+transliteración, `moonlit_translit.c`), Aura no tiene ese mecanismo --
+si falta un glifo, falta. Adaptado para comparar las 14 fuentes Inter
+de `design-system/out/fonts/` contra: (a) los codepoints reales de las
+seis columnas de `aura_lang.c`, (b) el rango cirílico completo
+U+0400-U+045F que pide el maestro (aunque hoy ninguna cadena de la UI
+lo usa -- lo que sí puede aparecer es texto cirílico REAL en
+metadatos: título/artista/álbum tecleados por el usuario, ahora que
+`ru` está activo), (c) puntuación tipográfica frecuente en metadatos
+(guiones, comillas, elipsis, símbolos musicales). **Resultado: las 14
+fuentes cubren el 100% de (a) y (b) sin faltantes** -- `generate.py`
+llama a `convttf` sin `-s`/`-l` (sin límite de rango), así que ya
+convierte TODO glifo presente en el Inter TTF de origen; a diferencia
+de Metro (que sí necesita subir su `LIMIT` explícito), Aura no tenía
+ningún límite artificial que corregir. No hizo falta tocar
+`generate.py` ni regenerar fuentes.
+
+**`gen_test_media.sh --lang-fixtures`** (nuevo, mismo patrón que
+`--aspect-fixtures` de D-350): dos álbumes de prueba, uno con
+título/artista/álbum en cirílico ("Тестовый альбом" / "Тестовый
+исполнитель") y uno en alemán con ß/ü/ö ("Größe & Übermaß" /
+"Königsgrößen"), instalados bajo `Music/Aura QA/` del simdisk. Sirven
+para verificar a simple vista que METADATOS reales de archivo (no las
+cadenas de `aura_lang.c`, que ya tienen su propio host test) se leen y
+dibujan bien -- distinto de (a)/(b) arriba, que solo cubren la UI
+propia. **No verificado interactivamente en esta sesión**: la
+reconstrucción de la base tagcache del simulador, corrida dentro de la
+misma sesión de captura, no llegó a indexar estos dos álbumes nuevos a
+tiempo para la captura (se investigó parcialmente -- no es la misma
+causa que D-342, que es sobre el firmware real; aquí probablemente el
+harness de automatización corta el proceso antes de que el commit de
+tagcache -- que ya es async por diseño -- termine de escribirse a
+disco, similar en espíritu al hallazgo de D-341 sobre USB, pero no se
+investigó a fondo por no ser bloqueante). Como los dos álbumes de
+prueba usan las MISMAS fuentes Inter que ya se verificaron con
+`check_fonts.py --coverage` (100% de cobertura cirílica), y Aura no
+tiene un camino de dibujo distinto para metadatos vs. cadenas de UI,
+la cobertura mecánica ya es evidencia suficientemente fuerte -- pero
+la confirmación visual queda pendiente como seguimiento, no como
+bloqueo de esta fase.
+
+**Matriz de capturas (`docs/screenshots/ajustes-2/matrix/`, 36
+capturas)**: hub/raíz, Ajustes, Acerca de, Bloqueo, Álbumes y Ahora
+suena, en los seis idiomas. Verificado a simple vista: sin cortes de
+texto visibles en ninguna captura (ni en las filas de Ajustes, más
+angostas, donde ruso/alemán son ~30% más largos según el maestro);
+metadatos de archivo (nombres de pista/álbum/artista de los fixtures)
+correctamente SIN traducir, como corresponde. **Hallazgo real durante
+la primera corrida**: el simulador (`firmware/build-sim`) no se había
+reconstruido tras los cambios de esta fase -- las primeras 36 capturas
+salieron con el binario viejo (`AURA_LANG_COUNT` todavía en 2), así que
+`clamp_enum()` recortaba silenciosamente cualquier idioma >= 2 y todo
+salía en español pese a que `aura.cfg` en disco sí tenía el valor
+correcto. Detectado al inspeccionar una captura "fr" y ver texto en
+español; corregido reconstruyendo el simulador y repitiendo la matriz
+completa. Registrado aquí porque es el mismo tipo de trampa que D-354 y
+la investigación de anomalía USB de la ronda anterior: la evidencia
+capturada mentía por un desfase de binario, no por un bug de UI.
+
+**Verificado:** 17/17 suites host (incluye `test_splash_lang`, sin
+cambios de comportamiento -- mismas 10 verificaciones, ahora sobre la
+tabla de 6 idiomas), build completo 0 errores/0 advertencias,
+`stack_report.py` OK (6608 B peor caso, sin cambio -- las tablas de
+cadenas nuevas son `static const` en Flash/rodata, no pila),
+`check_fonts.py --coverage` limpio, matriz de 36 capturas en los seis
+idiomas.
+
+**Pendiente, fuera de alcance de esta fase:** confirmación visual
+interactiva de los fixtures cirílico/alemán de `gen_test_media.sh`
+(bloqueada por el hallazgo de persistencia de tagcache de arriba, no
+por nada del código de idiomas); moonlit y Metro hacen su propio
+trabajo de fuentes/cobertura en sus propias sesiones (SS D.3 del
+maestro), no es trabajo de este repo.

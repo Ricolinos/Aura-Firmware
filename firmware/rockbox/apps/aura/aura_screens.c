@@ -584,15 +584,20 @@ static const aura_str_id_t sort_choice_labels[] = {
     AURA_STR_SORT_FIRSTNAME, AURA_STR_SORT_LASTNAME,
 };
 
+/* D-357: los primeros seis coinciden 1:1, en orden, con aura_lang_t
+ * (ES/EN/FR/DE/RU/IT) -- el indice de seleccion de esta lista SE USA
+ * directo como (aura_lang_t)index en apply_choice(), asi que el orden
+ * de aqui y el del enum tienen que ser el mismo siempre. Los nueve de
+ * despues siguen siendo catalogo inerte (sin traduccion todavia). */
 static const aura_str_id_t language_choice_labels[] = {
-    AURA_STR_LANG_ES, AURA_STR_LANG_EN,
-    AURA_STR_LANG_DA, AURA_STR_LANG_DE, AURA_STR_LANG_FR, AURA_STR_LANG_IT,
-    AURA_STR_LANG_NL, AURA_STR_LANG_NO, AURA_STR_LANG_PT, AURA_STR_LANG_FI,
-    AURA_STR_LANG_SV, AURA_STR_LANG_JA, AURA_STR_LANG_ZH, AURA_STR_LANG_KO,
-    AURA_STR_LANG_RU,
+    AURA_STR_LANG_ES, AURA_STR_LANG_EN, AURA_STR_LANG_FR,
+    AURA_STR_LANG_DE, AURA_STR_LANG_RU, AURA_STR_LANG_IT,
+    AURA_STR_LANG_DA, AURA_STR_LANG_NL, AURA_STR_LANG_NO, AURA_STR_LANG_PT,
+    AURA_STR_LANG_FI, AURA_STR_LANG_SV, AURA_STR_LANG_JA, AURA_STR_LANG_ZH,
+    AURA_STR_LANG_KO,
 };
 /* Cuantos de esa lista estan realmente disponibles (los primeros N). */
-#define LANGUAGE_AVAILABLE_N 2
+#define LANGUAGE_AVAILABLE_N 6
 /* Repetir (D-021: solo Desactivado/Todo/Uno -- REPEAT_SHUFFLE y
  * REPEAT_AB quedan fuera del modelo simplificado de Aura, el aleatorio
  * ya es su propio booleano independiente, D-014/Fase 17) indices 0/1/2,

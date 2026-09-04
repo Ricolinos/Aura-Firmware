@@ -101,30 +101,17 @@ static void apply_appearance(aura_shared_appearance_t v)
     aura_settings_sync_rockbox_theme_colors();
 }
 
-/* D-357 (Fase 3 de esta misma ronda) amplia aura_lang_t a los seis
- * idiomas del contrato -- hasta entonces, fr/de/ru/it son claves
- * VALIDAS y CONOCIDAS (aura_shared_settings_parse() las reconoce, no
- * las trata como clave desconocida) pero esta funcion todavia no sabe
- * mostrar esos cuatro, asi que las deja sin aplicar -- exactamente el
- * mismo criterio que "valor fuera de rango se ignora clave por clave"
- * (regla 2 del contrato), aunque aqui el valor SI es valido, solo que
- * este firmware en concreto (todavia) no lo soporta. */
+/* D-357: aura_lang_t ya trae los seis idiomas del contrato, en el
+ * MISMO orden que aura_shared_lang_t (ES/EN/FR/DE/RU/IT) -- los dos
+ * enums coinciden 1:1 a proposito (ver el comentario de aura_lang_t en
+ * aura_settings.h), asi que el mapeo es un cast directo con limite,
+ * mismo criterio de D-345 para el resto de las conversiones de este
+ * archivo. Antes de D-357 esta funcion dejaba fr/de/ru/it sin aplicar
+ * (aura_lang_t solo tenia ES/EN); ya no hace falta ese caso especial. */
 static void apply_language(aura_shared_lang_t v)
 {
-    switch (v)
-    {
-    case AURA_SHARED_LANG_ES:
-        aura_settings.language = AURA_LANG_ES; break;
-    case AURA_SHARED_LANG_EN:
-        aura_settings.language = AURA_LANG_EN; break;
-    case AURA_SHARED_LANG_FR:
-    case AURA_SHARED_LANG_DE:
-    case AURA_SHARED_LANG_RU:
-    case AURA_SHARED_LANG_IT:
-    case AURA_SHARED_LANG_COUNT:
-    default:
-        break;
-    }
+    if ((unsigned)v < (unsigned)AURA_LANG_COUNT)
+        aura_settings.language = (aura_lang_t)v;
 }
 
 void aura_shared_settings_apply_if_newer(void)
@@ -226,16 +213,12 @@ static aura_shared_appearance_t shared_appearance_of(aura_theme_id_t v)
                                   : AURA_SHARED_APPEARANCE_LIGHT;
 }
 
+/* D-357: cast directo, mismo motivo que apply_language() arriba. */
 static aura_shared_lang_t shared_lang_of(aura_lang_t v)
 {
-    switch (v)
-    {
-    case AURA_LANG_ES: return AURA_SHARED_LANG_ES;
-    case AURA_LANG_EN: return AURA_SHARED_LANG_EN;
-    /* D-357 amplia aura_lang_t; hasta entonces no hay mas casos que
-     * mapear desde este lado. */
-    default: return AURA_SHARED_LANG_ES;
-    }
+    if ((unsigned)v < (unsigned)AURA_SHARED_LANG_COUNT)
+        return (aura_shared_lang_t)v;
+    return AURA_SHARED_LANG_ES;
 }
 
 void aura_shared_settings_write_current(void)

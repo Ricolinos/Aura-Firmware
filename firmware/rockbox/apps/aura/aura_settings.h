@@ -86,9 +86,19 @@ typedef enum {
     AURA_EQ_COUNT,
 } aura_eq_preset_t;
 
+/* D-357: francés/alemán/ruso/italiano se agregan al FINAL, nunca en
+ * medio (mismo criterio que aura_lock_require_t abajo) -- un aura.cfg
+ * viejo con `language: 0` o `1` sigue significando ES/EN sin cambiar.
+ * El orden coincide 1:1 con `language` de /.aura/settings.cfg
+ * (aura_shared_lang_t, D-355/D-356) y con las columnas de
+ * aura_lang.c. */
 typedef enum {
     AURA_LANG_ES = 0,
     AURA_LANG_EN,
+    AURA_LANG_FR,
+    AURA_LANG_DE,
+    AURA_LANG_RU,
+    AURA_LANG_IT,
     AURA_LANG_COUNT,
 } aura_lang_t;
 

@@ -29,8 +29,7 @@
 typedef struct {
     const char *match; /* texto (o prefijo) original en ingles de Rockbox */
     int exact;          /* 1 = todo el texto debe coincidir, 0 = solo el prefijo */
-    const char *es;
-    const char *en;
+    const char *by_lang[AURA_LANG_COUNT]; /* D-357: ES/EN/FR/DE/RU/IT, mismo orden que aura_lang_t */
 } splash_rule_t;
 
 /* Textos fuente extraidos literal de apps/lang/english.lang (el unico
@@ -41,26 +40,29 @@ typedef struct {
  * variantes mas cortas. */
 static const splash_rule_t s_rules[] = {
     { "Loading... (",                              0,
-      "Cargando… (",                               "Loading... (" },
+      { "Cargando… (", "Loading... (", "Chargement… (", "Wird geladen… (", "Загрузка… (", "Caricamento… (" } },
     { "Loading...",                                1,
-      "Cargando…",                                  "Loading..." },
+      { "Cargando…", "Loading...", "Chargement…", "Wird geladen…", "Загрузка…", "Caricamento…" } },
     { "Scanning disk...",                          1,
-      "Preparando el disco…",                       "Preparing storage..." },
+      { "Preparando el disco…", "Preparing storage...", "Préparation du disque…", "Speicher wird vorbereitet…", "Подготовка диска…", "Preparazione del disco…" } },
     { "Shutting down...",                          1,
-      "Apagando…",                                   "Shutting down..." },
+      { "Apagando…", "Shutting down...", "Extinction…", "Wird ausgeschaltet…", "Выключение…", "Spegnimento…" } },
     { "Database is not ready",                     1,
-      "Terminando de preparar la biblioteca…",       "Finishing up your library..." },
+      { "Terminando de preparar la biblioteca…", "Finishing up your library...", "Finalisation de la bibliothèque…", "Bibliothek wird fertiggestellt…", "Завершение подготовки библиотеки…", "Completamento della libreria…" } },
     { "WARNING! Low Battery! Shutting down...",    1,
-      "Batería baja. Apagando…",                     "Low battery. Shutting down..." },
+      { "Batería baja. Apagando…", "Low battery. Shutting down...", "Batterie faible. Extinction…", "Akku schwach. Wird ausgeschaltet…", "Батарея разряжена. Выключение…", "Batteria scarica. Spegnimento…" } },
     { "Battery empty! RECHARGE! Shutting down...", 1,
-      "Batería agotada. Conecta el cargador.",       "Battery empty. Plug in your charger." },
+      { "Batería agotada. Conecta el cargador.", "Battery empty. Plug in your charger.", "Batterie épuisée. Branchez le chargeur.", "Akku leer. Ladegerät anschließen.", "Батарея разряжена. Подключите зарядное устройство.", "Batteria esaurita. Collega il caricabatterie." } },
     { "Committing database [",                     0,
-      "Preparando la biblioteca [",                  "Preparing your library [" },
+      { "Preparando la biblioteca [", "Preparing your library [", "Préparation de la bibliothèque [", "Bibliothek wird vorbereitet [", "Подготовка библиотеки [", "Preparazione della libreria [" } },
 };
 
 void aura_splash_translate(char *buf, size_t bufsz)
 {
     size_t i;
+    /* D-345/D-357: mismo criterio de cast sin signo que aura_lang.c. */
+    aura_lang_t lang = ((unsigned)aura_settings.language < (unsigned)AURA_LANG_COUNT)
+                            ? aura_settings.language : AURA_LANG_ES;
 
     for (i = 0; i < sizeof(s_rules) / sizeof(s_rules[0]); i++)
     {
@@ -73,7 +75,7 @@ void aura_splash_translate(char *buf, size_t bufsz)
         if (!matches)
             continue;
 
-        translated = (aura_settings.language == AURA_LANG_EN) ? r->en : r->es;
+        translated = r->by_lang[lang];
 
         if (r->exact)
         {

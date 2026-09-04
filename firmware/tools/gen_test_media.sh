@@ -8,6 +8,7 @@
 #
 # Uso: firmware/tools/gen_test_media.sh
 #      firmware/tools/gen_test_media.sh --aspect-fixtures
+#      firmware/tools/gen_test_media.sh --lang-fixtures
 #
 # --aspect-fixtures (D-350, contrato v18): ademas de lo de siempre, crea
 # cuatro albumes en el simdisk cuyo cover.jpg NO es cuadrado (1:1, 4:3,
@@ -17,12 +18,23 @@
 # inmediato (el patron de barras de color se ve sesgado o rasgado).
 # Studio, desde el contrato v18, escribe siempre 320x320 -- estos
 # fixtures son justamente lo que el firmware debe seguir tolerando.
+#
+# --lang-fixtures (D-357, ronda "ajustes 2" SS D.4): dos albumes con
+# titulo/artista en cirilico y en aleman con ss/u dieresis -- para
+# verificar a simple vista, en Musica/Cover Flow, que las etiquetas
+# reales de archivo (no las cadenas de aura_lang.c, que ya tienen su
+# propio host test) se leen y dibujan bien con las fuentes Inter del
+# firmware, sin '?'/huecos.
 
 set -euo pipefail
 
 ASPECT_FIXTURES=0
+LANG_FIXTURES=0
 if [[ "${1:-}" == "--aspect-fixtures" ]]; then
   ASPECT_FIXTURES=1
+  shift
+elif [[ "${1:-}" == "--lang-fixtures" ]]; then
+  LANG_FIXTURES=1
   shift
 fi
 
@@ -151,6 +163,37 @@ if [[ "${ASPECT_FIXTURES:-0}" == "1" ]]; then
       -c:a libmp3lame -b:a 128k "$dir/pista.mp3"
     echo "   $name ($dims)"
   done
+  echo "==> Recuerda: la base tagcache del simdisk tiene que reconstruirse"
+  echo "    (Ajustes > Actualizar biblioteca) para que aparezcan."
+fi
+
+# -- D-357: albumes de prueba cirilico y aleman ---------------------------
+if [[ "${LANG_FIXTURES:-0}" == "1" ]]; then
+  SIMDISK="$ROOT_DIR/firmware/build-sim/simdisk"
+  if [[ ! -d "$SIMDISK" ]]; then
+    echo "ERROR: no existe $SIMDISK -- corre firmware/tools/build_sim.sh primero" >&2
+    exit 1
+  fi
+  echo "==> Generando albumes de prueba cirilico y aleman"
+
+  dir_ru="$SIMDISK/Music/Aura QA/Тестовый альбом"
+  mkdir -p "$dir_ru"
+  ffmpeg -y -loglevel error \
+    -f lavfi -i "sine=frequency=${FREQ}:duration=${DURATION}" \
+    -metadata title="Первая дорожка" -metadata artist="Тестовый исполнитель" \
+    -metadata album="Тестовый альбом" \
+    -c:a libmp3lame -b:a 128k "$dir_ru/pista.mp3"
+  echo "   ru: Тестовый альбом / Тестовый исполнитель"
+
+  dir_de="$SIMDISK/Music/Aura QA/Größe & Übermaß"
+  mkdir -p "$dir_de"
+  ffmpeg -y -loglevel error \
+    -f lavfi -i "sine=frequency=${FREQ}:duration=${DURATION}" \
+    -metadata title="Straße der Überraschung" -metadata artist="Königsgrößen" \
+    -metadata album="Größe & Übermaß" \
+    -c:a libmp3lame -b:a 128k "$dir_de/pista.mp3"
+  echo "   de: Größe & Übermaß / Königsgrößen (ß/ü/ö)"
+
   echo "==> Recuerda: la base tagcache del simdisk tiene que reconstruirse"
   echo "    (Ajustes > Actualizar biblioteca) para que aparezcan."
 fi
