@@ -196,6 +196,12 @@ typedef struct {
     /* D-351: tick en que se puso el Hold, para los umbrales de 1/5 min.
      * NO persiste: un apagado ya pide codigo por su cuenta. */
     long screen_lock_hold_since;
+    /* D-355/D-356: ultimo `rev` de /.aura/settings.cfg que este firmware
+     * ya aplico -- CONTRATO-firmware-studio.md SS D.6 regla 1. Persiste
+     * en aura.cfg como "shared_rev_applied". 0 = nunca aplico ninguno
+     * (un archivo compartido real siempre tiene rev >= 1, asi que 0
+     * fuerza la aplicacion la primera vez que aparece). */
+    long shared_rev_applied;
     /* D-289 (sistema de temas): id del paquete de tema activo, o
      * cadena vacia = el default compilado ("Aura"). 33 = 32 + NUL,
      * ver AURA_STYLE_ID_LEN en aura_style.h (CONTRATO-formato-tema.md

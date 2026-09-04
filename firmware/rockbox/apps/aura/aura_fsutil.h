@@ -61,7 +61,22 @@ bool aura_fsutil_file_mtime(const char *path, uint32_t *out);
 
 int aura_fsutil_read_text(const char *path, char *buf, size_t bufsize);
 
-/* Escribe `len` bytes en `path` (crea/trunca). true si se escribio todo. */
+/* Escribe `len` bytes en `path` (crea/trunca). true si se escribio todo.
+ * NO es atomica -- un corte de energia a mitad de escritura deja el
+ * archivo truncado. Para un archivo que otra familia puede estar
+ * leyendo al mismo tiempo (p. ej. /.aura/settings.cfg, D-356) usar
+ * aura_fsutil_write_all_atomic() en su lugar. */
 bool aura_fsutil_write_all(const char *path, const char *data, size_t len);
+
+/* D-356: como aura_fsutil_write_all(), pero atomica -- escribe a
+ * "<path>.tmp" y hace rename() sobre `path`. rename() dentro del mismo
+ * volumen FAT reescribe la entrada de directorio sin copiar datos
+ * (mismo argumento que D-337 uso para migrar la base de tagcache): un
+ * lector nunca ve un archivo a medio escribir, en el peor caso ve la
+ * version VIEJA completa hasta que el rename() se confirma. Si el
+ * proceso se corta entre el write y el rename, el `.tmp` huerfano se
+ * ignora en la proxima lectura (nadie lo busca por ese nombre) y la
+ * proxima escritura lo pisa sin mas. */
+bool aura_fsutil_write_all_atomic(const char *path, const char *data, size_t len);
 
 #endif /* AURA_FSUTIL_H */

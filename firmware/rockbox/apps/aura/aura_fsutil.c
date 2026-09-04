@@ -131,6 +131,27 @@ bool aura_fsutil_write_all(const char *path, const char *data, size_t len)
     return n >= 0 && (size_t)n == len;
 }
 
+bool aura_fsutil_write_all_atomic(const char *path, const char *data, size_t len)
+{
+    char tmp[MAX_PATH];
+    int n;
+
+    n = snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    if (n <= 0 || (size_t)n >= sizeof(tmp))
+        return false;
+    if (!aura_fsutil_write_all(tmp, data, len))
+    {
+        remove(tmp);
+        return false;
+    }
+    if (rename(tmp, path) != 0)
+    {
+        remove(tmp);
+        return false;
+    }
+    return true;
+}
+
 bool aura_fsutil_file_mtime(const char *path, uint32_t *out)
 {
     char dir[MAX_PATH];

@@ -160,6 +160,44 @@ bool aura_sync_write_music_pending_marker(void);
 #define AURA_SHARED_ART_FORMAT_PATH AURA_SHARED_ART_DIR "/format.txt"
 #define AURA_SHARED_ART_FORMAT      2
 
+/* D-355/D-356 (contrato v19): ajustes compartidos entre familias
+ * (bloqueo, brillo, apagado, idioma...) -- fuera de `.rockbox/` (que se
+ * renombra al cambiar de familia, D-326), propiedad exclusiva de los
+ * firmwares. Formato en CONTRATO-firmware-studio.md SS D.6 y en
+ * aura_shared_settings.h (modulo puro que lo parsea/serializa). Mismo
+ * dueno de rutas que las de arriba: nadie mas deletrea esta. */
+#define AURA_SHARED_SETTINGS_PATH "/.aura/settings.cfg"
+
+/* D-356: lee AURA_SHARED_SETTINGS_PATH y, si trae un `rev` mayor que
+ * aura_settings.shared_rev_applied, aplica las 13 claves conocidas a
+ * global_settings/aura_settings y sube shared_rev_applied. Mismo punto
+ * que la hora (SS D.4): al arrancar y al volver de la pantalla USB
+ * (aura_main_sync_after_disk_handoff(), D-293). No hace nada si el
+ * archivo no existe o no trae la cabecera -- todo queda local, como
+ * antes de v19 (regla 5 del contrato). */
+void aura_shared_settings_apply_if_newer(void);
+
+/* D-356: reescribe AURA_SHARED_SETTINGS_PATH completo con el estado
+ * ACTUAL de global_settings/aura_settings, `rev+1`, `updated_by:
+ * "aura"`, preservando las claves desconocidas que ya hubiera en el
+ * archivo anterior (regla 2 del contrato) -- para eso relee el archivo
+ * antes de reescribirlo.
+ *
+ * A diferencia de aura_settings_core_touched()/_flush() (D-351), esto
+ * NO se difiere a un punto centralizado: escribe YA, en cada uno de los
+ * ~10 sitios que cambian una de las 13 claves compartidas. D-351 difiere
+ * porque settings_save() de Rockbox es perezoso por diseno (registra un
+ * callback, el flush real espera hasta 30s salvo que se fuerce) -- esta
+ * escritura, en cambio, ya es un unico open+write+rename sincrono
+ * (aura_fsutil_write_all_atomic()); diferirla no evitaria ningun trabajo
+ * de mas, y varios de esos sitios (aura_screenlock.c: Activar, Quitar
+ * bloqueo) salen de su pantalla con aura_nav_pop() sin pasar nunca por
+ * el BUTTON_MENU del despachador central -- un punto centralizado ahi
+ * se las habria perdido. Se llama en el mismo lugar donde ya se guarda
+ * el ajuste local (aura_settings_save()/aura_settings_core_touched()),
+ * nunca en su lugar, y en Restablecer ajustes. */
+void aura_shared_settings_write_current(void);
+
 /* D-337: apunta global_settings.tagcache_db_path a AURA_SHARED_DB_DIR y
  * migra por rename() (sin copiar) una base previa a v15 que siga en
  * ROCKBOX_DIR (database_*.tcd + aura/db_stamp.txt) si el compartido no

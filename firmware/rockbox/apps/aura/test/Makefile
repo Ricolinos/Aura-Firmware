@@ -8,7 +8,7 @@ BUILD := build
 
 .PHONY: test clean
 
-test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow $(BUILD)/test_color $(BUILD)/test_patterns $(BUILD)/test_style $(BUILD)/test_sync_marker $(BUILD)/test_device_name $(BUILD)/test_artist_images $(BUILD)/test_firmware_families $(BUILD)/test_cache_keys $(BUILD)/test_master_art $(BUILD)/test_switch_wait
+test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/test_motion $(BUILD)/test_wheel $(BUILD)/test_flow $(BUILD)/test_color $(BUILD)/test_patterns $(BUILD)/test_style $(BUILD)/test_sync_marker $(BUILD)/test_device_name $(BUILD)/test_artist_images $(BUILD)/test_firmware_families $(BUILD)/test_cache_keys $(BUILD)/test_master_art $(BUILD)/test_switch_wait $(BUILD)/test_shared_settings
 	@echo "== test_nav =="
 	@$(BUILD)/test_nav
 	@echo "== test_lrc =="
@@ -41,6 +41,8 @@ test: $(BUILD)/test_nav $(BUILD)/test_lrc $(BUILD)/test_splash_lang $(BUILD)/tes
 	@$(BUILD)/test_master_art
 	@echo "== test_switch_wait =="
 	@$(BUILD)/test_switch_wait
+	@echo "== test_shared_settings =="
+	@$(BUILD)/test_shared_settings
 
 $(BUILD)/test_nav: test_nav.c ../aura_nav.c ../aura_nav.h | $(BUILD)
 	$(CC) $(CFLAGS) test_nav.c ../aura_nav.c -o $@
@@ -89,6 +91,10 @@ $(BUILD)/test_master_art: test_master_art.c ../aura_master_art_format.c ../aura_
 
 $(BUILD)/test_switch_wait: test_switch_wait.c ../aura_switch_wait.c ../aura_switch_wait.h | $(BUILD)
 	$(CC) $(CFLAGS) test_switch_wait.c ../aura_switch_wait.c -o $@
+
+
+$(BUILD)/test_shared_settings: test_shared_settings.c ../aura_shared_settings.c ../aura_shared_settings.h | $(BUILD)
+	$(CC) $(CFLAGS) test_shared_settings.c ../aura_shared_settings.c -o $@
 
 $(BUILD):
 	mkdir -p $(BUILD)

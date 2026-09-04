@@ -327,6 +327,13 @@ static void aura_main_sync_after_disk_handoff(aura_nav_t *nav)
      * este handoff, es la unica ocasion en que el firmware recupera el
      * disco despues de una posible escritura de Studio. */
     aura_settings_apply_pending_clock();
+    /* D-355/D-356 (contrato v19): ajustes compartidos entre familias
+     * (bloqueo, brillo, apagado, idioma...) -- mismo momento exacto que
+     * la hora, arriba: es la unica ocasion en que el firmware recupera
+     * el disco tras un posible cambio de familia (que reescribe si el
+     * usuario toco algo compartido desde la OTRA familia) o una escritura
+     * de Aura Studio futura. No hace nada si no hay nada nuevo. */
+    aura_shared_settings_apply_if_newer();
     aura_sync_check_pending();
     if (aura_sync_needs_screen()
         && aura_nav_current(nav) != AURA_SCREEN_LIBRARY_SYNC)

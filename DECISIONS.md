@@ -2244,3 +2244,129 @@ confirmar que no rompió ninguna tabla ni referencia cruzada existente.
 reemplazar — regla de la ronda anterior, D-349) cuando le toque su fase.
 `CONTRATO-moonlit-studio.md` deberá referenciar v19 si menciona `/.aura/`
 — trabajo de la sesión de moonlit, no de esta.
+
+---
+
+## D-356 — Ajustes compartidos entre familias: implementación (`aura_shared_settings`)
+
+Fase 2 de "ajustes 2" (D-355 fijó el texto; esta decisión es el código).
+Tres piezas: módulo puro de formato, módulo impuro de E/S, y los puntos
+de aplicación/escritura repartidos por la UI.
+
+**Módulo puro (`aura_shared_settings.c/.h`).** C99, sin dependencia de
+Rockbox, mismo patrón que `aura_sync_marker.c`/`aura_style_manifest.c`.
+Vocabulario propio (`aura_shared_lock_require_t`, `aura_shared_lang_t`,
+etc.) deliberadamente desacoplado de los enums internos de Aura
+(`aura_lock_require_t`, `aura_lang_t`, `aura_theme_id_t`) — el contrato es
+estable e independiente; la traducción vive solo en el módulo impuro.
+`aura_shared_settings_parse()` valida la cabecera primero (regla 5:
+sin cabecera válida, rechazo entero) y luego admite valores fuera de
+rango o de enum ignorando SOLO esa clave (regla 2), nunca abortando el
+archivo. Test host (`test_shared_settings.c`) usa el **vector A.3 del
+maestro, literal**, más casos de cabecera ausente/futura, rango inválido,
+enum inválido, formato de PIN, `backlight_timeout: -1` vs. ausente,
+preservación de clave desconocida, y round-trip completo: **61/61
+verificaciones OK**.
+
+**Diseño descartado a medio camino: `touched()`/`flush()` calcado de
+D-351.** La primera versión copiaba el par
+`aura_shared_settings_touched()`/`flush()` de
+`aura_settings_core_touched()`/`core_flush()` (D-351), enganchado al
+mismo despacho centralizado de `BUTTON_MENU` en
+`aura_screens_handle_button()`. Error de diseño detectado antes de
+terminar: la razón de ser del diferido de D-351 es que
+`settings_save()` nativo de Rockbox es perezoso (se posterga hasta
+`call_storage_idle_notifys()`) — pero la escritura nueva
+(`aura_fsutil_write_all_atomic()`) ya es síncrona, diferirla no sirve
+para nada. Peor: los flujos de activar/quitar bloqueo en
+`aura_screenlock.c` salen por `aura_nav_pop()` disparado directo por
+`BUTTON_SELECT`, **nunca pasan por el despacho de `BUTTON_MENU`** — el
+diseño diferido habría dejado de escribir el archivo compartido
+precisamente en los cambios de bloqueo, el ajuste más sensible de los
+13. Revertido a escritura directa e inmediata
+(`aura_shared_settings_write_current()`) en cada uno de los ~11 sitios
+de cambio real (comentario en `aura_sync.h` documenta por qué esta
+función NO se difiere como la de D-351, para que nadie la vuelva a
+calcar sin leer esto primero).
+
+**Mapeos Aura ↔ contrato, verificados contra el código real (no
+supuestos):**
+- `backlight_timeout: -1` es "siempre" (nunca apaga), passthrough
+  directo a `global_settings.backlight_timeout` — confirmado por
+  `UNIT_SEC` en `settings_list.c` (segundos crudos, no índice de tabla)
+  y por el propio arreglo `backlight_values[]` de `aura_screens.c`.
+- `idle_poweroff` necesita `set_poweroff_timeout()`
+  (`firmware/powermgmt.c`) además de escribir `global_settings.poweroff`
+  — el propio comentario de la rama POWEROFF de `apply_choice()` ya lo
+  advertía ("no basta con escribir global_settings.poweroff a secas").
+- `keyclick` es booleano en el contrato pero volumen entero en Rockbox
+  (`global_settings.keyclick`); mapeado a 0/2 igual que el toggle nativo
+  de Ajustes › Sonido de clic (D-196).
+- `replaygain`: Rockbox tiene 4 estados
+  (`OFF/TRACK/ALBUM/SHUFFLE` — `dsp_misc.h`), el contrato solo 3.
+  `SHUFFLE` no tiene equivalente; se escribe como `track` (ambos aplican
+  ganancia real, a diferencia de `off`), documentado en el código.
+- `appearance` tiene **orden invertido** entre `aura_theme_id_t`
+  (`LIGHT=0, DARK=1`) y el enum compartido (`DARK=0, LIGHT=1`) — mapeo
+  explícito en los dos sentidos, nunca un cast directo.
+- `language`: el enum compartido ya trae los 6 códigos desde hoy (el
+  parser puro reconoce `fr`/`de`/`ru`/`it` como claves conocidas, no
+  como desconocidas), pero la capa de aplicación solo tiene mapeo real
+  para es/en — fr/de/ru/it quedan sin efecto (no rompen nada, no se
+  pierden: se preservan al reescribir) hasta que la Fase 3 (D-357)
+  amplíe `aura_lang_t`. Verificado en el simulador: con `language: fr`
+  en el vector, Ajustes › Idioma muestra "Español" con la marca de
+  verificación puesta — comportamiento esperado, no un bug de esta
+  fase.
+
+**Hallazgo de pila (D-226/D-345) al correr `stack_report.py`.** Las dos
+funciones del módulo impuro (`aura_shared_settings_io.c`) declaraban sus
+buffers y structs grandes como locales de pila:
+`aura_shared_settings_apply_if_newer()` con `char buf[1024]` +
+`aura_shared_settings_t` (904 B medidos directo,
+`sizeof(aura_shared_settings_t)`) ≈ 1920 B; `aura_shared_settings_write_current()`
+con dos buffers de 1024 B más DOS structs (`old`, `m`) ≈ 3824 B — muy
+por encima del límite de 1024 B por función del hilo de UI que es la
+razón de ser de la fase anterior de esta misma ronda. Corregido al
+mismo patrón que D-345 (`s_menu_items`, `s_marker_buf`, etc.): buffers y
+structs a `static`, con comentario documentando el invariante de
+seguridad (ambas funciones corren solo en el hilo de UI — una desde
+`aura_main_sync_after_disk_handoff()`, la otra desde las pantallas de
+Ajustes y `aura_screenlock.c` — y nunca se reentran ni se anidan entre
+sí).
+
+**Verificado:**
+- `firmware/rockbox/apps/aura/test`: 17/17 suites, incluida
+  `test_shared_settings` (61/61).
+- Build completo del target (`build-ipod6g`): 0 errores, 0 advertencias
+  (tras corregir 4 `-Wtype-limits` en los `*_name()` del módulo puro —
+  mismo patrón recurrente de D-345/D-352/D-354, `(unsigned)v < COUNT` en
+  vez de `v >= 0 && v < COUNT`).
+- `firmware/tools/stack_report.py --quiet`: **OK**, peor camino 6608 B
+  (53.8 % de 12 KB), ninguna función de `apps/aura/` sobre 1024 B.
+- Simulador (`build_sim.sh` + `apple2026_sim_shot.sh`, capturas en
+  `docs/screenshots/ajustes-2/`): vector A.3 escrito a mano en
+  `simdisk/.aura/settings.cfg`, arranque limpio (`shared_rev_applied`
+  ausente en `aura.cfg` ⇒ `rev: 7 > 0` se aplica) → Ajustes muestra
+  brillo **32/63** (`03-brillo.png`), Bloqueo › Pedir código con **Tras 1
+  minuto** marcado (`06-pedir-codigo.png`), tema **claro** (fondo blanco
+  en las tres capturas de Ajustes), idioma **Español** con verificación
+  puesta (`07-idioma.png`, esperado — ver mapeo de arriba). Un segundo
+  arranque (sin volver a escribir el vector a mano) ya mostró la pantalla
+  de bloqueo directo al iniciar — evidencia de que `screen_lock_enabled:
+  1` se aplicó y persistió en `aura.cfg` en el primer arranque; PIN
+  `0427` del vector desbloqueó correctamente. Cambiar el brillo un paso
+  (Ajustes › Brillo › subir uno → Seleccionar) reescribió el archivo con
+  exactamente lo que pedía el plan: `rev: 8`, `updated_by: aura`,
+  `brightness: 33`, y `clave_futura: lo que sea` preservada
+  (`08-brillo-cambiado-rev8.png`).
+- Proceso `rockboxui` corriendo detectado tras las capturas
+  (`pgrep -fl`) investigado antes de confiar en las capturas (lección de
+  la ronda anterior): pertenece a un checkout hermano
+  (`Metro-Aura/firmware/build-sim`), ajeno a este repo y a esta sesión —
+  no toca `Aura-Firmware/firmware/build-sim/simdisk`. Las corridas de
+  este repo sí terminan solas (`AURA_SIM_AUTODUMP_QUIT=1`) — las
+  capturas de arriba son de confiar.
+
+**Pendiente, fuera de alcance de esta fase:** aplicar `language`
+fr/de/ru/it (D-357, Fase 3).

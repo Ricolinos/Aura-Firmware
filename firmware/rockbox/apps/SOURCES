@@ -352,6 +352,8 @@ aura/apple2026_shell.c
 aura/aura_style.c
 aura/aura_style_manifest.c
 aura/aura_sync_marker.c
+aura/aura_shared_settings.c
+aura/aura_shared_settings_io.c
 aura/aura_sync.c
 aura/aura_firmware_families.c
 aura/aura_firmware_switch.c

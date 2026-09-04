@@ -742,6 +742,7 @@ static void apply_choice(aura_screen_id_t screen, int index)
             index = AURA_LOCK_REQUIRE_HOLD;
         aura_settings.screen_lock_require = (aura_lock_require_t)index;
         aura_settings_save();
+        aura_shared_settings_write_current(); /* D-355/D-356 */
         return;
     }
 
@@ -758,6 +759,7 @@ static void apply_choice(aura_screen_id_t screen, int index)
         global_settings.poweroff = poweroff_choice_minutes[index];
         set_poweroff_timeout(global_settings.poweroff);
         aura_settings_core_touched(); /* D-351 */
+        aura_shared_settings_write_current(); /* D-355/D-356 */
         return;
     }
 
@@ -775,6 +777,7 @@ static void apply_choice(aura_screen_id_t screen, int index)
         break;
     case AURA_SCREEN_SETTINGS_LANGUAGE:
         aura_settings.language = (aura_lang_t)index;
+        aura_shared_settings_write_current(); /* D-355/D-356 */
         break;
     case AURA_SCREEN_SETTINGS_SORT_BY:
         aura_settings.sort_by_lastname = index;
@@ -835,6 +838,7 @@ static void toggle_settings_row(aura_screen_id_t target)
     {
         global_settings.keyclick = global_settings.keyclick ? 0 : 2;
         aura_settings_core_touched(); /* D-351 */
+        aura_shared_settings_write_current(); /* D-355/D-356 */
     }
     else if (target == AURA_SCREEN_SETTINGS_LEFT_PANEL_SHADOW)
     {
@@ -862,6 +866,7 @@ static void toggle_settings_row(aura_screen_id_t target)
         global_settings.replaygain_settings.type = on ? REPLAYGAIN_OFF
                                                        : REPLAYGAIN_TRACK;
         aura_settings_core_touched(); /* D-351 */
+        aura_shared_settings_write_current(); /* D-355/D-356 */
     }
 }
 
@@ -3778,6 +3783,7 @@ static void handle_backlight(aura_nav_t *nav, long button)
         backlight_set_timeout(global_settings.backlight_timeout);
         backlight_set_timeout_plugged(global_settings.backlight_timeout_plugged);
         aura_settings_core_touched(); /* D-351 */
+        aura_shared_settings_write_current(); /* D-355/D-356 */
         aura_nav_pop(nav);
         break;
     case BUTTON_MENU:
@@ -3882,6 +3888,7 @@ static void handle_volume_limit(aura_nav_t *nav, long button)
     case BUTTON_SELECT:
     case BUTTON_MENU:
         aura_settings_core_touched(); /* D-351 */
+        aura_shared_settings_write_current(); /* D-355/D-356 */
         aura_nav_pop(nav);
         break;
     default:
@@ -4059,6 +4066,11 @@ static void handle_reset_confirm(aura_nav_t *nav, long button)
             aura_settings_core_touched(); /* D-351 */
             aura_settings_reset_to_defaults();
             aura_settings_apply_core_defaults();
+            /* D-355/D-356 regla 4: Restablecer ajustes tambien reescribe
+             * /.aura/settings.cfg con los valores de fabrica de las
+             * claves compartidas -- las tres funciones de arriba ya
+             * dejaron global_settings/aura_settings en ese estado. */
+            aura_shared_settings_write_current();
         }
         s_reset_confirm_yes = false;
         aura_nav_pop(nav);
@@ -5974,6 +5986,7 @@ static void handle_nav_list(aura_nav_t *nav, aura_screen_id_t screen, long butto
                 ? AURA_THEME_DARK : AURA_THEME_LIGHT;
             aura_settings_sync_rockbox_theme_colors();
             aura_settings_save();
+            aura_shared_settings_write_current(); /* D-355/D-356 */
             break;
         }
         /* "Canciones aleat." (menu de inicio del original) es una
@@ -6052,6 +6065,7 @@ static void handle_brightness(aura_nav_t *nav, long button)
     case BUTTON_SELECT:
     case BUTTON_MENU:
         aura_settings_core_touched(); /* D-351 */
+        aura_shared_settings_write_current(); /* D-355/D-356 */
         aura_nav_pop(nav);
         break;
     default:

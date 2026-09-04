@@ -33,6 +33,7 @@
 #include "aura_lang.h"
 #include "aura_screens.h"
 #include "aura_settings.h"
+#include "aura_sync.h" /* D-355/D-356: aura_shared_settings_write_current() */
 
 #define SL_DIGITS   4
 #define SL_BOX_W    34
@@ -263,6 +264,7 @@ static void handle_configure_button(aura_nav_t *nav, long button)
             aura_settings.screen_lock_configured = true;
             aura_settings.screen_lock_enabled = true;
             aura_settings_save();
+            aura_shared_settings_write_current(); /* D-355/D-356 */
             reset_all();
             aura_nav_pop(nav);
         }
@@ -306,6 +308,7 @@ static void handle_disable_confirm(aura_nav_t *nav, long button)
             aura_settings.screen_lock_active = false;
             aura_settings.screen_lock_pin = 0;
             aura_settings_save();
+            aura_shared_settings_write_current(); /* D-355/D-356 */
         }
         s_disable_confirm_yes = false;
         aura_nav_pop(nav);

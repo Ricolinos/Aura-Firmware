@@ -73,6 +73,7 @@ static const aura_settings_t aura_settings_defaults = {
     .screen_lock_active = false,
     .screen_lock_require = AURA_LOCK_REQUIRE_HOLD, /* D-351 */
     .screen_lock_hold_since = 0,
+    .shared_rev_applied = 0, /* D-355/D-356 */
 };
 
 /* Ganancia (dB) por banda para cada preset; el resto de cada banda
@@ -334,6 +335,12 @@ void aura_settings_load(void)
                         ? (aura_lock_require_t)v : AURA_LOCK_REQUIRE_HOLD;
             else if (!strcmp(name, "screen_lock_active"))
                 aura_settings.screen_lock_active = (v != 0);
+            else if (!strcmp(name, "shared_rev_applied"))
+                /* D-355/D-356: un rev negativo o corrupto vuelve a 0 --
+                 * fuerza que la proxima /.aura/settings.cfg real se
+                 * aplique, que es el lado seguro (peor caso: se re-
+                 * aplican los mismos valores que ya tenia). */
+                aura_settings.shared_rev_applied = (v < 0) ? 0 : v;
             else if (!strcmp(name, "theme_id"))
                 /* D-289: nombre de clave "theme_id" (no "style_id") a
                  * proposito -- es el que fija CONTRATO-formato-tema.md
@@ -437,6 +444,7 @@ void aura_settings_save(void)
     fdprintf(fd, "screen_lock_enabled: %d\n", (int)aura_settings.screen_lock_enabled);
     fdprintf(fd, "screen_lock_require: %d\n", (int)aura_settings.screen_lock_require);
     fdprintf(fd, "screen_lock_active: %d\n", (int)aura_settings.screen_lock_active);
+    fdprintf(fd, "shared_rev_applied: %ld\n", aura_settings.shared_rev_applied);
     fdprintf(fd, "theme_id: %s\n", aura_settings.style_id);
     /* D-289: informativa para Aura Studio -- le permite saber, leyendo
      * el iPod montado, si el firmware instalado entiende el sistema de
