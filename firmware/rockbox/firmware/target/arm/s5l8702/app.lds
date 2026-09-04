@@ -94,7 +94,11 @@ SECTIONS
        *(.stack)
        stackbegin = .;
        _stackbegin = .;
-       . += 0x2000;
+       /* Aura (D-345): 0x2000 -> 0x3000. La pila del hilo main (el de la
+        * UI) desbordo en hardware con 8 KB (*PANIC* stkov main, sp 528 B
+        * por debajo de stackbegin). IRAM de core = 48 KB (0xC000); con
+        * 12 KB _fiqstackend queda en 0xb530, ~2.7 KB de margen. */
+       . += 0x3000;
        stackend = .;
        _stackend = .;
        _irqstackbegin = .;

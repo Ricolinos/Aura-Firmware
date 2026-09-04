@@ -361,7 +361,17 @@ void aura_music_db_reset_triggers(void)
 static int count_unique_tag(int tag)
 {
     struct tagcache_search tcs;
-    char buf[TAGCACHE_BUFSZ];
+    /* D-345: TAGCACHE_BUFSZ son 552 B de pila (TAG_MAXLEN = MAX_PATH*2)
+     * para un texto que esta funcion NUNCA lee: solo cuenta. La
+     * unicidad la resuelve tagcache por el id numerico de la entrada
+     * (unique_list, tagcache.c:1644), no por el texto, y el unico uso
+     * del buffer es el `result_len > 1` de tagcache_get_next(), que
+     * sigue siendo cierto para cualquier tag no vacio con este tamano.
+     * struct tagcache_search se queda en la pila a proposito: contiene
+     * los descriptores de la busqueda y aura_music_browse() corre
+     * TAMBIEN en el hilo del constructor de caratulas
+     * (aura_master_art_builder.c), asi que no puede ser static. */
+    char buf[AURA_MUSIC_ITEM_LEN];
     int n = 0;
 
     if (!tagcache_is_usable())
@@ -490,7 +500,13 @@ static int run_search(int tag, bool use_artist, bool use_album, bool use_genre,
                        bool use_composer, aura_music_item_t *out, int max)
 {
     struct tagcache_search tcs;
-    char buf[TAGCACHE_BUFSZ];
+    /* D-345: la etiqueta acaba en out[n].label, de AURA_MUSIC_ITEM_LEN,
+     * asi que un buffer intermedio de 552 B (TAGCACHE_BUFSZ) solo
+     * gastaba pila para recortar despues al mismo tamano. La salida es
+     * identica byte a byte; la comparacion contra UNTAGGED ("<Untagged>",
+     * 10 caracteres) tambien cabe de sobra. tcs sigue en la pila: esta
+     * funcion tambien corre en el hilo del constructor de caratulas. */
+    char buf[AURA_MUSIC_ITEM_LEN];
     int n = 0;
 
     if (!tagcache_is_usable())
@@ -650,10 +666,16 @@ bool aura_music_album_artist(int32_t album_seek, char *out, size_t outsz)
     return found;
 }
 
+/* D-345: la ruta del archivo (260 B) sale de la pila. Solo la usa
+ * build_playlist_from_songs(), que corre unicamente en el hilo de UI
+ * (se dispara al elegir una cancion) y no es reentrante -- el hilo del
+ * constructor de caratulas nunca arma playlists. */
+static char s_playlist_path[MAX_PATH];
+
 static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
 {
     struct tagcache_search tcs;
-    char path[MAX_PATH];
+    char *path = s_playlist_path;
     int tag = tag_title;
     /* Los mismos filtros con los que se construyo la lista visible
      * (aura_music_browse) -- el playlist tiene que coincidir con lo que
@@ -693,7 +715,7 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
         static long s_nums[AURA_MUSIC_MAX_SONGS];
         int n = 0, a, b;
 
-        while (n < AURA_MUSIC_MAX_SONGS && tagcache_get_next(&tcs, path, sizeof(path)))
+        while (n < AURA_MUSIC_MAX_SONGS && tagcache_get_next(&tcs, path, sizeof(s_playlist_path)))
         {
             s_ids[n] = tcs.idx_id;
             s_nums[n] = tagcache_get_numeric(&tcs, tag_tracknumber);
@@ -721,7 +743,7 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
 
         for (a = 0; a < n; a++)
         {
-            if (tagcache_retrieve(&tcs, s_ids[a], tag_filename, path, sizeof(path)))
+            if (tagcache_retrieve(&tcs, s_ids[a], tag_filename, path, sizeof(s_playlist_path)))
             {
                 playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true);
                 inserted++;
@@ -741,7 +763,7 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
         static char s_titles[AURA_MUSIC_MAX_SONGS][AURA_MUSIC_ITEM_LEN];
         int n = 0, a, b;
 
-        while (n < AURA_MUSIC_MAX_SONGS && tagcache_get_next(&tcs, path, sizeof(path)))
+        while (n < AURA_MUSIC_MAX_SONGS && tagcache_get_next(&tcs, path, sizeof(s_playlist_path)))
         {
             s_ids[n] = tcs.idx_id;
             strlcpy(s_titles[n], path, AURA_MUSIC_ITEM_LEN);
@@ -767,7 +789,7 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
 
         for (a = 0; a < n; a++)
         {
-            if (tagcache_retrieve(&tcs, s_ids[a], tag_filename, path, sizeof(path)))
+            if (tagcache_retrieve(&tcs, s_ids[a], tag_filename, path, sizeof(s_playlist_path)))
             {
                 playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true);
                 inserted++;
@@ -777,12 +799,12 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
         return inserted > 0;
     }
 
-    while (tagcache_get_next(&tcs, path, sizeof(path)))
+    while (tagcache_get_next(&tcs, path, sizeof(s_playlist_path)))
     {
         /* tag_title da el titulo en `path`, no el nombre de archivo:
          * se recupera la ruta real con tagcache_retrieve() usando el
          * idx_id de esta misma entrada. */
-        if (tagcache_retrieve(&tcs, tcs.idx_id, tag_filename, path, sizeof(path)))
+        if (tagcache_retrieve(&tcs, tcs.idx_id, tag_filename, path, sizeof(s_playlist_path)))
         {
             playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST, false, true);
             inserted++;

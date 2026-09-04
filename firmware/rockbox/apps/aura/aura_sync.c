@@ -98,10 +98,17 @@ static bool s_force_full = false;
  * pasada anterior), se encadena un Q_REBUILD completo. */
 static bool s_recovery_done = false;
 
+/* D-345: el marcador serializado (1 KB) sale de la pila. Todo
+ * aura_sync.c corre en el hilo de UI -- aura_sync_tick() desde
+ * aura_main.c y aura_sync_force_shared_db_path() desde apps/main.c,
+ * ambos el hilo `main` -- asi que un buffer de archivo alcanza; nunca
+ * hay dos serializaciones vivas a la vez. */
+static char s_marker_buf[MARKER_BUF_SIZE];
+
 static bool write_marker(const aura_sync_marker_t *m)
 {
-    char buf[MARKER_BUF_SIZE];
-    int n = aura_sync_marker_serialize(m, buf, sizeof(buf));
+    char *buf = s_marker_buf;
+    int n = aura_sync_marker_serialize(m, buf, sizeof(s_marker_buf));
 
     if (n < 0)
         return false;
@@ -226,7 +233,10 @@ static void relocate_tagcache_files(const char *from, const char *to, bool move)
 {
     DIR *d = opendir(from);
     struct DIRENT *entry;
-    char src[MAX_PATH * 2], dst[MAX_PATH * 2]; /* 2x: ver aura_fsutil.c */
+    /* D-345: 2 x 520 B fuera de la pila (mismo hilo unico que
+     * s_marker_buf; esta funcion solo corre desde
+     * aura_sync_force_shared_db_path(), en el arranque). */
+    static char src[MAX_PATH * 2], dst[MAX_PATH * 2]; /* 2x: ver aura_fsutil.c */
 
     if (!d)
         return;

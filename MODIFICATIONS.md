@@ -28,7 +28,7 @@ cabecera de copyright GPL v2 (ver más abajo). Es el reemplazo de la UI
 de Rockbox (menús, WPS) por la capa "Aura UI", conectado al resto del
 árbol mediante los 20 archivos listados abajo.
 
-## Los 30 archivos de Rockbox modificados fuera de `apps/aura/`
+## Los 31 archivos de Rockbox modificados fuera de `apps/aura/`
 
 Todos conservan su cabecera de copyright original de Rockbox intacta.
 Los cambios de Aura están marcados inline en el propio código con
@@ -61,6 +61,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 - `bootloader/ipod-s5l87xx.c`
 - `firmware/export/config/ipod6g.h`
 - `firmware/export/font.h`
+- `firmware/target/arm/s5l8702/app.lds` (D-345: la pila del hilo `main` — el de la UI — pasa de 8 KB a 12 KB (`. += 0x2000` → `. += 0x3000`) tras un `*PANIC* stkov main` reproducido por el dueño en hardware; cabe en la IRAM de core de 48 KB: `_fiqstackend` queda en `0xb530`, ~2.7 KB por debajo del tope `0xC000`)
 - `firmware/target/hosted/filesystem-unix.c`
 - `lib/rbcodec/codecs/aiff.c`
 - `uisimulator/common/sim_tasks.c (D-330: token USB_INSERT del inyector, portado del M-039 de Metro-Aura)`
@@ -68,7 +69,7 @@ de `DECISIONS.md`, donde está el detalle completo de cada cambio):
 
 (Rutas relativas a `firmware/rockbox/`.)
 
-De estos 30 (`apps/tagcache.h` se sumó con D-293; los tres de `apps/plugins/sdl/progs/` con D-334; `apps/plugin.c`/`apps/plugin.h` con D-298; `apps/plugins/mpegplayer/mpeg_settings.h`, `stream_mgr.c`, `video_out.h` y `video_out_rockbox.c` con D-304), dos no tenían ningún comentario que mencionara a Aura:
+De estos 31 (`firmware/target/arm/s5l8702/app.lds` se sumó con D-345; `apps/tagcache.h` se sumó con D-293; los tres de `apps/plugins/sdl/progs/` con D-334; `apps/plugin.c`/`apps/plugin.h` con D-298; `apps/plugins/mpegplayer/mpeg_settings.h`, `stream_mgr.c`, `video_out.h` y `video_out_rockbox.c` con D-304), dos no tenían ningún comentario que mencionara a Aura:
 
 - **`utils/mks5lboot/Makefile`**: sí tiene una modificación real vigente
   (backend libusb opcional en macOS, D-050, 2026-08-10) — recibió un

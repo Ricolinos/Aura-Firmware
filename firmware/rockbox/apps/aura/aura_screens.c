@@ -96,6 +96,21 @@
  * pisar la pila. */
 #define MAX_MENU_ENTRIES 32
 
+/* D-345: los items de menu salen de la pila del hilo de UI. Cada copia
+ * pesaba ~1 150 B y habia tres funciones de dibujo cargandola a la vez
+ * en el peor camino (draw_choice_list 1 272 B, draw_nav_list 1 112 B,
+ * draw_style_list 1 104 B -- las tres por encima del tope de 1 024 B
+ * que vigila firmware/tools/stack_report.py).
+ *
+ * INVARIANTE que hace seguro compartir UN solo buffer: cada draw_*()
+ * arma su lista y se la pasa a draw_menu_screen_v2(), que la consume y
+ * regresa; ninguna la conserva viva despues de dibujar.
+ * aura_screens_draw() dibuja UNA pantalla por pasada y
+ * draw_menu_screen_v2() no vuelve a entrar a ningun draw_*(). Si algun
+ * dia una pantalla necesitara dos listas vivas a la vez, necesita su
+ * propio buffer -- no basta con reordenar el codigo. */
+static aura_menu_item_v2_t s_menu_items[MAX_MENU_ENTRIES];
+
 typedef struct {
     aura_str_id_t label_id;
     const char *icon_name;
@@ -2572,7 +2587,7 @@ static void draw_nav_list(aura_nav_t *nav, aura_screen_id_t screen)
 {
     const nav_entry_t *entries;
     int count = get_nav_table(screen, &entries);
-    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    aura_menu_item_v2_t *items = s_menu_items; /* D-345 */
     int selected = aura_nav_get_selection(nav);
     const char *panel_icon = NULL;
     int i;
@@ -2788,7 +2803,7 @@ static void draw_choice_list(aura_nav_t *nav, aura_screen_id_t screen)
     const aura_str_id_t *labels;
     int count = get_choice_table(screen, &labels);
     int current = get_choice_current(screen);
-    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    aura_menu_item_v2_t *items = s_menu_items; /* D-345 */
     int selected = aura_nav_get_selection(nav);
     const char *panel_icon;
     int i;
@@ -2851,7 +2866,7 @@ static void draw_style_list(aura_nav_t *nav)
 {
     static aura_style_entry_t entries[AURA_STYLES_MAX];
     int count = aura_style_scan(entries, AURA_STYLES_MAX);
-    aura_menu_item_v2_t items[MAX_MENU_ENTRIES];
+    aura_menu_item_v2_t *items = s_menu_items; /* D-345 */
     int selected = aura_nav_get_selection(nav);
     const char *active_id = aura_style_active_id();
     int i;
@@ -3417,6 +3432,77 @@ static const char *credits_body_with_version(void)
     return buf;
 }
 
+/* -- Marca de agua de la pila del hilo principal (D-345) --------------
+ *
+ * El kernel rellena la pila del hilo `main` con DEADBEEF al crearla
+ * (firmware/kernel/thread.c, create_thread()) y nunca la vuelve a
+ * tocar: el primer word que ya no lleva ese patron marca lo mas
+ * profundo que llego la pila en toda la sesion. Es la unica forma de
+ * que el dueno confirme EN HARDWARE que el `*PANIC* stkov main` de
+ * D-345 quedo cerrado, sin tener que esperar a que reviente otra vez.
+ *
+ * En el simulador no aplica y no se inventa un numero: ahi el hilo
+ * main es un hilo de SDL con la pila del host, sin canario que contar.
+ */
+#if (CONFIG_PLATFORM & PLATFORM_NATIVE)
+/* Mismo valor que firmware/kernel/thread-internal.h (cabecera interna
+ * del kernel, no incluible desde apps/). En ARM de 32 bits el cast
+ * trunca a 0xdeadbeef, exactamente como lo escribe el kernel. */
+#define AURA_STACK_FILL ((uintptr_t)0xdeadbeefdeadbeefull)
+#endif
+
+static bool main_stack_watermark(int *used, int *size)
+{
+#if (CONFIG_PLATFORM & PLATFORM_NATIVE)
+    extern uintptr_t stackbegin[];
+    extern uintptr_t stackend[];
+    const uintptr_t *p = stackbegin;
+    size_t total = (size_t)((uintptr_t)stackend - (uintptr_t)stackbegin);
+
+    while (p < stackend && *p == AURA_STACK_FILL)
+        p++;
+
+    *size = (int)total;
+    *used = (int)(total - (size_t)((const char *)p - (const char *)stackbegin));
+    return true;
+#else
+    (void)used;
+    (void)size;
+    return false;
+#endif
+}
+
+/* Visible siempre en el simulador (para poder capturarla) y, en el
+ * aparato, solo tras un SELECT mantenido sobre la pagina de Creditos
+ * -- la pagina donde vive la version. No es informacion de uso diario:
+ * es un instrumento de diagnostico. */
+#ifdef SIMULATOR
+static bool s_show_stack_watermark = true;
+#else
+static bool s_show_stack_watermark = false;
+#endif
+
+static void draw_about_stack_watermark(void)
+{
+    char line[64];
+    int used, size;
+    int y = AURA_DS_METRICS_ABOUT_EXPANDED_TEXT_BOTTOM_Y;
+
+    if (!s_show_stack_watermark)
+        return;
+
+    if (main_stack_watermark(&used, &size))
+        snprintf(line, sizeof(line), aura_str(AURA_STR_ABOUT_MAIN_STACK_FMT),
+                 used, size);
+    else
+        strlcpy(line, aura_str(AURA_STR_ABOUT_MAIN_STACK_NA), sizeof(line));
+
+    lcd_setfont(a26_font(A26_FONT_STYLE_DS_REG_10));
+    lcd_set_foreground(a26_color(A26_TEXT_TERTIARY));
+    lcd_putsxy(AURA_DS_METRICS_ABOUT_EXPANDED_BAR_X, y,
+               (const unsigned char *)line);
+}
+
 static void draw_about_credits(void)
 {
     const char *body = credits_body_with_version();
@@ -3455,6 +3541,8 @@ static void draw_about_credits(void)
         lcd_putsxy(text_x, y, (const unsigned char *)buf);
         y += line_h;
     }
+
+    draw_about_stack_watermark(); /* D-345 */
 }
 
 static void draw_about(void)
@@ -3524,6 +3612,15 @@ static void handle_about(aura_nav_t *nav, long button)
         if (s_about_page == ABOUT_PAGE_DEVICE)
             s_credits_scroll--;
         break;
+    /* D-345: SELECT mantenido sobre Creditos (la pagina donde esta la
+     * version) alterna la marca de agua de la pila. No choca con nada:
+     * en esta pantalla un SELECT normal pagina hacia adelante y en la
+     * ultima pagina ya no hacia nada, y el hold llega como un codigo
+     * distinto (aura_main.h, B-02), asi que jamas se confunde con el. */
+    case BUTTON_SELECT | AURA_BUTTON_HOLD:
+        if (s_about_page == ABOUT_PAGE_DEVICE)
+            s_show_stack_watermark = !s_show_stack_watermark;
+        break;
     case BUTTON_MENU:
         /* AUDITORIA-01 A-09: FULL-COLD "sin memoria" (doc de
          * comportamiento SS1) -- reiniciar al SALIR, no intentar
@@ -3548,13 +3645,17 @@ static char s_numeric_labels[NUMERIC_CHOICE_MAX][16];
 
 static const int backlight_values[] = { 0, 2, 5, 10, 20, 30, -1 };
 #define BACKLIGHT_VALUES_N ((int)(sizeof(backlight_values) / sizeof(backlight_values[0])))
+_Static_assert(BACKLIGHT_VALUES_N <= MAX_MENU_ENTRIES,
+               "backlight_values no cabe en s_menu_items (D-345)");
 
 static const int sleeptimer_values[] = { 0, 15, 30, 60, 90, 120 };
 #define SLEEPTIMER_VALUES_N ((int)(sizeof(sleeptimer_values) / sizeof(sleeptimer_values[0])))
+_Static_assert(SLEEPTIMER_VALUES_N <= MAX_MENU_ENTRIES,
+               "sleeptimer_values no cabe en s_menu_items (D-345)");
 
 static void draw_backlight(aura_nav_t *nav)
 {
-    aura_menu_item_v2_t items[BACKLIGHT_VALUES_N];
+    aura_menu_item_v2_t *items = s_menu_items; /* D-345 */
     int i;
 
     for (i = 0; i < BACKLIGHT_VALUES_N; i++)
@@ -3618,7 +3719,7 @@ static void handle_backlight(aura_nav_t *nav, long button)
 
 static void draw_sleeptimer(aura_nav_t *nav)
 {
-    aura_menu_item_v2_t items[SLEEPTIMER_VALUES_N];
+    aura_menu_item_v2_t *items = s_menu_items; /* D-345 */
     int i;
 
     for (i = 0; i < SLEEPTIMER_VALUES_N; i++)
@@ -3749,6 +3850,8 @@ static const mainmenu_row_t mainmenu_rows[] = {
     { AURA_STR_MAINMENU_RESTORE, "reset",          0, AURA_SCREEN_COUNT },
 };
 #define MAINMENU_ROWS ((int)(sizeof(mainmenu_rows) / sizeof(mainmenu_rows[0])))
+_Static_assert(MAINMENU_ROWS <= MAX_MENU_ENTRIES,
+               "mainmenu_rows no cabe en s_menu_items (D-345)");
 
 /* Marcado actual de cada fila. Musica y Extras son fijos (siempre en el
  * menu de inicio, como en el original); el resto es configurable. */
@@ -3773,7 +3876,7 @@ static int mainmenu_row_checked(const mainmenu_row_t *r)
 
 static void draw_mainmenu(aura_nav_t *nav)
 {
-    aura_menu_item_v2_t items[MAINMENU_ROWS];
+    aura_menu_item_v2_t *items = s_menu_items; /* D-345 */
     int sel = aura_nav_get_selection(nav);
     int i;
 

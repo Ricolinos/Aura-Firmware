@@ -75,6 +75,19 @@ static const int role_to_token[AURA_STYLE_ROLE_COUNT] = { 0, 1, 2, 3, 5, 6, 7, 8
 
 static int font_ids[A26_FONT_STYLE_COUNT];
 static char s_font_paths[A26_FONT_STYLE_COUNT][MAX_PATH];
+
+/* D-226/D-345: las 14 rutas de fuente candidatas (3 640 B) salen de la
+ * pila del hilo de UI. UN solo buffer compartido por los dos unicos
+ * sitios que arma rutas de fuente -- style_fonts_exist() (listar) y
+ * try_activate() (activar).
+ *
+ * INVARIANTE que lo hace seguro: los dos corren en el hilo de UI y
+ * NUNCA se anidan. style_fonts_exist() solo la llama aura_style_scan();
+ * try_activate() solo aura_style_boot() y aura_style_activate(); y
+ * aura_style_scan() no llama a ninguna de esas dos. Si algun dia un
+ * camino nuevo hiciera que una corra dentro de la otra, hay que
+ * separarlas en dos buffers -- no basta con reordenar el codigo. */
+static char s_candidate_paths[A26_FONT_STYLE_COUNT][MAX_PATH];
 static char s_active_id[AURA_STYLE_ID_LEN] = AURA_STYLE_ID_DEFAULT;
 static unsigned s_generation = 0;
 
@@ -238,12 +251,13 @@ static bool load_manifest(const char *id, aura_style_manifest_t *m)
  * corrupto) ocurre en try_activate(), con font_load() de verdad. */
 static bool style_fonts_exist(const char *id)
 {
-    char paths[A26_FONT_STYLE_COUNT][MAX_PATH];
     int i;
 
-    build_style_font_paths(id, paths);
+    /* D-345: s_candidate_paths, no un arreglo local -- ver el invariante
+     * de no anidamiento donde se declara. */
+    build_style_font_paths(id, s_candidate_paths);
     for (i = 0; i < A26_FONT_STYLE_COUNT; i++)
-        if (!file_exists(paths[i]))
+        if (!file_exists(s_candidate_paths[i]))
             return false;
     return true;
 }
@@ -252,7 +266,9 @@ static bool style_fonts_exist(const char *id)
 
 static bool try_activate(const char *id)
 {
-    char candidate_paths[A26_FONT_STYLE_COUNT][MAX_PATH];
+    /* D-345: las rutas candidatas viven en s_candidate_paths (estatico),
+     * no en la pila -- ver el invariante de no anidamiento donde se
+     * declara. */
     aura_style_manifest_t m;
     bool is_default = !strcmp(id, AURA_STYLE_ID_DEFAULT);
     bool all_ok = true;
@@ -260,7 +276,7 @@ static bool try_activate(const char *id)
 
     if (is_default)
     {
-        build_default_font_paths(candidate_paths);
+        build_default_font_paths(s_candidate_paths);
     }
     else
     {
@@ -268,7 +284,7 @@ static bool try_activate(const char *id)
             return false;
         if (!load_manifest(id, &m) || !aura_style_manifest_is_loadable(&m))
             return false;
-        build_style_font_paths(id, candidate_paths);
+        build_style_font_paths(id, s_candidate_paths);
     }
 
     /* MAXUSERFONTS esta exactamente al limite (font.h) -- no hay cupo
@@ -284,7 +300,7 @@ static bool try_activate(const char *id)
 
     for (i = 0; i < A26_FONT_STYLE_COUNT; i++)
     {
-        int fid = font_load(candidate_paths[i]);
+        int fid = font_load(s_candidate_paths[i]);
         font_ids[i] = fid;
         if (fid < 0)
             all_ok = false;
@@ -311,7 +327,7 @@ static bool try_activate(const char *id)
      * exactamente igual que el a26_shell_init() original. */
     for (i = 0; i < A26_FONT_STYLE_COUNT; i++)
     {
-        strlcpy(s_font_paths[i], candidate_paths[i], MAX_PATH);
+        strlcpy(s_font_paths[i], s_candidate_paths[i], MAX_PATH);
         if (font_ids[i] < 0)
             font_ids[i] = FONT_SYSFIXED;
     }

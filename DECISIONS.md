@@ -986,3 +986,189 @@ grafo de llamadas en vez de sumar a mano:
 - `make -C firmware/rockbox/apps/aura/test test`: **16/16 suites verdes**.
 - `git status --short` limpio tras los tres commits (salvo `.serena/`, sin
   seguimiento, herramienta local ajena al repo).
+
+---
+
+### D-345, Fase 1 — la corrección: pila a 12 KB, marcos grandes fuera del hilo de UI, motor de skins apagado
+
+**1. La pila del hilo `main` pasa de 8 KB a 12 KB.**
+`firmware/target/arm/s5l8702/app.lds`: `. += 0x2000` → `. += 0x3000`. Cabe en
+la IRAM de core (48 KB, `0xC000`): `_fiqstackend` sube de `0xa530` a `0xb530`
+y quedan **2 768 B** de margen. Archivo de Rockbox → registrado en
+`MODIFICATIONS.md` (el archivo 31 de la lista).
+
+**2. Herramienta de medición: `firmware/tools/stack_report.py`.**
+Falla (salida 1) si una función de `apps/aura/` supera 1 024 B de marco o si
+el peor camino estático desde `main` supera el 75 % de la pila. Corre en
+`package_dist.sh` **antes** de empaquetar.
+
+*Desviación respecto a §E.3 del maestro*, que pedía `-fstack-usage` + los
+`.su`: la herramienta mide el **desensamblado del binario que se publica**
+(`objdump -d`, prólogo `push` + `sub sp`). Razones, en orden: (a) los `.su`
+describen lo que el compilador reserva por función *fuente*, y tras el
+inlining el binario real difiere — el caso de `style_fonts_exist` de la línea
+base es exactamente eso, y sumar los dos `.su` cuenta la misma memoria dos
+veces; (b) no exige un segundo árbol compilado con otras banderas, así que la
+puerta de `package_dist.sh` cuesta segundos y no un build entero; (c) marcos y
+aristas salen del mismo desensamblado, así que siempre corresponden al mismo
+binario. Se conserva `--su-dir` como contraste opcional.
+
+La herramienta **declara** lo que excluye, en vez de bajar el número en
+silencio: los manejadores de fallo (`panicf`, `thread_stkov`, `UnwindStart`…
+— solo corren con el firmware ya caído; incluirlos hacía que el peor camino
+de cualquier función que cediera el CPU arrastrara el manejador del
+desbordamiento que la herramienta existe para evitar) y una arista con guarda
+de ejecución (`skin_get_gwps → skin_load`, ver punto 4). Cada exclusión se
+imprime con su motivo en el reporte, y `--keep-fault-handlers` /
+`--keep-guarded-edges` las devuelven.
+
+**3. Marcos bajados (bytes, mismo método de medición que la línea base):**
+
+| Función | Antes | Después | Qué se movió |
+|---|---|---|---|
+| `aura_style_scan` | 4 408 | **768** | `paths[14][MAX_PATH]` de `style_fonts_exist` (integrada aquí) → `s_candidate_paths` |
+| `try_activate` | 3 824 | **192** | `candidate_paths[14][MAX_PATH]` → el mismo `s_candidate_paths` |
+| `run_search` | 1 392 | **904** | `buf[TAGCACHE_BUFSZ]` (552) → `buf[AURA_MUSIC_ITEM_LEN]` (64) |
+| `draw_choice_list` | 1 272 | **< 688** | `items[32]` → `s_menu_items` |
+| `count_unique_tag` | 1 272 | **784** | mismo cambio de `buf` que `run_search` |
+| `draw_nav_list` | 1 112 | **< 688** | `items[32]` → `s_menu_items` |
+| `draw_style_list` | 1 104 | **< 688** | `items[32]` → `s_menu_items` |
+| `build_playlist_from_songs` | 1 104 | **840** | `path[MAX_PATH]` → `s_playlist_path` |
+| `relocate_tagcache_files` | 1 080 | **< 688** | `src`/`dst` (2 × 520) → `static` |
+| `write_marker` | 1 032 | **< 688** | `buf[MARKER_BUF_SIZE]` → `s_marker_buf` |
+
+Mayor marco de `apps/aura/` hoy: **1 016 B** (`import_ratings_from_studio`),
+por debajo del tope. Los `< 688` son funciones que salieron del top 12 del
+reporte; el 12.º puesto mide 688 B.
+
+**Cada buffer compartido lleva escrito su invariante de no anidamiento**, no
+solo un `static`:
+- `s_candidate_paths` (`aura_style.c`): `style_fonts_exist()` solo la llama
+  `aura_style_scan()`; `try_activate()` solo `aura_style_boot()` y
+  `aura_style_activate()`; y `aura_style_scan()` no llama a ninguna de las
+  dos.
+- `s_menu_items` (`aura_screens.c`): cada `draw_*()` arma su lista y se la
+  pasa a `draw_menu_screen_v2()`, que la consume y regresa; nadie la conserva
+  viva. Se añadieron tres `_Static_assert` para que agregar filas a
+  `backlight_values`/`sleeptimer_values`/`mainmenu_rows` no pueda desbordar el
+  buffer compartido en silencio — la cota `MAX_MENU_ENTRIES` ya había fallado
+  una vez (crash real al abrir Ajustes, ver el comentario de esa constante).
+- `s_marker_buf`/`src`/`dst` (`aura_sync.c`): todo el archivo corre en el hilo
+  `main`.
+- `s_playlist_path` (`aura_music.c`): solo `build_playlist_from_songs()`, que
+  solo corre desde la UI.
+
+**Lo que a propósito NO se hizo `static`:** `struct tagcache_search tcs` en
+`run_search()`/`count_unique_tag()`/`build_playlist_from_songs()`. Guarda los
+descriptores abiertos de la búsqueda, y `aura_music_browse()` corre **también
+en el hilo del constructor de carátulas** (`aura_master_art_builder.c:142`):
+compartirla sería una carrera con corrupción de la búsqueda, no un ahorro. En
+`run_search` y `count_unique_tag` se redujo el buffer de texto en su lugar, y
+la salida es idéntica byte a byte (la etiqueta acaba en `out[n].label`, de
+`AURA_MUSIC_ITEM_LEN`; la unicidad la resuelve tagcache por el id numérico de
+la entrada, `tagcache.c:1644`, no por el texto).
+
+**Hallazgo colateral, fuera de alcance de esta fase:** `s_uniqbuf`
+(`aura_music.c:86`, 8 KB) **ya se comparte hoy** entre el hilo de UI y el del
+constructor sin candado — `run_search()` se lo pasa a `tagcache_search_set_uniqbuf()`
+desde los dos. Es anterior a esta ronda (D-341) y no se tocó: arreglarlo es
+una decisión de sincronización propia. Queda anotado.
+
+**4. El camino de ~9.5 KB que D-343 dejó pendiente: cerrado en su raíz.**
+El maestro (§ Fase 1.4) suponía que bastaría con dejar `wps_file`/`sbs_file`/
+`rsbs_file` vacíos para que `settings_apply()` no entrara al motor de skins.
+**Esa premisa es falsa**: `skin_load()` (`skin_engine.c:217`) carga el skin
+**por defecto compilado** cuando el archivo no cargó, así que entra igual, con
+archivo o sin él. Aura ya los deja vacíos y el camino existía de todos modos.
+
+La entrada real no era `settings_apply` sino `settings_apply_skins()` en el
+arranque (`apps/main.c`) y, después, cualquier camino de UI que llamara a
+`sb_get_backdrop()`/`sb_skin_update()` — los tres entran por
+`skin_get_gwps(CUSTOM_STATUSBAR, …)`, que carga en diferido mientras
+`skins_initialised` sea true. Corrección: `settings_apply_skins()` ya no
+carga skins (`apps/gui/skin_engine/skin_engine.c`, marcado `Aura (D-345)`,
+registrado en `MODIFICATIONS.md`). Con `skins_initialised` en false,
+`skin_get_gwps()` sale de inmediato para `CUSTOM_STATUSBAR` — la única
+pantalla skinneable a la que Aura puede llegar, porque reemplazó el WPS y la
+radio. Se conserva el resto de la función (init de backdrops, recarga del
+ajuste, aviso `THEME_STATUSBAR`).
+
+Es seguro porque es **el mismo estado en el que corre Rockbox antes de ese
+init**: `gui_wps.data` apunta a memoria válida desde `gui_sync_skin_init()`
+(`apps/main.c`, anterior), `sb_get_backdrop()` devuelve −1 y
+`skin_backdrop_show(-1)` está contemplado, y `sb_skin_update()` /
+`sb_skin_get_info_vp()` salen temprano por `sbs_loaded == false`.
+
+`gui_usb_screen_run`, el camino que D-343 citaba: **6 824 → 4 416 B** (el plan
+pedía bajar de 6 KB).
+
+**5. `read_bmp_fd` (2 624 B) no se anida bajo `try_activate`** — medido, que
+era la pregunta del paso 5. Son dos caminos separados:
+`aura_style_read_icon_bmp → read_bmp_file → read_bmp_fd` = **3 848 B**, y
+`try_activate → font_load → glyph_cache_load` = **4 128 B**. Ninguno pasa por
+el otro.
+
+**6. Marca de agua de la pila en "Acerca de"** (página 3, Créditos — la página
+donde vive la versión). Lee el relleno `DEADBEEF` con que el kernel llena la
+pila al crear el hilo (`thread.c`, `create_thread()`): el primer word que ya
+no lo lleva marca lo más profundo que llegó la pila en toda la sesión. Es la
+única forma de que el dueño confirme en hardware que esto quedó cerrado sin
+esperar otro panic. Oculta por defecto en el aparato, se alterna con **SELECT
+mantenido** sobre esa página (`AURA_BUTTON_HOLD`, que ahí no chocaba con
+nada: un SELECT normal pagina, y en la última página ya no hacía nada).
+Siempre visible en el simulador. En el simulador **no se inventa un número**:
+el hilo `main` es un hilo de SDL con la pila del host y no hay canario que
+contar, así que la fila dice "sin dato en el simulador". Textos nuevos al
+final de las dos tablas de `aura_lang.c`.
+
+**De paso**: `aura_str()` avisaba `-Wtype-limits` en cada compilación de
+`aura_lang.c` (`id < 0` sobre un enum sin signo, el warning que D-344 dejó
+anotado sin tocar). Un cast a `unsigned` cubre las dos formas del enum sin
+warning y sin cambiar el comportamiento. El build del target queda **sin
+warnings**.
+
+**Resultado.**
+
+| | Antes (línea base) | Después |
+|---|---|---|
+| Pila del hilo `main` | 8 192 B | **12 288 B** |
+| Peor camino desde `main` | 10 620 B = **129.6 %** de los 8 KB originales | **6 608 B = 53.8 %** |
+| Peor camino desde `aura_main` | 10 532 B | **6 520 B = 53.1 %** |
+| `gui_usb_screen_run` (camino de D-343) | 6 824 B | **4 416 B** |
+| Mayor marco de `apps/aura/` | 4 408 B | **1 016 B** |
+| Funciones de `apps/aura/` sobre 1 024 B | 10 | **0** |
+| `RAM usage` | 12 503 096 | 12 510 136 (**+7 040 B de BSS**) |
+| `Binary size` | 1 299 688 | 1 299 736 |
+
+El peor camino ya no es un camino de Rockbox: es de Aura
+(`draw_choice_list → … → decode_album_master → read_bmp_fd → ATA`), y su parte
+más pesada (`read_bmp_fd`, 2 624 B) es de Rockbox base.
+
+**Verificado.**
+- `make -C firmware/build-ipod6g`: **0 errores, 0 warnings**.
+  `Binary size 1299736`, `RAM usage 12510136`.
+- `firmware/tools/stack_report.py`: **verde** — 6 608 B (53.8 % de 12 288),
+  ninguna función de `apps/aura/` sobre 1 024 B.
+- `make -C firmware/rockbox/apps/aura/test test`: **16/16 suites verdes**.
+- `firmware/tools/build_sim.sh` (compila + `make install` al simdisk):
+  **0 errores**. Recorrido real con inyección de botones, capturas en
+  `docs/screenshots/ronda-estabilidad/`:
+  - **Temas**: se instaló un segundo estilo en el simdisk (`qa-prueba`, 14
+    fuentes + íconos + `theme.cfg` con paleta propia) para ejercitar de
+    verdad el buffer compartido. La lista muestra las dos entradas y
+    "Prueba QA" **no** sale inerte (`style_fonts_exist` encontró las 14
+    fuentes a través de `s_candidate_paths`); al activarla, la palomita se
+    mueve y la UI queda intacta (`try_activate` recargó las 14 fuentes por
+    el mismo buffer, inmediatamente después de que `aura_style_scan` lo
+    usara). Capturas `02-temas-lista.png`, `03-temas-activado-qa.png`.
+  - **Pantalla USB** (`06-usb.png`): el camino del punto 4. Dibuja la
+    pantalla propia de Aura, sin cromo de Rockbox — con el motor de skins
+    apagado.
+  - **Fotos** cuadrícula y visor (`04`, `05`), **Music Flow** con CoverDrift
+    y reflejo (`07`), **"Ahora suena"** con una pista sonando (`08`),
+    **"Acerca de"** página 3 con la fila nueva (`01`).
+- **Límite documentado**: el simulador tiene la pila del host, así que nada de
+  esto prueba la aritmética de pila — solo que ningún cambio rompió el
+  comportamiento. La verificación real es en hardware, con la marca de agua
+  (lista al final de la ronda). Tampoco se pudo ejercitar el gesto de SELECT
+  mantenido: el inyector del simulador no tiene token de "hold".

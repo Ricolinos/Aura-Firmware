@@ -433,6 +433,11 @@ typedef enum {
     AURA_STR_SWITCH_TO_MOONLIT_ROW,
     AURA_STR_SWITCH_MOONLIT_CONFIRM_BODY,
     AURA_STR_SWITCH_MOONLIT_MISSING_BODY,
+    /* D-345: marca de agua de la pila del hilo principal, al pie de la
+     * pagina de Creditos de "Acerca de" -- oculta tras SELECT
+     * mantenido en el aparato, siempre visible en el simulador. */
+    AURA_STR_ABOUT_MAIN_STACK_FMT,      /* "Pila principal: %d / %d B (max.)" */
+    AURA_STR_ABOUT_MAIN_STACK_NA,
 
     AURA_STR_COUNT,
 } aura_str_id_t;

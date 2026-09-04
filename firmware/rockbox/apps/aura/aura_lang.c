@@ -306,6 +306,8 @@ static const char *const strings_es[AURA_STR_COUNT] = {
     [AURA_STR_SWITCH_TO_MOONLIT_ROW]      = "Cambiar a moonlit.aura",
     [AURA_STR_SWITCH_MOONLIT_CONFIRM_BODY] = "moonlit.aura está instalado, dormido, con sus ajustes. Cambiar toma un segundo y reinicia el iPod. Aura se queda guardado: vuelve desde los ajustes de moonlit.aura o desde Aura Studio.",
     [AURA_STR_SWITCH_MOONLIT_MISSING_BODY] = "moonlit.aura no está instalado en este iPod. Instálalo desde Aura Studio (Extras › Firmware): Aura se conserva, con sus ajustes, y podrás cambiar entre ellos desde aquí.",
+    [AURA_STR_ABOUT_MAIN_STACK_FMT]       = "Pila principal: %d / %d B (máx.)",
+    [AURA_STR_ABOUT_MAIN_STACK_NA]        = "Pila principal: sin dato en el simulador",
 };
 
 static const char *const strings_en[AURA_STR_COUNT] = {
@@ -582,11 +584,18 @@ static const char *const strings_en[AURA_STR_COUNT] = {
     [AURA_STR_SWITCH_TO_MOONLIT_ROW]      = "Switch to moonlit.aura",
     [AURA_STR_SWITCH_MOONLIT_CONFIRM_BODY] = "moonlit.aura is installed, dormant, with its settings. Switching takes a second and restarts the iPod. Aura stays saved: come back from moonlit.aura's settings or from Aura Studio.",
     [AURA_STR_SWITCH_MOONLIT_MISSING_BODY] = "moonlit.aura is not installed on this iPod. Install it from Aura Studio (Extras › Firmware): Aura is kept, with its settings, and you will be able to switch between them from here.",
+    [AURA_STR_ABOUT_MAIN_STACK_FMT]       = "Main stack: %d / %d B (peak)",
+    [AURA_STR_ABOUT_MAIN_STACK_NA]        = "Main stack: no data in the simulator",
 };
 
 const char *aura_str(aura_str_id_t id)
 {
-    if (id < 0 || id >= AURA_STR_COUNT)
+    /* D-345: el cast cubre las dos formas del enum sin warning. gcc
+     * elige un tipo sin signo para aura_str_id_t (no tiene valores
+     * negativos), asi que `id < 0` era siempre falso y avisaba
+     * -Wtype-limits en cada compilacion de este archivo; con un tipo
+     * con signo, el cast sigue atrapando cualquier negativo. */
+    if ((unsigned)id >= (unsigned)AURA_STR_COUNT)
         return "";
 
     const char *s = (aura_settings.language == AURA_LANG_EN)

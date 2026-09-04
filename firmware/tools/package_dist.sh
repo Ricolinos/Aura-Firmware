@@ -87,6 +87,14 @@ fi
 echo "==> Compilando el firmware ARM (rockbox.ipod)"
 PATH="$TOOLCHAIN:$PATH" make -j"$(sysctl -n hw.ncpu)"
 
+# D-345: puerta de pila. Corre sobre el rockbox.elf recien enlazado --
+# el mismo binario que se va a empaquetar -- y aborta el paquete si una
+# funcion de apps/aura/ pasa de 1 024 B de marco o si el peor camino
+# estatico desde main pasa del 75 % de la pila del hilo de UI. El
+# *PANIC* stkov main del dueno (D-345) fue exactamente eso.
+echo "==> Verificando la pila del hilo principal (stack_report.py)"
+"$ROOT_DIR/firmware/tools/stack_report.py" --quiet
+
 # D-297: hasta aca, este script armaba .rockbox/ a mano copiando SOLO
 # fuentes/iconos de design-system/out/ -- sin pasar nunca por "make zip",
 # rockbox.zip salia sin codecs/, sin rocks/ (plugins, incluido

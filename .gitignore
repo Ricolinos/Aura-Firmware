@@ -53,3 +53,6 @@ studio/**/build/
 *.log
 *.tmp
 *.swp
+
+# Serena (herramienta local de sesion, no del proyecto)
+.serena/
