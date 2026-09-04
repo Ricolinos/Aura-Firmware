@@ -79,6 +79,13 @@ unsigned a26_color(a26_token_t token)
     return aura_style_palette_color((int)token, dark);
 }
 
+unsigned a26_tile_placeholder(void)
+{
+    return (aura_settings.theme == AURA_THEME_DARK)
+               ? A26_COLOR_DARK_TILE_PLACEHOLDER
+               : A26_COLOR_LIGHT_TILE_PLACEHOLDER;
+}
+
 unsigned aura_accent(void)
 {
     aura_rgb_t c = aura_color_from_rgb24(aura_settings.accent_rgb24);

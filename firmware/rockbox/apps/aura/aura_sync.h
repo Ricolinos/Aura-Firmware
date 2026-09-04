@@ -149,6 +149,17 @@ bool aura_sync_write_music_pending_marker(void);
 #define AURA_SHARED_ART_ARTISTS_DIR AURA_SHARED_ART_DIR "/artists"
 #define AURA_SHARED_ART_PHOTOS_DIR  AURA_SHARED_ART_DIR "/photos"
 
+/* D-350 (contrato v18): version de FORMATO de la cache maestra y de las
+ * L2 privadas derivadas de ella. Un entero decimal en un archivo suelto.
+ * Al arrancar, cada familia lo lee: si falta o es menor que el suyo,
+ * borra todo /.aura/art/{albums,artists,photos} y sus L2 privadas y
+ * escribe su version. Existe porque una miniatura mal derivada por una
+ * version anterior del codigo sobrevive para siempre -- la clave de
+ * cache no cambia al corregir el DECODE, solo al cambiar la fuente.
+ * Studio nunca lo toca ni lo borra, igual que el resto de /.aura/art. */
+#define AURA_SHARED_ART_FORMAT_PATH AURA_SHARED_ART_DIR "/format.txt"
+#define AURA_SHARED_ART_FORMAT      2
+
 /* D-337: apunta global_settings.tagcache_db_path a AURA_SHARED_DB_DIR y
  * migra por rename() (sin copiar) una base previa a v15 que siga en
  * ROCKBOX_DIR (database_*.tcd + aura/db_stamp.txt) si el compartido no
@@ -156,6 +167,13 @@ bool aura_sync_write_music_pending_marker(void);
  * borra. Se llama desde apps/main.c DESPUES de settings_load() y ANTES
  * de tagcache_init(), que es quien copia la ruta a tc_stat.db_path. */
 void aura_sync_force_shared_db_path(void);
+
+/* D-350: lee AURA_SHARED_ART_FORMAT_PATH y, si falta o quedo por debajo
+ * de AURA_SHARED_ART_FORMAT, purga la cache maestra y las L2 privadas de
+ * esta familia y escribe la version. Se llama UNA vez al arrancar, antes
+ * de que nada lea arte (desde apps/main.c, junto a
+ * aura_sync_force_shared_db_path()). Devuelve true si purgo. */
+bool aura_sync_check_art_format(void);
 
 /* D-329 (contrato v12) / D-337 (v15): sello de biblioteca.
  * /.aura/library-stamp solo cambia cuando un sync de Studio toca la

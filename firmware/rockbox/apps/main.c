@@ -492,6 +492,12 @@ static void init(void)
      * tiene que fijarse (y migrarse desde /.rockbox si hace falta)
      * ANTES de tagcache_init(), que copia la ruta a tc_stat.db_path. */
     aura_sync_force_shared_db_path();
+    /* aura (D-350, contrato v18): version de formato de la cache de
+     * imagenes. Va aqui, junto a la de la base, porque tiene que correr
+     * ANTES de que cualquier pantalla lea arte -- si una miniatura mal
+     * derivada por una version anterior se lee una sola vez, se dibuja
+     * rota. */
+    aura_sync_check_art_format();
 #endif
     /* Aura siempre usa modo de almacenamiento masivo al conectar USB,
      * nunca HID (mouse/browser/presentacion/multimedia) -- Aura no
@@ -820,6 +826,12 @@ static void init(void)
     /* aura (D-337): base tagcache compartida -- ver el comentario
      * equivalente en la otra variante de init() mas arriba. */
     aura_sync_force_shared_db_path();
+    /* aura (D-350, contrato v18): version de formato de la cache de
+     * imagenes. Va aqui, junto a la de la base, porque tiene que correr
+     * ANTES de que cualquier pantalla lea arte -- si una miniatura mal
+     * derivada por una version anterior se lee una sola vez, se dibuja
+     * rota. */
+    aura_sync_check_art_format();
 #endif
     /* Ver el comentario equivalente en la otra variante de init()
      * (PLATFORM_HOSTED) mas arriba: Aura siempre usa modo de

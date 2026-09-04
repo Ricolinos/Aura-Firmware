@@ -169,8 +169,43 @@ static void test_gc_orphans(void)
     CHECK(aura_cache_keys_album_is_orphan("a-deadbeef-1234567.none", keys, 0));
 }
 
+/* D-350 (contrato v18): mtime de la clave de album y hermano cover.jpg. */
+static void test_album_mtime_v18(void)
+{
+    char buf[64];
+
+    /* Sin cover.jpg hermano: manda la pista, tal cual antes de v18. */
+    CHECK(aura_cache_keys_album_mtime(1000, false, 0) == 1000);
+    CHECK(aura_cache_keys_album_mtime(1000, false, 9999) == 1000);
+
+    /* El caso que cierra la hipotesis (a): caratula REESCRITA sin tocar
+     * la pista -- el mtime de la clave sube y la maestra vieja muere. */
+    CHECK(aura_cache_keys_album_mtime(1000, true, 2000) == 2000);
+
+    /* Pista mas nueva que la caratula: manda la pista. */
+    CHECK(aura_cache_keys_album_mtime(3000, true, 2000) == 3000);
+    /* Iguales: cualquiera. */
+    CHECK(aura_cache_keys_album_mtime(1234, true, 1234) == 1234);
+    /* Un cover.jpg con mtime 0 (FAT sin fecha) no debe TIRAR la clave. */
+    CHECK(aura_cache_keys_album_mtime(1000, true, 0) == 1000);
+
+    /* Ruta hermana */
+    CHECK(aura_cache_keys_sibling_cover("/Music/Artista/Album/01.mp3",
+                                        buf, sizeof(buf)));
+    CHECK(!strcmp(buf, "/Music/Artista/Album/cover.jpg"));
+    CHECK(aura_cache_keys_sibling_cover("/a.mp3", buf, sizeof(buf)));
+    CHECK(!strcmp(buf, "/cover.jpg"));
+    /* Sin directorio: no hay hermano posible. */
+    CHECK(!aura_cache_keys_sibling_cover("solo.mp3", buf, sizeof(buf)));
+    CHECK(!aura_cache_keys_sibling_cover(NULL, buf, sizeof(buf)));
+    /* No cabe: se rechaza en vez de truncar a una ruta que no existe. */
+    CHECK(!aura_cache_keys_sibling_cover("/Music/Artista/Album/01.mp3", buf, 20));
+    CHECK(!aura_cache_keys_sibling_cover("/x.mp3", buf, 0));
+}
+
 int main(void)
 {
+    test_album_mtime_v18();
     test_tagcache_files();
     test_stamp();
     test_album_key_roundtrip();

@@ -123,6 +123,20 @@ unsigned a26_color(a26_token_t token);
  * LCD, listo para lcd_set_foreground/background. */
 unsigned aura_accent(void);
 
+/* D-350 (SS F del plan maestro de la ronda): relleno del TILE DE
+ * RESPALDO -- el cuadro que se dibuja cuando un album, un artista o una
+ * playlist no tiene imagen. Hasta ahora usaba A26_SELECTION_FILL, el
+ * MISMO color del recuadro de seleccion de las cuadriculas: sobre una
+ * rejilla de tiles sin caratula, la fila activa se perdia porque el
+ * relleno y la seleccion eran indistinguibles.
+ *
+ * No entra en a26_token_t a proposito. Ese enum es la paleta que un tema
+ * puede sobrescribir (CONTRATO-formato-tema.md, 8 roles): agregarle un
+ * rol decimo cambiaria el formato de tema, que esta ronda no toca. Es un
+ * color compilado por tema, resuelto igual que aura_accent() -- el
+ * precedente del arbol para un color que no es rol de tema. */
+unsigned a26_tile_placeholder(void);
+
 /* Version del acento vigente mezclada hacia blanco/negro en
  * AURA_DS_COLOR_ACCENT_DERIVED_LIGHTEN_PCT/_DARKEN_PCT (D-086, G9) --
  * los dos colores derivados del degradado de SelectionSummary. Se

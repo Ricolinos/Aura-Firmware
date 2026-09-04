@@ -1508,3 +1508,133 @@ archivos enteros en vez de solo mirar el bloque nuevo.
 quedó en **D-349** porque en el camino entraron D-346 (la carrera de tagcache,
 encargo de la supervisora) y D-348 (la reproducibilidad del build). El
 bootloader es D-347.
+
+## D-350 — Las carátulas no cuadradas se rompían en los tres caminos que no pasan por la caché maestra (contrato v18)
+
+**El síntoma que reportó el dueño** ("las imágenes se ven mal") tenía una
+causa exacta y reproducible. La caché maestra ya recortaba bien
+(`aura_master_art_decode_fill()`: fill + center-crop desde v16). Lo que
+seguía roto eran los **caminos que no pasan por ella**: "Ahora suena" (135 px)
+y el decode "más grande que la maestra" (CoverDrift 320), más la portada de
+playlist. Los tres hacían lo mismo:
+
+```c
+int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
+bm.width = size; bm.height = size;
+read_jpeg_file(path, &bm, ...);          /* -> 135 x 101 con una 4:3 */
+...
+mask_corners_buffer(buf, ART_SIZE, ...); /* lee 135 x 135 */
+aura_art_transpose(decoded, dst, size);  /* idem */
+```
+
+`FORMAT_KEEP_ASPECT` **ajusta dentro** de la caja, no la llena: con una
+portada 4:3 el decodificador devuelve 135×101, y el enmascarado de esquinas,
+el reflejo y la transposición siguen leyendo con stride 135 y alto 135. Las
+últimas 34 filas son memoria sin inicializar. **No es que la imagen quede
+mal encuadrada: queda rota**, con basura de colores debajo.
+
+Se reprodujo en el simulador con fixtures nuevos y quedó capturado antes y
+después (`docs/screenshots/ronda-estabilidad/11-antes-ahora-suena-4x3.png`
+vs `11-ahora-suena-4x3.png`, y el par `13-*` con una 1:4).
+
+**Corrección: una sola primitiva para todos.** Los tres pasan a
+`aura_master_art_decode_fill()`, la misma que ya usaba la maestra, que es
+genérica en `size` desde D-341. Como dos de los tres corren con el candado de
+decodificación ya tomado por su llamador, se separó en
+`aura_master_art_decode_fill_locked()` (el núcleo) y un envoltorio que
+bloquea — `mutex_lock()` de Rockbox **no es reentrante**, así que llamar a la
+versión que bloquea desde dentro de una región ya bloqueada habría sido un
+abrazo mortal, no un no-op.
+
+`decode_album_at()` y `decode_playlist_art()` dejan de devolver un puntero al
+scratch con dimensiones arbitrarias y ahora **llenan un cuadrado** en el
+buffer del llamador (`out->cover_data`, que mide `size × size` por contrato),
+desde donde se transpone. Un buffer menos y una suposición menos.
+
+**Bug que introdujo la corrección y que el simulador atrapó**: al quitar el
+`struct bitmap` de `load_album_art()` quedó `s_art_bm.data` sin asignar, y el
+dibujo de la carátula inclinada seguía leyéndolo — **segfault** en el
+simulador al abrir "Ahora suena". `s_art_bm` se eliminó por completo: ya solo
+era un envoltorio de un puntero que ahora es directo. Vale la pena anotarlo:
+la captura automática lo encontró en la primera corrida.
+
+**Lo que NO se cambió, y por qué.** El tile de video/foto de las listas
+(`aura_screens.c`) sigue con `KEEP_ASPECT` + banda centrada. Es deliberado:
+un cartel de video es **3:4 por diseño** (contrato §D.1, "sin cambio") y
+recortarlo al cuadrado le cortaría la cabeza. Además nunca tuvo el bug —
+centra usando `bm.width`/`bm.height` reales, que es exactamente la diferencia.
+Anotado en el código para que la próxima auditoría no lo "arregle".
+
+**Qué pasa con una proporción extrema.** `aura_master_art_fill_box()` rechaza
+más de 4:1 y `aura_master_art_decode_fill()` cae al "centrado sobre color
+promedio". Verificado con la 1:4: sale la imagen completa centrada sobre gris,
+sin recorte ni rotura. Es el comportamiento correcto — recortar 1:4 al
+cuadrado tiraría el 75 % de la imagen.
+
+**`/.aura/art/format.txt` (§D.5 del contrato v18).** El problema que cierra:
+la clave de una entrada de caché describe su **fuente** (ruta + mtime), no el
+código que la derivó. Corregido el decode, las miniaturas mal derivadas por la
+versión anterior siguen teniendo la clave correcta y sobrevivirían **para
+siempre**. `aura_sync_check_art_format()` lee el entero al arrancar y, si
+falta o es menor que 2, purga `/.aura/art/{albums,artists,photos}` y las dos
+L2 privadas de Aura (`cfcache`, `photocache`) y escribe su versión. Se llama
+desde `apps/main.c` junto a `aura_sync_force_shared_db_path()` — **antes de
+que nada lea arte**: si una miniatura rota se lee una sola vez, se dibuja.
+
+**Medida de la purga** (el plan pedía moverla al hilo del constructor si pasaba
+de 2 s): con **3 569 entradas** sembradas en el simdisk, **13 ticks = 0.13 s**.
+Se queda en el hilo de UI. Límite honesto: es un SSD de Mac, no el disco de
+2008 del iPod; si en hardware resultara lenta, la medición ya está
+instrumentada (`DEBUGF` con ticks) para decidirlo con un número.
+
+**Clave de álbum con el `mtime` de `cover.jpg`** (§D.5 del contrato v18):
+`max(mtime de la pista, mtime del cover.jpg hermano)`. Cierra la hipótesis (a)
+de D-338/M-096/D-055 — una carátula reescrita **sin tocar la pista** dejaba la
+clave igual y la maestra vieja sobrevivía. La decisión se partió en dos piezas
+puras y probadas en host (`aura_cache_keys_album_mtime()` y
+`aura_cache_keys_sibling_cover()`, **13 comprobaciones nuevas** en
+`test_cache_keys.c`), y el acceso a disco quedó en
+`aura_fsutil_file_mtime()`. Rockbox no tiene `stat()`: la única forma de leer
+la fecha de un archivo es recorrer su directorio con `readdir()`. Con dircache
+listo (siempre en el 6G) eso se sirve de RAM; el costo es un recorrido del
+directorio del álbum por resolución de clave.
+
+**Token `tile_placeholder` (§F del plan maestro).** El relleno del tile de
+respaldo y el recuadro de selección eran **el mismo color**
+(`A26_SELECTION_FILL`), así que en una cuadrícula de tiles sin carátula la
+fila activa desaparecía. Token nuevo en `tokens.json` (claro `#D1D1D6`, oscuro
+`#3A3A3C`) → `A26_COLOR_{LIGHT,DARK}_TILE_PLACEHOLDER` vía `generate.py`, y
+por tanto también `AuraPalette.swift` (Studio lo recibe al subir el pin).
+
+*Desviación de forma respecto a §F*: se expone como `a26_tile_placeholder()`,
+no como un miembro de `a26_token_t`. Ese enum es la paleta que un **tema**
+puede sobrescribir (8 roles, `CONTRATO-formato-tema.md`): agregarle un rol
+cambiaría el formato de tema, que esta ronda no toca. Es un color compilado
+por tema, resuelto igual que `aura_accent()` — el precedente ya establecido en
+el árbol para un color que no es rol de tema.
+
+**Fixtures reproducibles**: `firmware/tools/gen_test_media.sh --aspect-fixtures`
+crea cuatro álbumes con `cover.jpg` de 1:1, 4:3, 16:9 y 1:4, con barras de
+color SMPTE — un recorte con el stride equivocado sale **rasgado**, no solo
+mal encuadrado, así que el fallo se ve a simple vista.
+
+**Verificado.**
+- Target: **0 errores, 0 warnings**. `stack_report.py` **verde**, sin cambio
+  (6 608 B, 53.8 %).
+- `make -C firmware/rockbox/apps/aura/test test`: **16/16 suites verdes**,
+  incluidas las 13 comprobaciones nuevas de la clave v18.
+- Simulador (build limpio + `make install`), con los cuatro álbumes de
+  proporciones y la base reconstruida:
+  - **"Ahora suena" 4:3, 16:9, 1:1 y 1:4**: las cuatro salen cuadradas y
+    limpias (`11`…`14`). El antes de la 4:3 y la 1:4 muestra la rotura
+    original (`11-antes-*`, `13-antes-*`).
+  - Lista de **Álbumes** con los cuatro tiles (`10`), **CoverDrift** en el
+    panel derecho de Música (`15`).
+  - **Purga de formato**: 3 569 entradas borradas, `format.txt` = 2, y el
+    segundo arranque **no** vuelve a purgar.
+- **Límite de la evidencia**: la captura de CoverDrift no es un antes/después
+  concluyente — en el momento del volcado el carrusel mostraba un fixture
+  cuadrado, no una de las portadas de proporción. Comparte el código
+  corregido (`decode_album_at`) con "Ahora suena", que sí quedó probado
+  punta a punta; la confirmación visual de CoverDrift con una portada 4:3 va
+  a la lista de hardware.

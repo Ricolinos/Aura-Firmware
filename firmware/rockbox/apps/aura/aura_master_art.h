@@ -106,4 +106,14 @@ void aura_master_art_gc(aura_master_art_kind_t kind, const aura_master_art_key_t
 bool aura_master_art_decode_fill(const char *path, int clip_off, unsigned long clip_len,
                                  int size, fb_data *out_flat);
 
+/* Igual que la anterior, pero SIN tomar el candado de decodificacion:
+ * para llamadores que ya lo tienen (D-350). El candado protege el
+ * scratch compartido entre el hilo de UI y el del constructor, y
+ * mutex_lock() de Rockbox no es reentrante -- llamar a la version que
+ * bloquea desde dentro de una region ya bloqueada seria un abrazo
+ * mortal, no un no-op. */
+bool aura_master_art_decode_fill_locked(const char *path, int clip_off,
+                                        unsigned long clip_len,
+                                        int size, fb_data *out_flat);
+
 #endif /* AURA_MASTER_ART_H */

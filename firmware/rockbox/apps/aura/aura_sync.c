@@ -20,6 +20,7 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
+#include "debug.h"
 #include "aura_sync.h"
 #include "aura_master_art_builder.h" /* D-344 */
 
@@ -61,6 +62,7 @@
  * sync) y portadas de playlist (pl-*) -- sigue tirandose al terminar. */
 #define AURA_DIR      ROCKBOX_DIR "/aura"
 #define CF_CACHE_DIR  AURA_DIR "/cfcache"
+#define PHOTO_CACHE_DIR AURA_DIR "/photocache"
 
 /* Un marcador real mide ~150 bytes; 1 KB deja sitio a claves futuras. */
 #define MARKER_BUF_SIZE 1024
@@ -254,6 +256,63 @@ static void relocate_tagcache_files(const char *from, const char *to, bool move)
             remove(src);
     }
     closedir(d);
+}
+
+/* -- D-350 (contrato v18): version de formato de la cache de imagenes --
+ *
+ * El problema que cierra: la clave de una entrada de cache describe su
+ * FUENTE (ruta + mtime), no el codigo que la derivo. Cuando se corrige
+ * el decode -- como en D-350, que hizo cuadrados los tres caminos que no
+ * pasaban por la maestra -- las miniaturas mal derivadas por la version
+ * anterior siguen teniendo la clave correcta y sobreviven para siempre.
+ * Un numero de formato es lo unico que distingue "la fuente cambio" de
+ * "la forma de derivarla cambio".
+ *
+ * Se purga la maestra COMPARTIDA y las dos L2 privadas de Aura; las
+ * hermanas hacen lo suyo con sus propias L2 cuando arrancan y ven el
+ * mismo archivo. */
+bool aura_sync_check_art_format(void)
+{
+    char buf[16];
+    int n, have = 0;
+    char version[8];
+
+    n = aura_fsutil_read_text(AURA_SHARED_ART_FORMAT_PATH, buf, sizeof(buf));
+    if (n > 0)
+        have = atoi(buf);
+
+    if (have >= AURA_SHARED_ART_FORMAT)
+        return false;
+
+    DEBUGF("aura_sync: formato de arte %d < %d -- purgando\n",
+           have, AURA_SHARED_ART_FORMAT);
+
+    /* La purga corre en el hilo de UI, en el arranque, antes de que haya
+     * nada dibujado. Se mide para saber si algun dia hay que moverla al
+     * hilo del constructor (ver D-350). */
+    {
+        long t0 = current_tick;
+
+        aura_fsutil_clear_dir(AURA_SHARED_ART_ALBUMS_DIR);
+        aura_fsutil_clear_dir(AURA_SHARED_ART_ARTISTS_DIR);
+        aura_fsutil_clear_dir(AURA_SHARED_ART_PHOTOS_DIR);
+        aura_fsutil_clear_dir(CF_CACHE_DIR);
+        aura_fsutil_clear_dir(PHOTO_CACHE_DIR);
+
+        DEBUGF("aura_sync: purga de arte terminada en %ld ticks (HZ=%d)\n",
+               (long)(current_tick - t0), (int)HZ);
+        (void)t0; /* DEBUGF se compila a nada fuera del simulador */
+    }
+
+    if (!dir_exists(AURA_SHARED_ART_DIR))
+    {
+        if (!dir_exists(AURA_SYNC_DIR))
+            mkdir(AURA_SYNC_DIR);
+        mkdir(AURA_SHARED_ART_DIR);
+    }
+    n = snprintf(version, sizeof(version), "%d\n", AURA_SHARED_ART_FORMAT);
+    aura_fsutil_write_all(AURA_SHARED_ART_FORMAT_PATH, version, (size_t)n);
+    return true;
 }
 
 void aura_sync_force_shared_db_path(void)

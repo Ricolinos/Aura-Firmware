@@ -98,6 +98,22 @@ bool aura_cache_keys_album_resolved(bool pfraw_valid, bool none_present);
  *  - a-*.pfraw o a-*.none cuya (crc, mtime) no esta en `keys`, o
  *  - <seek>-<lado>.pfraw de antes de D-338 (empieza por digito).
  * pl-*, ar-* y cualquier otro nombre devuelven false: no son de este GC. */
+/* D-350 (contrato v18): el <mtime> de la clave de album es
+ * max(mtime de la pista representativa, mtime del cover.jpg hermano si
+ * existe). Sin esto, una caratula reescrita SIN tocar la pista deja la
+ * clave igual y la maestra vieja sobrevive para siempre -- la hipotesis
+ * (a) de D-338/M-096/D-055. Pura aritmetica, separada del stat para que
+ * la decision se pueda probar en host. */
+uint32_t aura_cache_keys_album_mtime(uint32_t track_mtime,
+                                     bool cover_present, uint32_t cover_mtime);
+
+/* D-350: "<directorio de la pista>/cover.jpg" a partir de la ruta de la
+ * pista. false si no cabe en `out` o si `track_path` no trae directorio
+ * (una ruta sin '/' no puede tener un hermano). El nombre es exactamente
+ * `cover.jpg`: es lo que el contrato v18 le exige a Studio, y la unica
+ * de las variantes que busca find_albumart() que Studio escribe. */
+bool aura_cache_keys_sibling_cover(const char *track_path, char *out, size_t outsz);
+
 bool aura_cache_keys_album_is_orphan(const char *name,
                                      const aura_cache_album_key_t *keys, int count);
 

@@ -130,3 +130,43 @@ bool aura_fsutil_write_all(const char *path, const char *data, size_t len)
     close(fd);
     return n >= 0 && (size_t)n == len;
 }
+
+bool aura_fsutil_file_mtime(const char *path, uint32_t *out)
+{
+    char dir[MAX_PATH];
+    const char *slash, *name;
+    size_t dir_len;
+    DIR *d;
+    struct DIRENT *entry;
+    bool found = false;
+
+    if (path == NULL || out == NULL)
+        return false;
+    slash = strrchr(path, '/');
+    if (slash == NULL)
+        return false;
+    name = slash + 1;
+    dir_len = (size_t)(slash - path);
+    if (dir_len == 0)
+        dir_len = 1;                 /* "/x": el directorio es "/" */
+    if (dir_len >= sizeof(dir))
+        return false;
+    memcpy(dir, path, dir_len);
+    dir[dir_len] = '\0';
+
+    d = opendir(dir);
+    if (!d)
+        return false;
+    while ((entry = readdir(d)) != NULL)
+    {
+        if (!strcmp(entry->d_name, name))
+        {
+            struct dirinfo info = dir_get_info(d, entry);
+            *out = (uint32_t)info.mtime;
+            found = true;
+            break;
+        }
+    }
+    closedir(d);
+    return found;
+}

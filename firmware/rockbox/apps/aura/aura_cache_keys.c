@@ -181,3 +181,30 @@ bool aura_cache_keys_album_is_orphan(const char *name,
     return (name[0] >= '0' && name[0] <= '9')
         && n > 6 && strcmp(name + n - 6, ".pfraw") == 0;
 }
+
+uint32_t aura_cache_keys_album_mtime(uint32_t track_mtime,
+                                     bool cover_present, uint32_t cover_mtime)
+{
+    if (!cover_present)
+        return track_mtime;
+    return (cover_mtime > track_mtime) ? cover_mtime : track_mtime;
+}
+
+bool aura_cache_keys_sibling_cover(const char *track_path, char *out, size_t outsz)
+{
+    static const char name[] = "cover.jpg";
+    const char *slash;
+    size_t dir_len;
+
+    if (track_path == NULL || out == NULL || outsz == 0)
+        return false;
+    slash = strrchr(track_path, '/');
+    if (slash == NULL)
+        return false;               /* sin directorio no hay hermano */
+    dir_len = (size_t)(slash - track_path) + 1;  /* incluye el '/' */
+    if (dir_len + sizeof(name) > outsz)
+        return false;
+    memcpy(out, track_path, dir_len);
+    memcpy(out + dir_len, name, sizeof(name));   /* copia el NUL */
+    return true;
+}

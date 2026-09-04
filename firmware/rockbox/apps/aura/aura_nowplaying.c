@@ -55,6 +55,7 @@
 #include "aura_status_bar_v2.h"
 #include "aura_widgets.h"
 #include "aura_art.h"
+#include "aura_master_art.h"
 #include "aura_albumart.h"
 #include "aura_motion.h"
 #include "aura_music.h"
@@ -243,7 +244,6 @@ static bool seek_engine_ready(const struct mp3entry *id3)
 static long s_volume_overlay_until = 0;
 
 static unsigned char s_art_buf[64 * 1024];
-static struct bitmap s_art_bm;
 static bool s_art_valid = false;
 static unsigned char s_reflection_buf[ART_SIZE * (ART_SIZE * ART_REFLECTION_PCT / 100) * sizeof(fb_data)];
 
@@ -466,25 +466,17 @@ static bool load_album_art(const struct mp3entry *id3)
 {
     char path[MAX_PATH];
     struct dim d = { ART_SIZE, ART_SIZE };
-    int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
-    int len;
-    int ret;
+    bool ok;
 
-    s_art_bm.width = ART_SIZE;
-    s_art_bm.height = ART_SIZE;
-    s_art_bm.data = (char *)s_art_buf;
-#if (LCD_DEPTH > 1)
-    s_art_bm.maskdata = NULL;
-#endif
-
+    /* D-350: fill + center-crop, la MISMA primitiva que la caché
+     * maestra. Antes se decodificaba con FORMAT_KEEP_ASPECT dentro de
+     * una caja de ART_SIZE y despues se enmascaraban esquinas y se
+     * generaba el reflejo SUPONIENDO que el bitmap era cuadrado: con
+     * una portada 4:3 el decodificador devuelve 135x101 y las dos
+     * pasadas leen con un stride que no es el real -- la imagen se
+     * rompe. Ahora s_art_buf siempre queda cuadrado de ART_SIZE. */
     if (find_albumart(id3, path, sizeof(path), &d))
-    {
-        len = (int)strlen(path);
-        if (len > 4 && !strcasecmp(path + len - 4, ".bmp"))
-            ret = read_bmp_file(path, &s_art_bm, sizeof(s_art_buf), format, NULL);
-        else
-            ret = read_jpeg_file(path, &s_art_bm, sizeof(s_art_buf), format, NULL);
-    }
+        ok = aura_master_art_decode_fill(path, 0, 0, ART_SIZE, (fb_data *)s_art_buf);
     else if (id3->has_embedded_albumart
              && (id3->albumart.type & AA_CLEAR_FLAGS_MASK) == AA_TYPE_JPG)
     {
@@ -492,19 +484,19 @@ static bool load_album_art(const struct mp3entry *id3)
          * playback.c y aura_albumart.c) -- el id3 del track actual ya
          * trae pos/size llenos por el motor de reproduccion, sin
          * get_metadata() extra. */
-        ret = clip_jpeg_file(id3->path, id3->albumart.pos,
-                              id3->albumart.size, &s_art_bm,
-                              sizeof(s_art_buf), format, NULL);
+        ok = aura_master_art_decode_fill(id3->path, id3->albumart.pos,
+                                         id3->albumart.size, ART_SIZE,
+                                         (fb_data *)s_art_buf);
     }
     else
         return false;
 
-    if (ret <= 0)
+    if (!ok)
         return false;
 
-    mask_corners_buffer((fb_data *)s_art_bm.data, ART_SIZE, ART_RADIUS,
+    mask_corners_buffer((fb_data *)s_art_buf, ART_SIZE, ART_RADIUS,
                          a26_color(A26_SHELL_BG));
-    aura_art_generate_reflection((const fb_data *)s_art_bm.data,
+    aura_art_generate_reflection((const fb_data *)s_art_buf,
                                   (fb_data *)s_reflection_buf,
                                   ART_SIZE, ART_REFLECTION_PCT,
                                   a26_color(A26_SHELL_BG), false);
@@ -559,16 +551,10 @@ static void reload_for_track(const struct mp3entry *id3)
          * esquinas + reflejo que una caratula real -- reemplaza al
          * recuadro vacio que draw_cover_tilted() dibujaba antes para
          * este caso. */
-        s_art_bm.width = ART_SIZE;
-        s_art_bm.height = ART_SIZE;
-        s_art_bm.data = (char *)s_art_buf;
-#if (LCD_DEPTH > 1)
-        s_art_bm.maskdata = NULL;
-#endif
-        aura_albumart_default_tile((fb_data *)s_art_bm.data, ART_SIZE, false);
-        mask_corners_buffer((fb_data *)s_art_bm.data, ART_SIZE, ART_RADIUS,
+        aura_albumart_default_tile((fb_data *)s_art_buf, ART_SIZE, false);
+        mask_corners_buffer((fb_data *)s_art_buf, ART_SIZE, ART_RADIUS,
                              a26_color(A26_SHELL_BG));
-        aura_art_generate_reflection((const fb_data *)s_art_bm.data,
+        aura_art_generate_reflection((const fb_data *)s_art_buf,
                                       (fb_data *)s_reflection_buf,
                                       ART_SIZE, ART_REFLECTION_PCT,
                                       a26_color(A26_SHELL_BG), false);
@@ -888,7 +874,7 @@ static void draw_cover_tilted(int t256)
         int col = aura_flow_source_column(&proj);
         int dy = aura_flow_vertical_scale(&proj);
         int p = 0, dest_row, n_rows = 0;
-        const fb_data *cover = (const fb_data *)s_art_bm.data;
+        const fb_data *cover = (const fb_data *)s_art_buf;
         const fb_data *refl = (const fb_data *)s_reflection_buf;
         fb_data *dst = s_cover_tilted_buf[i];
         /* Centrado vertical por columna (mismo criterio que el

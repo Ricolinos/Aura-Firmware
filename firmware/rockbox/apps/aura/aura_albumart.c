@@ -45,6 +45,7 @@
 #include "aura_art.h"
 #include "aura_music.h" /* AURA_MUSIC_ITEM_LEN, mismo tope que aura_music_list_playlists() */
 #include "aura_artist_images.h" /* D-322: lookup de la foto por tag de artista */
+#include "aura_fsutil.h"
 #include "aura_cache_keys.h"     /* D-338: nombre a-<crc>-<mtime>-<lado>.pfraw; D-339: a-<crc>-<mtime>.none */
 #include "aura_master_art.h"     /* D-341: maestra compartida /.aura/art, fuente de todo lo de abajo */
 #include "crc32.h"
@@ -254,14 +255,17 @@ static int default_tile_icon_size(int size)
  * tile con la rampa de antialias real, ningun bitmap nuevo. */
 /* Compone `icon_name`-`icon_size`.bmp (mascara de cobertura horneada,
  * design-system/generate.py) centrado sobre un tile plano
- * A26_SELECTION_FILL -- compartido por el default de Musica ("nota
+ * A26_TILE_PLACEHOLDER (D-350) -- compartido por el default de Musica ("nota
  * musical", tamano proporcional al tile) y el placeholder de Artistas
  * (D-322, "artist", 28px fijo -- ver aura_artist_art_default_tile()).
  * Tile plano sin icono (mejor que nada) si el asset faltara. */
 static void default_tile_with_icon(fb_data *buf, int size, bool transposed,
                                     const char *icon_name, int icon_size)
 {
-    unsigned tile = a26_color(A26_SELECTION_FILL);
+    /* D-350: A26_TILE_PLACEHOLDER, no A26_SELECTION_FILL. Eran el mismo
+     * color, asi que en una cuadricula de tiles sin caratula el recuadro
+     * de seleccion desaparecia sobre el relleno. */
+    unsigned tile = a26_tile_placeholder();
     /* Tinta del icono: punto medio entre SHELL_RAIL y TEXT_SECONDARY --
      * RAIL solo (primera version del default de Musica) quedaba casi
      * invisible sobre el tile claro; la referencia del dueno del diseno
@@ -309,7 +313,7 @@ void aura_albumart_default_tile(fb_data *buf, int size, bool transposed)
     default_tile_with_icon(buf, size, transposed, "music", default_tile_icon_size(size));
 }
 
-/* D-322: placeholder de Artistas -- mismo tile A26_SELECTION_FILL,
+/* D-322: placeholder de Artistas -- mismo tile A26_TILE_PLACEHOLDER,
  * icono "artist" (el mismo que ya usa la fila de Artistas del menu de
  * Musica) a 28px FIJOS (no proporcional como el de Musica -- pedido
  * explicito del plan, PLAN-biblioteca-medios-v2.md §3.6). */
@@ -359,8 +363,28 @@ static bool find_any_track_in_album(int32_t album_seek, char *path, size_t path_
             tagcache_retrieve(&tcs, tcs.idx_id, tag_album, album, album_sz);
         if (key)
         {
+            /* D-350 (contrato v18): el mtime de la clave es
+             * max(pista, cover.jpg hermano). Sin esto, una caratula
+             * reescrita sin tocar la pista deja la clave igual y la
+             * maestra vieja sobrevive para siempre (hipotesis (a) de
+             * D-338). El cover.jpg hermano es lo que Studio escribe con
+             * la politica albumOnly; con perTrack no hay archivo y la
+             * caratula viaja dentro de la pista, cuyo mtime ya manda.
+             *
+             * Cuesta un recorrido del directorio del album por clave.
+             * Con dircache listo (siempre en el 6G: apps/main.c lo
+             * inicializa) se sirve de RAM. */
+            static char s_cover[MAX_PATH]; /* D-226: fuera de la pila */
+            uint32_t track_mtime = (uint32_t)tagcache_get_numeric(&tcs, tag_mtime);
+            uint32_t cover_mtime = 0;
+            bool cover_present = false;
+
+            if (aura_cache_keys_sibling_cover(path, s_cover, sizeof(s_cover)))
+                cover_present = aura_fsutil_file_mtime(s_cover, &cover_mtime);
+
             key->path_crc = crc_32(path, strlen(path), 0xffffffff);
-            key->mtime = (uint32_t)tagcache_get_numeric(&tcs, tag_mtime);
+            key->mtime = aura_cache_keys_album_mtime(track_mtime, cover_present,
+                                                     cover_mtime);
         }
         found = true;
     }
@@ -510,11 +534,12 @@ static bool decode_album_master(int32_t album_seek, aura_albumart_key_t *key,
 }
 
 /* Decodifica la caratula real al lado pedido (> maestra: Ahora suena
- * 135, CoverDrift 320), fila-contigua en el scratch compartido -- el
- * camino anterior a D-341, conservado solo para esos lados. Devuelve el
- * puntero al bitmap dentro del scratch (valido con el candado tomado,
- * que el LLAMADOR ya tiene) o NULL. */
-static const fb_data *decode_album_at(int32_t album_seek, int size, aura_albumart_key_t *key)
+ * 135, CoverDrift 320) y la deja CUADRADA y fila-contigua en `out_flat`
+ * (size x size, del llamador) -- el camino anterior a D-341, conservado
+ * solo para esos lados. El candado de decodificacion lo tiene ya el
+ * LLAMADOR. Devuelve false si no hay caratula. */
+static bool decode_album_at(int32_t album_seek, int size, aura_albumart_key_t *key,
+                            fb_data *out_flat)
 {
     /* D-343: aqui TODO puede salir de la pila sin mover nada de sitio --
      * el unico llamador (aura_albumart_load_for_album(), lado mayor que
@@ -524,60 +549,52 @@ static const fb_data *decode_album_at(int32_t album_seek, int size, aura_albumar
     static char s_artist[128];
     static char s_album[128];
     struct dim dim = { size, size };
-    int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
-    size_t scratch_sz;
-    unsigned char *scratch = aura_master_art_scratch(&scratch_sz);
-    struct bitmap bm;
-    int len, ret;
 
     s_artist[0] = '\0';
     s_album[0] = '\0';
     if (!find_any_track_in_album(album_seek, s_path, sizeof(s_path),
                                   s_artist, sizeof(s_artist), s_album, sizeof(s_album), key))
-        return NULL;
+        return false;
 
     memset(&s_fake_id3, 0, sizeof(s_fake_id3));
     strlcpy(s_fake_id3.path, s_path, sizeof(s_fake_id3.path));
     s_fake_id3.artist = s_artist;
     s_fake_id3.album = s_album;
 
-    bm.width = size;
-    bm.height = size;
-    bm.data = (char *)scratch;
-#if (LCD_DEPTH > 1)
-    bm.maskdata = NULL;
-#endif
-
+    /* D-350: fill + center-crop, la MISMA primitiva que la maestra --
+     * antes se decodificaba con FORMAT_KEEP_ASPECT dentro de una caja
+     * cuadrada y se devolvia el scratch tal cual, con las dimensiones
+     * que hubiera elegido el decodificador. El llamador lo transponia
+     * como si fuera `size x size`: con una portada 4:3 el stride no
+     * coincide y la imagen sale rota. Ahora out_flat SIEMPRE queda
+     * cuadrado de `size x size`. */
     if (find_albumart(&s_fake_id3, s_art_path, sizeof(s_art_path), &dim))
     {
-        len = (int)strlen(s_art_path);
-        if (len > 4 && !strcasecmp(s_art_path + len - 4, ".bmp"))
-            ret = read_bmp_file(s_art_path, &bm, scratch_sz, format, NULL);
-        else
-            ret = read_jpeg_file(s_art_path, &bm, scratch_sz, format, NULL);
-        DEBUGF("aura_master_art: decode %s at %d -> %d\n", s_art_path, size, ret);
-        return ret > 0 ? (const fb_data *)scratch : NULL;
+        bool ok = aura_master_art_decode_fill_locked(s_art_path, 0, 0, size, out_flat);
+        DEBUGF("aura_master_art: fill %s at %d -> %d\n", s_art_path, size, (int)ok);
+        return ok;
     }
 
     {
         int fd = open(s_path, O_RDONLY);
+        bool ok;
 
         if (fd < 0)
-            return NULL;
+            return false;
         if (!get_metadata(&s_probe_id3, fd, s_path)
             || !s_probe_id3.has_embedded_albumart
             || (s_probe_id3.albumart.type & AA_CLEAR_FLAGS_MASK) != AA_TYPE_JPG)
         {
             close(fd);
-            return NULL;
+            return false;
         }
         close(fd);
 
-        ret = clip_jpeg_file(s_path, s_probe_id3.albumart.pos,
-                              s_probe_id3.albumart.size, &bm,
-                              scratch_sz, format, NULL);
-        DEBUGF("aura_master_art: decode %s (embedded) at %d -> %d\n", s_path, size, ret);
-        return ret > 0 ? (const fb_data *)scratch : NULL;
+        ok = aura_master_art_decode_fill_locked(s_path, s_probe_id3.albumart.pos,
+                                                s_probe_id3.albumart.size,
+                                                size, out_flat);
+        DEBUGF("aura_master_art: fill %s (embedded) at %d -> %d\n", s_path, size, (int)ok);
+        return ok;
     }
 }
 
@@ -657,8 +674,6 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
      * ademas falta la maestra, se construye de paso: "siempre se
      * escribe la maestra cuando se decodifica". */
     {
-        const fb_data *decoded;
-
         if (!aura_master_art_resolved(AURA_MASTER_ART_ALBUM, &key))
         {
             bool definitive;
@@ -673,14 +688,19 @@ bool aura_albumart_load_for_album(int32_t album_seek, aura_albumart_t *out)
         }
 
         aura_master_art_decode_lock();
-        decoded = decode_album_at(album_seek, out->size, &key);
-        if (decoded == NULL)
+        /* D-350: se decodifica CUADRADO directamente sobre el buffer del
+         * llamador (out->cover_data mide size x size por contrato) y de
+         * ahi se transpone. Antes se transponia el scratch tal como lo
+         * dejo el decodificador, que con una portada no cuadrada no
+         * tenia el stride que la transposicion supone. */
+        if (!decode_album_at(album_seek, out->size, &key, (fb_data *)out->cover_data))
         {
             aura_master_art_decode_unlock();
             return false;
         }
         pfraw_path(&key, out->size, path, sizeof(path));
-        aura_art_transpose(decoded, (fb_data *)s_transpose_scratch, out->size);
+        aura_art_transpose((const fb_data *)out->cover_data,
+                           (fb_data *)s_transpose_scratch, out->size);
         aura_master_art_decode_unlock();
 
         aura_art_mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);
@@ -754,33 +774,23 @@ static void playlist_art_source_path(const char *playlist_filename, char *out, s
 /* Decodifica el sidecar al scratch compartido (candado tomado por el
  * llamador) -- el sidecar siempre es JPEG (Aura Studio nunca escribe
  * otra cosa), asi que no hace falta la rama .bmp. */
-static const fb_data *decode_playlist_art(const char *playlist_filename, int size)
+static bool decode_playlist_art(const char *playlist_filename, int size,
+                                fb_data *out_flat)
 {
     static char path[AURA_PLAYLIST_ART_PATH_LEN]; /* static: D-226/D-227 */
-    int format = FORMAT_NATIVE | FORMAT_RESIZE | FORMAT_KEEP_ASPECT;
-    size_t scratch_sz;
-    unsigned char *scratch = aura_master_art_scratch(&scratch_sz);
-    struct bitmap bm;
 
     playlist_art_source_path(playlist_filename, path, sizeof(path));
-
-    bm.width = size;
-    bm.height = size;
-    bm.data = (char *)scratch;
-#if (LCD_DEPTH > 1)
-    bm.maskdata = NULL;
-#endif
-
-    if (read_jpeg_file(path, &bm, scratch_sz, format, NULL) <= 0)
-        return NULL;
-    return (const fb_data *)scratch;
+    /* D-350: fill + center-crop como el resto -- la portada de playlist
+     * la escribe Aura Studio y desde el contrato v18 llega cuadrada,
+     * pero el firmware no lo exige: la tolera igual que cualquier otra
+     * proporcion. El candado lo tiene el llamador. */
+    return aura_master_art_decode_fill_locked(path, 0, 0, size, out_flat);
 }
 
 bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
 {
     static char cache_path[AURA_PLAYLIST_ART_PATH_LEN]; /* static: D-226/D-227 */
     unsigned bg = a26_color(A26_SHELL_BG);
-    const fb_data *decoded;
 
     out->valid = false;
     if (!playlist_filename || !*playlist_filename)
@@ -795,13 +805,13 @@ bool aura_playlist_art_load(const char *playlist_filename, aura_albumart_t *out)
     }
 
     aura_master_art_decode_lock();
-    decoded = decode_playlist_art(playlist_filename, out->size);
-    if (decoded == NULL)
+    if (!decode_playlist_art(playlist_filename, out->size, (fb_data *)out->cover_data))
     {
         aura_master_art_decode_unlock();
         return false;
     }
-    aura_art_transpose(decoded, (fb_data *)s_transpose_scratch, out->size);
+    aura_art_transpose((const fb_data *)out->cover_data,
+                       (fb_data *)s_transpose_scratch, out->size);
     aura_master_art_decode_unlock();
 
     aura_art_mask_corners_transposed((fb_data *)s_transpose_scratch, out->size, out->radius, bg);

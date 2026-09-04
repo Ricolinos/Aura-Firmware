@@ -7,8 +7,24 @@
 # Salida: firmware/test-media/ (no se versiona -- generado on-demand).
 #
 # Uso: firmware/tools/gen_test_media.sh
+#      firmware/tools/gen_test_media.sh --aspect-fixtures
+#
+# --aspect-fixtures (D-350, contrato v18): ademas de lo de siempre, crea
+# cuatro albumes en el simdisk cuyo cover.jpg NO es cuadrado (1:1, 4:3,
+# 16:9 y 1:4). Existen para probar el recorte fill + center-crop de los
+# caminos que no pasan por la cache maestra: si alguno vuelve a suponer
+# que el bitmap decodificado es cuadrado, estas portadas lo delatan de
+# inmediato (el patron de barras de color se ve sesgado o rasgado).
+# Studio, desde el contrato v18, escribe siempre 320x320 -- estos
+# fixtures son justamente lo que el firmware debe seguir tolerando.
 
 set -euo pipefail
+
+ASPECT_FIXTURES=0
+if [[ "${1:-}" == "--aspect-fixtures" ]]; then
+  ASPECT_FIXTURES=1
+  shift
+fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT_DIR="$ROOT_DIR/firmware/test-media"
@@ -108,6 +124,35 @@ if [[ -d "$SIMDISK" ]]; then
     mkdir -p "$SIMDISK/SinArte"
     cp "$OUT_DIR"/SinArte/*.mp3 "$SIMDISK/SinArte/"
   fi
+fi
+
+# -- D-350: portadas NO cuadradas -----------------------------------------
+if [[ "${ASPECT_FIXTURES:-0}" == "1" ]]; then
+  SIMDISK="$ROOT_DIR/firmware/build-sim/simdisk"
+  if [[ ! -d "$SIMDISK" ]]; then
+    echo "ERROR: no existe $SIMDISK -- corre firmware/tools/build_sim.sh primero" >&2
+    exit 1
+  fi
+  echo "==> Generando albumes de prueba con portadas NO cuadradas"
+  # "<nombre>:<ancho>x<alto>". Barras de color SMPTE escaladas a la
+  # proporcion: un recorte con el stride equivocado sale rasgado, no
+  # solo mal encuadrado, asi que el fallo se ve a simple vista.
+  for pair in "Aspecto 1x1:600x600" "Aspecto 4x3:800x600" "Aspecto 16x9:960x540" "Aspecto 1x4:300x1200"; do
+    name="${pair%%:*}"
+    dims="${pair##*:}"
+    dir="$SIMDISK/Music/Aura QA/$name"
+    mkdir -p "$dir"
+    ffmpeg -y -loglevel error -f lavfi -i "smptebars=size=${dims}:rate=1" \
+      -pix_fmt yuvj420p -frames:v 1 "$dir/cover.jpg"
+    ffmpeg -y -loglevel error \
+      -f lavfi -i "sine=frequency=${FREQ}:duration=${DURATION}" \
+      -metadata title="Pista de $name" -metadata artist="$ARTIST" \
+      -metadata album="$name" \
+      -c:a libmp3lame -b:a 128k "$dir/pista.mp3"
+    echo "   $name ($dims)"
+  done
+  echo "==> Recuerda: la base tagcache del simdisk tiene que reconstruirse"
+  echo "    (Ajustes > Actualizar biblioteca) para que aparezcan."
 fi
 
 echo "==> Listo: $OUT_DIR"

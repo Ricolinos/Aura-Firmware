@@ -325,11 +325,21 @@ static fb_data average_color(const fb_data *px, int w, int h)
 bool aura_master_art_decode_fill(const char *path, int clip_off, unsigned long clip_len,
                                  int size, fb_data *out_flat)
 {
+    bool ok;
+
+    aura_master_art_decode_lock();
+    ok = aura_master_art_decode_fill_locked(path, clip_off, clip_len, size, out_flat);
+    aura_master_art_decode_unlock();
+    return ok;
+}
+
+bool aura_master_art_decode_fill_locked(const char *path, int clip_off,
+                                        unsigned long clip_len,
+                                        int size, fb_data *out_flat)
+{
     struct bitmap bm;
     int ret, w, h, box_w = 0, box_h = 0;
     bool ok = false;
-
-    aura_master_art_decode_lock();
 
     bm.width = size;
     bm.height = size;
@@ -378,6 +388,5 @@ bool aura_master_art_decode_fill(const char *path, int clip_off, unsigned long c
     ok = true;
 
 out:
-    aura_master_art_decode_unlock();
     return ok;
 }

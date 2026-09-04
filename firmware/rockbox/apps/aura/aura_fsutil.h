@@ -30,6 +30,7 @@
 #define AURA_FSUTIL_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stddef.h>
 
 /* Borra un arbol completo (archivos y subdirectorios) y al final el
@@ -51,6 +52,13 @@ bool aura_fsutil_clear_dir_except(const char *path, bool (*keep)(const char *nam
  * los bytes leidos, -1 si no se pudo abrir, o -2 si no cabe (el
  * contenido se descarta: un archivo mas grande que el buffer no es el
  * que esperabamos). */
+/* D-350: mtime de UN archivo. Rockbox no tiene stat(): el unico modo de
+ * leer la fecha de un archivo es recorrer su directorio con readdir() y
+ * pedir dir_get_info() de la entrada. Con dircache listo eso se sirve de
+ * RAM; sin dircache es un giro de disco, asi que el llamador decide si
+ * vale la pena. false si el archivo no existe (y *out queda intacto). */
+bool aura_fsutil_file_mtime(const char *path, uint32_t *out);
+
 int aura_fsutil_read_text(const char *path, char *buf, size_t bufsize);
 
 /* Escribe `len` bytes en `path` (crea/trunca). true si se escribio todo. */

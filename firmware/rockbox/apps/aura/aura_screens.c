@@ -1283,7 +1283,16 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
         if (ret <= 0)
             return false;
 
-        /* Centrado sobre lienzo SZxSZ, banda de fondo del shell si el
+        /* D-350: AUDITADO y se queda como esta. Este es el unico decode
+         * de la ronda que NO pasa a fill + center-crop, y a proposito:
+         * un cartel de video es 3:4 POR DISENO (contrato SS D.1, "sin
+         * cambio") y recortarlo al cuadrado le cortaria la cabeza al
+         * cartel. A diferencia de los tres que si se corrigieron, este
+         * nunca supuso que el bitmap fuera cuadrado -- centra usando
+         * bm.width/bm.height reales, que es exactamente por lo que no
+         * tenia el bug.
+         *
+         * Centrado sobre lienzo SZxSZ, banda de fondo del shell si el
          * origen no llena algun eje (letterbox/pillarbox, mismo criterio
          * que photo_thumb_decode_and_cache() en aura_photos.c) -- fila-
          * contigua directo, formato que ya espera aura_coverdrift_draw()
