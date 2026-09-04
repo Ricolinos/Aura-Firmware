@@ -700,11 +700,26 @@ void aura_main(void)
          * Va DESPUES de todas las puertas de animacion de arriba (que
          * solo actuan con `timeout_ticks < 0`) y solo BAJA la cadencia
          * pedida, nunca la sube: una animacion que pidio 20 fps sigue a
-         * 20 fps. Y no se gatea con lcd_active(): con la pantalla
-         * dormida no hay nada que dibujar, pero el flanco hay que verlo
-         * igual para saber cuanto tiempo estuvo puesto el Hold. */
-        if (timeout_ticks < 0 || timeout_ticks > HZ / 2)
-            timeout_ticks = HZ / 2;
+         * 20 fps.
+         *
+         * D-351 (addendum 2): con la pantalla DORMIDA y el bloqueo SIN
+         * armar, no hay nada que sondear y el bucle vuelve a esperar sin
+         * limite -- que es como se comportaba antes de D-351 y lo que no
+         * cuesta bateria. El unico consumidor del Hold en ese estado es
+         * el icono de la barra, y la barra no existe con la pantalla
+         * apagada: se redibuja al despertar, con el boton que la
+         * despierta, y ahi el estado se lee de nuevo.
+         *
+         * Con el bloqueo ARMADO el sondeo se mantiene aunque la pantalla
+         * duerma: `hold_since` tiene que ser el instante real en que se
+         * puso el Hold, no el instante en que alguien volvio a tocar un
+         * boton -- si no, "Tras 1 minuto" mediria desde el sitio
+         * equivocado. */
+        if (lcd_active() || aura_settings.screen_lock_enabled)
+        {
+            if (timeout_ticks < 0 || timeout_ticks > HZ / 2)
+                timeout_ticks = HZ / 2;
+        }
 
         /* D-341: el constructor de maestras en segundo plano se detiene
          * mientras la UI anima (cadencia fina pedida por cualquiera de

@@ -1915,3 +1915,68 @@ NOR y no hay vuelta atrás desde el propio aparato.
       bootloader → firmware; solo desaparecen las dos leyendas.
 - [ ] Leyendas legibles, sin parpadeo, sin retardo añadido.
 - [ ] Modo USB del bootloader: el texto cae **debajo** de la marca.
+
+### D-351, addendum 2 — el bucle vuelve a dormir cuando no hay nada que sondear
+
+El único costo conocido de D-351 era que el bucle principal pasó a despertar
+dos veces por segundo **siempre**. No hace falta siempre:
+
+```c
+if (lcd_active() || aura_settings.screen_lock_enabled)
+    /* tope de HZ/2 */
+```
+
+- **Pantalla dormida y bloqueo SIN armar**: no hay nada que sondear. El único
+  consumidor del Hold en ese estado es el ícono de la barra, y la barra no
+  existe con la pantalla apagada — se redibuja al despertar, con el mismo
+  botón que la despierta, y ahí el estado se lee de nuevo. El bucle vuelve a
+  esperar sin límite, exactamente como antes de D-351.
+- **Bloqueo ARMADO**: el sondeo se mantiene aunque la pantalla duerma.
+  `hold_since` tiene que ser el instante **real** en que se puso el Hold, no
+  el instante en que alguien volvió a tocar un botón: si no, "Tras 1 minuto"
+  mediría desde el sitio equivocado.
+
+**Verificado**: target y simulador **0 errores, 0 warnings**;
+`stack_report.py` verde sin cambio. Con la pantalla despierta y el bloqueo sin
+armar, poner Hold sigue pintando el candado en la barra
+(`29-candado-con-hold.png`, alineación 0.0 px).
+
+**Lo que NO quedó verificado, y por qué**: el caso que este addendum optimiza
+—pantalla **dormida**, despertar con un botón, candado presente— se intentó
+capturar dejando 12 s de inactividad (el temporizador de luz son 10 s) y la
+captura salió mostrando **la pantalla USB**, sin explicación. No se investigó
+por falta de cuota, y **no se envía como evidencia**: una captura que no se
+entiende no prueba nada. Queda en la lista de abajo.
+
+**Para la lista de hardware (D-353)**: la comparación de autonomía en reposo
+debe hacerse **dos veces**, con el bloqueo **desactivado** y **activado** por
+separado — son dos comportamientos distintos del bucle desde este addendum, y
+medir solo uno no dice nada del otro.
+
+---
+
+## REANUDAR (2026-09-04 05:40)
+
+Pausa por cuota, no por bloqueo técnico. **Árbol limpio, todo commiteado, sin
+tag ni Release.** La ronda D-345…D-353 está cerrada y aprobada; lo de abajo es
+lo único pendiente.
+
+**1. Verificar el addendum 2 de D-351 en el estado que optimiza** (único
+pendiente de código de esta sesión):
+   - Reproducir: pantalla dormida (>10 s sin tocar nada), poner Hold,
+     despertar con un botón, comprobar que el candado está en la barra.
+   - **Antes**, entender por qué la captura de ese escenario salió mostrando
+     la pantalla USB (`/tmp/29-sin-explicar.png` si sigue ahí; si no,
+     reproducir con `apple2026_sim_shot.sh <png> 90 "<12 WAIT>,HOLD,SCROLL_FWD"`).
+     Puede ser un artefacto del volcado con la pantalla dormida, o algo real
+     en el camino de despertar. No se dio por bueno ninguno de los dos.
+   - Si resulta ser algo real, es un bug nuevo y va con su propia decisión.
+
+**2. Nada más.** Todo lo demás de la ronda espera al **hardware del dueño**
+(lista en D-353). El release (`v0.4.5-beta` sugerido) lo dispara él después de
+probar.
+
+**Lo que Aura Studio necesita cuando se retome**: contrato v18 (ya
+byte-idéntico), `docs/contracts/library-layout-v1.md` **v1.5** (que copie el de
+este repo, no al revés — ver D-349) y el `AuraPalette.swift` nuevo, que trae
+`tilePlaceholder`.
