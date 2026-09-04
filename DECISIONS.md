@@ -2462,9 +2462,15 @@ la lista de Álbumes en pantalla seguía sin mostrar los dos nuevos. La
 causa real: APFS normaliza a NFD (Unicode descompuesto) los nombres de
 archivo no-ASCII al crearlos desde una herramienta de línea de
 comandos en macOS, y algo en la cadena de lectura de directorio del
-simulador (no aplica al dispositivo real, que usa FAT32/exFAT vía
-Aura Studio en Swift, con su propia normalización) no reconciliaba esa
-forma con la cadena esperada. Solución: la CARPETA usa un nombre
+simulador no reconciliaba esa forma con la cadena esperada. **No
+aplica al dispositivo real**: Aura Studio (Swift, `FileManager` sobre
+FAT32/exFAT) escribe los nombres de carpeta de álbum tal cual llegan
+del tag, sin pasar por la normalización NFD de APFS -- es un artefacto
+específico de crear estos fixtures de simulador desde una shell de
+macOS, no algo que un usuario real vaya a encontrar sincronizando
+desde Studio. Que quede anotado para que nadie lo persiga después
+como si fuera un bug de lectura de tags en el firmware. Solución: la
+CARPETA usa un nombre
 ASCII fijo (`LangFixtureRU`/`LangFixtureDE`) -- el título/artista/álbum
 Unicode real, que es lo único que la UI en verdad lee y dibuja, viaja
 en las etiquetas ID3 (`-metadata title=...`), nunca en el nombre de
