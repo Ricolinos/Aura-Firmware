@@ -2810,3 +2810,58 @@ inconsistencia real, dos piezas de UI con propósitos distintos.
 (solo `README.md`, `docs/readme/*.png`); nada que compilar ni testear
 más allá de lo ya verde en D-358. Enlaces del README revisados a mano
 contra los archivos reales del árbol.
+
+---
+
+## D-360 — Contrato v20: foto de artista a 320×320 (registro; sin código en Aura)
+
+Encargo del dueño (relayado por la sesión maestra), solo contrato --
+**registro de esta decisión, ningún archivo de firmware cambia.**
+
+`.rockbox/aura/artists/<archivo>.jpg` pasa de "cuadrada, lado ≤ 128 px"
+a **cuadrada, 320×320 px, JPEG baseline sRGB, sin ICC, sin progresivo,
+calidad 0.85** -- el mismo formato exacto que `cover.jpg` ya tiene
+desde v1.5 de `docs/contracts/library-layout-v1.md` (D-349, contrato
+v18). Motivo: dar a la foto de artista la misma resolución de origen
+que la carátula de álbum, para que un futuro consumidor que necesite
+más de 130 px (el fondo de "Ahora suena" de Metro-Aura/moonlit.aura ya
+lo hace, decodificando la fuente directamente sin pasar por la caché
+maestra) tenga margen real. **§D.5 no cambia**: la caché MAESTRA de
+foto de artista sigue derivándose a 130×130 -- sigue siendo el lado más
+grande que Aura necesita para Music Flow, y los círculos de 48 px de la
+lista de Artistas siguen saliendo de esa misma maestra sin tocar el
+archivo fuente. Compatibilidad hacia atrás explícita: los tres
+firmwares siguen aceptando fotos de artista ≤ 128 px de bibliotecas
+sincronizadas antes de esta versión, con el mismo fill-crop y
+ampliación que ya usan para cualquier proporción no cuadrada (§D.5) --
+no hay archivo que deje de leerse. Aura Studio reescribe las fotos de
+artista existentes a 320×320 en la primera sincronización que corra
+tras la versión 0.2.1 de Studio.
+
+**Por qué sin código en este repo:** el camino de decodificación de
+Aura hacia la caché maestra (`aura_master_art.c`) ya hace fill-and-
+center-crop desde CUALQUIER tamaño/proporción de origen hacia el lado
+canónico (130×130 para foto de artista) -- lo mismo que ya tolera hoy
+tanto una foto de 128 px como una de proporción no cuadrada de
+bibliotecas viejas. Una fuente de 320 px en vez de 128 solo cambia el
+costo de UN decode (más grande, mismo camino), nunca la lógica.
+Verificado además que `ARTIST_FILE_LEN` (128, en
+`aura_artist_images.c`) es el tope de bytes del NOMBRE de archivo, sin
+relación con la resolución en píxeles -- no hay ninguna otra
+constante `128` en el camino de artistas que pudiera confundirse con
+el tamaño de imagen viejo.
+
+`CONTRATO-firmware-studio.md` → **Versión 20 — 2026-09-05**: párrafo
+de encabezado v20, `§D.3` (formato de la foto en sí) y la fila de
+`.rockbox/aura/artists/<archivo>.jpg` en la tabla de `§D` actualizados;
+`§D.5` deliberadamente sin tocar.
+
+**Verificado**: sin build, sin tests -- solo texto del contrato.
+Releído completo tras editar para confirmar que ninguna otra mención de
+"128" en el archivo quedó desactualizada (las dos apariciones restantes
+son entradas de bitácora histórica de v6/v18, que describen
+correctamente lo que esas versiones hicieron EN SU MOMENTO, y el tope
+de 128 bytes del nombre de artista en el índice, sin relación).
+
+**Aura Studio copiará este archivo entero** (con `diff` completo antes
+de reemplazar, regla de D-349) cuando le toque su fase.
