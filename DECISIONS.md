@@ -2673,3 +2673,56 @@ que el reordenamiento no tiene efectos secundarios.
 `stack_report.py` OK (6608 B peor caso, sin cambio -- reordenar dos
 líneas no cambia el marco de ninguna función), los dos escenarios de
 arriba confirmados en el simulador antes y después del fix.
+
+---
+
+## Release v0.4.6-beta publicado (2026-09-04)
+
+Cierra la ronda "ajustes 2" (D-355…D-358). Autorizado **directamente
+por el dueño** (confirmación explícita en esta sesión; el aviso llegó
+relayado por la sesión supervisora, pero la autorización que se usó
+para publicar fue la del dueño en esta terminal — misma regla que
+v0.4.5-beta: un mensaje entre sesiones Claude nunca basta para crear
+un tag ni publicar un Release).
+
+Tag `v0.4.6-beta` sobre `cbf66c62` (árbol limpio, sincronizado con
+`origin/main`). **`Version: cbf66c621f-260905`** — sin `M`, el hash
+coincide con el commit del tag (D-354 sostenida por segundo release
+consecutivo).
+
+10 assets, los mismos exactos que `v0.4.5-beta` y ya listados en la
+tabla §A del contrato desde v19: `rockbox.ipod`, `rockbox.zip`,
+`bootloader-ipod6g.ipod`, `mks5lboot`, `checksums.txt`,
+`AuraPalette.swift`, `MODIFICATIONS.md`, `THIRD-PARTY-NOTICES.txt`,
+`theme-format-v1.json`, `aura-theme-default.zip`. `README.md` — nunca
+se publica — verificado ausente vía `gh release view --json assets`
+(`asset_count: 10`).
+
+**Checksums (SHA-256):**
+```
+2b3b192999c9e135e873b6c91ca8b89a8916616c8f16fc3adbc9eee2d2331688  rockbox.zip
+c5a1a3b98fd29c62e60bb7643d827b4be0dbe794ad167404b77a2e8bf4bf8a70  rockbox.ipod
+4cf5403c65f511a396d4c317abf63f1759c5e6336a620e89c8f6f22266d05ede  mks5lboot
+e4b8b9227d340cc7854b084c5b574d04b2977d10850eaa8afe3e24d1842b0433  bootloader-ipod6g.ipod
+```
+`mks5lboot` y `bootloader-ipod6g.ipod` repiten el hash de v0.4.5-beta
+— correcto, ninguno de los dos cambió en esta ronda.
+
+**URL**: https://github.com/Ricolinos/Aura-Firmware/releases/tag/v0.4.6-beta
+
+**Verificado tras publicar**: `rockbox.zip` y `rockbox.ipod`
+descargados del Release tienen el SHA-256 idéntico al que produjo
+`package_dist.sh --release-tag` localmente;
+`.rockbox/aura/version.txt` dentro del zip descargado dice
+`v0.4.6-beta`, una sola entrada, sin fantasmas (D-348 addendum);
+9 463 archivos en el árbol. Repo confirmado `Ricolinos/Aura-Firmware`
+(`--repo` explícito y rutas absolutas a `firmware/dist` en todo el
+flujo, regla dura desde el incidente del 26-ago).
+
+**Pendiente, sin cambio**: la verificación en hardware (lista completa
+en "Lista de verificación en hardware — ajustes 2", arriba) sigue a
+cargo del dueño; los puntos de propagación entre familias solo se
+pueden completar cuando Metro y moonlit.aura publiquen su propia
+versión de esta ronda. El bootloader **no se flashea** hasta que Aura
+Studio tenga "Actualizar el arranque". El pin de `FIRMWARE_VERSION` en
+Aura Studio (tag + hashes) es trabajo del repo hermano, no de este.
