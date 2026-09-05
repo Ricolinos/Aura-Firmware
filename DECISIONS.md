@@ -2726,3 +2726,87 @@ pueden completar cuando Metro y moonlit.aura publiquen su propia
 versión de esta ronda. El bootloader **no se flashea** hasta que Aura
 Studio tenga "Actualizar el arranque". El pin de `FIRMWARE_VERSION` en
 Aura Studio (tag + hashes) es trabajo del repo hermano, no de este.
+
+---
+
+## D-359 — README en inglés para el repositorio ya público
+
+Encargo del dueño (relayado por la sesión supervisora), `PLAN-publicacion-
+repos-publicos.md` §B: los cuatro repositorios ya son públicos y cada
+firmware necesita su README en inglés, con capturas reales del
+simulador. Sin código de firmware — solo documentación y assets de
+imagen.
+
+**`README.md` reescrito por completo, en inglés** (el español no se
+conserva, un solo idioma por archivo por regla del plan): estructura de
+siete secciones (What it is/Install, Highlights, Features, Sister
+firmwares, Roadmap, Building from source + Structure, Contributing/
+Decisions + bloque legal §A del plan, copiado literal). Lo que seguía
+siendo cierto del README anterior se tradujo (estructura de
+directorios, guía de compilación, punteros a `DECISIONS.md`/
+`MODIFICATIONS.md`/`CONTRATO-firmware-studio.md`); lo que ya no aplicaba
+a un README orientado a usuario final (instrucciones de terminal fuera
+de "compilar", detalle de infraestructura del contrato) se recortó a
+favor de la instalación de un solo paso vía Aura Studio, tal como pide
+el plan ("Install" nunca son instrucciones de terminal).
+
+**15 capturas nuevas en `docs/readme/`** (320×240 reales del simulador,
+escaladas ×2 a 640×480 con vecino más cercano vía PIL, sin
+interpolación): arranque (maqueta existente, reescalada igual que el
+resto), menú raíz, Álbumes, Music Flow, Ahora suena, letras
+sincronizadas, CoverDrift (fondo ambiental en Extras), cuadrícula de
+Fotos, visor de foto completa, Ajustes, Bloqueo, Acerca de
+(almacenamiento), Cambiar sistema, un idioma no latino (ruso, Ahora
+suena con cirílico completo) y tema claro (Álbumes) -- tema oscuro ya
+cubierto por la mayoría de las demás. `pgrep -fl rockboxui` verificado
+antes de confiar en cada tanda (tres procesos ajenos de sesiones
+hermanas, `Metro-Aura`/`moonlit-aura`, nunca de este repo).
+
+**Biblioteca de demostración nueva, generada para estas capturas**
+(`Music/Aura Demo/` y `Photos/` del simdisk, nunca comiteada --
+`simdisk/` está en `.gitignore`): seis álbumes de una pista con
+portadas de color sólido en la paleta de marca de Aura, nombres y
+artistas genéricos sin relación con música real (`Nocturne`,
+`Vela`, `Perihelion`...), y seis fotos en degradado. Se descartaron a
+propósito los fixtures de rondas anteriores que seguían en el simdisk
+(`Aura QA/Aspecto *`, `Lento *`) por ser barras de prueba poco
+presentables para un README público, y **las fotos previas del
+simdisk resultaron ser en su mayoría contenido real/con copyright**
+(una portada de un álbum real de Gorillaz entre ellas) -- nunca
+adecuado para una captura pública; sustituidas enteras por las seis
+fotos sintéticas nuevas.
+
+**Hallazgo real, dos capas.** Las primeras portadas de prueba
+(generadas con el filtro `gradients` de ffmpeg, luego con `color=`
+liso, ambas con `-pix_fmt yuvj420p`) decodificaban en gris plano
+dentro del firmware pese a verse correctas con Pillow/`ffprobe` --
+mismo síntoma que el hallazgo ya documentado de D-303
+("un JPEG mjpeg de ffmpeg decodifica con colores incorrectos en el
+decoder liviano de Rockbox"), aquí confirmado en un caso nuevo (relleno
+sólido, no solo ruido/gradiente) y con `-pix_fmt yuvj420p` puesto, que
+no alcanza a evitarlo. Se investigó primero la hipótesis de caché de
+arte (`/.aura/art`, `cfcache`) por descarte -- borrar toda caché no lo
+arregló --, antes de aislar la causa real al propio encoder. Solución
+igual a la de D-303: generar los JPEG con Pillow (`Image.new(...).
+save(..., "JPEG")`) en vez de ffmpeg: color correcto de inmediato,
+confirmado en Ahora Suena a pantalla completa. Los `.jpg` de prueba
+generados con `smptebars`/`testsrc` de ffmpeg (patrones de barras, no
+rellenos lisos) sí decodifican bien -- la causa parece estar en el
+encoder de un solo color/gradiente liso de ffmpeg específicamente, no
+en mjpeg en general; no se investigó más a fondo por no ser bloqueante
+una vez con la solución de Pillow en mano.
+
+**Nota aparte, no un bug:** el renglón "Music" del menú raíz
+siempre muestra la descripción `AURA_STR_EMPTY_MUSIC` ("No music yet")
+sin importar si la biblioteca tiene contenido real -- confirmado
+leyendo `root_selection_description()` (`aura_screens.c`) y su
+comentario, que cita `componentes/selection-summary.md`: es "sin
+selección rica" deliberado para esa fila, no una lectura en vivo del
+estado de la base. Investigado porque al principio parecía
+contradecir que Álbumes sí mostrara contenido real -- ninguna
+inconsistencia real, dos piezas de UI con propósitos distintos.
+
+**Verificado**: sin cambios de código de firmware en esta decisión
+(solo `README.md`, `docs/readme/*.png`); nada que compilar ni testear
+más allá de lo ya verde en D-358. Enlaces del README revisados a mano
+contra los archivos reales del árbol.
