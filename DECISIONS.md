@@ -2880,3 +2880,13 @@ de reemplazar, regla de D-349) cuando le toque su fase.
 **Deliberadamente no ejecutado** (resto del plan de D-315, pendiente de medición en hardware): (4) StatusBar compuesta una vez y solo desplazada, (5) prerender de estados finales al estilo `s_push_fb`, (6) LUT de la sombra SDF del álbum, y el remaquetado invariante del texto de letras. La definición del efecto NO se degradó en ningún nivel: la coreografía, los ~330ms nominales y el resultado visual por cuadro son los mismos; lo que cambia es el costo por cuadro y que la duración en pared ahora sí está acotada.
 
 **Verificado**: build ARM completo (`firmware/build-ipod6g`) limpio -- solo el `-Wtype-limits` preexistente de `aura_style.c`; simulador (`build_sim.sh`) limpio; suite de host **17/17**. Arranque del simulador verificado con captura headless (menú principal con íconos servidos ya por el caché, sin artefactos). La medición de ms/cuadro en hardware real queda para el dueño, con la instrumentación D-300 lista (build DEBUG).
+
+## D-362 — La instrumentación D-300 del morph se vuelca a `/.aura/morph-log.txt` en builds DEBUG + guía de medición
+
+**Encargo**: dejar documentado el procedimiento exacto para medir en el iPod real los ms/cuadro del morph del Modo 4 (el paso que D-315 dejó pendiente para el dueño).
+
+**Hallazgo previo**: el canal previsto no funciona en hardware -- `DEBUGF` formatea a un buffer y `debug()` del target s5l8702 (iPod 6g) es un no-op, sin salida serial, y Aura no expone el menú de depuración de Rockbox (`logf` tampoco era opción: nada en `apps/aura/` lo usa y el "logf dump" vive en ese mismo menú inaccesible).
+
+**Hecho**: en builds DEBUG (`#ifdef DEBUG`, no-op sin costo en producción, mismo criterio que `DEBUGF`), las dos líneas de medición de `mode4_morph()` (barrido principal y fase de sombra) se escriben además a `/.aura/morph-log.txt` en el disco del iPod -- truncado una vez por arranque (sesión limpia por reinicio) y escrito DESPUÉS de cada fase medida, fuera de la ventana cronometrada. Se lee conectando el iPod por USB, sin menús ni consola. Procedimiento completo (build `--type=ad`, instalación, medición, tabla de interpretación frames/ticks, restauración del build normal) documentado en `docs/guia-medicion-rendimiento.md`.
+
+**Verificado**: build DEBUG (`firmware/build-ipod6g-debug`) recompilado y empaquetado (`rockbox.zip`) con la ruta del log presente en el binario; build normal ARM y simulador limpios (solo el `-Wtype-limits` preexistente).

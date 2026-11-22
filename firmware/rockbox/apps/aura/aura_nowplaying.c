@@ -315,6 +315,46 @@ bool aura_nowplaying_take_fullscreen_exit(void)
 
 static void mode4_morph(int dir); /* definida junto a draw_player */
 
+/* Volcado a disco de la instrumentacion D-300, SOLO en builds DEBUG:
+ * DEBUGF no tiene salida legible en el iPod 6g (debug() del target
+ * s5l8702 es un no-op y Aura no expone el menu debug de Rockbox), asi
+ * que la misma linea se agrega a /.aura/morph-log.txt y el dueno la lee
+ * conectando el iPod por USB (procedimiento completo en
+ * docs/guia-medicion-rendimiento.md). El archivo se TRUNCA una vez por
+ * arranque (cada sesion de medicion empieza limpia) y la escritura
+ * corre DESPUES de la fase medida, fuera de la ventana cronometrada.
+ * En builds normales es un no-op sin costo, igual que DEBUGF. */
+#ifdef DEBUG
+static void m4_log_line(const char *phase, int frames, long ticks)
+{
+    static bool truncated = false;
+    char line[96];
+    int flags = O_WRONLY | O_CREAT;
+    int fd, len;
+
+    if (!truncated)
+    {
+        flags |= O_TRUNC; /* una sesion de medicion limpia por arranque */
+        truncated = true;
+    }
+    else
+    {
+        flags |= O_APPEND;
+    }
+
+    fd = open("/.aura/morph-log.txt", flags, 0666);
+    if (fd < 0)
+        return;
+    len = snprintf(line, sizeof(line), "mode4_morph %s: %d frames en %ld ticks\n",
+                   phase, frames, ticks);
+    write(fd, line, len);
+    close(fd);
+}
+#else
+#define m4_log_line(phase, frames, ticks) \
+    do { (void)(frames); (void)(ticks); } while (0)
+#endif
+
 /* PLAN-niveles-fx.md §8.2 (matriz de niveles del dueno, 2026-08-18):
  * punto unico de entrada/salida del Modo 4 -- decide QUE transicion corre
  * segun Animaciones, sin que cada llamador repita la eleccion:
@@ -1780,6 +1820,7 @@ static void mode4_morph(int dir)
     }
     DEBUGF("aura_nowplaying: mode4_morph barrido principal, %d frames en %ld ticks\n",
            frames, (long)(current_tick - morph_start_tick));
+    m4_log_line("barrido principal", frames, (long)(current_tick - morph_start_tick));
     (void)morph_start_tick; /* DEBUGF es no-op fuera de builds DEBUG -- evita -Wunused-variable */
 
     if (dir > 0)
@@ -1868,6 +1909,7 @@ static void mode4_morph(int dir)
         }
         DEBUGF("aura_nowplaying: mode4_morph fase extra (sombra), %d frames en %ld ticks\n",
                sframes, (long)(current_tick - shadow_start_tick));
+        m4_log_line("fase extra (sombra)", sframes, (long)(current_tick - shadow_start_tick));
         (void)shadow_start_tick; /* DEBUGF es no-op fuera de builds DEBUG -- evita -Wunused-variable */
     }
     s_m4_shadow_a = 256;
