@@ -383,16 +383,25 @@ animada — el llamador hace el push genérico después, no un segundo
 morph).
 
 **Optimización de rendimiento del morph canónico (Todas):** el dueño
-reportó el morph "muy lento en hardware". El perfil estático
+reportó el morph "muy lento en hardware" — y con las animaciones al
+máximo, "exageradamente lento". El perfil estático
 (PLAN-niveles-fx.md §6) identificó como sospechoso dominante la falta de
 caché de íconos en RAM (~13-15 lecturas de BMP desde disco por cuadro, sin
 ningún caché — `aura_widgets.c`/`aura_style.c`), más divisiones enteras
 por píxel en el tinte de la hoja de vidrio y `lcd_update()` completo por
-cuadro. El plan de optimización (caché de íconos, LUTs, prerender de
-invariantes) conserva la definición del efecto — es trabajo de
-rendimiento pendiente de ejecutar y medir en hardware real con la
-instrumentación D-300 ya presente en `mode4_morph()`, no un cambio de
-niveles.
+cuadro. Ejecutado en D-361: caché de íconos/máscaras en RAM
+(`aura_style.c`), LUT del degradado del vidrio e invariantes fuera de los
+bucles de píxel (`aura_nowplaying.c`), y — la pieza que explicaba el
+"peor exactamente en Todas" — el ritmo del morph pasó de conteo de
+cuadros con espera fija a **reloj con presupuesto de pared**: el morph
+dura ~330ms siempre, con salto de cuadros natural si el render se atrasa
+(antes: `cuadros × (render + espera)`, sin tope, y el doble de cuadros en
+Todas duplicaba el estiramiento). Pendientes del plan original de D-315:
+StatusBar compuesta una vez, prerender de estados finales, LUT de la
+sombra SDF y remaquetado invariante del texto de letras — se miden en
+hardware real con la instrumentación D-300 ya presente en `mode4_morph()`.
+La definición del efecto no cambia: misma coreografía, mismos ~330ms
+nominales, mismo resultado visual por cuadro.
 
 ## Pendiente de definir
 

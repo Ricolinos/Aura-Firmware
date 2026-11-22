@@ -91,6 +91,11 @@ static char s_candidate_paths[A26_FONT_STYLE_COUNT][MAX_PATH];
 static char s_active_id[AURA_STYLE_ID_LEN] = AURA_STYLE_ID_DEFAULT;
 static unsigned s_generation = 0;
 
+/* Definida junto al cache de iconos, mas abajo (seccion "Iconos") --
+ * aura_style_delete() la necesita para invalidar iconos de un estilo
+ * que acaba de desaparecer del disco. */
+static void icon_cache_flush(void);
+
 static unsigned s_palette[2][TOKEN_COUNT]; /* [[0]=claro, [1]=oscuro][token] */
 static unsigned s_category_settings_gray_rgb24;
 static unsigned s_category_video_rgb24;
@@ -440,25 +445,142 @@ bool aura_style_delete(const char *id)
         return false;
 
     snprintf(path, sizeof(path), "%s/%s", AURA_STYLES_DIR, id);
-    return aura_fsutil_remove_tree(path);
+    {
+        bool removed = aura_fsutil_remove_tree(path);
+
+        /* Los iconos cacheados de ese estilo ya no existen en disco --
+         * sin este vaciado se servirian pixeles de un estilo borrado. */
+        if (removed)
+            icon_cache_flush();
+        return removed;
+    }
 }
 
 /* -- Iconos, con fallback por archivo al default ----------------------- */
+
+/* Cache de iconos/mascaras en RAM (ejecuta el plan del perfil estatico
+ * de D-315, optimizacion (1) -- "el morph de Letras se siente lento",
+ * sospechoso dominante: cada icono del reproductor (~13-15 por cuadro:
+ * bateria, transporte, modos, estrellas) se leia y decodificaba de
+ * DISCO en cada cuadro de toda animacion, ~250-285 aperturas en los
+ * 330ms del morph del Modo 4 sobre el HDD del iPod; mismo patron de
+ * cache en RAM que D-224 uso para "coverflow muy lento"). Beneficia a
+ * todo el sistema, no solo al morph: TODA lectura de icono pasa por
+ * aura_style_read_icon_bmp().
+ *
+ * Clave = ruta absoluta ya resuelta (lleva dentro el estilo activo y la
+ * variante de tema, sin ambiguedad). Invalidacion: por generacion de
+ * estilo (s_generation sube en cada try_activate(), exito o fallback)
+ * y al borrar un estilo (aura_style_delete()). Desalojo: pool lineal;
+ * si una entrada nueva no cabe, el cache se vacia entero y se repuebla
+ * solo -- el conjunto de trabajo real (iconos de <=60px) cabe con
+ * margen de sobra, asi que el vaciado no ocurre en caliente; y si
+ * ocurriera, el costo es releer de disco UNA vez, nunca un resultado
+ * incorrecto. Tambien se cachean los FALLOS (size 0): el icono que el
+ * estilo activo no trae (y cae al default) pega en disco una vez por
+ * generacion en vez de una vez por cuadro.
+ *
+ * Seguro por el mismo invariante de siempre: todos los llamadores corren
+ * en el hilo de UI, sin anidacion. */
+#define ICON_CACHE_SLOTS   64
+#define ICON_CACHE_POOL    (96 * 1024)
+#define ICON_CACHE_MAX_BMP (16 * 1024) /* el mas grande hoy: 60x60 RGB565 = 7 200 B */
+
+typedef struct {
+    char path[MAX_PATH];
+    unsigned int offset;   /* dentro de s_icon_cache_pool */
+    unsigned int size;     /* 0 = fallo cacheado */
+    short width;
+    short height;
+} icon_cache_entry_t;
+
+static icon_cache_entry_t s_icon_cache[ICON_CACHE_SLOTS];
+static int s_icon_cache_count = 0;
+static unsigned int s_icon_cache_used = 0;
+static unsigned s_icon_cache_generation = 0;
+static unsigned char s_icon_cache_pool[ICON_CACHE_POOL];
+
+static void icon_cache_flush(void)
+{
+    s_icon_cache_count = 0;
+    s_icon_cache_used = 0;
+    s_icon_cache_generation = s_generation;
+}
+
+static int icon_cache_read(const char *path, struct bitmap *bm, size_t bufsize)
+{
+    icon_cache_entry_t *e;
+    int i, ret;
+
+    for (i = 0; i < s_icon_cache_count; i++)
+    {
+        if (!strcmp(s_icon_cache[i].path, path))
+        {
+            e = &s_icon_cache[i];
+            if (e->size == 0)
+                return -1; /* fallo cacheado (ver header del cache) */
+            if (e->size > bufsize)
+                /* No cabe en el buffer del llamador: directo de disco y
+                 * SIN volver a guardar (una segunda entrada de la misma
+                 * ruta nunca se consultaria -- la primera siempre
+                 * coincide antes). */
+                return read_bmp_file(path, bm, bufsize, FORMAT_NATIVE, NULL);
+            memcpy(bm->data, s_icon_cache_pool + e->offset, e->size);
+            bm->width = e->width;
+            bm->height = e->height;
+            return (int)e->size;
+        }
+    }
+
+    ret = read_bmp_file(path, bm, bufsize, FORMAT_NATIVE, NULL);
+
+    if (s_icon_cache_count < ICON_CACHE_SLOTS
+        && ret <= ICON_CACHE_MAX_BMP)
+    {
+        /* Par a la paridad de fb_data (2 B) -- el pool se recorre como
+         * arreglo de pixeles nativos al copiar de vuelta. */
+        unsigned int sz = (ret > 0) ? (((unsigned int)ret + 1) & ~1u) : 0;
+
+        if (s_icon_cache_used + sz > ICON_CACHE_POOL)
+            icon_cache_flush();
+        e = &s_icon_cache[s_icon_cache_count++];
+        strlcpy(e->path, path, sizeof(e->path));
+        e->offset = s_icon_cache_used;
+        e->size = sz;
+        if (sz > 0)
+        {
+            memcpy(s_icon_cache_pool + s_icon_cache_used, bm->data,
+                   (size_t)ret);
+            s_icon_cache_used += sz;
+            e->width = (short)bm->width;
+            e->height = (short)bm->height;
+        }
+        else
+        {
+            e->width = 0;
+            e->height = 0;
+        }
+    }
+    return ret;
+}
 
 int aura_style_read_icon_bmp(const char *rel, struct bitmap *bm, size_t bufsize)
 {
     char path[MAX_PATH];
     int ret;
 
+    if (s_icon_cache_generation != s_generation)
+        icon_cache_flush();
+
     if (!aura_style_is_default())
     {
         snprintf(path, sizeof(path), "%s/%s/icons/%s",
                   AURA_STYLES_DIR, s_active_id, rel);
-        ret = read_bmp_file(path, bm, bufsize, FORMAT_NATIVE, NULL);
+        ret = icon_cache_read(path, bm, bufsize);
         if (ret > 0)
             return ret;
     }
 
     snprintf(path, sizeof(path), "%s/aura/%s", ICON_DIR, rel);
-    return read_bmp_file(path, bm, bufsize, FORMAT_NATIVE, NULL);
+    return icon_cache_read(path, bm, bufsize);
 }

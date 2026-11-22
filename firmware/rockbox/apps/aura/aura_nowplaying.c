@@ -259,6 +259,18 @@ static char s_loaded_path[MAX_PATH];
 static bool s_panel_colors_valid = false;
 static unsigned s_panel_top = 0, s_panel_bot = 0, s_panel_ink = 0;
 
+/* LUT del degradado diagonal del vidrio (ejecuta la optimizacion (3)
+ * del plan de D-315): m4_grad_diag() depende solo de (x_rel + y), con
+ * rango acotado [0, M4_RPANEL_W + A26_SCREEN_HEIGHT), y de los colores
+ * del panel (fijos por pista). Antes se recalculaba con un blend y una
+ * division por cada uno de los ~45 600 pixeles de la hoja EN CADA
+ * CUADRO del morph (ARM sin divisor por hardware). Se construye una sola
+ * vez por pista dentro de ensure_panel_colors() -- mismo punto y misma
+ * cadencia de invalidacion que los propios colores (reload_for_track()
+ * apaga s_panel_colors_valid), asi que los valores son byte-identicos
+ * a los que producia la formula original. */
+static unsigned s_m4_grad_lut[M4_RPANEL_W + A26_SCREEN_HEIGHT];
+
 /* Cache de draw_cover_tilted() (seguimiento de D-229, item 1: el
  * candidato de "recompute per-frame" que D-229 dejo sin tocar por falta
  * de confianza). La proyeccion de perspectiva por columna (aura_flow.c)
@@ -619,6 +631,18 @@ static unsigned scale_rgb_pct(int r8, int g8, int b8, int pct)
     return LCD_RGBPACK(r8, g8, b8);
 }
 
+/* Construye la LUT del degradado diagonal una vez por pista (ver
+ * s_m4_grad_lut): la MISMA formula que m4_grad_diag() aplicaba por
+ * pixel, evaluada una sola vez por valor posible de (x_rel + y). */
+static void build_m4_grad_lut(void)
+{
+    int d;
+
+    for (d = 0; d < M4_RPANEL_W + A26_SCREEN_HEIGHT; d++)
+        s_m4_grad_lut[d] = a26_shell_blend(s_panel_top, s_panel_bot,
+            d * 256 / (M4_RPANEL_W + A26_SCREEN_HEIGHT));
+}
+
 static void ensure_panel_colors(void)
 {
     const fb_data *px = (const fb_data *)s_art_buf;
@@ -634,6 +658,7 @@ static void ensure_panel_colors(void)
         s_panel_top = a26_color(A26_SELECTION_FILL);
         s_panel_bot = a26_color(A26_SHELL_RAIL);
         s_panel_ink = a26_color(A26_TEXT_PRIMARY);
+        build_m4_grad_lut();
         s_panel_colors_valid = true;
         return;
     }
@@ -661,18 +686,20 @@ static void ensure_panel_colors(void)
     s_panel_ink = (lum < 140)
         ? (unsigned)AURA_DS_METRICS_SELECTOR_CONTENT_TINT_HEX_ON_ACCENT
         : scale_rgb_pct(r8, g8, b8, 22);
+    build_m4_grad_lut();
     s_panel_colors_valid = true;
 }
 
 /* Degradado DIAGONAL del panel derecho: interpola del color promedio
  * aclarado (esquina superior izquierda de la hoja) al oscurecido
  * (inferior derecha). `x_rel` es la columna relativa al borde de la
- * hoja. */
+ * hoja. El valor sale de la LUT precalculada por pista (D-315, ver
+ * s_m4_grad_lut) -- identico al blend original, sin recalcularlo por
+ * pixel. */
 static unsigned m4_grad_diag(int x_rel, int y)
 {
     ensure_panel_colors();
-    return a26_shell_blend(s_panel_top, s_panel_bot,
-                            (x_rel + y) * 256 / (M4_RPANEL_W + A26_SCREEN_HEIGHT));
+    return s_m4_grad_lut[x_rel + y];
 }
 
 /* Tinta de texto sobre la hoja: la tinta legible por luminancia contra
@@ -705,6 +732,10 @@ static void draw_m4_right_panel(int t256)
 {
     int x0 = MORPH_PANEL_W + m4_panel_dx(t256);
     int x, y, sx;
+    /* D-315, optimizacion (2): invariante de la pantalla entera, fuera
+     * de los bucles de pixel (antes se consultaba en CADA iteracion del
+     * bucle de la franja de sombra). */
+    const bool shadows = aura_shadows_enabled();
 
     if (t256 <= 0 || x0 >= A26_SCREEN_WIDTH)
         return;
@@ -724,7 +755,7 @@ static void draw_m4_right_panel(int t256)
          * primer cuadro dejaba una banda vertical flotando sobre el
          * contenido viejo antes de que la hoja llegara debajo. */
         for (sx = MORPH_PANEL_W;
-             aura_shadows_enabled() && sx < MORPH_PANEL_W + M4_PANEL_SHADOW_W;
+             shadows && sx < MORPH_PANEL_W + M4_PANEL_SHADOW_W;
              sx++)
         {
             if (sx < x0)
@@ -1657,7 +1688,10 @@ static void draw_player(const struct mp3entry *id3, int scrub_preview_ms, int t2
 static void mode4_morph(int dir)
 {
     struct mp3entry *id3 = audio_current_track();
-    int frames, frame_delay, i;
+    int frames = 0, frame_period;
+    long i = 0;
+    int last_t = -1;
+    long dur_ticks;
     /* D-300 (diagnostico de rendimiento, encargo del dueno: "el morph
      * de Letras se siente lento"): mismo criterio de instrumentacion
      * que TRANSITION_LOG en aura_transitions.c (Fase 16, PLAN-UX.md) --
@@ -1670,57 +1704,79 @@ static void mode4_morph(int dir)
     if (!id3 || !lcd_active() || aura_settings.animation_mode == AURA_ANIM_NONE)
         return;
 
-    if (aura_settings.animation_mode == AURA_ANIM_ALL)
-    {
-        frames = M4_MORPH_MS * 60 / 1000;
-        frame_delay = HZ / 60;
-    }
-    else
-    {
-        frames = M4_MORPH_MS * 30 / 1000;
-        frame_delay = HZ / 30;
-    }
+    /* Ritmo POR RELOJ, no por conteo de cuadros (D-315, encargo del
+     * dueno: "exageradamente lento con las animaciones al maximo"). La
+     * version vieja dormia frame_delay DESPUES de renderizar cada
+     * cuadro: la duracion real era cuadros x (render + espera), sin
+     * tope -- un solo cuadro caro estiraba el morph de ~330ms a
+     * segundos en pared, y como Animaciones=Todas dibuja el DOBLE de
+     * cuadros que Minimas (60 vs 30 fps), el estiramiento era doble de
+     * visible exactamente en el nivel maximo. Ahora `t` sale del reloj:
+     * el morph dura M4_MORPH_MS en pared siempre; si el render de un
+     * cuadro se pasa de su slot, el siguiente sale ya con el `t` que le
+     * toca (salto de cuadros natural) en vez de acumular retraso, y si
+     * el render es rapido solo se duerme lo que FALTA para el slot
+     * siguiente, no el periodo completo. */
+    dur_ticks = M4_MORPH_MS * HZ / 1000;
+    frame_period = (aura_settings.animation_mode == AURA_ANIM_ALL)
+        ? HZ / 60 : HZ / 30;
+    if (frame_period < 1)
+        frame_period = 1;
 
-    for (i = 1; i <= frames; i++)
+    for (;;)
     {
-        int t = 256 * i / frames; /* fundido lineal de contenido */
+        long elapsed = current_tick - morph_start_tick;
+        bool last = elapsed >= dur_ticks;
+        int t = last ? 256 : (int)(elapsed * 256 / dur_ticks);
         int dy;
+        long slot;
 
-        if (dir < 0)
-            t = 256 - t;
-        /* La sombra del panel izquierdo aparece con su propio fade
-         * DESPUES del acople (fase extra abajo); al salir se va con
-         * el morph. */
-        s_m4_shadow_a = (dir > 0) ? 0 : t;
-        a26_shell_clear_screen();
-
-        /* La barra de estado se DESLIZA hacia arriba con el morph
-         * (correccion 2026-08-12: antes desaparecia de golpe). */
-        dy = A26_LAYOUT_STATUSBAR_HEIGHT * t / 256;
-        if (dy < A26_LAYOUT_STATUSBAR_HEIGHT)
+        i++;
+        if (t != last_t || last)
         {
-            aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH,
-                                          aura_str(AURA_STR_NOWPLAYING));
-            if (dy > 0)
+            last_t = t;
+            if (dir < 0)
+                t = 256 - t;
+            /* La sombra del panel izquierdo aparece con su propio fade
+             * DESPUES del acople (fase extra abajo); al salir se va con
+             * el morph. */
+            s_m4_shadow_a = (dir > 0) ? 0 : t;
+            a26_shell_clear_screen();
+
+            /* La barra de estado se DESLIZA hacia arriba con el morph
+             * (correccion 2026-08-12: antes desaparecia de golpe). */
+            dy = A26_LAYOUT_STATUSBAR_HEIGHT * t / 256;
+            if (dy < A26_LAYOUT_STATUSBAR_HEIGHT)
             {
-                int yy;
+                aura_status_bar_v2_draw_auto(0, A26_SCREEN_WIDTH,
+                                              aura_str(AURA_STR_NOWPLAYING));
+                if (dy > 0)
+                {
+                    int yy;
 
-                for (yy = 0; yy < A26_LAYOUT_STATUSBAR_HEIGHT - dy; yy++)
-                    memcpy(FBADDR(0, yy), FBADDR(0, yy + dy),
-                           A26_SCREEN_WIDTH * sizeof(fb_data));
-                lcd_set_foreground(a26_color(A26_SHELL_BG));
-                for (yy = A26_LAYOUT_STATUSBAR_HEIGHT - dy;
-                     yy < A26_LAYOUT_STATUSBAR_HEIGHT; yy++)
-                    lcd_hline(0, A26_SCREEN_WIDTH - 1, yy);
+                    for (yy = 0; yy < A26_LAYOUT_STATUSBAR_HEIGHT - dy; yy++)
+                        memcpy(FBADDR(0, yy), FBADDR(0, yy + dy),
+                               A26_SCREEN_WIDTH * sizeof(fb_data));
+                    lcd_set_foreground(a26_color(A26_SHELL_BG));
+                    for (yy = A26_LAYOUT_STATUSBAR_HEIGHT - dy;
+                         yy < A26_LAYOUT_STATUSBAR_HEIGHT; yy++)
+                        lcd_hline(0, A26_SCREEN_WIDTH - 1, yy);
+                }
             }
-        }
 
-        draw_player(id3, (int)s_scrub_preview_ms, t);
-        lcd_update();
+            draw_player(id3, (int)s_scrub_preview_ms, t);
+            lcd_update();
+            frames++;
+        }
+        if (last)
+            break;
         if (button_queue_full())
             button_clear_queue();
-        if (i < frames)
-            sleep(frame_delay);
+        slot = morph_start_tick + i * frame_period;
+        if (current_tick < slot)
+            sleep(slot - current_tick);
+        else
+            yield(); /* atrasados: cede sin dormir; el cuadro sale ya */
     }
     DEBUGF("aura_nowplaying: mode4_morph barrido principal, %d frames en %ld ticks\n",
            frames, (long)(current_tick - morph_start_tick));
@@ -1750,10 +1806,16 @@ static void mode4_morph(int dir)
          * siguiente solo recalcula el segundo blend (sombra sobre esa
          * base ya fija) para esos 8 columnas, con `lcd_update_rect()`
          * acotado a esa franja en vez de voltear la pantalla entera. */
-        int sframes = frames / 2;
+        int sframes = 0;
         long shadow_start_tick = current_tick;
+        long shadow_ticks = dur_ticks / 2; /* ~la mitad del morph */
+        long j = 0;
+        int last_a = -1;
         int x0 = MORPH_PANEL_W + m4_panel_dx(256);
         static fb_data stripe_base[A26_SCREEN_HEIGHT][M4_PANEL_SHADOW_W];
+        /* D-315, optimizacion (2): invariante fuera del bucle de pixel
+         * (antes se consultaba por CADA columna de CADA fila). */
+        const bool shadows = aura_shadows_enabled();
         int yy, sx;
 
         for (yy = 0; yy < A26_SCREEN_HEIGHT; yy++)
@@ -1761,29 +1823,48 @@ static void mode4_morph(int dir)
                 if (MORPH_PANEL_W + sx >= x0)
                     stripe_base[yy][sx] = *FBADDR(MORPH_PANEL_W + sx, yy);
 
-        for (i = 1; i <= sframes; i++)
+        /* Mismo ritmo por reloj que el barrido principal: esta fase
+         * dura shadow_ticks en pared, con salto de cuadros natural si
+         * el render se atrasa. */
+        for (;;)
         {
-            s_m4_shadow_a = 256 * i / sframes;
+            long elapsed = current_tick - shadow_start_tick;
+            bool last = elapsed >= shadow_ticks;
+            int a = last ? 256 : (int)(elapsed * 256 / shadow_ticks);
+            long slot;
 
-            for (yy = 0; yy < A26_SCREEN_HEIGHT; yy++)
+            j++;
+            if (a != last_a || last)
             {
-                fb_data *row = FBADDR(0, yy);
+                last_a = a;
+                s_m4_shadow_a = a;
 
-                for (sx = 0; aura_shadows_enabled() && sx < M4_PANEL_SHADOW_W; sx++)
+                for (yy = 0; yy < A26_SCREEN_HEIGHT; yy++)
                 {
-                    if (MORPH_PANEL_W + sx < x0)
-                        continue;
-                    row[MORPH_PANEL_W + sx] = a26_shell_blend(stripe_base[yy][sx],
-                        LCD_RGBPACK(0, 0, 0),
-                        88 * (M4_PANEL_SHADOW_W - sx) * s_m4_shadow_a
-                            / (M4_PANEL_SHADOW_W * 256));
+                    fb_data *row = FBADDR(0, yy);
+
+                    for (sx = 0; shadows && sx < M4_PANEL_SHADOW_W; sx++)
+                    {
+                        if (MORPH_PANEL_W + sx < x0)
+                            continue;
+                        row[MORPH_PANEL_W + sx] = a26_shell_blend(stripe_base[yy][sx],
+                            LCD_RGBPACK(0, 0, 0),
+                            88 * (M4_PANEL_SHADOW_W - sx) * s_m4_shadow_a
+                                / (M4_PANEL_SHADOW_W * 256));
+                    }
                 }
+                lcd_update_rect(MORPH_PANEL_W, 0, M4_PANEL_SHADOW_W, A26_SCREEN_HEIGHT);
+                sframes++;
             }
-            lcd_update_rect(MORPH_PANEL_W, 0, M4_PANEL_SHADOW_W, A26_SCREEN_HEIGHT);
+            if (last)
+                break;
             if (button_queue_full())
                 button_clear_queue();
-            if (i < sframes)
-                sleep(frame_delay);
+            slot = shadow_start_tick + j * frame_period;
+            if (current_tick < slot)
+                sleep(slot - current_tick);
+            else
+                yield();
         }
         DEBUGF("aura_nowplaying: mode4_morph fase extra (sombra), %d frames en %ld ticks\n",
                sframes, (long)(current_tick - shadow_start_tick));
