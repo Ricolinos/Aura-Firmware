@@ -1392,6 +1392,38 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
     }
 }
 
+/* D-365: registro de imagenes SIN caratula decodificable (archivo
+ * ausente/corrupto, album sin arte) -- se marcan en el primer intento
+ * fallido y no se reintentan mientras pool y generacion de biblioteca
+ * sigan vigentes. El llamador las SALTA antes de dibujar (ver
+ * drift_skip_undecodable()): CoverDrift solo muestra imagenes reales,
+ * nunca el placeholder solido (encargo del dueno: "siempre se deben ver
+ * imagenes, no elementos vacios"). Un fallo TRANSITORIO (disco ocupado)
+ * tambien marca -- mismo criterio de no-reintento que ya tenian los
+ * slots; se reintenta en el siguiente cambio de pool/generacion. */
+static bool s_drift_decode_failed[AURA_DRIFT_POOL_MAX];
+static drift_pool_t s_drift_decode_failed_pool = AURA_DRIFT_POOL_MUSIC;
+static int s_drift_decode_failed_gen = -1;
+
+static bool drift_decode_failed(int pool_idx)
+{
+    return s_drift_decode_failed_pool == s_drift_active_pool
+           && s_drift_decode_failed_gen == s_drift_album_pool_generation
+           && s_drift_decode_failed[pool_idx];
+}
+
+static void drift_mark_decode_failed(int pool_idx)
+{
+    if (s_drift_decode_failed_pool != s_drift_active_pool
+        || s_drift_decode_failed_gen != s_drift_album_pool_generation)
+    {
+        memset(s_drift_decode_failed, 0, sizeof(s_drift_decode_failed));
+        s_drift_decode_failed_pool = s_drift_active_pool;
+        s_drift_decode_failed_gen = s_drift_album_pool_generation;
+    }
+    s_drift_decode_failed[pool_idx] = true;
+}
+
 /* D-364: true si algun slot retiene `pool_idx` decodificado del pool y
  * la generacion de biblioteca VIGENTES (aunque el bitmap todavia no este
  * listo -- el indice se marca ANTES de decodificar, ver
@@ -1424,6 +1456,10 @@ static void drift_slot_store(bool slot_a, int pool_idx)
             s_drift_album_bmp_a.data = (char *)s_drift_album_pixels_a;
             s_drift_album_images[pool_idx].bmp = &s_drift_album_bmp_a;
         }
+        else
+        {
+            drift_mark_decode_failed(pool_idx);
+        }
     }
     else
     {
@@ -1437,6 +1473,10 @@ static void drift_slot_store(bool slot_a, int pool_idx)
             s_drift_album_bmp_b.height = SZ;
             s_drift_album_bmp_b.data = (char *)s_drift_album_pixels_b;
             s_drift_album_images[pool_idx].bmp = &s_drift_album_bmp_b;
+        }
+        else
+        {
+            drift_mark_decode_failed(pool_idx);
         }
     }
 }
@@ -1480,23 +1520,49 @@ static void ensure_drift_albums_decoded(void)
     if (active < 0 || active >= pool_count)
         return;
 
-    if (!drift_slot_holds(active))
+    /* D-365: las marcadas como sin caratula decodificable no se
+     * reintentan -- el llamador las salta antes de dibujar. */
+    if (!drift_slot_holds(active) && !drift_decode_failed(active))
         drift_slot_store_needed(active, prev);
 
     if (prev >= 0 && prev < pool_count && aura_coverdrift_prev_needed()
-        && !drift_slot_holds(prev))
+        && !drift_slot_holds(prev) && !drift_decode_failed(prev))
         drift_slot_store_needed(prev, active);
 
     /* El pre-decode espera a que el activo ya este residente: asi, al
      * montar CoverDrift, las dos decodificaciones (activo + siguiente)
      * caen en cuadros distintos en vez de duplicar el costo del primer
      * cuadro. */
-    if (pool_count > 1 && drift_slot_holds(active)
+    if (pool_count > 1 && (drift_slot_holds(active)
+                           || drift_decode_failed(active))
         && !aura_coverdrift_prev_needed())
     {
         int next = (active + 1) % pool_count;
-        if (!drift_slot_holds(next))
+        if (!drift_slot_holds(next) && !drift_decode_failed(next))
             drift_slot_store_needed(next, active);
+    }
+}
+
+/* D-365: si la imagen activa resulto NO tener caratula decodificable
+ * (marcada en el intento de este mismo cuadro o en el pre-decode de
+ * ciclos anteriores), saltarla ANTES de dibujar, y asi sucesivamente
+ * mientras sigan apareciendo marcadas -- CoverDrift solo muestra
+ * imagenes reales, nunca el placeholder solido. Acotado a `count`
+ * saltos: si TODAS las imagenes del pool fallaran (caso extremo), se
+ * queda en la ultima en vez de girar para siempre. */
+static void drift_skip_undecodable(int width, int count)
+{
+    int guard = count;
+
+    while (guard-- > 0)
+    {
+        int active = aura_coverdrift_active_index();
+
+        if (active < 0 || active >= count || !drift_decode_failed(active))
+            break;
+
+        aura_coverdrift_skip_current(width, count);
+        ensure_drift_albums_decoded();
     }
 }
 
@@ -1696,6 +1762,7 @@ static void draw_panel_identity(int panel_x, int panel_w, const panel_identity_t
 
             aura_coverdrift_advance_if_due(panel_w, count);
             ensure_drift_albums_decoded();
+            drift_skip_undecodable(panel_w, count);
             aura_coverdrift_draw(panel_x, panel_w, s_drift_album_images, count);
         }
     }

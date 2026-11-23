@@ -85,6 +85,14 @@ int aura_coverdrift_should_mount(int image_count);
  * este cuadro. */
 void aura_coverdrift_advance_if_due(int width, int count);
 
+/* D-365: salta la imagen activa de inmediato (misma mecanica que el
+ * avance de ciclo, pero disparado por el llamador). Usarla cuando la
+ * activa resulto NO tener caratula decodificable -- CoverDrift solo
+ * muestra imagenes reales, nunca el placeholder solido. Mismos
+ * `width`/`count` que se le pasan a aura_coverdrift_advance_if_due()
+ * en este cuadro. */
+void aura_coverdrift_skip_current(int width, int count);
+
 /* Dibuja en la franja [x, x+width) x [0, A26_SCREEN_HEIGHT) -- mismo
  * hueco exacto que ocuparia aura_selection_summary_draw() en la misma
  * llamada, nunca los dos a la vez. `images`/`count` son el pool

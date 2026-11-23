@@ -204,13 +204,31 @@ static void draw_image_solid(const aura_coverdrift_image_t *images, int index,
 }
 
 #if AURA_COVERDRIFT_SUBPIXEL
+/* D-365: variante INLINE de a26_shell_blend() para el bucle bilineal.
+ * La version de biblioteca (funcion EXTERNA, ~115k llamadas por cuadro
+ * entre las 3 mezclas por pixel de 38.4k pixeles) no alcanzaba los
+ * 20fps en el ARM de 80MHz -- el dueno reporto el movimiento "como a
+ * 5fps" en hardware. Misma matematica (delta por canal, t en [0,256]),
+ * pero inline y sin los cortes de alpha<=0/>=256 (las fracciones
+ * sub-pixel estan en [1,255] en los caminos que la llaman; con t=0 los
+ * llamadores usan la via entera). */
+static inline unsigned blend_fast(unsigned from, unsigned to, int t)
+{
+    int r = RGB_UNPACK_RED(from)
+        + (((RGB_UNPACK_RED(to)   - RGB_UNPACK_RED(from))   * t) >> 8);
+    int g = RGB_UNPACK_GREEN(from)
+        + (((RGB_UNPACK_GREEN(to) - RGB_UNPACK_GREEN(from)) * t) >> 8);
+    int b = RGB_UNPACK_BLUE(from)
+        + (((RGB_UNPACK_BLUE(to)  - RGB_UNPACK_BLUE(from))  * t) >> 8);
+    return LCD_RGBPACK(r, g, b);
+}
+
 /* D-364: variante de draw_image_solid() con muestreo SUB-PIXEL
  * (interpolacion bilineal). sx256/sy256 son el origen de muestreo dentro
  * de la imagen en pixeles*256 (equivalente sub-pixel de los src_x/src_y
  * enteros que sample_offsets() produce). Por cada pixel del panel mezcla
  * los 4 vecinos de la imagen fuente: primero horizontal en las dos filas
- * vecinas, luego vertical entre ambos resultados (a26_shell_blend, alpha
- * 0-255/256 -- la fraccion baja 8 bits del desplazamiento).
+ * vecinas, luego vertical entre ambos resultados.
  *
  * La deriva esta acotada por construccion a los margenes de sobrante de
  * la imagen (ver aura_coverdrift_draw()), asi que la ventana entera de
@@ -218,7 +236,12 @@ static void draw_image_solid(const aura_coverdrift_image_t *images, int index,
  * interpolacion pide en el borde extremo: para ese caso se clampa el
  * origen un pixel atras y se cae a muestreo entero en ese eje (la
  * diferencia visual de <1px en el borde del recorrido es imperceptible
- * frente al riesgo de leer fuera del buffer). */
+ * frente al riesgo de leer fuera del buffer).
+ *
+ * D-365: bucle especializado por eje -- de las 8 direcciones de deriva,
+ * 4 son puramente horizontales/verticales (fraccion 0 en un eje) y con
+ * un solo blend por pixel se dibujan; solo las 4 diagonales pagan las 3
+ * mezclas completas. */
 static void draw_image_solid_subpixel(const struct bitmap *bmp,
                                        int px, int pw,
                                        int sx256, int sy256)
@@ -251,14 +274,33 @@ static void draw_image_solid_subpixel(const struct bitmap *bmp,
     {
         const fb_data *r0 = (const fb_data *)bmp->data
             + (sy + row) * IMAGE_SIZE + sx;
-        const fb_data *r1 = r0 + IMAGE_SIZE;
         fb_data *dst = FBADDR(px, row);
 
-        for (col = 0; col < pw; col++)
+        if (fy == 0)
         {
-            fb_data top = a26_shell_blend(r0[col], r0[col + 1], fx);
-            fb_data bot = a26_shell_blend(r1[col], r1[col + 1], fx);
-            dst[col] = a26_shell_blend(top, bot, fy);
+            /* Movimiento puramente horizontal (0/180 grados). */
+            for (col = 0; col < pw; col++)
+                dst[col] = blend_fast(r0[col], r0[col + 1], fx);
+        }
+        else if (fx == 0)
+        {
+            /* Movimiento puramente vertical (90/270 grados). */
+            const fb_data *r1 = r0 + IMAGE_SIZE;
+
+            for (col = 0; col < pw; col++)
+                dst[col] = blend_fast(r0[col], r1[col], fy);
+        }
+        else
+        {
+            /* Diagonal: bilineal completo, 3 mezclas por pixel. */
+            const fb_data *r1 = r0 + IMAGE_SIZE;
+
+            for (col = 0; col < pw; col++)
+            {
+                unsigned top = blend_fast(r0[col], r0[col + 1], fx);
+                unsigned bot = blend_fast(r1[col], r1[col + 1], fx);
+                dst[col] = blend_fast(top, bot, fy);
+            }
         }
     }
 }
@@ -349,6 +391,29 @@ void aura_coverdrift_advance_if_due(int width, int count)
     elapsed_ms = (current_tick - s_since) * 1000L / HZ;
     if (elapsed_ms >= CYCLE_MS)
         advance_cycle(count, max_distance);
+}
+
+/* D-365: salta la imagen activa de inmediato -- el llamador la invoca
+ * cuando la activa resulto NO tener caratula decodificable (archivo
+ * ausente/corrupto, album sin arte), para que CoverDrift solo muestre
+ * imagenes reales y nunca el placeholder solido. Misma mecanica que el
+ * avance normal de ciclo (nuevo angulo/distancia, reloj reiniciado,
+ * la saltada queda como "anterior" -- como su bitmap es NULL, el
+ * cross-fade de ese tramo se degrada a mostrar la entrante directo,
+ * ver draw_crossfade()). */
+void aura_coverdrift_skip_current(int width, int count)
+{
+    int margin_x = (IMAGE_SIZE - width) / 2;
+    int margin_y = (IMAGE_SIZE - A26_SCREEN_HEIGHT) / 2;
+    int max_distance = margin_x < margin_y ? margin_x : margin_y;
+
+    if (max_distance < 0)
+        max_distance = 0;
+
+    if (count <= 0 || s_index < 0)
+        return;
+
+    advance_cycle(count, max_distance);
 }
 
 void aura_coverdrift_draw(int x, int width,

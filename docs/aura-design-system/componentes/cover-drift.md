@@ -119,14 +119,18 @@ anterior.
   40px en 7s la deriva avanza ~0.29px por cuadro a 20fps, así que en
   pantalla se veía como saltos de 1px cada ~3.5 cuadros. Ahora
   (`AURA_COVERDRIFT_SUBPIXEL`, `draw_image_solid_subpixel()`) el
-  desplazamiento fraccionario se interpola bilinealmente píxel a píxel
-  (3 blends por píxel del panel, ~115k por cuadro — ~3× el costo de un
-  cross-fade, que ya corre sin problema en hardware). Solo aplica con
-  Animaciones = Todas y fuera del cross-fade (el fundido ya difumina el
-  paso de 1px por sí mismo). `#define AURA_COVERDRIFT_SUBPIXEL 0`
-  restaura el muestreo entero si el costo en batería resultara excesivo
-  (estimado ~25-36ms/cuadro en el ARM de 80MHz — pendiente de medición
-  en hardware por el dueño).
+  desplazamiento fraccionario se interpola bilinealmente píxel a píxel.
+  Solo aplica con Animaciones = Todas y fuera del cross-fade (el fundido
+  ya difumina el paso de 1px por sí mismo). `#define
+  AURA_COVERDRIFT_SUBPIXEL 0` restaura el muestreo entero si el costo en
+  batería resultara excesivo. **Costo (D-365, medido en hardware por el
+  dueño):** la primera versión llamaba `a26_shell_blend()` (función
+  externa) 3 veces por píxel — ~115k llamadas/cuadro tumbaban la
+  cadencia a ~5fps en el ARM de 80MHz. Se reemplazó por una variante
+  **inline** (`blend_fast()`, misma matemática) con bucle
+  **especializado por eje**: las 4 direcciones puramente
+  horizontales/verticales usan 1 blend por píxel; solo las 4 diagonales
+  pagan las 3 mezclas completas.
 - **Transición entre imágenes: fundido REAL** (D-254, corrección tras un
   primer intento con corte directo) — mezcla píxel a píxel entre la imagen
   saliente (quieta, en el centro) y la entrante (moviéndose), durante los
@@ -207,8 +211,15 @@ decodificaciones. Cada slot registra además el pool y la generación de
 biblioteca con que se decodificó (D-364): antes solo se guardaba el
 índice, y al cambiar de fuente (Música→Video→Fotos) o regenerarse la
 biblioteca un índice coincidente podía mostrar la imagen del pool viejo
-hasta el siguiente avance. Presupuesto real, todo en buffers `static`
-fijos (sin asignación dinámica repetida):
+hasta el siguiente avance. Además (D-365, encargo del dueño: "siempre
+se deben ver imágenes, no elementos vacíos"), las imágenes **sin
+carátula decodificable** (archivo ausente/corrupto, álbum sin arte) se
+marcan al primer intento fallido (`s_drift_decode_failed[]`, por pool y
+generación) y se **saltan antes de dibujarse**
+(`aura_coverdrift_skip_current()` + `drift_skip_undecodable()`) — el
+placeholder sólido de acento queda solo como respaldo del primer cuadro
+de montaje, nunca como contenido de un ciclo completo. Presupuesto
+real, todo en buffers `static` fijos (sin asignación dinámica repetida):
 
 - Dos tiles finales decodificados (activa + anterior): 320×320×2 bytes cada
   uno ≈ 400KB en total.
