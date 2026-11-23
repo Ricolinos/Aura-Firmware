@@ -146,6 +146,15 @@ bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index);
 bool aura_music_play_all_shuffled(void);
 bool aura_music_play_track(int32_t idx_id);
 
+/* D-367: llenado en segundo plano de "Canciones aleat." -- la primera
+ * pista suena al instante y el resto de la playlist se inserta por
+ * tramos desde el bucle principal (aura_main.c llama _step() cada
+ * vuelta mientras _active()). Todo arranque de reproduccion de Aura
+ * cancela un llenado en curso antes de crear su propia playlist. */
+bool aura_music_shuffle_fill_active(void);
+void aura_music_shuffle_fill_step(void);
+void aura_music_shuffle_fill_cancel(void);
+
 /* Etiqueta visible de la pista actual de una busqueda tagcache ABIERTA
  * (titulo real, o nombre de archivo si no tiene tag). */
 struct tagcache_search;

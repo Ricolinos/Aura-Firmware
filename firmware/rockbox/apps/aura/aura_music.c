@@ -868,6 +868,7 @@ static bool build_playlist_from_songs(aura_screen_id_t songs_screen)
 
 bool aura_music_play_songs(aura_screen_id_t songs_screen, int start_index)
 {
+    aura_music_shuffle_fill_cancel(); /* D-367: la playlist nueva desplaza al shuffle en llenado */
     if (!build_playlist_from_songs(songs_screen))
         return false;
 
@@ -894,6 +895,7 @@ bool aura_music_play_track(int32_t idx_id)
     if (!tagcache_search(&tcs, tag_title))
         return false;
 
+    aura_music_shuffle_fill_cancel(); /* D-367 */
     if (tagcache_retrieve(&tcs, idx_id, tag_filename, path, sizeof(path)))
     {
         playlist_create(NULL, NULL);
@@ -907,13 +909,150 @@ bool aura_music_play_track(int32_t idx_id)
     return ok;
 }
 
+/* -- D-367: llenado en segundo plano de "Canciones aleat." -------------
+ *
+ * Encargo del dueno del producto: "en lugar de que el ipod cargue todas
+ * las canciones de un solo jalon, reproducira inmediatamente una cancion
+ * aleatoria, y despues de que empiece a sonar cargara el resto de
+ * canciones en un proceso de fondo". La version anterior
+ * (build_playlist_from_songs() + playlist_randomise()) insertaba TODAS
+ * las pistas -- miles de tagcache_retrieve() + playlist_insert_track()
+ * con sync a disco cada una -- bloqueando el hilo de UI varios segundos
+ * antes de que sonara la primera nota.
+ *
+ * Esquema: se recolectan los idx_id de tagcache una sola vez (arreglo
+ * estatico, 20KB para 5000), se barajan en RAM (Fisher-Yates -- el orden
+ * barajado ES el orden de insercion, ya no hace falta
+ * playlist_randomise()), la PRIMERA pista se inserta y arranca al
+ * instante, y el resto se inserta por tramos de 32 por vuelta del bucle
+ * principal (aura_music_shuffle_fill_step(), llamada desde aura_main.c)
+ * con sync=false y UN solo playlist_sync() al final. La busqueda de
+ * tagcache queda ABIERTA durante el llenado (tagcache_retrieve() la
+ * necesita); es una sesion de solo lectura independiente, como las que
+ * ya conviven con la navegacion normal.
+ *
+ * Cancelacion: cualquier otro arranque de reproduccion de Aura llama
+ * aura_music_shuffle_fill_cancel() ANTES de crear su playlist (sin esto,
+ * el llenado seguiria insertando canciones del shuffle en la playlist
+ * NUEVA). Mientras un plugin corre (video, mpegplayer) el bucle de Aura
+ * no itera y el llenado simplemente pausa; se reanuda al salir. */
+static struct tagcache_search s_fill_tcs;
+static bool s_fill_tcs_open = false;
+static int32_t s_fill_ids[AURA_MUSIC_MAX_SONGS];
+static int s_fill_count = 0;
+static int s_fill_next = 0;
+
+static void aura_music_shuffle_fill_close(void)
+{
+    if (s_fill_tcs_open)
+    {
+        tagcache_search_finish(&s_fill_tcs);
+        s_fill_tcs_open = false;
+    }
+    s_fill_count = 0;
+    s_fill_next = 0;
+}
+
+void aura_music_shuffle_fill_cancel(void)
+{
+    aura_music_shuffle_fill_close();
+}
+
+bool aura_music_shuffle_fill_active(void)
+{
+    return s_fill_tcs_open;
+}
+
+void aura_music_shuffle_fill_step(void)
+{
+    enum { CHUNK = 32 };
+    int k = CHUNK;
+    char path[MAX_PATH];
+
+    if (!s_fill_tcs_open)
+        return;
+
+    while (k-- > 0 && s_fill_next < s_fill_count)
+    {
+        if (tagcache_retrieve(&s_fill_tcs, s_fill_ids[s_fill_next],
+                              tag_filename, path, sizeof(path)))
+            playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST,
+                                  false, false);
+        s_fill_next++;
+    }
+
+    if (s_fill_next >= s_fill_count)
+    {
+        playlist_sync(NULL);
+        aura_music_shuffle_fill_close();
+    }
+}
+
+/* "Canciones aleat." del menu de inicio (encargo 2026-08-13, reescrito
+ * en D-367): toda la biblioteca en orden aleatorio -- la primera pista
+ * suena DE INMEDIATO y el resto de la playlist se llena en segundo plano
+ * (ver el bloque de arriba). */
 bool aura_music_play_all_shuffled(void)
 {
-    if (!build_playlist_from_songs(AURA_SCREEN_MUSIC_SONGS))
+    char path[MAX_PATH];
+    int n = 0, i;
+
+    aura_music_shuffle_fill_cancel();
+
+    if (!tagcache_is_usable())
+        return false;
+    if (!tagcache_search(&s_fill_tcs, tag_title))
         return false;
 
-    playlist_randomise(NULL, current_tick, true);
+    /* D-346: hilo de UI -- su propio scratch. */
+    tagcache_search_set_uniqbuf(&s_fill_tcs, s_ui_scratch.uniqbuf,
+                                sizeof(s_ui_scratch.uniqbuf));
+
+    while (n < AURA_MUSIC_MAX_SONGS
+           && tagcache_get_next(&s_fill_tcs, path, sizeof(path)))
+        s_fill_ids[n++] = s_fill_tcs.idx_id;
+
+    if (n == 0)
+    {
+        tagcache_search_finish(&s_fill_tcs);
+        return false;
+    }
+
+    /* Fisher-Yates sobre los idx_id -- el orden barajado ES el orden de
+     * insercion, asi la playlist queda aleatoria sin playlist_randomise()
+     * posterior. */
+    for (i = 0; i < n - 1; i++)
+    {
+        int j = i + rand() % (n - i);
+        int32_t tmp = s_fill_ids[i];
+        s_fill_ids[i] = s_fill_ids[j];
+        s_fill_ids[j] = tmp;
+    }
+
+    playlist_create(NULL, NULL);
+
+    /* La PRIMERA pista entra y arranca al instante -- esto es todo lo
+     * que el usuario espera antes de oir musica. */
+    if (!tagcache_retrieve(&s_fill_tcs, s_fill_ids[0], tag_filename,
+                           path, sizeof(path))
+        || playlist_insert_track(NULL, path, PLAYLIST_INSERT_LAST,
+                                 false, true) < 0)
+    {
+        tagcache_search_finish(&s_fill_tcs);
+        return false;
+    }
     playlist_start(0, 0, 0);
+
+    /* El RESTO se inserta en segundo plano desde el bucle principal. */
+    s_fill_count = n;
+    s_fill_next = 1;
+    s_fill_tcs_open = true;
+
+    if (s_fill_next >= s_fill_count) /* biblioteca de una sola pista */
+    {
+        playlist_sync(NULL);
+        aura_music_shuffle_fill_close();
+    }
     return true;
 }
 
@@ -973,6 +1112,7 @@ bool aura_music_play_playlist(int index)
     if (index < 0 || index >= n)
         return false;
 
+    aura_music_shuffle_fill_cancel(); /* D-367 */
     if (playlist_create(dir, labels[index]) == -1)
         return false;
 

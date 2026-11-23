@@ -1101,60 +1101,97 @@ static int drift_pool_count(drift_pool_t pool)
     else
         count = photo_coverdrift_count(pool);
 
-    /* D-316: s_drift_album_images[]/effective_drift_seek()/etc. estan
-     * dimensionados a AURA_MUSIC_MAX_ITEMS (300) -- el pool de Musica
-     * nunca lo excede (tagcache ya lo acota ahi), pero el de Fotos SI
-     * podria (MAX_PHOTOS=500 en aura_photos.c) si el usuario tuviera mas
-     * de 300 fotos de una misma categoria. Acotar aca en vez de crecer
-     * ese arreglo: nadie necesita CoverDrift rotando entre mas de 300
-     * imagenes distintas para que la sensacion de variedad funcione. */
+    /* D-316: los arreglos indexados por pool general estan dimensionados
+     * a AURA_DRIFT_POOL_MAX (300) -- el pool de Musica nunca lo excede
+     * (tagcache ya lo acota ahi), pero el de Fotos SI podria
+     * (MAX_PHOTOS=500 en aura_photos.c) si el usuario tuviera mas de 300
+     * fotos de una misma categoria. Acotar aca en vez de crecer esos
+     * arreglos: nadie necesita CoverDrift sorteando entre mas de 300
+     * imagenes distintas (y desde D-366 el subconjunto residente es de
+     * max 15 de todos modos). */
     if (count > AURA_DRIFT_POOL_MAX)
         count = AURA_DRIFT_POOL_MAX;
     return count;
 }
 
-/* PLAN-niveles-fx.md D-d/§5: subconjunto RESIDENTE del pool general para
- * Graficos=Minimos -- hasta AURA_DS_METRICS_COVER_DRIFT_POOL_CAP_MINIMAL
- * (5) seeks elegidos al azar, sorteados UNA vez por arranque y re-
- * sorteados solo si cambia el nivel de Graficos o el pool general se
- * regenera (biblioteca resincronizada) -- nunca en cada cuadro. Con
- * Graficos=Todos este subconjunto no se usa -- ese nivel sigue leyendo
- * directo de s_drift_album_pool_seeks/_count (comportamiento actual, el
- * pool completo por rotacion). */
-static int32_t s_drift_effective_seeks[AURA_DS_METRICS_COVER_DRIFT_POOL_CAP_MINIMAL];
-static int s_drift_effective_count = 0;
-static int s_drift_effective_pool_generation = -1;
-static bool s_drift_effective_built_for_minimal = false;
+/* D-366 (encargo del dueno del producto: "Actualizar biblioteca... vas a
+ * escoger solo 15 portadas aleatorias... si hay menos imagenes que eso,
+ * con las que haya"): CoverDrift ya NO rota por el pool completo -- para
+ * cada fuente se sortea un subconjunto aleatorio ACOTADO (tokens
+ * AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_*: 15 musica, 10 video, 15
+ * fotos) una vez por generacion de biblioteca/pool/nivel, y TODAS sus
+ * imagenes quedan decodificadas en RAM (ver s_drift_resident_* mas
+ * abajo). La deriva asi jamas toca el disco duro a mitad de ciclo --
+ * el golpe de HDD del pre-decode por ciclo (D-364) era el "tropezado"
+ * periodico que el dueno seguia viendo en hardware.
+ *
+ * El subconjunto es un arreglo de INDICES FUENTE (posicion dentro del
+ * pool general de su fuente), agnostico del tipo de pool: para Musica
+ * indexa s_drift_album_pool_seeks[], para Video/Fotos es el argumento de
+ * video_coverdrift_filename()/photo_coverdrift_filename(). La traduccion
+ * vive en decode_album_drift_tile().
+ *
+ * PLAN-niveles-fx.md D-d: con Graficos=Minimos el pool de Musica sigue
+ * topado a 5 (AURA_DS_METRICS_COVER_DRIFT_POOL_CAP_MINIMAL, la reduccion
+ * documentada de ese nivel); Graficos=Ninguno ni siquiera llega aca (el
+ * llamador dibuja el degradado de acento). */
+static int s_drift_subset[AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_MAX];
+static int s_drift_subset_count = 0;
+static drift_pool_t s_drift_subset_pool = AURA_DRIFT_POOL_MUSIC;
+static int s_drift_subset_gen = -1;
+static int s_drift_subset_gfx = -1;
 
-/* Numero de imagenes que CoverDrift debe considerar este cuadro, segun
- * el ajuste de Graficos (D-a: Graficos decide QUE existe) -- construye/
- * refresca el sorteo de Minimos bajo demanda. Devuelve 0 en Ninguno (el
- * llamador dibuja el degradado de acento en su lugar, nunca decodifica
- * nada). */
-static int ensure_drift_effective_pool(void)
+/* D-316: pool activo para esta ronda de decodificacion -- lo fija
+ * draw_panel_identity() (mas abajo) segun id->coverdrift_pool ANTES de
+ * llamar a ensure_drift_subset()/ensure_drift_albums_decoded()/
+ * aura_coverdrift_draw(). Un solo CoverDrift visible a la vez (mismo
+ * invariante que el resto de este mecanismo), asi que un estado global
+ * compartido es seguro -- evita triplicar los buffers de pixeles/bitmap
+ * por fuente cuando Musica, Video y Fotos jamas decodifican al mismo
+ * tiempo. */
+static drift_pool_t s_drift_active_pool = AURA_DRIFT_POOL_MUSIC;
+
+/* Definida mas abajo (junto a los arreglos que limpia): invalida todo
+ * el estado indexado por posicion de subconjunto -- imagenes residentes,
+ * fallos de decodificacion y punteros de s_drift_album_images[]. */
+static void drift_invalidate_subset_state(void);
+
+static int drift_resident_cap(drift_pool_t pool)
 {
-    int cap;
+    if (aura_settings.graphics_mode == AURA_GFX_MINIMAL
+        && pool == AURA_DRIFT_POOL_MUSIC)
+        return AURA_DS_METRICS_COVER_DRIFT_POOL_CAP_MINIMAL;
+    if (pool == AURA_DRIFT_POOL_MUSIC)
+        return AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_MUSIC;
+    if (pool == AURA_DRIFT_POOL_VIDEO_ALL
+        || pool == AURA_DRIFT_POOL_VIDEO_MOVIES
+        || pool == AURA_DRIFT_POOL_VIDEO_SERIES)
+        return AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_VIDEO;
+    return AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_PHOTO;
+}
 
-    if (aura_settings.graphics_mode != AURA_GFX_MINIMAL)
-    {
-        s_drift_effective_built_for_minimal = false;
-        return aura_fx_coverdrift_pool_cap(s_drift_album_pool_count);
-    }
+static int ensure_drift_subset(void)
+{
+    int cap = drift_resident_cap(s_drift_active_pool);
+    int n = drift_pool_count(s_drift_active_pool);
 
-    cap = aura_fx_coverdrift_pool_cap(s_drift_album_pool_count);
-    if (s_drift_effective_built_for_minimal
-        && s_drift_effective_pool_generation == s_drift_album_pool_generation
-        && s_drift_effective_count == cap)
-        return s_drift_effective_count;
+    if (cap > n)
+        cap = n;
+
+    if (s_drift_subset_pool == s_drift_active_pool
+        && s_drift_subset_gen == s_drift_album_pool_generation
+        && s_drift_subset_gfx == (int)aura_settings.graphics_mode
+        && s_drift_subset_count == cap)
+        return s_drift_subset_count;
 
     /* Fisher-Yates parcial sobre una copia de indices del pool general --
      * static (no en la pila): mismo criterio de D-226 en este archivo,
-     * hasta AURA_MUSIC_MAX_ITEMS=300 ints (1200B) es demasiado para el
+     * hasta AURA_DRIFT_POOL_MAX=300 ints (1200B) es demasiado para el
      * stack de 8KB del hilo "main" sumado al resto de lo que ya vive ahi
      * en este punto de la pila. */
     {
         static int s_shuffle_idx[AURA_DRIFT_POOL_MAX];
-        int i, n = s_drift_album_pool_count;
+        int i;
 
         for (i = 0; i < n; i++)
             s_shuffle_idx[i] = i;
@@ -1164,25 +1201,20 @@ static int ensure_drift_effective_pool(void)
             int tmp = s_shuffle_idx[i];
             s_shuffle_idx[i] = s_shuffle_idx[j];
             s_shuffle_idx[j] = tmp;
-            s_drift_effective_seeks[i] = s_drift_album_pool_seeks[s_shuffle_idx[i]];
+            s_drift_subset[i] = s_shuffle_idx[i];
         }
     }
-    s_drift_effective_count = cap;
-    s_drift_effective_pool_generation = s_drift_album_pool_generation;
-    s_drift_effective_built_for_minimal = true;
-    return s_drift_effective_count;
-}
+    s_drift_subset_count = cap;
+    s_drift_subset_pool = s_drift_active_pool;
+    s_drift_subset_gen = s_drift_album_pool_generation;
+    s_drift_subset_gfx = (int)aura_settings.graphics_mode;
 
-/* Seek del indice `idx` dentro del pool EFECTIVO de este cuadro (el
- * subconjunto de Minimos, o el pool completo en Todos) -- -1 fuera de
- * rango. Unico punto que decide de cual de los dos arreglos leer. */
-static int32_t effective_drift_seek(int idx)
-{
-    if (aura_settings.graphics_mode == AURA_GFX_MINIMAL)
-        return (idx >= 0 && idx < s_drift_effective_count)
-            ? s_drift_effective_seeks[idx] : -1;
-    return (idx >= 0 && idx < s_drift_album_pool_count)
-        ? s_drift_album_pool_seeks[idx] : -1;
+    /* Todo lo indexado por posicion del subconjunto anterior queda
+     * invalido (imagenes residentes, fallos de decodificacion, punteros
+     * de s_drift_album_images[]). */
+    drift_invalidate_subset_state();
+
+    return s_drift_subset_count;
 }
 
 /* aura_music_db_ready() (aura_music.c) no es solo una consulta -- es lo
@@ -1228,45 +1260,32 @@ static void ensure_drift_album_pool(void)
     }
 }
 
-/* Decodificacion bajo demanda de solo la imagen activa + la anterior
- * (nunca el pool completo -- con hasta AURA_MUSIC_MAX_ITEMS=300 albumes
- * y ~168KB por imagen al tamano de CoverDrift D-254, decodificarlas
- * todas de una vez es inviable). aura_albumart_load_for_album() (mismo
- * cache .pfraw en disco que ya usa Music Flow/la lista de Albumes, pide
- * el tamano nuevo directo -- genera su propio archivo de cache aparte,
- * sin invalidar el de 48px/130px que usan otras pantallas) da el
- * bitmap TRANSPUESTO (columna-mayor, mismo formato que
- * draw_album_thumb() de mas abajo); se transpone a fila-mayor (lo que
- * espera aura_coverdrift_draw() via lcd_bitmap_part()) una sola vez por
- * cambio de indice activo, nunca por cuadro. */
+/* Decodificacion bajo demanda del subconjunto residente (D-366: ya no
+ * solo activa+anterior, sino TODAS las del sorteo acotado, llenado
+ * progresivo de a una por cuadro -- nunca el pool completo: con hasta
+ * AURA_MUSIC_MAX_ITEMS=300 albumes y ~200KB por imagen al tamano de
+ * CoverDrift D-254, decodificarlas todas de una vez es inviable).
+ * aura_albumart_load_for_album() (mismo cache .pfraw en disco que ya usa
+ * Music Flow/la lista de Albumes, pide el tamano nuevo directo -- genera
+ * su propio archivo de cache aparte, sin invalidar el de 48px/130px que
+ * usan otras pantallas) da el bitmap TRANSPUESTO (columna-mayor, mismo
+ * formato que draw_album_thumb() de mas abajo); se transpone a fila-
+ * mayor (lo que espera aura_coverdrift_draw() via lcd_bitmap_part()) una
+ * sola vez por imagen, nunca por cuadro. */
 static aura_coverdrift_image_t s_drift_album_images[AURA_DRIFT_POOL_MAX];
-static int s_drift_album_buf_a_idx = -1;
-static int s_drift_album_buf_b_idx = -1;
-/* D-364: pool y generacion de biblioteca con que se decodifico cada
- * slot. Antes solo se registraba el indice: al cambiar de pool (Musica
- * -> Video -> Fotos) o al regenerarse la biblioteca, un indice
- * coincidente daba por buena la imagen del pool viejo hasta que el
- * ciclo avanzaba (hasta CYCLE_MS mostrando la caratula equivocada). */
-static drift_pool_t s_drift_album_buf_a_pool = AURA_DRIFT_POOL_MUSIC;
-static drift_pool_t s_drift_album_buf_b_pool = AURA_DRIFT_POOL_MUSIC;
-static int s_drift_album_buf_a_gen = -1;
-static int s_drift_album_buf_b_gen = -1;
-static struct bitmap s_drift_album_bmp_a;
-static struct bitmap s_drift_album_bmp_b;
-static fb_data s_drift_album_pixels_a[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
-                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
-static fb_data s_drift_album_pixels_b[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
-                                       * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
 
-/* D-316: pool activo para esta ronda de decodificacion -- lo fija
- * draw_panel_identity() (mas abajo) segun id->coverdrift_pool ANTES de
- * llamar a aura_coverdrift_advance_if_due()/ensure_drift_albums_decoded()/
- * aura_coverdrift_draw(). Un solo CoverDrift visible a la vez (mismo
- * invariante que el resto de este mecanismo), asi que un estado global
- * compartido es seguro -- evita triplicar los buffers de pixeles/bitmap
- * (~400KB) por fuente cuando Musica, Video y Fotos jamas decodifican al
- * mismo tiempo. */
-static drift_pool_t s_drift_active_pool = AURA_DRIFT_POOL_MUSIC;
+/* D-366: subconjunto RESIDENTE -- todas las imagenes del subconjunto
+ * sorteado (max 15, tokens AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_*)
+ * decodificadas en RAM, una por posicion efectiva. ~3MB estaticos
+ * (15 x 320x320 x 2B), ~4.7% de los 64MB del target: el precio explicito
+ * del encargo del dueno por no tocar el disco jamas durante la deriva.
+ * `s_drift_resident_ready[idx]` = bitmap valido; la validez de TODO el
+ * arreglo va atada al subconjunto vigente (drift_invalidate_subset_state()
+ * lo limpia cuando el sorteo se rehace). */
+static fb_data s_drift_resident_pixels[AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_MAX]
+    [AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE * AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE];
+static struct bitmap s_drift_resident_bmp[AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_MAX];
+static bool s_drift_resident_ready[AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_MAX];
 
 static bool has_ext_ci(const char *name, const char *ext)
 {
@@ -1281,13 +1300,23 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
     static unsigned char refl_buf[SZ *
         (SZ * AURA_DS_METRICS_MUSIC_FLOW_REFLECTION_PCT_OF_SLIDE_HEIGHT / 100 + 1)
         * sizeof(fb_data)];
+    /* D-366: `pool_idx` es la posicion dentro del SUBCONJUNTO efectivo;
+     * `src_idx` es la posicion dentro del pool general de la fuente
+     * (indice de s_drift_album_pool_seeks[] en Musica, argumento de
+     * video_/photo_coverdrift_filename() en las demas). */
+    int src_idx = (pool_idx >= 0 && pool_idx < s_drift_subset_count)
+        ? s_drift_subset[pool_idx] : -1;
     int col, row;
+
+    if (src_idx < 0)
+        return false;
 
     if (s_drift_active_pool == AURA_DRIFT_POOL_MUSIC)
     {
         aura_albumart_t art;
         const fb_data *cover;
-        int32_t seek = effective_drift_seek(pool_idx);
+        int32_t seek = (src_idx < s_drift_album_pool_count)
+            ? s_drift_album_pool_seeks[src_idx] : -1;
 
         if (seek < 0)
             return false;
@@ -1329,7 +1358,7 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
             char base[MAX_PATH];
             char *dot;
 
-            filename = video_coverdrift_filename(s_drift_active_pool, pool_idx);
+            filename = video_coverdrift_filename(s_drift_active_pool, src_idx);
             if (!filename)
                 return false;
             strlcpy(base, filename, sizeof(base));
@@ -1340,7 +1369,7 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
         }
         else
         {
-            filename = photo_coverdrift_filename(s_drift_active_pool, pool_idx);
+            filename = photo_coverdrift_filename(s_drift_active_pool, src_idx);
             if (!filename)
                 return false;
             snprintf(path, sizeof(path), "/Photos/%s", filename);
@@ -1394,152 +1423,107 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
 
 /* D-365: registro de imagenes SIN caratula decodificable (archivo
  * ausente/corrupto, album sin arte) -- se marcan en el primer intento
- * fallido y no se reintentan mientras pool y generacion de biblioteca
- * sigan vigentes. El llamador las SALTA antes de dibujar (ver
- * drift_skip_undecodable()): CoverDrift solo muestra imagenes reales,
- * nunca el placeholder solido (encargo del dueno: "siempre se deben ver
- * imagenes, no elementos vacios"). Un fallo TRANSITORIO (disco ocupado)
- * tambien marca -- mismo criterio de no-reintento que ya tenian los
- * slots; se reintenta en el siguiente cambio de pool/generacion. */
+ * fallido y no se reintentan mientras el subconjunto vigente siga siendo
+ * el mismo (D-366: la validez va atada al sorteo, que ya incorpora pool,
+ * generacion de biblioteca y nivel de Graficos;
+ * drift_invalidate_subset_state() lo limpia al rehacerse). El llamador
+ * las SALTA antes de dibujar (ver drift_skip_undecodable()): CoverDrift
+ * solo muestra imagenes reales, nunca el placeholder solido (encargo del
+ * dueno: "siempre se deben ver imagenes, no elementos vacios"). Un fallo
+ * TRANSITORIO (disco ocupado) tambien marca; se reintenta en el
+ * siguiente resorteo. */
 static bool s_drift_decode_failed[AURA_DRIFT_POOL_MAX];
-static drift_pool_t s_drift_decode_failed_pool = AURA_DRIFT_POOL_MUSIC;
-static int s_drift_decode_failed_gen = -1;
 
 static bool drift_decode_failed(int pool_idx)
 {
-    return s_drift_decode_failed_pool == s_drift_active_pool
-           && s_drift_decode_failed_gen == s_drift_album_pool_generation
+    return pool_idx >= 0 && pool_idx < AURA_DRIFT_POOL_MAX
            && s_drift_decode_failed[pool_idx];
 }
 
 static void drift_mark_decode_failed(int pool_idx)
 {
-    if (s_drift_decode_failed_pool != s_drift_active_pool
-        || s_drift_decode_failed_gen != s_drift_album_pool_generation)
-    {
-        memset(s_drift_decode_failed, 0, sizeof(s_drift_decode_failed));
-        s_drift_decode_failed_pool = s_drift_active_pool;
-        s_drift_decode_failed_gen = s_drift_album_pool_generation;
-    }
-    s_drift_decode_failed[pool_idx] = true;
+    if (pool_idx >= 0 && pool_idx < AURA_DRIFT_POOL_MAX)
+        s_drift_decode_failed[pool_idx] = true;
 }
 
-/* D-364: true si algun slot retiene `pool_idx` decodificado del pool y
- * la generacion de biblioteca VIGENTES (aunque el bitmap todavia no este
- * listo -- el indice se marca ANTES de decodificar, ver
- * drift_slot_store(), para que un fallo no reintente cada cuadro). */
-static bool drift_slot_holds(int pool_idx)
+/* D-366: invalida todo el estado indexado por posicion de subconjunto
+ * (lo invoca ensure_drift_subset() al rehacer el sorteo). */
+static void drift_invalidate_subset_state(void)
 {
-    bool a = s_drift_album_buf_a_idx == pool_idx
-             && s_drift_album_buf_a_pool == s_drift_active_pool
-             && s_drift_album_buf_a_gen == s_drift_album_pool_generation;
-    bool b = s_drift_album_buf_b_idx == pool_idx
-             && s_drift_album_buf_b_pool == s_drift_active_pool
-             && s_drift_album_buf_b_gen == s_drift_album_pool_generation;
-    return a || b;
+    memset(s_drift_resident_ready, 0, sizeof(s_drift_resident_ready));
+    memset(s_drift_decode_failed, 0, sizeof(s_drift_decode_failed));
+    memset(s_drift_album_images, 0, sizeof(s_drift_album_images));
 }
 
-static void drift_slot_store(bool slot_a, int pool_idx)
+/* Decodifica la imagen efectiva `idx` a SU slot residente fijo (uno por
+ * posicion del subconjunto, D-366 -- ya no hay rotacion de slots). */
+static void drift_resident_decode(int idx)
 {
     enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
 
-    if (slot_a)
+    s_drift_album_images[idx].bmp = NULL;
+    if (decode_album_drift_tile(idx, s_drift_resident_pixels[idx]))
     {
-        s_drift_album_buf_a_idx = pool_idx;
-        s_drift_album_buf_a_pool = s_drift_active_pool;
-        s_drift_album_buf_a_gen = s_drift_album_pool_generation;
-        s_drift_album_images[pool_idx].bmp = NULL;
-        if (decode_album_drift_tile(pool_idx, s_drift_album_pixels_a))
-        {
-            s_drift_album_bmp_a.width = SZ;
-            s_drift_album_bmp_a.height = SZ;
-            s_drift_album_bmp_a.data = (char *)s_drift_album_pixels_a;
-            s_drift_album_images[pool_idx].bmp = &s_drift_album_bmp_a;
-        }
-        else
-        {
-            drift_mark_decode_failed(pool_idx);
-        }
+        s_drift_resident_bmp[idx].width = SZ;
+        s_drift_resident_bmp[idx].height = SZ;
+        s_drift_resident_bmp[idx].data = (char *)s_drift_resident_pixels[idx];
+        s_drift_album_images[idx].bmp = &s_drift_resident_bmp[idx];
+        s_drift_resident_ready[idx] = true;
     }
     else
     {
-        s_drift_album_buf_b_idx = pool_idx;
-        s_drift_album_buf_b_pool = s_drift_active_pool;
-        s_drift_album_buf_b_gen = s_drift_album_pool_generation;
-        s_drift_album_images[pool_idx].bmp = NULL;
-        if (decode_album_drift_tile(pool_idx, s_drift_album_pixels_b))
-        {
-            s_drift_album_bmp_b.width = SZ;
-            s_drift_album_bmp_b.height = SZ;
-            s_drift_album_bmp_b.data = (char *)s_drift_album_pixels_b;
-            s_drift_album_images[pool_idx].bmp = &s_drift_album_bmp_b;
-        }
-        else
-        {
-            drift_mark_decode_failed(pool_idx);
-        }
+        drift_mark_decode_failed(idx);
     }
 }
 
-/* Decodifica `pool_idx` en el slot que NO retiene `other_idx` (asi la
- * imagen que todavia se esta dibujando nunca se pisa). */
-static void drift_slot_store_needed(int pool_idx, int other_idx)
-{
-    bool a_holds_other = s_drift_album_buf_a_idx == other_idx
-                         && s_drift_album_buf_a_pool == s_drift_active_pool
-                         && s_drift_album_buf_a_gen == s_drift_album_pool_generation;
-    drift_slot_store(!a_holds_other, pool_idx);
-}
-
-/* D-364 (fluidez de CoverDrift, encargo del dueno del producto:
- * "el movimiento no es fluido, me gustaria que se viera suavizado"):
- * la version anterior decodificaba la imagen activa y RE-decodificaba la
- * anterior EN EL MISMO CUADRO del avance de ciclo (cada 7s) -- dos
- * decodificaciones JPEG+transpuesta de 320x320 seguidas bloqueando el
- * hilo de UI, el tirones visible al cambiar de imagen (deuda ya anotada
- * en DECISIONS.md tras D-311).
- *
- * Nueva calendarizacion -- en estado estacionario el cuadro del avance
- * hace CERO decodificaciones:
- *  (1) activo no residente -> decodificarlo ya (solo al montar o si un
- *      decode anterior fallo);
+/* D-366 (encargo del dueno: el movimiento seguia "tropezado" en hardware
+ * tras D-364/D-365 -- el golpe de HDD del pre-decode por ciclo era la
+ * causa restante): todas las imagenes del subconjunto viven en RAM.
+ * Calendarizacion por cuadro, A LO SUMO UNA decodificacion:
+ *  (1) activo no residente -> decodificarlo ya (solo al montar o tras un
+ *      salto encadenado de D-365);
  *  (2) anterior, SOLO mientras aura_coverdrift_prev_needed() (ventana
- *      del cross-fade) -- con el pre-decode de abajo, en la practica ya
- *      siempre esta residente y esto no decodifica nada;
- *  (3) en cuanto termina el cross-fade, pre-decodificar la SIGUIENTE
- *      imagen del ciclo en el slot que quedo libre -- la
- *      decodificacion pesada ocurre en la zona muerta del ciclo (~6.4s
- *      de margen), nunca en el cuadro del cambio. Los dos slots rotan
- *      solos entre imagenes consecutivas. */
+ *      del cross-fade);
+ *  (3) llenado progresivo en la zona muerta: la siguiente imagen aun no
+ *      residente a partir de la que sigue al activo, una por cuadro,
+ *      hasta completar el subconjunto (~15 cuadros tras el montaje).
+ * En estado estacionario: CERO decodificaciones por cuadro y el disco
+ * no se toca jamas durante la deriva. */
 static void ensure_drift_albums_decoded(void)
 {
     int active = aura_coverdrift_active_index();
     int prev = aura_coverdrift_prev_index();
-    int pool_count = drift_pool_count(s_drift_active_pool);
+    int count = s_drift_subset_count;
 
-    if (active < 0 || active >= pool_count)
+    if (active < 0 || active >= count)
         return;
 
-    /* D-365: las marcadas como sin caratula decodificable no se
-     * reintentan -- el llamador las salta antes de dibujar. */
-    if (!drift_slot_holds(active) && !drift_decode_failed(active))
-        drift_slot_store_needed(active, prev);
+    if (!s_drift_resident_ready[active] && !drift_decode_failed(active))
+        drift_resident_decode(active);
 
-    if (prev >= 0 && prev < pool_count && aura_coverdrift_prev_needed()
-        && !drift_slot_holds(prev) && !drift_decode_failed(prev))
-        drift_slot_store_needed(prev, active);
+    if (prev >= 0 && prev < count && aura_coverdrift_prev_needed()
+        && !s_drift_resident_ready[prev] && !drift_decode_failed(prev))
+        drift_resident_decode(prev);
 
-    /* El pre-decode espera a que el activo ya este residente: asi, al
-     * montar CoverDrift, las dos decodificaciones (activo + siguiente)
-     * caen en cuadros distintos en vez de duplicar el costo del primer
-     * cuadro. */
-    if (pool_count > 1 && (drift_slot_holds(active)
-                           || drift_decode_failed(active))
+    if (count > 1 && (s_drift_resident_ready[active]
+                      || drift_decode_failed(active))
         && !aura_coverdrift_prev_needed())
     {
-        int next = (active + 1) % pool_count;
-        if (!drift_slot_holds(next) && !drift_decode_failed(next))
-            drift_slot_store_needed(next, active);
+        /* Llenado progresivo: la primera posicion aun no residente a
+         * partir de la que sigue al activo (asi la SIGUIENTE del ciclo
+         * siempre es la primera en completarse), una por cuadro. */
+        int i;
+
+        for (i = 1; i < count; i++)
+        {
+            int idx = (active + i) % count;
+
+            if (!s_drift_resident_ready[idx] && !drift_decode_failed(idx))
+            {
+                drift_resident_decode(idx);
+                break;
+            }
+        }
     }
 }
 
@@ -1740,25 +1724,16 @@ static void draw_panel_identity(int panel_x, int panel_w, const panel_identity_t
 
             /* D-316: cambiar de FUENTE (Musica <-> Video <-> Fotos, o de
              * pool dentro de Video/Fotos, p.ej. Peliculas -> Series)
-             * invalida los dos buffers compartidos -- sin esto, un indice
-             * numericamente igual al de la fuente anterior (p.ej. ambos
-             * pools traen algo en su posicion 0) haria que
-             * ensure_drift_albums_decoded() diera por decodificada una
-             * imagen que en realidad es de la fuente VIEJA. */
-            if (s_drift_active_pool != id->coverdrift_pool)
-            {
-                s_drift_active_pool = id->coverdrift_pool;
-                s_drift_album_buf_a_idx = -1;
-                s_drift_album_buf_b_idx = -1;
-            }
+             * invalida lo decodificado. D-366: ya no hay que resetear
+             * buffers a mano -- ensure_drift_subset() detecta el cambio
+             * de pool y rehace el sorteo, invalidando todo lo residente
+             * (drift_invalidate_subset_state()). */
+            s_drift_active_pool = id->coverdrift_pool;
 
-            /* El sorteo/tope de 5 en Graficos=Minimos (PLAN-niveles-fx.md
-             * D-d) es exclusivo del pool de Musica -- Video/Fotos siempre
-             * usan su pool completo (sin ese ajuste, no pedido para
-             * ellos). */
-            count = (s_drift_active_pool == AURA_DRIFT_POOL_MUSIC)
-                ? ensure_drift_effective_pool()
-                : drift_pool_count(s_drift_active_pool);
+            /* D-366: el count es siempre el del SUBCONJUNTO residente
+             * sorteado (15/10/15 por fuente, 5 en Graficos=Minimos para
+             * Musica, D-d) -- nunca el pool completo. */
+            count = ensure_drift_subset();
 
             aura_coverdrift_advance_if_due(panel_w, count);
             ensure_drift_albums_decoded();

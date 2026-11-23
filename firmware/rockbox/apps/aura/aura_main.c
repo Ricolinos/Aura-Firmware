@@ -587,6 +587,20 @@ void aura_main(void)
         if (aura_nav_current(&nav) == AURA_SCREEN_LIBRARY_SYNC && !aura_sync_needs_screen())
             aura_nav_pop(&nav); /* termino bien: la pantalla se cierra sola */
 
+        /* D-367: llenado en segundo plano de "Canciones aleat." -- la
+         * primera pista ya esta sonando; el resto de la playlist se
+         * inserta por tramos aca, con o sin pantalla encendida (es
+         * trabajo de playlist, no animacion -- mismo criterio que el
+         * aura_sync_job_active() de arriba). Mientras dure, cadencia
+         * propia para terminar pronto aunque el usuario no toque
+         * botones. */
+        if (aura_music_shuffle_fill_active())
+        {
+            aura_music_shuffle_fill_step();
+            if (timeout_ticks < 0)
+                timeout_ticks = HZ / 10;
+        }
+
         /* Puerta de energia central (doc SS6/CLAUDE.md, Fase 28): toda
          * animacion visual se detiene con la pantalla dormida -- un
          * unico chequeo aca, no uno por cada *_pending() (evita repetir

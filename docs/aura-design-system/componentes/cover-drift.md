@@ -195,34 +195,32 @@ la misma sesión continua, siempre en vivo. Solo cuenta como cambio real
 dejar de calificar o cambiar de categoría — ahí aplica la cadencia de la
 tabla anterior según el destino.
 
-## Memoria (D-254, actualizado D-256 y D-364)
+## Memoria (D-254, actualizado D-256, D-364 y D-366)
 
-Decodificación bajo demanda con **dos slots** de 320×320 que rotan solos
-(nunca el pool completo — con hasta 300 álbumes posibles, decodificarlos
-todos de antemano sería inviable). Calendarización (D-364, corrección del
-tirón cada 7s — antes el cuadro del avance decodificaba la activa Y
-re-decodificaba la anterior, dos JPEG+transpuesta seguidos bloqueando el
-hilo de UI): la activa se decodifica al montar; la anterior solo se
-mantiene durante la ventana del cross-fade
-(`aura_coverdrift_prev_needed()`); y en cuanto el fundido termina, el slot
-libre **pre-decodifica la SIGUIENTE** imagen del ciclo — en estado
-estacionario el cuadro del cambio de imagen hace **cero**
-decodificaciones. Cada slot registra además el pool y la generación de
-biblioteca con que se decodificó (D-364): antes solo se guardaba el
-índice, y al cambiar de fuente (Música→Video→Fotos) o regenerarse la
-biblioteca un índice coincidente podía mostrar la imagen del pool viejo
-hasta el siguiente avance. Además (D-365, encargo del dueño: "siempre
-se deben ver imágenes, no elementos vacíos"), las imágenes **sin
-carátula decodificable** (archivo ausente/corrupto, álbum sin arte) se
-marcan al primer intento fallido (`s_drift_decode_failed[]`, por pool y
-generación) y se **saltan antes de dibujarse**
+**Subconjunto residente** (D-366, encargo del dueño tras probar D-364/
+D-365 en hardware — el movimiento seguía "tropezado": el golpe de HDD
+del pre-decode en cada ciclo era la causa restante): CoverDrift ya no
+rota por el pool completo. Para cada fuente se sortea un subconjunto
+aleatorio acotado — **15 imágenes de Música, 10 de Video, 15 de Fotos**
+(tokens `AURA_DS_METRICS_COVER_DRIFT_RESIDENT_CAP_*`; si la biblioteca
+tiene menos, con las que haya) — una vez por generación de
+biblioteca/pool/nivel, y **todas sus imágenes quedan decodificadas en
+RAM**. Calendarización: la activa se decodifica al montar; luego el
+llenado es progresivo, **una imagen por cuadro** en la zona muerta del
+ciclo, hasta completar el subconjunto (~15 cuadros). En estado
+estacionario la deriva hace **cero** decodificaciones y **el disco no se
+toca jamás** — de ahí la fluidez. Las imágenes **sin carátula
+decodificable** (D-365: archivo ausente/corrupto, álbum sin arte) se
+marcan al primer intento fallido (`s_drift_decode_failed[]`, válido
+mientras el sorteo no se rehaga) y se **saltan antes de dibujarse**
 (`aura_coverdrift_skip_current()` + `drift_skip_undecodable()`) — el
-placeholder sólido de acento queda solo como respaldo del primer cuadro
-de montaje, nunca como contenido de un ciclo completo. Presupuesto
-real, todo en buffers `static` fijos (sin asignación dinámica repetida):
+placeholder sólido de acento queda solo como respaldo transitorio, nunca
+como contenido de un ciclo completo. Presupuesto real, todo en buffers
+`static` fijos (sin asignación dinámica repetida):
 
-- Dos tiles finales decodificados (activa + anterior): 320×320×2 bytes cada
-  uno ≈ 400KB en total.
+- Tiles residentes del subconjunto: 15 × 320×320×2 bytes ≈ 3MB (D-366 —
+  antes eran 2 slots de ~200KB; el precio explícito del encargo por no
+  tocar el disco jamás durante la deriva, ~4.7% de los 64MB del target).
 - Buffers de trabajo de decodificación/transposición (`aura_albumart.c`,
   compartidos con Music Flow, redimensionados para este tamaño mayor):
   ≈800KB.
@@ -270,7 +268,7 @@ existe. Ver el índice transversal en `sistema/06-niveles-de-fx.md`.
 |---|---|---|---|
 | **Ninguno** | Panel de **acento con degradado** (vertical, `aura_selection_summary_draw_accent_gradient_background()`, reutilizado tal cual), estático. Aparición por **corte** (gate de Animaciones apaga el fundido) | Igual, estático; la aparición **conserva el fundido** de 600ms | Igual; aparición con fundido. Sin imágenes, Animaciones no tiene nada más que decidir |
 | **Mínimos** | **5 imágenes** residentes del pool general (sorteo al azar, una vez por arranque o al cambiar de nivel/pool), estáticas; rotación cada 7s por **corte** | 5 imágenes, estáticas; rotación con **cross-fade** de 600ms | 5 imágenes con **drift + cross-fade** completos |
-| **Todos** | Todas las imágenes (comportamiento actual), estáticas, rotación por corte; delay de aparición **500ms** | Todas las imágenes, estáticas, con fade; delay **500ms** | **Canon** de esta página; delay de aparición baja de 2000 a **500ms** |
+| **Todos** | Subconjunto residente **15/10/15** (D-366), estático, rotación por corte; delay de aparición **500ms** | Subconjunto residente 15/10/15, estático, con fade; delay **500ms** | **Canon** de esta página; subconjunto residente 15/10/15; delay de aparición baja de 2000 a **500ms** |
 
 - **La rotación de imagen cada 7s (`CYCLE_MS`) es contenido, no
   animación** (D-a) — sigue ocurriendo en TODOS los niveles de
@@ -289,13 +287,12 @@ existe. Ver el índice transversal en `sistema/06-niveles-de-fx.md`.
   esta página) — independiente de Gráficos; con Gráficos = Mínimos y un
   pool de 3-4 álbumes, el tope de 5 simplemente no se alcanza (`cap =
   MIN(5, pool)`).
-- El modo de 5 imágenes **no ahorra RAM** respecto al comportamiento
-  actual (que ya solo mantiene 2 imágenes residentes sin importar el
-  tamaño del pool) — gasta ~600KB MÁS (5×200KB vs. ~400KB de hoy). Lo que
-  compra es que el disco deja de despertar cada 7s una vez decodificadas
-  las 5: batería/silencio, no memoria. Implementación:
-  `aura_fx_coverdrift_pool_cap()` (`aura_fx.h`) +
-  `ensure_drift_effective_pool()` (`aura_screens.c`).
+- El modo de 5 imágenes **no ahorra RAM** respecto a Todos — desde D-366
+  TODOS los niveles usan subconjunto residente (los buffers de 15 slots
+  son `static`, reservados siempre) y el disco deja de despertar en todos
+  los niveles; la diferencia de Mínimos queda solo en la VARIEDAD (5 vs.
+  15 imágenes en rotación). Implementación: `drift_resident_cap()` +
+  `ensure_drift_subset()` (`aura_screens.c`).
 
 ## Reutilización (D-316: ya conectado a las 3 fuentes)
 
