@@ -99,6 +99,12 @@ void aura_coverdrift_draw(int x, int width,
 int aura_coverdrift_pending(void);
 int aura_coverdrift_animating(void);
 
+/* D-364: true solo mientras la imagen ANTERIOR participa del cross-fade
+ * vigente -- el llamador la usa para saber si debe mantenerla
+ * decodificada o si el slot ya quedo libre para pre-decodificar la
+ * siguiente imagen del ciclo (ver aura_screens.c). */
+int aura_coverdrift_prev_needed(void);
+
 /* D-254: el llamador decodifica bajo demanda SOLO la imagen activa y
  * la anterior (nunca el pool completo -- con hasta 300 caratulas de
  * album posibles y ~168KB por imagen al tamano nuevo, decodificarlas

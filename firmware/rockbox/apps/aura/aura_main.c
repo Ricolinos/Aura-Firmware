@@ -670,9 +670,15 @@ void aura_main(void)
 
             /* CoverDrift (T2.9) -- movimiento continuo mientras este
              * montado, sin tramo estatico real (a diferencia del resto
-             * de esta puerta): pending()/animating() coinciden. */
+             * de esta puerta). D-364: con Animaciones != Todas la
+             * imagen queda quieta y animating() solo cubre la ventana
+             * del cross-fade; el resto del ciclo (reloj de rotacion de
+             * imagen + pre-decode de la siguiente, D-364) avanza con
+             * cadencia gruesa, como el resto de pending()s. */
             if (aura_coverdrift_animating() && timeout_ticks < 0)
                 timeout_ticks = HZ / 20;
+            else if (aura_coverdrift_pending() && timeout_ticks < 0)
+                timeout_ticks = HZ / 4;
 
             /* D-262: debounce/fundido general del panel derecho de la
              * Ruta A (reemplaza el temporizador de 3s especifico de

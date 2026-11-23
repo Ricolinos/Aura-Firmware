@@ -1242,6 +1242,15 @@ static void ensure_drift_album_pool(void)
 static aura_coverdrift_image_t s_drift_album_images[AURA_DRIFT_POOL_MAX];
 static int s_drift_album_buf_a_idx = -1;
 static int s_drift_album_buf_b_idx = -1;
+/* D-364: pool y generacion de biblioteca con que se decodifico cada
+ * slot. Antes solo se registraba el indice: al cambiar de pool (Musica
+ * -> Video -> Fotos) o al regenerarse la biblioteca, un indice
+ * coincidente daba por buena la imagen del pool viejo hasta que el
+ * ciclo avanzaba (hasta CYCLE_MS mostrando la caratula equivocada). */
+static drift_pool_t s_drift_album_buf_a_pool = AURA_DRIFT_POOL_MUSIC;
+static drift_pool_t s_drift_album_buf_b_pool = AURA_DRIFT_POOL_MUSIC;
+static int s_drift_album_buf_a_gen = -1;
+static int s_drift_album_buf_b_gen = -1;
 static struct bitmap s_drift_album_bmp_a;
 static struct bitmap s_drift_album_bmp_b;
 static fb_data s_drift_album_pixels_a[AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE
@@ -1383,37 +1392,111 @@ static bool decode_album_drift_tile(int pool_idx, fb_data *dst)
     }
 }
 
-static void ensure_drift_albums_decoded(void)
+/* D-364: true si algun slot retiene `pool_idx` decodificado del pool y
+ * la generacion de biblioteca VIGENTES (aunque el bitmap todavia no este
+ * listo -- el indice se marca ANTES de decodificar, ver
+ * drift_slot_store(), para que un fallo no reintente cada cuadro). */
+static bool drift_slot_holds(int pool_idx)
+{
+    bool a = s_drift_album_buf_a_idx == pool_idx
+             && s_drift_album_buf_a_pool == s_drift_active_pool
+             && s_drift_album_buf_a_gen == s_drift_album_pool_generation;
+    bool b = s_drift_album_buf_b_idx == pool_idx
+             && s_drift_album_buf_b_pool == s_drift_active_pool
+             && s_drift_album_buf_b_gen == s_drift_album_pool_generation;
+    return a || b;
+}
+
+static void drift_slot_store(bool slot_a, int pool_idx)
 {
     enum { SZ = AURA_DS_METRICS_COVER_DRIFT_IMAGE_SIZE };
-    int active = aura_coverdrift_active_index();
-    int prev = aura_coverdrift_prev_index();
-    int pool_count = drift_pool_count(s_drift_active_pool);
 
-    if (active >= 0 && active < pool_count && active != s_drift_album_buf_a_idx)
+    if (slot_a)
     {
-        s_drift_album_buf_a_idx = active;
-        s_drift_album_images[active].bmp = NULL;
-        if (decode_album_drift_tile(active, s_drift_album_pixels_a))
+        s_drift_album_buf_a_idx = pool_idx;
+        s_drift_album_buf_a_pool = s_drift_active_pool;
+        s_drift_album_buf_a_gen = s_drift_album_pool_generation;
+        s_drift_album_images[pool_idx].bmp = NULL;
+        if (decode_album_drift_tile(pool_idx, s_drift_album_pixels_a))
         {
             s_drift_album_bmp_a.width = SZ;
             s_drift_album_bmp_a.height = SZ;
             s_drift_album_bmp_a.data = (char *)s_drift_album_pixels_a;
-            s_drift_album_images[active].bmp = &s_drift_album_bmp_a;
+            s_drift_album_images[pool_idx].bmp = &s_drift_album_bmp_a;
         }
     }
-
-    if (prev >= 0 && prev < pool_count && prev != s_drift_album_buf_b_idx)
+    else
     {
-        s_drift_album_buf_b_idx = prev;
-        s_drift_album_images[prev].bmp = NULL;
-        if (decode_album_drift_tile(prev, s_drift_album_pixels_b))
+        s_drift_album_buf_b_idx = pool_idx;
+        s_drift_album_buf_b_pool = s_drift_active_pool;
+        s_drift_album_buf_b_gen = s_drift_album_pool_generation;
+        s_drift_album_images[pool_idx].bmp = NULL;
+        if (decode_album_drift_tile(pool_idx, s_drift_album_pixels_b))
         {
             s_drift_album_bmp_b.width = SZ;
             s_drift_album_bmp_b.height = SZ;
             s_drift_album_bmp_b.data = (char *)s_drift_album_pixels_b;
-            s_drift_album_images[prev].bmp = &s_drift_album_bmp_b;
+            s_drift_album_images[pool_idx].bmp = &s_drift_album_bmp_b;
         }
+    }
+}
+
+/* Decodifica `pool_idx` en el slot que NO retiene `other_idx` (asi la
+ * imagen que todavia se esta dibujando nunca se pisa). */
+static void drift_slot_store_needed(int pool_idx, int other_idx)
+{
+    bool a_holds_other = s_drift_album_buf_a_idx == other_idx
+                         && s_drift_album_buf_a_pool == s_drift_active_pool
+                         && s_drift_album_buf_a_gen == s_drift_album_pool_generation;
+    drift_slot_store(!a_holds_other, pool_idx);
+}
+
+/* D-364 (fluidez de CoverDrift, encargo del dueno del producto:
+ * "el movimiento no es fluido, me gustaria que se viera suavizado"):
+ * la version anterior decodificaba la imagen activa y RE-decodificaba la
+ * anterior EN EL MISMO CUADRO del avance de ciclo (cada 7s) -- dos
+ * decodificaciones JPEG+transpuesta de 320x320 seguidas bloqueando el
+ * hilo de UI, el tirones visible al cambiar de imagen (deuda ya anotada
+ * en DECISIONS.md tras D-311).
+ *
+ * Nueva calendarizacion -- en estado estacionario el cuadro del avance
+ * hace CERO decodificaciones:
+ *  (1) activo no residente -> decodificarlo ya (solo al montar o si un
+ *      decode anterior fallo);
+ *  (2) anterior, SOLO mientras aura_coverdrift_prev_needed() (ventana
+ *      del cross-fade) -- con el pre-decode de abajo, en la practica ya
+ *      siempre esta residente y esto no decodifica nada;
+ *  (3) en cuanto termina el cross-fade, pre-decodificar la SIGUIENTE
+ *      imagen del ciclo en el slot que quedo libre -- la
+ *      decodificacion pesada ocurre en la zona muerta del ciclo (~6.4s
+ *      de margen), nunca en el cuadro del cambio. Los dos slots rotan
+ *      solos entre imagenes consecutivas. */
+static void ensure_drift_albums_decoded(void)
+{
+    int active = aura_coverdrift_active_index();
+    int prev = aura_coverdrift_prev_index();
+    int pool_count = drift_pool_count(s_drift_active_pool);
+
+    if (active < 0 || active >= pool_count)
+        return;
+
+    if (!drift_slot_holds(active))
+        drift_slot_store_needed(active, prev);
+
+    if (prev >= 0 && prev < pool_count && aura_coverdrift_prev_needed()
+        && !drift_slot_holds(prev))
+        drift_slot_store_needed(prev, active);
+
+    /* El pre-decode espera a que el activo ya este residente: asi, al
+     * montar CoverDrift, las dos decodificaciones (activo + siguiente)
+     * caen en cuadros distintos en vez de duplicar el costo del primer
+     * cuadro. */
+    if (pool_count > 1 && drift_slot_holds(active)
+        && !aura_coverdrift_prev_needed())
+    {
+        int next = (active + 1) % pool_count;
+        if (!drift_slot_holds(next))
+            drift_slot_store_needed(next, active);
     }
 }
 

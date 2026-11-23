@@ -37,6 +37,18 @@
 #define CROSSFADE_MS AURA_DS_METRICS_COVER_DRIFT_CROSSFADE_MS
 #define ANGLE_COUNT  AURA_DS_METRICS_COVER_DRIFT_DIRECTIONS_DEG_COUNT
 
+/* D-364: muestreo SUB-PIXEL (interpolacion bilineal) del movimiento de
+ * deriva. A 40px en 7000ms la deriva avanza ~0.29px por cuadro a 20fps:
+ * con muestreo entero eso se ve como saltos de 1px cada ~3.5 cuadros
+ * (peor en diagonal, ver D-257). Con muestreo bilineal el desplazamiento
+ * fraccionario se interpola pixel a pixel (3 blends por pixel del panel,
+ * ~115k blends por cuadro -- unas 3 veces el costo de un cross-fade, que
+ * ya corre sin problema en hardware). Solo se usa cuando
+ * aura_fx_coverdrift_motion() esta activo (Animaciones=Todas); poner en
+ * 0 para volver al muestreo entero (lcd_bitmap_part) si el costo
+ * resultara excesivo en bateria/rendimiento. */
+#define AURA_COVERDRIFT_SUBPIXEL 1
+
 static const int ANGLES_DEG[ANGLE_COUNT] = AURA_DS_METRICS_COVER_DRIFT_DIRECTIONS_DEG_VALUES;
 
 static int s_index = -1;
@@ -96,11 +108,35 @@ int aura_coverdrift_pending(void)
 
 int aura_coverdrift_animating(void)
 {
-    /* A diferencia de MarqueeText/ScrollIndicator, el movimiento es
-     * continuo durante TODO el ciclo (nunca hay un tramo realmente
-     * estatico salvo el instante exacto en que llega al centro) --
-     * pending() y animating() coinciden mientras este montado. */
-    return s_index >= 0;
+    /* D-364: con Animaciones == Todas el movimiento es continuo durante
+     * TODO el ciclo (nunca hay un tramo realmente estatico salvo el
+     * instante exacto en que llega al centro). Con Animaciones != Todas
+     * la imagen activa queda QUIETA en el centro (D-a) -- ahi el unico
+     * tramo que de verdad anima pixel a pixel es la ventana del
+     * cross-fade; fuera de ella basta la cadencia gruesa de
+     * aura_coverdrift_pending() (aura_main.c) para que el reloj del
+     * ciclo avance y la rotacion de imagen (contenido, no animacion)
+     * ocurra a tiempo. */
+    if (s_index < 0)
+        return 0;
+
+    if (!aura_fx_coverdrift_motion())
+        return aura_fx_coverdrift_crossfade() && s_prev_index >= 0
+               && (current_tick - s_since) * 1000L / HZ < CROSSFADE_MS;
+
+    return 1;
+}
+
+/* D-364: true solo mientras la imagen ANTERIOR participa del cross-fade
+ * vigente. Fuera de esa ventana (o con el fundido apagado en la
+ * configuracion global) ya nadie la dibuja, y su slot de decodificacion
+ * queda libre para pre-decodificar la siguiente imagen del ciclo (ver
+ * ensure_drift_albums_decoded() en aura_screens.c). */
+int aura_coverdrift_prev_needed(void)
+{
+    return s_index >= 0 && s_prev_index >= 0
+           && aura_fx_coverdrift_crossfade()
+           && (current_tick - s_since) * 1000L / HZ < CROSSFADE_MS;
 }
 
 int aura_coverdrift_active_index(void)
@@ -166,6 +202,67 @@ static void draw_image_solid(const aura_coverdrift_image_t *images, int index,
     a26_shell_fill_rounded_rect(px, 0, pw, A26_SCREEN_HEIGHT, 0,
                                  placeholder_color(index), a26_color(A26_SHELL_BG));
 }
+
+#if AURA_COVERDRIFT_SUBPIXEL
+/* D-364: variante de draw_image_solid() con muestreo SUB-PIXEL
+ * (interpolacion bilineal). sx256/sy256 son el origen de muestreo dentro
+ * de la imagen en pixeles*256 (equivalente sub-pixel de los src_x/src_y
+ * enteros que sample_offsets() produce). Por cada pixel del panel mezcla
+ * los 4 vecinos de la imagen fuente: primero horizontal en las dos filas
+ * vecinas, luego vertical entre ambos resultados (a26_shell_blend, alpha
+ * 0-255/256 -- la fraccion baja 8 bits del desplazamiento).
+ *
+ * La deriva esta acotada por construccion a los margenes de sobrante de
+ * la imagen (ver aura_coverdrift_draw()), asi que la ventana entera de
+ * muestreo siempre cae dentro de la imagen EXCEPTO el vecino +1 que la
+ * interpolacion pide en el borde extremo: para ese caso se clampa el
+ * origen un pixel atras y se cae a muestreo entero en ese eje (la
+ * diferencia visual de <1px en el borde del recorrido es imperceptible
+ * frente al riesgo de leer fuera del buffer). */
+static void draw_image_solid_subpixel(const struct bitmap *bmp,
+                                       int px, int pw,
+                                       int sx256, int sy256)
+{
+    int sx = sx256 >> 8;
+    int fx = sx256 & 255;
+    int sy = sy256 >> 8;
+    int fy = sy256 & 255;
+    int row, col;
+
+    if (sx < 0) { sx = 0; fx = 0; }
+    if (sy < 0) { sy = 0; fy = 0; }
+    if (sx + pw + 1 > IMAGE_SIZE) { sx = IMAGE_SIZE - pw - 1; fx = 0; }
+    if (sy + A26_SCREEN_HEIGHT + 1 > IMAGE_SIZE)
+    {
+        sy = IMAGE_SIZE - A26_SCREEN_HEIGHT - 1;
+        fy = 0;
+    }
+
+    /* Sin parte fraccionaria en ningun eje, la interpolacion se reduce a
+     * una copia entera -- la via rapida de hardware de siempre. */
+    if (fx == 0 && fy == 0)
+    {
+        lcd_bitmap_part((const fb_data *)bmp->data, sx, sy, IMAGE_SIZE,
+                         px, 0, pw, A26_SCREEN_HEIGHT);
+        return;
+    }
+
+    for (row = 0; row < A26_SCREEN_HEIGHT; row++)
+    {
+        const fb_data *r0 = (const fb_data *)bmp->data
+            + (sy + row) * IMAGE_SIZE + sx;
+        const fb_data *r1 = r0 + IMAGE_SIZE;
+        fb_data *dst = FBADDR(px, row);
+
+        for (col = 0; col < pw; col++)
+        {
+            fb_data top = a26_shell_blend(r0[col], r0[col + 1], fx);
+            fb_data bot = a26_shell_blend(r1[col], r1[col + 1], fx);
+            dst[col] = a26_shell_blend(top, bot, fy);
+        }
+    }
+}
+#endif /* AURA_COVERDRIFT_SUBPIXEL */
 
 /* D-254: fundido real pixel a pixel entre la imagen SALIENTE (quieta,
  * en el centro exacto -- termino su ciclo ahi, D-089/G10) y la
@@ -333,7 +430,27 @@ void aura_coverdrift_draw(int x, int width,
     }
     else
     {
-        draw_image_solid(images, s_index, x, width, margin_x, margin_y, dx, dy);
+#if AURA_COVERDRIFT_SUBPIXEL
+        const struct bitmap *bmp = images[s_index].bmp;
+
+        /* D-364: movimiento con muestreo sub-pixel (bilineal) -- elimina
+         * los saltos de 1px del muestreo entero a velocidades de deriva
+         * menores que 1px/cuadro. El cross-fade sigue con muestreo
+         * entero (su propia mezcla de alpha ya difumina el paso de 1px,
+         * y solo dura CROSSFADE_MS); sin bitmap real o con el movimiento
+         * apagado, la via entera de siempre. */
+        if (bmp && aura_fx_coverdrift_motion())
+        {
+            draw_image_solid_subpixel(bmp, x, width,
+                                       (margin_x << 8) - pos_hp.dx256,
+                                       (margin_y << 8) - pos_hp.dy256);
+        }
+        else
+#endif
+        {
+            draw_image_solid(images, s_index, x, width, margin_x, margin_y,
+                              dx, dy);
+        }
     }
 
     /* D-258 (encargo del dueno del producto: "la sombra paralela que

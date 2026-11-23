@@ -112,6 +112,21 @@ anterior.
   función original, 5 pruebas existentes) sigue siendo un envoltorio de
   una línea sobre la nueva, sin cambio de comportamiento en los puntos ya
   probados.
+- **Muestreo sub-píxel real al dibujar** (D-364 — el dueño del producto
+  reportó que el movimiento "no se veía fluido" incluso tras D-257): D-257
+  calculó la *posición* con precisión sub-píxel, pero el *dibujo* seguía
+  muestreando la imagen en coordenadas enteras (`lcd_bitmap_part`) — a
+  40px en 7s la deriva avanza ~0.29px por cuadro a 20fps, así que en
+  pantalla se veía como saltos de 1px cada ~3.5 cuadros. Ahora
+  (`AURA_COVERDRIFT_SUBPIXEL`, `draw_image_solid_subpixel()`) el
+  desplazamiento fraccionario se interpola bilinealmente píxel a píxel
+  (3 blends por píxel del panel, ~115k por cuadro — ~3× el costo de un
+  cross-fade, que ya corre sin problema en hardware). Solo aplica con
+  Animaciones = Todas y fuera del cross-fade (el fundido ya difumina el
+  paso de 1px por sí mismo). `#define AURA_COVERDRIFT_SUBPIXEL 0`
+  restaura el muestreo entero si el costo en batería resultara excesivo
+  (estimado ~25-36ms/cuadro en el ARM de 80MHz — pendiente de medición
+  en hardware por el dueño).
 - **Transición entre imágenes: fundido REAL** (D-254, corrección tras un
   primer intento con corte directo) — mezcla píxel a píxel entre la imagen
   saliente (quieta, en el centro) y la entrante (moviéndose), durante los
@@ -176,12 +191,24 @@ la misma sesión continua, siempre en vivo. Solo cuenta como cambio real
 dejar de calificar o cambiar de categoría — ahí aplica la cadencia de la
 tabla anterior según el destino.
 
-## Memoria (D-254, actualizado D-256)
+## Memoria (D-254, actualizado D-256 y D-364)
 
-Decodificación bajo demanda: solo la imagen ACTIVA y la ANTERIOR (nunca el
-pool completo — con hasta 300 álbumes posibles, decodificarlos todos de
-antemano sería inviable). Presupuesto real, todo en buffers `static` fijos
-(sin asignación dinámica repetida):
+Decodificación bajo demanda con **dos slots** de 320×320 que rotan solos
+(nunca el pool completo — con hasta 300 álbumes posibles, decodificarlos
+todos de antemano sería inviable). Calendarización (D-364, corrección del
+tirón cada 7s — antes el cuadro del avance decodificaba la activa Y
+re-decodificaba la anterior, dos JPEG+transpuesta seguidos bloqueando el
+hilo de UI): la activa se decodifica al montar; la anterior solo se
+mantiene durante la ventana del cross-fade
+(`aura_coverdrift_prev_needed()`); y en cuanto el fundido termina, el slot
+libre **pre-decodifica la SIGUIENTE** imagen del ciclo — en estado
+estacionario el cuadro del cambio de imagen hace **cero**
+decodificaciones. Cada slot registra además el pool y la generación de
+biblioteca con que se decodificó (D-364): antes solo se guardaba el
+índice, y al cambiar de fuente (Música→Video→Fotos) o regenerarse la
+biblioteca un índice coincidente podía mostrar la imagen del pool viejo
+hasta el siguiente avance. Presupuesto real, todo en buffers `static`
+fijos (sin asignación dinámica repetida):
 
 - Dos tiles finales decodificados (activa + anterior): 320×320×2 bytes cada
   uno ≈ 400KB en total.
@@ -241,6 +268,12 @@ existe. Ver el índice transversal en `sistema/06-niveles-de-fx.md`.
 - Con Animaciones ≠ Todas, la imagen activa queda **quieta en el
   centro** (distancia de deriva forzada a 0) — nunca revela el fondo del
   panel, el mismo invariante geométrico de siempre sigue garantizado.
+  Además (D-364), con la imagen quieta la cadencia de redibujo baja de
+  20fps a 4fps fuera de la ventana del cross-fade
+  (`aura_coverdrift_animating()` vs. `aura_coverdrift_pending()` en
+  `aura_main.c`) — el reloj de rotación de 7s y el pre-decode de la
+  siguiente siguen cumpliéndose, sin repintar la pantalla entera 20
+  veces por segundo para no cambiar nada.
 - El umbral de montaje sigue siendo **3 imágenes disponibles** (arriba en
   esta página) — independiente de Gráficos; con Gráficos = Mínimos y un
   pool de 3-4 álbumes, el tope de 5 simplemente no se alcanza (`cap =
